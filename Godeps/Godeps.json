@@ -1,0 +1,35 @@
+{
+	"ImportPath": "github.com/containernetworking/plugins",
+	"GoVersion": "go1.7",
+	"GodepVersion": "v79",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/containernetworking/cni/pkg/skel",
+			"Comment": "v0.5.0",
+			"Rev": "4ce9b019aab51b28a32ff6549784a69f9b209fe4"
+		},
+		{
+			"ImportPath": "github.com/containernetworking/cni/pkg/types",
+			"Comment": "v0.5.0",
+			"Rev": "4ce9b019aab51b28a32ff6549784a69f9b209fe4"
+		},
+		{
+			"ImportPath": "github.com/containernetworking/cni/pkg/types/020",
+			"Comment": "v0.5.0",
+			"Rev": "4ce9b019aab51b28a32ff6549784a69f9b209fe4"
+		},
+		{
+			"ImportPath": "github.com/containernetworking/cni/pkg/types/current",
+			"Comment": "v0.5.0",
+			"Rev": "4ce9b019aab51b28a32ff6549784a69f9b209fe4"
+		},
+		{
+			"ImportPath": "github.com/containernetworking/cni/pkg/version",
+			"Comment": "v0.5.0",
+			"Rev": "4ce9b019aab51b28a32ff6549784a69f9b209fe4"
+		}
+	]
+}
