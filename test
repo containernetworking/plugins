@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+#
+# Run CNI plugin tests.
+# 
+# This needs sudo, as we'll be creating net interfaces. It also needs a valid
+# CNI_PATH, with at least the ptp and host-local plugins.
+#
+# You'll probably run it like this:
+# CNI_PATH=../cni/bin ./test
+set -e
+
+if [ -z "$CNI_PATH" ]; then
+	echo "Need a valid CNI_PATH"
+	exit 1
+fi
+
+# Check that the plugins we need are available
+if ! PATH=${CNI_PATH} type -P ptp host-local >& /dev/null; then
+	echo '$CNI_PATH must include ptp and host-local'
+	exit 1
+fi
+
+#add our build path to CNI_PATH
+CNI_PATH=$(pwd)/bin:${CNI_PATH}
+
+## Build everything
+./build
+
+echo "Running tests"
+
+TEST=${PKG:-./plugins/...}
+sudo -E bash -c "umask 0; PATH=${PATH} CNI_PATH=${CNI_PATH} go test ${TEST}"
+
+

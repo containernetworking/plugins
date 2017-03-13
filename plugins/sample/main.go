@@ -116,6 +116,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 			containerIPs = append(containerIPs, ip.Address.IP)
 		}
 	}
+	if len(containerIPs) == 0 {
+		return fmt.Errorf("got no container IPs")
+	}
 
 	// Pass through the result for the next plugin
 	return types.PrintResult(conf.PrevResult, conf.CNIVersion)
