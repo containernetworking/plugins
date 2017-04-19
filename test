@@ -27,7 +27,7 @@ CNI_PATH=$(pwd)/bin:${CNI_PATH}
 
 echo "Running tests"
 
-TESTABLE="plugins/sample"
+TESTABLE="plugins/sample plugins/vlan"
 
 # user has not provided PKG override
 if [ -z "$PKG" ]; then
