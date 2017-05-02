@@ -15,9 +15,14 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net"
+	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/skel"
@@ -26,7 +31,9 @@ import (
 )
 
 type NetConf struct {
-	Device string `json:"device"`
+	Device     string `json:"device"`     // Device-Name, something like eth0 or can0 etc.
+	HWAddr     string `json:"hwaddr"`     // MAC Address of target network interface
+	KernelPath string `json:"kernelpath"` // Kernelpath of the device
 }
 
 func init() {
@@ -41,8 +48,8 @@ func loadConf(bytes []byte) (*NetConf, error) {
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, fmt.Errorf("failed to load netconf: %v", err)
 	}
-	if n.Device == "" {
-		return nil, fmt.Errorf(`"device" field is required. It specifies the host device to put into the pod`)
+	if n.Device == "" && n.HWAddr == "" && n.KernelPath == "" {
+		return nil, fmt.Errorf(`specify either "device", "hwaddr" or "kernelpath"`)
 	}
 	return n, nil
 }
@@ -57,7 +64,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
 	}
 	defer containerNs.Close()
-	return addLink(cfg.Device, containerNs)
+	return addLink(cfg.Device, cfg.HWAddr, cfg.KernelPath, containerNs)
 }
 
 func cmdDel(args *skel.CmdArgs) error {
@@ -70,21 +77,21 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
 	}
 	defer containerNs.Close()
-	return removeLink(cfg.Device, containerNs)
+	return removeLink(cfg.Device, cfg.HWAddr, cfg.KernelPath, containerNs)
 }
 
-func addLink(name string, containerNs ns.NetNS) error {
-	dev, err := netlink.LinkByName(name)
+func addLink(device, hwAddr, kernelPath string, containerNs ns.NetNS) error {
+	dev, err := getLink(device, hwAddr, kernelPath)
 	if err != nil {
-		return fmt.Errorf("failed to lookup %v: %v", name, err)
+		return err
 	}
 	return netlink.LinkSetNsFd(dev, int(containerNs.Fd()))
 }
 
-func removeLink(name string, containerNs ns.NetNS) error {
+func removeLink(device, hwAddr, kernelPath string, containerNs ns.NetNS) error {
 	var dev netlink.Link
 	err := containerNs.Do(func(_ ns.NetNS) error {
-		d, err := netlink.LinkByName(name)
+		d, err := getLink(device, hwAddr, kernelPath)
 		if err != nil {
 			return err
 		}
@@ -99,6 +106,51 @@ func removeLink(name string, containerNs ns.NetNS) error {
 		return err
 	}
 	return netlink.LinkSetNsFd(dev, int(defaultNs.Fd()))
+}
+
+func getLink(devname, hwaddr, kernelpath string) (netlink.Link, error) {
+	links, err := netlink.LinkList()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list node links: %v", err)
+	}
+
+	if len(devname) > 0 {
+		if m, err := netlink.LinkByName(devname); err == nil {
+			return m, nil
+		}
+	} else if len(hwaddr) > 0 {
+		hwAddr, err := net.ParseMAC(hwaddr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse MAC address %q: %v", hwaddr, err)
+		}
+
+		for _, link := range links {
+			if bytes.Equal(link.Attrs().HardwareAddr, hwAddr) {
+				return link, nil
+			}
+		}
+	} else if len(kernelpath) > 0 {
+		if !filepath.IsAbs(kernelpath) || !strings.HasPrefix(kernelpath, "/sys/devices/") {
+			return nil, fmt.Errorf("kernel device path %q must be absolute and begin with /sys/devices/", kernelpath)
+		}
+		netDir := filepath.Join(kernelpath, "net")
+		files, err := ioutil.ReadDir(netDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find network devices at %q", netDir)
+		}
+
+		// Grab the first device from eg /sys/devices/pci0000:00/0000:00:19.0/net
+		for _, file := range files {
+			// Make sure it's really an interface
+			for _, l := range links {
+				if file.Name() == l.Attrs().Name {
+					return l, nil
+				}
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("failed to find physical interface")
 }
 
 func main() {
