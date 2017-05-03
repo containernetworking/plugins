@@ -12,15 +12,15 @@ fi
 export GO15VENDOREXPERIMENT=1
 export GOPATH=${PWD}/gopath
 
-mkdir -p ${PWD}/bin
+mkdir -p "${PWD}/bin"
 
 echo "Building plugins"
 PLUGINS="plugins/*"
 for d in $PLUGINS; do
-	if [ -d $d ]; then
-		plugin=$(basename $d)
-		echo "  " $plugin
+	if [ -d "$d" ]; then
+		plugin="$(basename "$d")"
+		echo "  $plugin"
 		# use go install so we don't duplicate work
-		GOBIN=${PWD}/bin go install -pkgdir $GOPATH/pkg "$@" $REPO_PATH/$d
+		go build -o "${PWD}/bin/$plugin" -pkgdir "$GOPATH/pkg" "$@" "$REPO_PATH/$d"
 	fi
 done
