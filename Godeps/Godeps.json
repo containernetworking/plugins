@@ -162,6 +162,16 @@
 			"Rev": "2152b45fa28a361beba9aab0885972323a444e28"
 		},
 		{
+			"ImportPath": "github.com/onsi/gomega/gbytes",
+			"Comment": "v1.0-71-g2152b45",
+			"Rev": "2152b45fa28a361beba9aab0885972323a444e28"
+		},
+		{
+			"ImportPath": "github.com/onsi/gomega/gexec",
+			"Comment": "v1.0-71-g2152b45",
+			"Rev": "2152b45fa28a361beba9aab0885972323a444e28"
+		},
+		{
 			"ImportPath": "github.com/onsi/gomega/internal/assertion",
 			"Comment": "v1.0-71-g2152b45",
 			"Rev": "2152b45fa28a361beba9aab0885972323a444e28"
