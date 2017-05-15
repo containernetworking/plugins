@@ -6,7 +6,7 @@
 #
 set -e
 
-source ./build
+source ./build.sh
 
 echo "Running tests"
 
