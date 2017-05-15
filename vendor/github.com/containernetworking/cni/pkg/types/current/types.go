@@ -24,9 +24,9 @@ import (
 	"github.com/containernetworking/cni/pkg/types/020"
 )
 
-const implementedSpecVersion string = "0.3.0"
+const ImplementedSpecVersion string = "0.3.1"
 
-var SupportedVersions = []string{implementedSpecVersion}
+var SupportedVersions = []string{"0.3.0", ImplementedSpecVersion}
 
 func NewResult(data []byte) (types.Result, error) {
 	result := &Result{}
@@ -37,7 +37,7 @@ func NewResult(data []byte) (types.Result, error) {
 }
 
 func GetResult(r types.Result) (*Result, error) {
-	resultCurrent, err := r.GetAsVersion(implementedSpecVersion)
+	resultCurrent, err := r.GetAsVersion(ImplementedSpecVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -63,8 +63,9 @@ func convertFrom020(result types.Result) (*Result, error) {
 	}
 
 	newResult := &Result{
-		DNS:    oldResult.DNS,
-		Routes: []*types.Route{},
+		CNIVersion: ImplementedSpecVersion,
+		DNS:        oldResult.DNS,
+		Routes:     []*types.Route{},
 	}
 
 	if oldResult.IP4 != nil {
@@ -117,6 +118,7 @@ func convertFrom030(result types.Result) (*Result, error) {
 	if !ok {
 		return nil, fmt.Errorf("failed to convert result")
 	}
+	newResult.CNIVersion = ImplementedSpecVersion
 	return newResult, nil
 }
 
@@ -129,11 +131,12 @@ func NewResultFromResult(result types.Result) (*Result, error) {
 			}
 		}
 	}
-	return nil, fmt.Errorf("unsupported CNI result version %q", version)
+	return nil, fmt.Errorf("unsupported CNI result22 version %q", version)
 }
 
 // Result is what gets returned from the plugin (via stdout) to the caller
 type Result struct {
+	CNIVersion string         `json:"cniVersion,omitempty"`
 	Interfaces []*Interface   `json:"interfaces,omitempty"`
 	IPs        []*IPConfig    `json:"ips,omitempty"`
 	Routes     []*types.Route `json:"routes,omitempty"`
@@ -143,7 +146,8 @@ type Result struct {
 // Convert to the older 0.2.0 CNI spec Result type
 func (r *Result) convertTo020() (*types020.Result, error) {
 	oldResult := &types020.Result{
-		DNS: r.DNS,
+		CNIVersion: types020.ImplementedSpecVersion,
+		DNS:        r.DNS,
 	}
 
 	for _, ip := range r.IPs {
@@ -189,17 +193,18 @@ func (r *Result) convertTo020() (*types020.Result, error) {
 }
 
 func (r *Result) Version() string {
-	return implementedSpecVersion
+	return ImplementedSpecVersion
 }
 
 func (r *Result) GetAsVersion(version string) (types.Result, error) {
 	switch version {
-	case implementedSpecVersion:
+	case "0.3.0", ImplementedSpecVersion:
+		r.CNIVersion = version
 		return r, nil
 	case types020.SupportedVersions[0], types020.SupportedVersions[1], types020.SupportedVersions[2]:
 		return r.convertTo020()
 	}
-	return nil, fmt.Errorf("cannot convert version 0.3.0 to %q", version)
+	return nil, fmt.Errorf("cannot convert version 0.3.x to %q", version)
 }
 
 func (r *Result) Print() error {
