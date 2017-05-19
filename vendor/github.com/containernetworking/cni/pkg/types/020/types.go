@@ -23,9 +23,9 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 )
 
-const ImplementedSpecVersion string = "0.2.0"
+const implementedSpecVersion string = "0.2.0"
 
-var SupportedVersions = []string{"", "0.1.0", ImplementedSpecVersion}
+var SupportedVersions = []string{"", "0.1.0", implementedSpecVersion}
 
 // Compatibility types for CNI version 0.1.0 and 0.2.0
 
@@ -39,7 +39,7 @@ func NewResult(data []byte) (types.Result, error) {
 
 func GetResult(r types.Result) (*Result, error) {
 	// We expect version 0.1.0/0.2.0 results
-	result020, err := r.GetAsVersion(ImplementedSpecVersion)
+	result020, err := r.GetAsVersion(implementedSpecVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -52,20 +52,18 @@ func GetResult(r types.Result) (*Result, error) {
 
 // Result is what gets returned from the plugin (via stdout) to the caller
 type Result struct {
-	CNIVersion string    `json:"cniVersion,omitempty"`
-	IP4        *IPConfig `json:"ip4,omitempty"`
-	IP6        *IPConfig `json:"ip6,omitempty"`
-	DNS        types.DNS `json:"dns,omitempty"`
+	IP4 *IPConfig `json:"ip4,omitempty"`
+	IP6 *IPConfig `json:"ip6,omitempty"`
+	DNS types.DNS `json:"dns,omitempty"`
 }
 
 func (r *Result) Version() string {
-	return ImplementedSpecVersion
+	return implementedSpecVersion
 }
 
 func (r *Result) GetAsVersion(version string) (types.Result, error) {
 	for _, supportedVersion := range SupportedVersions {
 		if version == supportedVersion {
-			r.CNIVersion = version
 			return r, nil
 		}
 	}

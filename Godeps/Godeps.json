@@ -8,68 +8,68 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/invoke",
-			"Comment": "v0.5.0",
-			"Rev": "1a9288c3c09cea4e580fdb1a636f1c5e185a391f"
+			"Comment": "v0.5.2",
+			"Rev": "137b4975ecab6e1f0c24c1e3c228a50a3cfba75e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/ip",
-			"Comment": "v0.5.0",
-			"Rev": "1a9288c3c09cea4e580fdb1a636f1c5e185a391f"
+			"Comment": "v0.5.2",
+			"Rev": "137b4975ecab6e1f0c24c1e3c228a50a3cfba75e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/ipam",
-			"Comment": "v0.5.0",
-			"Rev": "1a9288c3c09cea4e580fdb1a636f1c5e185a391f"
+			"Comment": "v0.5.2",
+			"Rev": "137b4975ecab6e1f0c24c1e3c228a50a3cfba75e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/ns",
-			"Comment": "v0.5.0",
-			"Rev": "1a9288c3c09cea4e580fdb1a636f1c5e185a391f"
+			"Comment": "v0.5.2",
+			"Rev": "137b4975ecab6e1f0c24c1e3c228a50a3cfba75e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/skel",
-			"Comment": "v0.5.0",
-			"Rev": "1a9288c3c09cea4e580fdb1a636f1c5e185a391f"
+			"Comment": "v0.5.2",
+			"Rev": "137b4975ecab6e1f0c24c1e3c228a50a3cfba75e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/testutils",
-			"Comment": "v0.5.0",
-			"Rev": "1a9288c3c09cea4e580fdb1a636f1c5e185a391f"
+			"Comment": "v0.5.2",
+			"Rev": "137b4975ecab6e1f0c24c1e3c228a50a3cfba75e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/types",
-			"Comment": "v0.5.0",
-			"Rev": "1a9288c3c09cea4e580fdb1a636f1c5e185a391f"
+			"Comment": "v0.5.2",
+			"Rev": "137b4975ecab6e1f0c24c1e3c228a50a3cfba75e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/types/020",
-			"Comment": "v0.5.0",
-			"Rev": "1a9288c3c09cea4e580fdb1a636f1c5e185a391f"
+			"Comment": "v0.5.2",
+			"Rev": "137b4975ecab6e1f0c24c1e3c228a50a3cfba75e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/types/current",
-			"Comment": "v0.5.0",
-			"Rev": "1a9288c3c09cea4e580fdb1a636f1c5e185a391f"
+			"Comment": "v0.5.2",
+			"Rev": "137b4975ecab6e1f0c24c1e3c228a50a3cfba75e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/utils",
-			"Comment": "v0.5.0",
-			"Rev": "1a9288c3c09cea4e580fdb1a636f1c5e185a391f"
+			"Comment": "v0.5.2",
+			"Rev": "137b4975ecab6e1f0c24c1e3c228a50a3cfba75e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/utils/hwaddr",
-			"Comment": "v0.5.0",
-			"Rev": "1a9288c3c09cea4e580fdb1a636f1c5e185a391f"
+			"Comment": "v0.5.2",
+			"Rev": "137b4975ecab6e1f0c24c1e3c228a50a3cfba75e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/utils/sysctl",
-			"Comment": "v0.5.0",
-			"Rev": "1a9288c3c09cea4e580fdb1a636f1c5e185a391f"
+			"Comment": "v0.5.2",
+			"Rev": "137b4975ecab6e1f0c24c1e3c228a50a3cfba75e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/version",
-			"Comment": "v0.5.0",
-			"Rev": "1a9288c3c09cea4e580fdb1a636f1c5e185a391f"
+			"Comment": "v0.5.2",
+			"Rev": "137b4975ecab6e1f0c24c1e3c228a50a3cfba75e"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-iptables/iptables",
