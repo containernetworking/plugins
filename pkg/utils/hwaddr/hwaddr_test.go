@@ -17,7 +17,7 @@ package hwaddr_test
 import (
 	"net"
 
-	"github.com/containernetworking/cni/pkg/utils/hwaddr"
+	"github.com/containernetworking/plugins/pkg/utils/hwaddr"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
