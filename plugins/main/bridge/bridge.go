@@ -22,6 +22,8 @@ import (
 	"runtime"
 	"syscall"
 
+	"io/ioutil"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
@@ -46,6 +48,12 @@ type NetConf struct {
 	HairpinMode  bool   `json:"hairpinMode"`
 }
 
+type gwInfo struct {
+	gws               []net.IPNet
+	family            int
+	defaultRouteFound bool
+}
+
 func init() {
 	// this ensures that main runs only on main thread (thread group leader).
 	// since namespace ops (unshare, setns) are done for a single thread, we
@@ -63,28 +71,98 @@ func loadNetConf(bytes []byte) (*NetConf, string, error) {
 	return n, n.CNIVersion, nil
 }
 
-func ensureBridgeAddr(br *netlink.Bridge, ipn *net.IPNet, forceAddress bool) error {
-	addrs, err := netlink.AddrList(br, syscall.AF_INET)
+// calcGateways processes the results from the IPAM plugin and does the
+// following for each IP family:
+//    - Calculates and compiles a list of gateway addresses
+//    - Adds a default route if needed
+func calcGateways(result *current.Result, n *NetConf) (*gwInfo, *gwInfo, error) {
+
+	gwsV4 := &gwInfo{}
+	gwsV6 := &gwInfo{}
+
+	for _, ipc := range result.IPs {
+
+		// Determine if this config is IPv4 or IPv6
+		var gws *gwInfo
+		defaultNet := &net.IPNet{}
+		switch {
+		case ipc.Address.IP.To4() != nil:
+			gws = gwsV4
+			gws.family = netlink.FAMILY_V4
+			defaultNet.IP = net.IPv4zero
+		case len(ipc.Address.IP) == net.IPv6len:
+			gws = gwsV6
+			gws.family = netlink.FAMILY_V6
+			defaultNet.IP = net.IPv6zero
+		default:
+			return nil, nil, fmt.Errorf("Unknown IP object: %v", ipc)
+		}
+		defaultNet.Mask = net.IPMask(defaultNet.IP)
+
+		// All IPs currently refer to the container interface
+		ipc.Interface = 2
+
+		// If not provided, calculate the gateway address corresponding
+		// to the selected IP address
+		if ipc.Gateway == nil && n.IsGW {
+			ipc.Gateway = calcGatewayIP(&ipc.Address)
+		}
+
+		// Add a default route for this family using the current
+		// gateway address if necessary.
+		if n.IsDefaultGW && !gws.defaultRouteFound {
+			for _, route := range result.Routes {
+				if route.GW != nil && defaultNet.String() == route.Dst.String() {
+					gws.defaultRouteFound = true
+					break
+				}
+			}
+			if !gws.defaultRouteFound {
+				result.Routes = append(
+					result.Routes,
+					&types.Route{Dst: *defaultNet, GW: ipc.Gateway},
+				)
+				gws.defaultRouteFound = true
+			}
+		}
+
+		// Append this gateway address to the list of gateways
+		if n.IsGW {
+			gw := net.IPNet{
+				IP:   ipc.Gateway,
+				Mask: ipc.Address.Mask,
+			}
+			gws.gws = append(gws.gws, gw)
+		}
+	}
+	return gwsV4, gwsV6, nil
+}
+
+func ensureBridgeAddr(br *netlink.Bridge, family int, ipn *net.IPNet, forceAddress bool) error {
+	addrs, err := netlink.AddrList(br, family)
 	if err != nil && err != syscall.ENOENT {
 		return fmt.Errorf("could not get list of IP addresses: %v", err)
 	}
 
-	// if there're no addresses on the bridge, it's ok -- we'll add one
-	if len(addrs) > 0 {
-		ipnStr := ipn.String()
-		for _, a := range addrs {
-			// string comp is actually easiest for doing IPNet comps
-			if a.IPNet.String() == ipnStr {
-				return nil
-			}
+	ipnStr := ipn.String()
+	for _, a := range addrs {
 
-			// If forceAddress is set to true then reconfigure IP address otherwise throw error
+		// string comp is actually easiest for doing IPNet comps
+		if a.IPNet.String() == ipnStr {
+			return nil
+		}
+
+		// Multiple IPv6 addresses are allowed on the bridge if the
+		// corresponding subnets do not overlap. For IPv4 or for
+		// overlapping IPv6 subnets, reconfigure the IP address if
+		// forceAddress is true, otherwise throw an error.
+		if family == netlink.FAMILY_V4 || a.IPNet.Contains(ipn.IP) || ipn.Contains(a.IPNet.IP) {
 			if forceAddress {
 				if err = deleteBridgeAddr(br, a.IPNet); err != nil {
 					return err
 				}
 			} else {
-				return fmt.Errorf("%q already has an IP address different from %v", br.Name, ipn.String())
+				return fmt.Errorf("%q already has an IP address different from %v", br.Name, ipnStr)
 			}
 		}
 	}
@@ -99,16 +177,8 @@ func ensureBridgeAddr(br *netlink.Bridge, ipn *net.IPNet, forceAddress bool) err
 func deleteBridgeAddr(br *netlink.Bridge, ipn *net.IPNet) error {
 	addr := &netlink.Addr{IPNet: ipn, Label: ""}
 
-	if err := netlink.LinkSetDown(br); err != nil {
-		return fmt.Errorf("could not set down bridge %q: %v", br.Name, err)
-	}
-
 	if err := netlink.AddrDel(br, addr); err != nil {
 		return fmt.Errorf("could not remove IP address from %q: %v", br.Name, err)
-	}
-
-	if err := netlink.LinkSetUp(br); err != nil {
-		return fmt.Errorf("could not set up bridge %q: %v", br.Name, err)
 	}
 
 	return nil
@@ -216,6 +286,20 @@ func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
 	}, nil
 }
 
+// disableIPV6DAD disables IPv6 Duplicate Address Detection (DAD)
+// for an interface.
+func disableIPV6DAD(ifName string) error {
+	f := fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_dad", ifName)
+	return ioutil.WriteFile(f, []byte("0"), 0644)
+}
+
+func enableIPForward(family int) error {
+	if family == netlink.FAMILY_V4 {
+		return ip.EnableIP4Forward()
+	}
+	return ip.EnableIP6Forward()
+}
+
 func cmdAdd(args *skel.CmdArgs) error {
 	n, cniVersion, err := loadNetConf(args.StdinData)
 	if err != nil {
@@ -260,54 +344,31 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	result.Interfaces = []*current.Interface{brInterface, hostInterface, containerInterface}
 
-	for _, ipc := range result.IPs {
-		// All IPs currently refer to the container interface
-		ipc.Interface = 2
-		if ipc.Gateway == nil && n.IsGW {
-			ipc.Gateway = calcGatewayIP(&ipc.Address)
-		}
+	// Gather gateway information for each IP family
+	gwsV4, gwsV6, err := calcGateways(result, n)
+	if err != nil {
+		return err
 	}
 
+	// Configure the container hardware address and IP address(es)
 	if err := netns.Do(func(_ ns.NetNS) error {
-		// set the default gateway if requested
-		if n.IsDefaultGW {
-			for _, ipc := range result.IPs {
-				defaultNet := &net.IPNet{}
-				switch {
-				case ipc.Address.IP.To4() != nil:
-					defaultNet.IP = net.IPv4zero
-					defaultNet.Mask = net.IPMask(net.IPv4zero)
-				case len(ipc.Address.IP) == net.IPv6len && ipc.Address.IP.To4() == nil:
-					defaultNet.IP = net.IPv6zero
-					defaultNet.Mask = net.IPMask(net.IPv6zero)
-				default:
-					return fmt.Errorf("Unknown IP object: %v", ipc)
-				}
-
-				for _, route := range result.Routes {
-					if defaultNet.String() == route.Dst.String() {
-						if route.GW != nil && !route.GW.Equal(ipc.Gateway) {
-							return fmt.Errorf(
-								"isDefaultGateway ineffective because IPAM sets default route via %q",
-								route.GW,
-							)
-						}
-					}
-				}
-
-				result.Routes = append(
-					result.Routes,
-					&types.Route{Dst: *defaultNet, GW: ipc.Gateway},
-				)
-			}
+		// Disable IPv6 DAD just in case hairpin mode is enabled on the
+		// bridge. Hairpin mode causes echos of neighbor solicitation
+		// packets, which causes DAD failures.
+		// TODO: (short term) Disable DAD conditional on actual hairpin mode
+		// TODO: (long term) Use enhanced DAD when that becomes available in kernels.
+		if err := disableIPV6DAD(args.IfName); err != nil {
+			return err
 		}
 
 		if err := ipam.ConfigureIface(args.IfName, result); err != nil {
 			return err
 		}
 
-		if err := ip.SetHWAddrByIP(args.IfName, result.IPs[0].Address.IP, nil /* TODO IPv6 */); err != nil {
-			return err
+		if result.IPs[0].Address.IP.To4() != nil {
+			if err := ip.SetHWAddrByIP(args.IfName, result.IPs[0].Address.IP, nil /* TODO IPv6 */); err != nil {
+				return err
+			}
 		}
 
 		// Refetch the veth since its MAC address may changed
@@ -324,17 +385,23 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	if n.IsGW {
 		var firstV4Addr net.IP
-		for _, ipc := range result.IPs {
-			gwn := &net.IPNet{
-				IP:   ipc.Gateway,
-				Mask: ipc.Address.Mask,
-			}
-			if ipc.Gateway.To4() != nil && firstV4Addr == nil {
-				firstV4Addr = ipc.Gateway
+		// Set the IP address(es) on the bridge and enable forwarding
+		for _, gws := range []*gwInfo{gwsV4, gwsV6} {
+			for _, gw := range gws.gws {
+				if gw.IP.To4() != nil && firstV4Addr == nil {
+					firstV4Addr = gw.IP
+				}
+
+				err = ensureBridgeAddr(br, gws.family, &gw, n.ForceAddress)
+				if err != nil {
+					return fmt.Errorf("failed to set bridge addr: %v", err)
+				}
 			}
 
-			if err = ensureBridgeAddr(br, gwn, n.ForceAddress); err != nil {
-				return err
+			if gws.gws != nil {
+				if err = enableIPForward(gws.family); err != nil {
+					return fmt.Errorf("failed to enable forwarding: %v", err)
+				}
 			}
 		}
 
@@ -342,10 +409,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if err := ip.SetHWAddrByIP(n.BrName, firstV4Addr, nil /* TODO IPv6 */); err != nil {
 				return err
 			}
-		}
-
-		if err := ip.EnableIP4Forward(); err != nil {
-			return fmt.Errorf("failed to enable forwarding: %v", err)
 		}
 	}
 
@@ -392,7 +455,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	var ipn *net.IPNet
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		var err error
-		ipn, err = ip.DelLinkByNameAddr(args.IfName, netlink.FAMILY_V4)
+		ipn, err = ip.DelLinkByNameAddr(args.IfName, netlink.FAMILY_ALL)
 		if err != nil && err == ip.ErrLinkNotFound {
 			return nil
 		}
