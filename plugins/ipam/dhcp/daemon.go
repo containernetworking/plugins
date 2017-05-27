@@ -18,7 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/rpc"
@@ -141,19 +141,29 @@ func getListener() (net.Listener, error) {
 	}
 }
 
-func runDaemon() {
+func runDaemon(pidfilePath string) error {
 	// since other goroutines (on separate threads) will change namespaces,
 	// ensure the RPC server does not get scheduled onto those
 	runtime.LockOSThread()
 
+	// Write the pidfile
+	if pidfilePath != "" {
+		if !filepath.IsAbs(pidfilePath) {
+			return fmt.Errorf("Error writing pidfile %q: path not absolute", pidfilePath)
+		}
+		if err := ioutil.WriteFile(pidfilePath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
+			return fmt.Errorf("Error writing pidfile %q: %v", pidfilePath, err)
+		}
+	}
+
 	l, err := getListener()
 	if err != nil {
-		log.Printf("Error getting listener: %v", err)
-		return
+		return fmt.Errorf("Error getting listener: %v", err)
 	}
 
 	dhcp := newDHCP()
 	rpc.Register(dhcp)
 	rpc.HandleHTTP()
 	http.Serve(l, nil)
+	return nil
 }

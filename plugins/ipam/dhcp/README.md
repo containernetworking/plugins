@@ -16,6 +16,9 @@ $ rm -f /run/cni/dhcp.sock
 $ ./dhcp daemon
 ```
 
+If given `-pidfile <path>` arguments after 'daemon', the dhcp plugin will write
+its PID to the given file.
+
 Alternatively, you can use systemd socket activation protocol.
 Be sure that the .socket file uses /run/cni/dhcp.sock as the socket path.
 
