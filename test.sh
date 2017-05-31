@@ -10,7 +10,7 @@ source ./build.sh
 
 echo "Running tests"
 
-TESTABLE="plugins/ipam/dhcp plugins/ipam/host-local plugins/ipam/host-local/backend/allocator plugins/main/loopback plugins/main/ipvlan plugins/main/macvlan plugins/main/bridge plugins/main/ptp plugins/meta/flannel plugins/main/vlan plugins/sample"
+TESTABLE="plugins/ipam/dhcp plugins/ipam/host-local plugins/ipam/host-local/backend/allocator plugins/main/loopback plugins/main/ipvlan plugins/main/macvlan plugins/main/bridge plugins/main/ptp plugins/meta/flannel plugins/main/vlan plugins/sample pkg/ip pkg/ipam pkg/ns pkg/utils pkg/utils/hwaddr pkg/utils/sysctl"
 
 # user has not provided PKG override
 if [ -z "$PKG" ]; then
