@@ -60,6 +60,11 @@
 			"Rev": "bed07e1bc5b85f69c6f0fd73393aa35ec68ed892"
 		},
 		{
+			"ImportPath": "github.com/mattn/go-shellwords",
+			"Comment": "v1.0.3",
+			"Rev": "02e3cf038dcea8290e44424da473dd12be796a8a"
+		},
+		{
 			"ImportPath": "github.com/onsi/ginkgo",
 			"Comment": "v1.2.0-29-g7f8ab55",
 			"Rev": "7f8ab55aaf3b86885aa55b762e803744d1674700"
