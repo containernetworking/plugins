@@ -186,7 +186,7 @@ func testEchoServer(address string) bool {
 	}
 	defer conn.Close()
 
-	conn.SetDeadline(time.Now().Add(2 * time.Second))
+	conn.SetDeadline(time.Now().Add(20 * time.Second))
 	fmt.Fprintln(GinkgoWriter, "connected to", address)
 
 	message := "Aliquid melius quam pessimum optimum non est."
@@ -196,7 +196,7 @@ func testEchoServer(address string) bool {
 		return false
 	}
 
-	conn.SetDeadline(time.Now().Add(2 * time.Second))
+	conn.SetDeadline(time.Now().Add(20 * time.Second))
 	fmt.Fprintln(GinkgoWriter, "reading...")
 	response := make([]byte, len(message))
 	_, err = conn.Read(response)

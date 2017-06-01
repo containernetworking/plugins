@@ -21,6 +21,11 @@ for d in $PLUGINS; do
 		plugin="$(basename "$d")"
 		echo "  $plugin"
 		# use go install so we don't duplicate work
-		go build -o "${PWD}/bin/$plugin" -pkgdir "$GOPATH/pkg" "$@" "$REPO_PATH/$d"
+		if [ -n "$FASTBUILD" ]
+		then
+			GOBIN=${PWD}/bin go install -pkgdir $GOPATH/pkg "$@" $REPO_PATH/$d
+		else
+			go build -o "${PWD}/bin/$plugin" -pkgdir "$GOPATH/pkg" "$@" "$REPO_PATH/$d"
+		fi
 	fi
 done
