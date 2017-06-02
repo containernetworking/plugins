@@ -19,9 +19,7 @@ if [ -z "$PKG" ]; then
 
 # user has provided PKG override
 else
-	# strip out slashes and dots from PKG=./foo/
-	TEST=${PKG//\//}
-	TEST=${TEST//./}
+	TEST=$PKG
 
 	# only run gofmt on packages provided by user
 	FMT="$TEST"
@@ -40,4 +38,9 @@ if [ -n "${fmtRes}" ]; then
 	exit 255
 fi
 
-
+echo "Checking govet..."
+vetRes=$(go vet $TEST)
+if [ -n "${vetRes}" ]; then
+	echo -e "govet checking failed:\n${vetRes}"
+	exit 255
+fi

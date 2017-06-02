@@ -19,17 +19,10 @@ env:
 matrix:
   fast_finish: true
 
-install:
- - |
-   go get github.com/containernetworking/cni || true
-   pushd ../cni
-     GOARCH="${TARGET}" ./build.sh
-   popd
-
 script:
  - |
    if [ "${TARGET}" == "amd64" ]; then
-     CNI_PATH="$(cd ../cni/bin && pwd)" GOARCH="${TARGET}" ./test.sh
+     GOARCH="${TARGET}" ./test.sh
    else
      GOARCH="${TARGET}" ./build.sh
    fi
