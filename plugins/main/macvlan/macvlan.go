@@ -29,6 +29,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
+	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
 )
 
@@ -176,36 +177,26 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	result.Interfaces = []*current.Interface{macvlanInterface}
 
-	var firstV4Addr net.IP
 	for _, ipc := range result.IPs {
 		// All addresses apply to the container macvlan interface
 		ipc.Interface = 0
-
-		if ipc.Address.IP.To4() != nil && firstV4Addr == nil {
-			firstV4Addr = ipc.Address.IP
-		}
 	}
 
-	if firstV4Addr != nil {
-		err = netns.Do(func(_ ns.NetNS) error {
-			if err := ip.SetHWAddrByIP(args.IfName, firstV4Addr, nil /* TODO IPv6 */); err != nil {
-				return err
-			}
-
-			return ipam.ConfigureIface(args.IfName, result)
-		})
-		if err != nil {
+	err = netns.Do(func(_ ns.NetNS) error {
+		if err := ipam.ConfigureIface(args.IfName, result); err != nil {
 			return err
 		}
-	}
 
-	// Re-fetch macvlan interface as its MAC address may have changed
-	err = netns.Do(func(_ ns.NetNS) error {
-		link, err := netlink.LinkByName(args.IfName)
+		contVeth, err := net.InterfaceByName(args.IfName)
 		if err != nil {
-			return fmt.Errorf("failed to re-fetch macvlan interface: %v", err)
+			return fmt.Errorf("failed to look up %q: %v", args.IfName, err)
 		}
-		macvlanInterface.Mac = link.Attrs().HardwareAddr.String()
+
+		for _, ipc := range result.IPs {
+			if ipc.Version == "4" {
+				_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
+			}
+		}
 		return nil
 	})
 	if err != nil {

@@ -22,8 +22,6 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/vishvananda/netlink"
-
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
@@ -32,6 +30,8 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/utils"
+	"github.com/j-keck/arping"
+	"github.com/vishvananda/netlink"
 )
 
 func init() {
@@ -73,42 +73,18 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 		containerInterface.Mac = contVeth0.HardwareAddr.String()
 		containerInterface.Sandbox = netns.Path()
 
-		var firstV4Addr net.IP
 		for _, ipc := range pr.IPs {
 			// All addresses apply to the container veth interface
 			ipc.Interface = 1
-
-			if ipc.Address.IP.To4() != nil && firstV4Addr == nil {
-				firstV4Addr = ipc.Address.IP
-			}
 		}
 
 		pr.Interfaces = []*current.Interface{hostInterface, containerInterface}
-
-		if firstV4Addr != nil {
-			err = hostNS.Do(func(_ ns.NetNS) error {
-				hostVethName := hostVeth.Name
-				if err := ip.SetHWAddrByIP(hostVethName, firstV4Addr, nil /* TODO IPv6 */); err != nil {
-					return fmt.Errorf("failed to set hardware addr by IP: %v", err)
-				}
-
-				return nil
-			})
-			if err != nil {
-				return err
-			}
-		}
 
 		if err = ipam.ConfigureIface(ifName, pr); err != nil {
 			return err
 		}
 
-		if err := ip.SetHWAddrByIP(contVeth0.Name, firstV4Addr, nil /* TODO IPv6 */); err != nil {
-			return fmt.Errorf("failed to set hardware addr by IP: %v", err)
-		}
-
-		// Re-fetch container veth to update attributes
-		contVeth, err := netlink.LinkByName(ifName)
+		contVeth, err := net.InterfaceByName(ifName)
 		if err != nil {
 			return fmt.Errorf("failed to look up %q: %v", ifName, err)
 		}
@@ -116,7 +92,7 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 		for _, ipc := range pr.IPs {
 			// Delete the route that was automatically added
 			route := netlink.Route{
-				LinkIndex: contVeth.Attrs().Index,
+				LinkIndex: contVeth.Index,
 				Dst: &net.IPNet{
 					IP:   ipc.Address.IP.Mask(ipc.Address.Mask),
 					Mask: ipc.Address.Mask,
@@ -130,7 +106,7 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 
 			for _, r := range []netlink.Route{
 				netlink.Route{
-					LinkIndex: contVeth.Attrs().Index,
+					LinkIndex: contVeth.Index,
 					Dst: &net.IPNet{
 						IP:   ipc.Gateway,
 						Mask: net.CIDRMask(32, 32),
@@ -139,7 +115,7 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 					Src:   ipc.Address.IP,
 				},
 				netlink.Route{
-					LinkIndex: contVeth.Attrs().Index,
+					LinkIndex: contVeth.Index,
 					Dst: &net.IPNet{
 						IP:   ipc.Address.IP.Mask(ipc.Address.Mask),
 						Mask: ipc.Address.Mask,
@@ -152,6 +128,13 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 				if err := netlink.RouteAdd(&r); err != nil {
 					return fmt.Errorf("failed to add route %v: %v", r, err)
 				}
+			}
+		}
+
+		// Send a gratuitous arp for all v4 addresses
+		for _, ipc := range pr.IPs {
+			if ipc.Version == "4" {
+				_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
 			}
 		}
 
