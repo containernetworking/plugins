@@ -51,12 +51,21 @@ We generally require test coverage of any new features or bug fixes.
 Here's how you can run the test suite on any system (even Mac or Windows) using
  [Vagrant](https://www.vagrantup.com/) and a hypervisor of your choice:
 
+First, ensure that you have the [CNI repo](https://github.com/containernetworking/cni) and this repo (plugins) cloned side-by-side:
+```bash
+cd ~/workspace
+git clone https://github.com/containernetworking/cni
+git clone https://github.com/containernetworking/plugins
+```
+
+Next, boot the virtual machine and SSH in to run the tests:
+
 ```bash
 vagrant up
 vagrant ssh
 # you're now in a shell in a virtual machine
 sudo su
-cd /go/src/github.com/containernetworking/cni
+cd /go/src/github.com/containernetworking/plugins
 
 # to run the full test suite
 ./test.sh
