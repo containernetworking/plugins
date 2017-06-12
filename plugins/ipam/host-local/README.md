@@ -49,14 +49,19 @@ We can test it out on the command-line:
 ```bash
 $ export CNI_COMMAND=ADD
 $ export CNI_CONTAINERID=f81d4fae-7dec-11d0-a765-00a0c91e6bf6
-$ echo '{ "name": "default", "ipam": { "type": "host-local", "subnet": "203.0.113.0/24" } }' | ./host-local
+$ export CNI_NETNS=test
+$ export CNI_IFNAME=eth0
+$ export CNI_PATH=/PATH/TO/CNI/PLUGINS/bin  # the cni binaries path
+$ echo '{ "name": "default", "ipam": { "type": "host-local", "subnet": "203.0.113.0/24" } }' | /PATH/TO/host-local
 ```
 
 ```json
 {
     "ip4": {
-        "ip": "203.0.113.1/24"
-    }
+        "ip": "203.0.113.2/24",
+		"gateway": "203.0.113.1"
+    },
+	"dns": {}
 }
 ```
 
