@@ -104,12 +104,17 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 				return fmt.Errorf("failed to delete route %v: %v", route, err)
 			}
 
+			addrBits := 32
+			if ipc.Version == "6" {
+				addrBits = 128
+			}
+
 			for _, r := range []netlink.Route{
 				netlink.Route{
 					LinkIndex: contVeth.Index,
 					Dst: &net.IPNet{
 						IP:   ipc.Gateway,
-						Mask: net.CIDRMask(32, 32),
+						Mask: net.CIDRMask(addrBits, addrBits),
 					},
 					Scope: netlink.SCOPE_LINK,
 					Src:   ipc.Address.IP,
@@ -187,10 +192,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	if err := ip.EnableIP4Forward(); err != nil {
-		return fmt.Errorf("failed to enable forwarding: %v", err)
-	}
-
 	// run the IPAM plugin and get back the config to apply
 	r, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
 	if err != nil {
@@ -204,6 +205,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	if len(result.IPs) == 0 {
 		return errors.New("IPAM plugin returned missing IP config")
+	}
+
+	if err := ip.EnableForward(result.IPs); err != nil {
+		return fmt.Errorf("Could not enable IP forwarding: %v", err)
 	}
 
 	netns, err := ns.GetNS(args.Netns)
