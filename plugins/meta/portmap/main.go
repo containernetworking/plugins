@@ -28,6 +28,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -54,11 +55,16 @@ type PortMapConf struct {
 	} `json:"runtimeConfig,omitempty"`
 	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
 	PrevResult    *current.Result        `json:"-"`
-	ContainerID   string
+
+	// These are fields parsed out of the config or the environment;
+	// included here for convenience
+	ContainerID string `json:"-"`
+	ContIPv4    net.IP `json:"-"`
+	ContIPv6    net.IP `json:"-"`
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
-	netConf, err := parseConfig(args.StdinData)
+	netConf, err := parseConfig(args.StdinData, args.IfName)
 	if err != nil {
 		return fmt.Errorf("failed to parse config: %v", err)
 	}
@@ -73,31 +79,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	netConf.ContainerID = args.ContainerID
 
-	// Loop through IPs, setting up forwarding to the first container IP
-	// per family
-	hasV4 := false
-	hasV6 := false
-	for _, ip := range netConf.PrevResult.IPs {
-		if ip.Version == "6" && hasV6 {
-			continue
-		} else if ip.Version == "4" && hasV4 {
-			continue
-		}
-
-		// Skip known non-sandbox interfaces
-		intIdx := ip.Interface
-		if intIdx >= 0 && intIdx < len(netConf.PrevResult.Interfaces) && netConf.PrevResult.Interfaces[intIdx].Name != args.IfName {
-			continue
-		}
-
-		if err := forwardPorts(netConf, ip.Address.IP); err != nil {
+	if netConf.ContIPv4 != nil {
+		if err := forwardPorts(netConf, netConf.ContIPv4); err != nil {
 			return err
 		}
+	}
 
-		if ip.Version == "6" {
-			hasV6 = true
-		} else {
-			hasV4 = true
+	if netConf.ContIPv6 != nil {
+		if err := forwardPorts(netConf, netConf.ContIPv6); err != nil {
+			return err
 		}
 	}
 
@@ -106,7 +96,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
-	netConf, err := parseConfig(args.StdinData)
+	netConf, err := parseConfig(args.StdinData, args.IfName)
 	if err != nil {
 		return fmt.Errorf("failed to parse config: %v", err)
 	}
@@ -126,7 +116,7 @@ func main() {
 }
 
 // parseConfig parses the supplied configuration (and prevResult) from stdin.
-func parseConfig(stdin []byte) (*PortMapConf, error) {
+func parseConfig(stdin []byte, ifName string) (*PortMapConf, error) {
 	conf := PortMapConf{}
 
 	if err := json.Unmarshal(stdin, &conf); err != nil {
@@ -153,6 +143,38 @@ func parseConfig(stdin []byte) (*PortMapConf, error) {
 	if conf.SNAT == nil {
 		tvar := true
 		conf.SNAT = &tvar
+	}
+
+	// Reject invalid port numbers
+	for _, pm := range conf.RuntimeConfig.PortMaps {
+		if pm.ContainerPort <= 0 {
+			return nil, fmt.Errorf("Invalid container port number: %d", pm.ContainerPort)
+		}
+		if pm.HostPort <= 0 {
+			return nil, fmt.Errorf("Invalid host port number: %d", pm.HostPort)
+		}
+	}
+
+	if conf.PrevResult != nil {
+		for _, ip := range conf.PrevResult.IPs {
+			if ip.Version == "6" && conf.ContIPv6 != nil {
+				continue
+			} else if ip.Version == "4" && conf.ContIPv4 != nil {
+				continue
+			}
+
+			// Skip known non-sandbox interfaces
+			intIdx := ip.Interface
+			if intIdx >= 0 && intIdx < len(conf.PrevResult.Interfaces) && conf.PrevResult.Interfaces[intIdx].Name != ifName {
+				continue
+			}
+			switch ip.Version {
+			case "6":
+				conf.ContIPv6 = ip.Address.IP
+			case "4":
+				conf.ContIPv4 = ip.Address.IP
+			}
+		}
 	}
 
 	return &conf, nil

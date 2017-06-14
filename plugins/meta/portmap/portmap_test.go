@@ -32,6 +32,100 @@ var _ = Describe("portmapping configuration", func() {
 	ipv4addr := net.ParseIP("192.2.0.1")
 	ipv6addr := net.ParseIP("2001:db8::1")
 
+	Context("config parsing", func() {
+		It("Correctly parses an ADD config", func() {
+			configBytes := []byte(`{
+	"name": "test",
+	"type": "portmap",
+	"cniVersion": "0.3.1",
+	"runtimeConfig": {
+		"portMappings": [
+			{ "hostPort": 8080, "containerPort": 80, "protocol": "tcp"},
+			{ "hostPort": 8081, "containerPort": 81, "protocol": "udp"}
+		]
+	},
+	"snat": false,
+	"conditionsV4": ["a", "b"],
+	"conditionsV6": ["c", "d"],
+	"prevResult": {
+		"interfaces": [
+			{"name": "host"},
+			{"name": "container", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.1/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			},
+			{
+				"version": "6",
+				"address": "2001:db8:1::2/64",
+				"gateway": "2001:db8:1::1",
+				"interface": 1
+			},
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 1
+			}
+		]
+	}
+}`)
+			c, err := parseConfig(configBytes, "container")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c.CNIVersion).To(Equal("0.3.1"))
+			Expect(c.ConditionsV4).To(Equal(&[]string{"a", "b"}))
+			Expect(c.ConditionsV6).To(Equal(&[]string{"c", "d"}))
+			fvar := false
+			Expect(c.SNAT).To(Equal(&fvar))
+			Expect(c.Name).To(Equal("test"))
+
+			Expect(c.ContIPv4).To(Equal(net.ParseIP("10.0.0.2")))
+			Expect(c.ContIPv6).To(Equal(net.ParseIP("2001:db8:1::2")))
+		})
+
+		It("Correctly parses a DEL config", func() {
+			// When called with DEL, neither runtimeConfig nor prevResult may be specified
+			configBytes := []byte(`{
+	"name": "test",
+	"type": "portmap",
+	"cniVersion": "0.3.1",
+	"snat": false,
+	"conditionsV4": ["a", "b"],
+	"conditionsV6": ["c", "d"]
+}`)
+			c, err := parseConfig(configBytes, "container")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c.CNIVersion).To(Equal("0.3.1"))
+			Expect(c.ConditionsV4).To(Equal(&[]string{"a", "b"}))
+			Expect(c.ConditionsV6).To(Equal(&[]string{"c", "d"}))
+			fvar := false
+			Expect(c.SNAT).To(Equal(&fvar))
+			Expect(c.Name).To(Equal("test"))
+		})
+
+		It("fails with invalid mappings", func() {
+			configBytes := []byte(`{
+	"name": "test",
+	"type": "portmap",
+	"cniVersion": "0.3.1",
+	"snat": false,
+	"conditionsV4": ["a", "b"],
+	"conditionsV6": ["c", "d"],
+	"runtimeConfig": {
+		"portMappings": [
+			{ "hostPort": 0, "containerPort": 80, "protocol": "tcp"}
+		]
+	}
+}`)
+			_, err := parseConfig(configBytes, "container")
+			Expect(err).To(MatchError("Invalid host port number: 0"))
+		})
+	})
+
 	Describe("Generating chains", func() {
 		Context("for DNAT", func() {
 			It("generates a correct container chain", func() {
