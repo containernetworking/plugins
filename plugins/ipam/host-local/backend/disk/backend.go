@@ -24,10 +24,12 @@ import (
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend"
 )
 
-const lastIPFile = "last_reserved_ip"
+const lastIPFilePrefix = "last_reserved_ip."
 
 var defaultDataDir = "/var/lib/cni/networks"
 
+// Store is a simple disk-backed store that creates one file per IP
+// address in a given directory. The contents of the file are the container ID.
 type Store struct {
 	FileLock
 	dataDir string
@@ -41,7 +43,7 @@ func New(network, dataDir string) (*Store, error) {
 		dataDir = defaultDataDir
 	}
 	dir := filepath.Join(dataDir, network)
-	if err := os.MkdirAll(dir, 0644); err != nil {
+	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, err
 	}
 
@@ -52,7 +54,7 @@ func New(network, dataDir string) (*Store, error) {
 	return &Store{*lk, dir}, nil
 }
 
-func (s *Store) Reserve(id string, ip net.IP) (bool, error) {
+func (s *Store) Reserve(id string, ip net.IP, rangeID string) (bool, error) {
 	fname := filepath.Join(s.dataDir, ip.String())
 	f, err := os.OpenFile(fname, os.O_RDWR|os.O_EXCL|os.O_CREATE, 0644)
 	if os.IsExist(err) {
@@ -71,7 +73,7 @@ func (s *Store) Reserve(id string, ip net.IP) (bool, error) {
 		return false, err
 	}
 	// store the reserved ip in lastIPFile
-	ipfile := filepath.Join(s.dataDir, lastIPFile)
+	ipfile := filepath.Join(s.dataDir, lastIPFilePrefix+rangeID)
 	err = ioutil.WriteFile(ipfile, []byte(ip.String()), 0644)
 	if err != nil {
 		return false, err
@@ -80,8 +82,8 @@ func (s *Store) Reserve(id string, ip net.IP) (bool, error) {
 }
 
 // LastReservedIP returns the last reserved IP if exists
-func (s *Store) LastReservedIP() (net.IP, error) {
-	ipfile := filepath.Join(s.dataDir, lastIPFile)
+func (s *Store) LastReservedIP(rangeID string) (net.IP, error) {
+	ipfile := filepath.Join(s.dataDir, lastIPFilePrefix+rangeID)
 	data, err := ioutil.ReadFile(ipfile)
 	if err != nil {
 		return nil, err

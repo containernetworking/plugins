@@ -16,20 +16,21 @@ package testing
 
 import (
 	"net"
+	"os"
 
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend"
 )
 
 type FakeStore struct {
 	ipMap          map[string]string
-	lastReservedIP net.IP
+	lastReservedIP map[string]net.IP
 }
 
 // FakeStore implements the Store interface
 var _ backend.Store = &FakeStore{}
 
-func NewFakeStore(ipmap map[string]string, lastIP net.IP) *FakeStore {
-	return &FakeStore{ipmap, lastIP}
+func NewFakeStore(ipmap map[string]string, lastIPs map[string]net.IP) *FakeStore {
+	return &FakeStore{ipmap, lastIPs}
 }
 
 func (s *FakeStore) Lock() error {
@@ -44,18 +45,22 @@ func (s *FakeStore) Close() error {
 	return nil
 }
 
-func (s *FakeStore) Reserve(id string, ip net.IP) (bool, error) {
+func (s *FakeStore) Reserve(id string, ip net.IP, rangeID string) (bool, error) {
 	key := ip.String()
 	if _, ok := s.ipMap[key]; !ok {
 		s.ipMap[key] = id
-		s.lastReservedIP = ip
+		s.lastReservedIP[rangeID] = ip
 		return true, nil
 	}
 	return false, nil
 }
 
-func (s *FakeStore) LastReservedIP() (net.IP, error) {
-	return s.lastReservedIP, nil
+func (s *FakeStore) LastReservedIP(rangeID string) (net.IP, error) {
+	ip, ok := s.lastReservedIP[rangeID]
+	if !ok {
+		return nil, os.ErrNotExist
+	}
+	return ip, nil
 }
 
 func (s *FakeStore) Release(ip net.IP) error {
@@ -74,4 +79,8 @@ func (s *FakeStore) ReleaseByID(id string) error {
 		delete(s.ipMap, ip)
 	}
 	return nil
+}
+
+func (s *FakeStore) SetIPMap(m map[string]string) {
+	s.ipMap = m
 }

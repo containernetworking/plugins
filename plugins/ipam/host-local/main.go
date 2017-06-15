@@ -15,6 +15,10 @@
 package main
 
 import (
+	"fmt"
+	"net"
+	"strings"
+
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/disk"
 
@@ -50,17 +54,58 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer store.Close()
 
-	allocator, err := allocator.NewIPAllocator(ipamConf, store)
-	if err != nil {
-		return err
+	// Keep the allocators we used, so we can release all IPs if an error
+	// occurs after we start allocating
+	allocs := []*allocator.IPAllocator{}
+
+	// Store all requested IPs in a map, so we can easily remove ones we use
+	// and error if some remain
+	requestedIPs := map[string]net.IP{} //net.IP cannot be a key
+
+	for _, ip := range ipamConf.IPArgs {
+		requestedIPs[ip.String()] = ip
 	}
 
-	ipConf, routes, err := allocator.Get(args.ContainerID)
-	if err != nil {
-		return err
+	for idx, ipRange := range ipamConf.Ranges {
+		allocator := allocator.NewIPAllocator(ipamConf.Name, ipRange, store)
+
+		// Check to see if there are any custom IPs requested in this range.
+		var requestedIP net.IP
+		for k, ip := range requestedIPs {
+			if ipRange.IPInRange(ip) == nil {
+				requestedIP = ip
+				delete(requestedIPs, k)
+				break
+			}
+		}
+
+		ipConf, err := allocator.Get(args.ContainerID, requestedIP)
+		if err != nil {
+			// Deallocate all already allocated IPs
+			for _, alloc := range allocs {
+				_ = alloc.Release(args.ContainerID)
+			}
+			return fmt.Errorf("failed to allocate for range %d: %v", idx, err)
+		}
+
+		allocs = append(allocs, allocator)
+
+		result.IPs = append(result.IPs, ipConf)
 	}
-	result.IPs = []*current.IPConfig{ipConf}
-	result.Routes = routes
+
+	// If an IP was requested that wasn't fulfilled, fail
+	if len(requestedIPs) != 0 {
+		for _, alloc := range allocs {
+			_ = alloc.Release(args.ContainerID)
+		}
+		errstr := "failed to allocate all requested IPs:"
+		for _, ip := range requestedIPs {
+			errstr = errstr + " " + ip.String()
+		}
+		return fmt.Errorf(errstr)
+	}
+
+	result.Routes = ipamConf.Routes
 
 	return types.PrintResult(result, confVersion)
 }
@@ -77,10 +122,19 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 	defer store.Close()
 
-	ipAllocator, err := allocator.NewIPAllocator(ipamConf, store)
-	if err != nil {
-		return err
+	// Loop through all ranges, releasing all IPs, even if an error occurs
+	var errors []string
+	for _, ipRange := range ipamConf.Ranges {
+		ipAllocator := allocator.NewIPAllocator(ipamConf.Name, ipRange, store)
+
+		err := ipAllocator.Release(args.ContainerID)
+		if err != nil {
+			errors = append(errors, err.Error())
+		}
 	}
 
-	return ipAllocator.Release(args.ContainerID)
+	if errors != nil {
+		return fmt.Errorf(strings.Join(errors, ";"))
+	}
+	return nil
 }
