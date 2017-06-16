@@ -30,6 +30,8 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
+const TIMEOUT = 20
+
 var _ = Describe("portmap integration tests", func() {
 
 	var configList *libcni.NetworkConfigList
@@ -173,7 +175,7 @@ var _ = Describe("portmap integration tests", func() {
 
 		close(done)
 
-	}, 5)
+	}, TIMEOUT*3)
 })
 
 // testEchoServer returns true if we found an echo server on the port
@@ -186,7 +188,7 @@ func testEchoServer(address string) bool {
 	}
 	defer conn.Close()
 
-	conn.SetDeadline(time.Now().Add(20 * time.Second))
+	conn.SetDeadline(time.Now().Add(TIMEOUT * time.Second))
 	fmt.Fprintln(GinkgoWriter, "connected to", address)
 
 	message := "Aliquid melius quam pessimum optimum non est."
@@ -196,7 +198,7 @@ func testEchoServer(address string) bool {
 		return false
 	}
 
-	conn.SetDeadline(time.Now().Add(20 * time.Second))
+	conn.SetDeadline(time.Now().Add(TIMEOUT * time.Second))
 	fmt.Fprintln(GinkgoWriter, "reading...")
 	response := make([]byte, len(message))
 	_, err = conn.Read(response)
