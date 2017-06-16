@@ -15,7 +15,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"log"
 	"net/rpc"
 	"os"
 	"path/filepath"
@@ -30,7 +32,15 @@ const socketPath = "/run/cni/dhcp.sock"
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "daemon" {
-		runDaemon()
+		var pidfilePath string
+		daemonFlags := flag.NewFlagSet("daemon", flag.ExitOnError)
+		daemonFlags.StringVar(&pidfilePath, "pidfile", "", "optional path to write daemon PID to")
+		daemonFlags.Parse(os.Args[2:])
+
+		if err := runDaemon(pidfilePath); err != nil {
+			log.Printf(err.Error())
+			os.Exit(1)
+		}
 	} else {
 		skel.PluginMain(cmdAdd, cmdDel, version.All)
 	}
