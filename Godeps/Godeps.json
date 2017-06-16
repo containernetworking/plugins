@@ -60,6 +60,10 @@
 			"Rev": "bed07e1bc5b85f69c6f0fd73393aa35ec68ed892"
 		},
 		{
+			"ImportPath": "github.com/j-keck/arping",
+			"Rev": "2cf9dc699c5640a7e2c81403a44127bf28033600"
+		},
+		{
 			"ImportPath": "github.com/mattn/go-shellwords",
 			"Comment": "v1.0.3",
 			"Rev": "02e3cf038dcea8290e44424da473dd12be796a8a"
