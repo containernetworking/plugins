@@ -224,6 +224,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 			n.Delegate["isGateway"] = true
 		}
 	}
+	if n.CNIVersion != "" {
+		n.Delegate["cniVersion"] = n.CNIVersion
+	}
 
 	n.Delegate["ipam"] = map[string]interface{}{
 		"type":   "host-local",
