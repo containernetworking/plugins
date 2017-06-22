@@ -109,13 +109,13 @@ var _ = Describe("IPAM Operations", func() {
 			IPs: []*current.IPConfig{
 				{
 					Version:   "4",
-					Interface: 0,
+					Interface: current.Int(0),
 					Address:   *ipv4,
 					Gateway:   ipgw4,
 				},
 				{
 					Version:   "6",
-					Interface: 0,
+					Interface: current.Int(0),
 					Address:   *ipv6,
 					Gateway:   ipgw6,
 				},
@@ -226,7 +226,7 @@ var _ = Describe("IPAM Operations", func() {
 	})
 
 	It("returns an error when the interface index doesn't match the link name", func() {
-		result.IPs[0].Interface = 1
+		result.IPs[0].Interface = current.Int(1)
 		err := originalNS.Do(func(ns.NetNS) error {
 			return ConfigureIface(LINK_NAME, result)
 		})
@@ -234,7 +234,15 @@ var _ = Describe("IPAM Operations", func() {
 	})
 
 	It("returns an error when the interface index is too big", func() {
-		result.IPs[0].Interface = 2
+		result.IPs[0].Interface = current.Int(2)
+		err := originalNS.Do(func(ns.NetNS) error {
+			return ConfigureIface(LINK_NAME, result)
+		})
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("returns an error when the interface index is too small", func() {
+		result.IPs[0].Interface = current.Int(-1)
 		err := originalNS.Do(func(ns.NetNS) error {
 			return ConfigureIface(LINK_NAME, result)
 		})
@@ -254,5 +262,38 @@ var _ = Describe("IPAM Operations", func() {
 			return ConfigureIface("asdfasdf", result)
 		})
 		Expect(err).To(HaveOccurred())
+	})
+
+	It("does not panic when interface is not specified", func() {
+		result = &current.Result{
+			Interfaces: []*current.Interface{
+				{
+					Name:    "eth0",
+					Mac:     "00:11:22:33:44:55",
+					Sandbox: "/proc/3553/ns/net",
+				},
+				{
+					Name:    "fake0",
+					Mac:     "00:33:44:55:66:77",
+					Sandbox: "/proc/1234/ns/net",
+				},
+			},
+			IPs: []*current.IPConfig{
+				{
+					Version: "4",
+					Address: *ipv4,
+					Gateway: ipgw4,
+				},
+				{
+					Version: "6",
+					Address: *ipv6,
+					Gateway: ipgw6,
+				},
+			},
+		}
+		err := originalNS.Do(func(ns.NetNS) error {
+			return ConfigureIface(LINK_NAME, result)
+		})
+		Expect(err).NotTo(HaveOccurred())
 	})
 })

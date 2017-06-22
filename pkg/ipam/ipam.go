@@ -53,7 +53,11 @@ func ConfigureIface(ifName string, res *current.Result) error {
 
 	var v4gw, v6gw net.IP
 	for _, ipc := range res.IPs {
-		if int(ipc.Interface) >= len(res.Interfaces) || res.Interfaces[ipc.Interface].Name != ifName {
+		if ipc.Interface == nil {
+			continue
+		}
+		intIdx := *ipc.Interface
+		if intIdx < 0 || intIdx >= len(res.Interfaces) || res.Interfaces[intIdx].Name != ifName {
 			// IP address is for a different interface
 			return fmt.Errorf("failed to add IP addr %v to %q: invalid interface index", ipc, ifName)
 		}

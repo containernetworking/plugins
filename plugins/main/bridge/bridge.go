@@ -100,7 +100,7 @@ func calcGateways(result *current.Result, n *NetConf) (*gwInfo, *gwInfo, error) 
 		defaultNet.Mask = net.IPMask(defaultNet.IP)
 
 		// All IPs currently refer to the container interface
-		ipc.Interface = 2
+		ipc.Interface = current.Int(2)
 
 		// If not provided, calculate the gateway address corresponding
 		// to the selected IP address

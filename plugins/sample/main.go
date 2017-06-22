@@ -106,7 +106,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	} else {
 		for _, ip := range conf.PrevResult.IPs {
-			intIdx := ip.Interface
+			if ip.Interface == nil {
+				continue
+			}
+			intIdx := *ip.Interface
 			// Every IP is indexed in to the interfaces array, with "-1" standing
 			// for an unknown interface (which we'll assume to be Container-side
 			// Skip all IPs we know belong to an interface with the wrong name.

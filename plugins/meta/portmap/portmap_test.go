@@ -124,6 +124,34 @@ var _ = Describe("portmapping configuration", func() {
 			_, err := parseConfig(configBytes, "container")
 			Expect(err).To(MatchError("Invalid host port number: 0"))
 		})
+
+		It("Does not fail on missing prevResult interface index", func() {
+			configBytes := []byte(`{
+	"name": "test",
+	"type": "portmap",
+	"cniVersion": "0.3.1",
+	"runtimeConfig": {
+		"portMappings": [
+			{ "hostPort": 8080, "containerPort": 80, "protocol": "tcp"}
+		]
+	},
+	"conditionsV4": ["a", "b"],
+	"prevResult": {
+		"interfaces": [
+			{"name": "host"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.1/24",
+				"gateway": "10.0.0.1"
+			}
+		]
+	}
+}`)
+			_, err := parseConfig(configBytes, "container")
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
 	Describe("Generating chains", func() {

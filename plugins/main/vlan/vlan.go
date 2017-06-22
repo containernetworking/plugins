@@ -148,7 +148,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	for _, ipc := range result.IPs {
 		// All addresses belong to the vlan interface
-		ipc.Interface = 0
+		ipc.Interface = current.Int(0)
 	}
 
 	result.Interfaces = []*current.Interface{vlanInterface}
