@@ -33,6 +33,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/utils"
 	"github.com/vishvananda/netlink"
+	"os"
 )
 
 const defaultBrName = "cni0"
@@ -308,6 +309,15 @@ func enableIPForward(family int) error {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
+	var success bool = false
+	defer func(ok *bool) {
+		if !*ok {
+			os.Setenv("CNI_COMMAND", "DEL")
+			cmdDel(args)
+			os.Setenv("CNI_COMMAND", "ADD")
+		}
+	}(&success)
+
 	n, cniVersion, err := loadNetConf(args.StdinData)
 	if err != nil {
 		return err
@@ -442,6 +452,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 	brInterface.Mac = br.Attrs().HardwareAddr.String()
 
 	result.DNS = n.DNS
+
+	success = true
 
 	return types.PrintResult(result, cniVersion)
 }
