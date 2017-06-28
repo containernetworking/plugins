@@ -19,6 +19,7 @@ import (
 	"os"
 
 	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -102,7 +103,7 @@ FLANNEL_IPMASQ=true
 				defer GinkgoRecover()
 
 				By("calling ADD")
-				_, _, err := testutils.CmdAddWithResult(targetNs.Path(), IFNAME, []byte(input), func() error {
+				resI, _, err := testutils.CmdAddWithResult(targetNs.Path(), IFNAME, []byte(input), func() error {
 					return cmdAdd(args)
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -131,6 +132,10 @@ FLANNEL_IPMASQ=true
 }
 `
 				Expect(netConfBytes).Should(MatchJSON(expected))
+
+				result, err := current.NewResultFromResult(resI)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.IPs).To(HaveLen(1))
 
 				By("calling DEL")
 				err = testutils.CmdDelWithResult(targetNs.Path(), IFNAME, func() error {
