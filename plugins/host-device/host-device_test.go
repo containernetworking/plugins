@@ -15,62 +15,102 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/testutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
 )
 
+var ifname = "dummy0"
+
 var _ = Describe("base functionality", func() {
-	var targetNs ns.NetNS
+	var originalNS ns.NetNS
 
 	BeforeEach(func() {
 		var err error
-		targetNs, err = ns.NewNS()
+		originalNS, err = ns.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		targetNs.Close()
+		originalNS.Close()
 	})
 
 	It("Works with a valid config", func() {
-		ifname := "eth0"
+
+		// prepare ifname in original namespace
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			err := netlink.LinkAdd(&netlink.Dummy{
+				LinkAttrs: netlink.LinkAttrs{
+					Name: ifname,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			link, err := netlink.LinkByName(ifname)
+			Expect(err).NotTo(HaveOccurred())
+			err = netlink.LinkSetUp(link)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// call CmdAdd
+		targetNS, err := ns.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+
 		conf := `{
-	"name": "cni-plugin-host-device-test",
-	"type": "host-device",
-	"device": "eth0"
-}`
-		conf = fmt.Sprintf(conf, ifname, targetNs.Path())
+			"cniVersion": "0.3.0",
+			"name": "cni-plugin-host-device-test",
+			"type": "host-device",
+			"device": ifname
+		}`
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
-			Netns:       targetNs.Path(),
+			Netns:       targetNS.Path(),
 			IfName:      ifname,
 			StdinData:   []byte(conf),
 		}
-		_, _, err := testutils.CmdAddWithResult(targetNs.Path(), "eth0", []byte(conf), func() error { return cmdAdd(args) })
+		_, _, err = testutils.CmdAddWithResult(targetNS.Path(), ifname, []byte(conf), func() error { return cmdAdd(args) })
 		Expect(err).NotTo(HaveOccurred())
 
+		// assert that dummy0 is now in the target namespace
+		err = targetNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			link, err := netlink.LinkByName(ifname)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().Name).To(Equal(ifname))
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// assert that dummy0 is now NOT in the original namespace anymore
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			_, err := netlink.LinkByName(ifname)
+			Expect(err).To(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("fails an invalid config", func() {
 		conf := `{
-	"cniVersion": "0.3.0",
-	"name": "cni-plugin-sample-test",
-	"type": "host-device"
-}`
+			"cniVersion": "0.3.0",
+			"name": "cni-plugin-host-device-test",
+			"type": "host-device"
+		}`
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
-			Netns:       targetNs.Path(),
-			IfName:      "eth0",
+			Netns:       originalNS.Path(),
+			IfName:      ifname,
 			StdinData:   []byte(conf),
 		}
-		_, _, err := testutils.CmdAddWithResult(targetNs.Path(), "eth0", []byte(conf), func() error { return cmdAdd(args) })
-		Expect(err).To(MatchError("anotherAwesomeArg must be specified"))
+		_, _, err := testutils.CmdAddWithResult(originalNS.Path(), ifname, []byte(conf), func() error { return cmdAdd(args) })
+		Expect(err).To(MatchError(`specify either "device", "hwaddr" or "kernelpath"`))
 
 	})
 
