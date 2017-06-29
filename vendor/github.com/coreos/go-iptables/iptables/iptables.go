@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -28,6 +29,7 @@ import (
 // Adds the output of stderr to exec.ExitError
 type Error struct {
 	exec.ExitError
+	cmd exec.Cmd
 	msg string
 }
 
@@ -36,7 +38,7 @@ func (e *Error) ExitStatus() int {
 }
 
 func (e *Error) Error() string {
-	return fmt.Sprintf("exit status %v: %v", e.ExitStatus(), e.msg)
+	return fmt.Sprintf("running %v: exit status %v: %v", e.cmd.Args, e.ExitStatus(), e.msg)
 }
 
 // Protocol to differentiate between IPv4 and IPv6
@@ -173,6 +175,72 @@ func (ipt *IPTables) ListChains(table string) ([]string, error) {
 	return chains, nil
 }
 
+// Stats lists rules including the byte and packet counts
+func (ipt *IPTables) Stats(table, chain string) ([][]string, error) {
+	args := []string{"-t", table, "-L", chain, "-n", "-v", "-x"}
+	lines, err := ipt.executeList(args)
+	if err != nil {
+		return nil, err
+	}
+
+	appendSubnet := func(addr string) string {
+		if strings.IndexByte(addr, byte('/')) < 0 {
+			if strings.IndexByte(addr, '.') < 0 {
+				return addr + "/128"
+			}
+			return addr + "/32"
+		}
+		return addr
+	}
+
+	ipv6 := ipt.proto == ProtocolIPv6
+
+	rows := [][]string{}
+	for i, line := range lines {
+		// Skip over chain name and field header
+		if i < 2 {
+			continue
+		}
+
+		// Fields:
+		// 0=pkts 1=bytes 2=target 3=prot 4=opt 5=in 6=out 7=source 8=destination 9=options
+		line = strings.TrimSpace(line)
+		fields := strings.Fields(line)
+
+		// The ip6tables verbose output cannot be naively split due to the default "opt"
+		// field containing 2 single spaces.
+		if ipv6 {
+			// Check if field 6 is "opt" or "source" address
+			dest := fields[6]
+			ip, _, _ := net.ParseCIDR(dest)
+			if ip == nil {
+				ip = net.ParseIP(dest)
+			}
+
+			// If we detected a CIDR or IP, the "opt" field is empty.. insert it.
+			if ip != nil {
+				f := []string{}
+				f = append(f, fields[:4]...)
+				f = append(f, "  ") // Empty "opt" field for ip6tables
+				f = append(f, fields[4:]...)
+				fields = f
+			}
+		}
+
+		// Adjust "source" and "destination" to include netmask, to match regular
+		// List output
+		fields[7] = appendSubnet(fields[7])
+		fields[8] = appendSubnet(fields[8])
+
+		// Combine "options" fields 9... into a single space-delimited field.
+		options := fields[9:]
+		fields = fields[:9]
+		fields = append(fields, strings.Join(options, " "))
+		rows = append(rows, fields)
+	}
+	return rows, nil
+}
+
 func (ipt *IPTables) executeList(args []string) ([]string, error) {
 	var stdout bytes.Buffer
 	if err := ipt.runWithOutput(args, &stdout); err != nil {
@@ -254,7 +322,12 @@ func (ipt *IPTables) runWithOutput(args []string, stdout io.Writer) error {
 	}
 
 	if err := cmd.Run(); err != nil {
-		return &Error{*(err.(*exec.ExitError)), stderr.String()}
+		switch e := err.(type) {
+		case *exec.ExitError:
+			return &Error{*e, cmd, stderr.String()}
+		default:
+			return err
+		}
 	}
 
 	return nil
