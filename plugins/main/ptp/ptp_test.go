@@ -86,7 +86,7 @@ var _ = Describe("ptp Operations", func() {
 			Expect(link.Attrs().Name).To(Equal(IFNAME))
 
 			for _, ipc := range res.IPs {
-				if ipc.Interface != 1 {
+				if *ipc.Interface != 1 {
 					continue
 				}
 				seenIPs += 1
