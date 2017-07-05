@@ -220,15 +220,15 @@
 		},
 		{
 			"ImportPath": "github.com/vishvananda/netlink",
-			"Rev": "fe3b5664d23a11b52ba59bece4ff29c52772a56b"
+			"Rev": "6e453822d85ef5721799774b654d4d02fed62afb"
 		},
 		{
 			"ImportPath": "github.com/vishvananda/netlink/nl",
-			"Rev": "fe3b5664d23a11b52ba59bece4ff29c52772a56b"
+			"Rev": "6e453822d85ef5721799774b654d4d02fed62afb"
 		},
 		{
 			"ImportPath": "github.com/vishvananda/netns",
-			"Rev": "8ba1072b58e0c2a240eb5f6120165c7776c3e7b8"
+			"Rev": "54f0e4339ce73702a0607f49922aaa1e749b418d"
 		},
 		{
 			"ImportPath": "golang.org/x/sys/unix",
