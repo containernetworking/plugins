@@ -20,6 +20,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 
 	"github.com/vishvananda/netlink"
@@ -210,6 +211,78 @@ var _ = Describe("IPAM Operations", func() {
 					v4found = true
 				}
 				if !isv4 && ipNetEqual(route.Dst, routev6) && route.Gw.Equal(ipgw6) {
+					v6found = true
+				}
+
+				if v4found && v6found {
+					break
+				}
+			}
+			Expect(v4found).To(Equal(true))
+			Expect(v6found).To(Equal(true))
+
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("configures a link with addresses and routes that already exist", func() {
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			link, err := netlink.LinkByName(LINK_NAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().Name).To(Equal(LINK_NAME))
+			err = netlink.LinkSetUp(link)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Add addresses
+			addr := &netlink.Addr{IPNet: &result.IPs[0].Address}
+			err = netlink.AddrAdd(link, addr)
+			Expect(err).NotTo(HaveOccurred())
+			addr = &netlink.Addr{IPNet: &result.IPs[1].Address}
+			err = netlink.AddrAdd(link, addr)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Add some routes
+			err = ip.AddRoute(routev4, routegwv4, link)
+			Expect(err).NotTo(HaveOccurred())
+			err = ip.AddRoute(routev6, routegwv6, link)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Now try to re-apply the configuration and make sure it worked
+			err = ConfigureIface(LINK_NAME, result)
+			Expect(err).NotTo(HaveOccurred())
+
+			v4addrs, err := netlink.AddrList(link, syscall.AF_INET)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4addrs)).To(Equal(1))
+			Expect(ipNetEqual(v4addrs[0].IPNet, ipv4)).To(Equal(true))
+
+			v6addrs, err := netlink.AddrList(link, syscall.AF_INET6)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v6addrs)).To(Equal(2))
+
+			var found bool
+			for _, a := range v6addrs {
+				if ipNetEqual(a.IPNet, ipv6) {
+					found = true
+					break
+				}
+			}
+			Expect(found).To(Equal(true))
+
+			// Ensure the v4 route and v6 route
+			routes, err := netlink.RouteList(link, 0)
+			Expect(err).NotTo(HaveOccurred())
+
+			var v4found, v6found bool
+			for _, route := range routes {
+				isv4 := route.Dst.IP.To4() != nil
+				if isv4 && ipNetEqual(route.Dst, routev4) && route.Gw.Equal(routegwv4) {
+					v4found = true
+				}
+				if !isv4 && ipNetEqual(route.Dst, routev6) && route.Gw.Equal(routegwv6) {
 					v6found = true
 				}
 
