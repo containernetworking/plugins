@@ -15,7 +15,11 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -39,20 +43,8 @@ var _ = Describe("ptp Operations", func() {
 		Expect(originalNS.Close()).To(Succeed())
 	})
 
-	It("configures and deconfigures a ptp link with ADD/DEL", func() {
+	doTest := func(conf string, numIPs int) {
 		const IFNAME = "ptp0"
-
-		conf := `{
-    "cniVersion": "0.3.1",
-    "name": "mynet",
-    "type": "ptp",
-    "ipMasq": true,
-    "mtu": 5000,
-    "ipam": {
-        "type": "host-local",
-        "subnet": "10.1.2.0/24"
-    }
-}`
 
 		targetNs, err := ns.NewNS()
 		Expect(err).NotTo(HaveOccurred())
@@ -65,11 +57,14 @@ var _ = Describe("ptp Operations", func() {
 			StdinData:   []byte(conf),
 		}
 
+		var resI types.Result
+		var res *current.Result
+
 		// Execute the plugin with the ADD command, creating the veth endpoints
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			_, _, err := testutils.CmdAddWithResult(targetNs.Path(), IFNAME, []byte(conf), func() error {
+			resI, _, err = testutils.CmdAddWithResult(targetNs.Path(), IFNAME, []byte(conf), func() error {
 				return cmdAdd(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -77,16 +72,38 @@ var _ = Describe("ptp Operations", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
+		res, err = current.NewResultFromResult(resI)
+		Expect(err).NotTo(HaveOccurred())
+
 		// Make sure ptp link exists in the target namespace
+		// Then, ping the gateway
+		seenIPs := 0
 		err = targetNs.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
 			link, err := netlink.LinkByName(IFNAME)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(link.Attrs().Name).To(Equal(IFNAME))
+
+			for _, ipc := range res.IPs {
+				if ipc.Interface != 1 {
+					continue
+				}
+				seenIPs += 1
+				saddr := ipc.Address.IP.String()
+				daddr := ipc.Gateway.String()
+				fmt.Fprintln(GinkgoWriter, "ping", saddr, "->", daddr)
+
+				if err := testutils.Ping(saddr, daddr, (ipc.Version == "6"), 30); err != nil {
+					return fmt.Errorf("ping %s -> %s failed: %s", saddr, daddr, err)
+				}
+			}
+
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
+
+		Expect(seenIPs).To(Equal(numIPs))
 
 		// Call the plugins with the DEL command, deleting the veth endpoints
 		err = originalNS.Do(func(ns.NetNS) error {
@@ -110,7 +127,43 @@ var _ = Describe("ptp Operations", func() {
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
+	}
+
+	It("configures and deconfigures a ptp link with ADD/DEL", func() {
+		conf := `{
+    "cniVersion": "0.3.1",
+    "name": "mynet",
+    "type": "ptp",
+    "ipMasq": true,
+    "mtu": 5000,
+    "ipam": {
+        "type": "host-local",
+        "subnet": "10.1.2.0/24"
+    }
+}`
+
+		doTest(conf, 1)
 	})
+
+	It("configures and deconfigures a dual-stack ptp link with ADD/DEL", func() {
+		conf := `{
+    "cniVersion": "0.3.1",
+    "name": "mynet",
+    "type": "ptp",
+    "ipMasq": true,
+    "mtu": 5000,
+    "ipam": {
+        "type": "host-local",
+		"ranges": [
+			{ "subnet": "10.1.2.0/24"},
+			{ "subnet": "2001:db8:1::0/66"}
+		]
+    }
+}`
+
+		doTest(conf, 2)
+	})
+
 	It("deconfigures an unconfigured ptp link with DEL", func() {
 		const IFNAME = "ptp0"
 
