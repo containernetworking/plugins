@@ -164,9 +164,14 @@ func parseConfig(stdin []byte, ifName string) (*PortMapConf, error) {
 			}
 
 			// Skip known non-sandbox interfaces
-			intIdx := ip.Interface
-			if intIdx >= 0 && intIdx < len(conf.PrevResult.Interfaces) && conf.PrevResult.Interfaces[intIdx].Name != ifName {
-				continue
+			if ip.Interface != nil {
+				intIdx := *ip.Interface
+				if intIdx >= 0 &&
+					intIdx < len(conf.PrevResult.Interfaces) &&
+					(conf.PrevResult.Interfaces[intIdx].Name != ifName ||
+						conf.PrevResult.Interfaces[intIdx].Sandbox == "") {
+					continue
+				}
 			}
 			switch ip.Version {
 			case "6":

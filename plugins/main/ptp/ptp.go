@@ -75,7 +75,7 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 
 		for _, ipc := range pr.IPs {
 			// All addresses apply to the container veth interface
-			ipc.Interface = 1
+			ipc.Interface = current.Int(1)
 		}
 
 		pr.Interfaces = []*current.Interface{hostInterface, containerInterface}

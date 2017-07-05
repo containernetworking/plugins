@@ -134,7 +134,8 @@ var _ = Describe("portmap integration tests", func() {
 		var contIP net.IP
 
 		for _, ip := range result.IPs {
-			if result.Interfaces[ip.Interface].Sandbox == "" {
+			intfIndex := *ip.Interface
+			if result.Interfaces[intfIndex].Sandbox == "" {
 				continue
 			}
 			contIP = ip.Address.IP

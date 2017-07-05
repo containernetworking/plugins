@@ -179,7 +179,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	for _, ipc := range result.IPs {
 		// All addresses apply to the container macvlan interface
-		ipc.Interface = 0
+		ipc.Interface = current.Int(0)
 	}
 
 	err = netns.Do(func(_ ns.NetNS) error {

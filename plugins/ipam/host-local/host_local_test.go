@@ -86,27 +86,25 @@ var _ = Describe("host-local Operations", func() {
 		// Gomega is cranky about slices with different caps
 		Expect(*result.IPs[0]).To(Equal(
 			current.IPConfig{
-				Version:   "4",
-				Interface: 0,
-				Address:   mustCIDR("10.1.2.2/24"),
-				Gateway:   net.ParseIP("10.1.2.1"),
+				Version: "4",
+				Address: mustCIDR("10.1.2.2/24"),
+				Gateway: net.ParseIP("10.1.2.1"),
 			}))
 
 		Expect(*result.IPs[1]).To(Equal(
 			current.IPConfig{
-				Version:   "6",
-				Interface: 0,
-				Address:   mustCIDR("2001:db8:1::2/64"),
-				Gateway:   net.ParseIP("2001:db8:1::1"),
+				Version: "6",
+				Address: mustCIDR("2001:db8:1::2/64"),
+				Gateway: net.ParseIP("2001:db8:1::1"),
 			},
 		))
 		Expect(len(result.IPs)).To(Equal(2))
 
 		Expect(result.Routes).To(Equal([]*types.Route{
-			&types.Route{Dst: mustCIDR("0.0.0.0/0"), GW: nil},
-			&types.Route{Dst: mustCIDR("::/0"), GW: nil},
-			&types.Route{Dst: mustCIDR("192.168.0.0/16"), GW: net.ParseIP("1.1.1.1")},
-			&types.Route{Dst: mustCIDR("2001:db8:2::0/64"), GW: net.ParseIP("2001:db8:3::1")},
+			{Dst: mustCIDR("0.0.0.0/0"), GW: nil},
+			{Dst: mustCIDR("::/0"), GW: nil},
+			{Dst: mustCIDR("192.168.0.0/16"), GW: net.ParseIP("1.1.1.1")},
+			{Dst: mustCIDR("2001:db8:2::0/64"), GW: net.ParseIP("2001:db8:3::1")},
 		}))
 
 		ipFilePath1 := filepath.Join(tmpDir, "mynet", "10.1.2.2")
