@@ -32,7 +32,7 @@ func TestPortmap(t *testing.T) {
 	RunSpecs(t, "portmap Suite")
 }
 
-// OpenEchoServer opens a server that handles one connection before closing.
+// OpenEchoServer opens a server that listens until closeChan is closed.
 // It opens on a random port and sends the port number on portChan when
 // the server is up and running. If an error is encountered, closes portChan.
 // If closeChan is closed, closes the socket.
