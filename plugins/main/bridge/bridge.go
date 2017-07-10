@@ -28,6 +28,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/containernetworking/plugins/pkg/bridge"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -428,6 +429,34 @@ func cmdAdd(args *skel.CmdArgs) error {
 		comment := utils.FormatComment(n.Name, args.ContainerID)
 		for _, ipc := range result.IPs {
 			if err = ip.SetupIPMasq(ip.Network(&ipc.Address), chain, comment); err != nil {
+				return err
+			}
+		}
+	}
+
+	if n.PromiscMode {
+		// Add ebtables rules to block duplicate packets.
+		br, err = bridgeByName(n.BrName)
+		mac := br.Attrs().HardwareAddr.String()
+		// IPv4
+		addrs, err := netlink.AddrList(br, syscall.AF_INET)
+		if err != nil {
+			return err
+		}
+		for _, a := range addrs {
+			nw := ip.Network(a.IPNet)
+			if err := bridge.AddDedupRules(mac, a.IP.String(), nw.String(), syscall.AF_INET); err != nil {
+				return err
+			}
+		}
+		// IPv6
+		addrs, err = netlink.AddrList(br, syscall.AF_INET6)
+		if err != nil {
+			return err
+		}
+		for _, a := range addrs {
+			nw := ip.Network(a.IPNet)
+			if err := bridge.AddDedupRules(mac, a.IP.String(), nw.String(), syscall.AF_INET6); err != nil {
 				return err
 			}
 		}

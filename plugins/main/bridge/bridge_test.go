@@ -21,8 +21,10 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/020"
+	types020 "github.com/containernetworking/cni/pkg/types/020"
 	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/containernetworking/plugins/pkg/bridge/ebtables"
+	utilexec "github.com/containernetworking/plugins/pkg/exec"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/containernetworking/plugins/pkg/utils/hwaddr"
@@ -46,6 +48,7 @@ type testCase struct {
 	gateway    string      // Single subnet config: Gateway
 	ranges     []rangeInfo // Ranges list (multiple subnets config)
 	isGW       bool
+	isPromisc  bool
 	expGWCIDRs []string // Expected gateway addresses in CIDR form
 }
 
@@ -79,6 +82,11 @@ const (
 	"bridge": "%s",
 	"isDefaultGateway": true,
 	"ipMasq": false`
+
+	// Promiscuous mode configuration
+	promiscMode = `,
+        "hairpinMode": false,
+ 	"promiscMode": true`
 
 	ipamStartStr = `,
     "ipam": {
@@ -114,6 +122,9 @@ const (
 func (tc testCase) netConfJSON() string {
 	conf := fmt.Sprintf(netConfStr, tc.cniVersion, BRNAME)
 	if tc.subnet != "" || tc.ranges != nil {
+		if tc.isPromisc {
+			conf += promiscMode
+		}
 		conf += ipamStartStr
 		if tc.subnet != "" {
 			conf += tc.subnetConfig()
@@ -856,40 +867,56 @@ var _ = Describe("bridge Operations", func() {
 		}
 	})
 	It("ensure promiscuous mode on bridge", func() {
-		const IFNAME = "bridge0"
-		const EXPECTED_IP = "10.0.0.0/8"
-		const CHANGED_EXPECTED_IP = "10.1.2.3/16"
-
-		conf := &NetConf{
-			NetConf: types.NetConf{
-				CNIVersion: "0.3.1",
-				Name:       "testConfig",
-				Type:       "bridge",
+		testCases := []testCase{
+			{
+				// IPv4 only
+				subnet:    "10.1.2.0/24",
+				isPromisc: true,
 			},
-			BrName:      IFNAME,
-			IsGW:        true,
-			IPMasq:      false,
-			HairpinMode: false,
-			PromiscMode: true,
-			MTU:         5000,
+			{
+				// IPv6 only
+				subnet:    "2001:db8::0/64",
+				isPromisc: true,
+			},
 		}
 
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			_, _, err := setupBridge(conf)
+		for _, tc := range testCases {
+			originalNS, err := ns.NewNS()
 			Expect(err).NotTo(HaveOccurred())
-			// Check if ForceAddress has default value
-			Expect(conf.ForceAddress).To(Equal(false))
-
-			//Check if promiscuous mode is set correctly
-			link, err := netlink.LinkByName("bridge0")
+			tester := testerV03x{}
+			targetNS, err := ns.NewNS()
 			Expect(err).NotTo(HaveOccurred())
+			tester.setNS(originalNS, targetNS)
+			defer targetNS.Close()
+			tester.args = tc.createCmdArgs(tester.targetNS)
+			Expect(err).NotTo(HaveOccurred())
+			// Execute cmdADD on the plugin
 
-			Expect(link.Attrs().Promisc).To(Equal(1))
+			err = tester.testNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				_, _, err := testutils.CmdAddWithResult(tester.targetNS.Path(), IFNAME, tester.args.StdinData, func() error {
+					return cmdAdd(tester.args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+				//Check if promiscuous mode is set correctly
+				link, err := netlink.LinkByName(BRNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().Promisc).To(Equal(1))
 
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
+				// Check ebtables filters
+				ebt, err := ebtables.New(utilexec.New())
+				Expect(err).NotTo(HaveOccurred())
+				rules, err := ebt.List("filter", "CNI-DEDUP")
+				Expect(err).NotTo(HaveOccurred())
+				// There should be at least a drop and accept
+				// entry for each address.  If there is an IPv6
+				// address, there may also be a link local.
+				Expect(len(rules)).To(BeNumerically(">=", 2))
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+			// Clean up bridge addresses for next test case
+			delBridgeAddrs(originalNS)
+		}
 	})
 })
