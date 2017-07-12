@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
@@ -30,9 +31,10 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-const TIMEOUT = 20
+const TIMEOUT = 90
 
 var _ = Describe("portmap integration tests", func() {
+	rand.Seed(time.Now().UTC().UnixNano())
 
 	var configList *libcni.NetworkConfigList
 	var cniConf *libcni.CNIConfig
@@ -51,7 +53,10 @@ var _ = Describe("portmap integration tests", func() {
 			"ipMasq": true,
 			"ipam": {
 				"type": "host-local",
-				"subnet": "172.16.31.0/24"
+				"subnet": "172.16.31.0/24",
+				"routes": [
+					{"dst": "0.0.0.0/0"}
+				]
 			}
 		},
 		{
@@ -89,9 +94,9 @@ var _ = Describe("portmap integration tests", func() {
 	// This needs to be done using Ginkgo's asynchronous testing mode.
 	It("forwards a TCP port on ipv4", func(done Done) {
 		var err error
-		hostPort := 9999
+		hostPort := rand.Intn(10000) + 1025
 		runtimeConfig := libcni.RuntimeConf{
-			ContainerID: "unit-test",
+			ContainerID: fmt.Sprintf("unit-test-%d", hostPort),
 			NetNS:       targetNS.Path(),
 			IfName:      "eth0",
 			CapabilityArgs: map[string]interface{}{
@@ -118,7 +123,7 @@ var _ = Describe("portmap integration tests", func() {
 		// we'll also manually check the iptables chains
 		ipt, err := iptables.NewWithProtocol(iptables.ProtocolIPv4)
 		Expect(err).NotTo(HaveOccurred())
-		dnatChainName := genDnatChain("cni-portmap-unit-test", "unit-test", nil).name
+		dnatChainName := genDnatChain("cni-portmap-unit-test", runtimeConfig.ContainerID, nil).name
 
 		// Create the network
 		resI, err := cniConf.AddNetworkList(configList, &runtimeConfig)
@@ -144,11 +149,14 @@ var _ = Describe("portmap integration tests", func() {
 			Fail("could not determine container IP")
 		}
 
+		hostIP := getLocalIP()
+		fmt.Fprintf(GinkgoWriter, "hostIP: %s:%d, contIP: %s:%d\n",
+			hostIP, hostPort, contIP, containerPort)
+
 		// Sanity check: verify that the container is reachable directly
 		contOK := testEchoServer(fmt.Sprintf("%s:%d", contIP.String(), containerPort))
 
 		// Verify that a connection to the forwarded port works
-		hostIP := getLocalIP()
 		dnatOK := testEchoServer(fmt.Sprintf("%s:%d", hostIP, hostPort))
 
 		// Verify that a connection to localhost works
@@ -176,7 +184,7 @@ var _ = Describe("portmap integration tests", func() {
 
 		close(done)
 
-	}, TIMEOUT*3)
+	}, TIMEOUT*9)
 })
 
 // testEchoServer returns true if we found an echo server on the port
@@ -221,6 +229,9 @@ func getLocalIP() string {
 	Expect(err).NotTo(HaveOccurred())
 
 	for _, addr := range addrs {
+		if !addr.IP.IsGlobalUnicast() {
+			continue
+		}
 		return addr.IP.String()
 	}
 	Fail("no live addresses")
