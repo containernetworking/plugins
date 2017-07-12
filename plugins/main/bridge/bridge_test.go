@@ -583,6 +583,7 @@ var _ = Describe("bridge Operations", func() {
 			link, err := netlink.LinkByName(BRNAME)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(link.Attrs().Name).To(Equal(BRNAME))
+			Expect(link.Attrs().Promisc).To(Equal(0))
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -853,5 +854,42 @@ var _ = Describe("bridge Operations", func() {
 			// Clean up bridge addresses for next test case
 			delBridgeAddrs(originalNS)
 		}
+	})
+	It("ensure promiscuous mode on bridge", func() {
+		const IFNAME = "bridge0"
+		const EXPECTED_IP = "10.0.0.0/8"
+		const CHANGED_EXPECTED_IP = "10.1.2.3/16"
+
+		conf := &NetConf{
+			NetConf: types.NetConf{
+				CNIVersion: "0.3.1",
+				Name:       "testConfig",
+				Type:       "bridge",
+			},
+			BrName:      IFNAME,
+			IsGW:        true,
+			IPMasq:      false,
+			HairpinMode: false,
+			PromiscMode: true,
+			MTU:         5000,
+		}
+
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			_, _, err := setupBridge(conf)
+			Expect(err).NotTo(HaveOccurred())
+			// Check if ForceAddress has default value
+			Expect(conf.ForceAddress).To(Equal(false))
+
+			//Check if promiscuous mode is set correctly
+			link, err := netlink.LinkByName("bridge0")
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(link.Attrs().Promisc).To(Equal(1))
+
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
 	})
 })
