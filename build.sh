@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
+if [ "$(uname)" == "Darwin" ]; then
+	export GOOS=linux
+fi
+
 ORG_PATH="github.com/containernetworking"
 export REPO_PATH="${ORG_PATH}/plugins"
 
