@@ -50,9 +50,11 @@ type NetworkConfigList struct {
 
 type CNI interface {
 	AddNetworkList(net *NetworkConfigList, rt *RuntimeConf) (types.Result, error)
+	GetNetworkList(net *NetworkConfigList, rt *RuntimeConf) (types.Result, error)
 	DelNetworkList(net *NetworkConfigList, rt *RuntimeConf) error
 
 	AddNetwork(net *NetworkConfig, rt *RuntimeConf) (types.Result, error)
+	GetNetwork(net *NetworkConfig, rt *RuntimeConf) (types.Result, error)
 	DelNetwork(net *NetworkConfig, rt *RuntimeConf) error
 }
 
@@ -119,8 +121,7 @@ func injectRuntimeConfig(orig *NetworkConfig, rt *RuntimeConf) (*NetworkConfig, 
 	return orig, nil
 }
 
-// AddNetworkList executes a sequence of plugins with the ADD command
-func (c *CNIConfig) AddNetworkList(list *NetworkConfigList, rt *RuntimeConf) (types.Result, error) {
+func (c *CNIConfig) addOrGetNetworkList(command string, list *NetworkConfigList, rt *RuntimeConf) (types.Result, error) {
 	var prevResult types.Result
 	for _, net := range list.Plugins {
 		pluginPath, err := invoke.FindInPath(net.Network.Type, c.Path)
@@ -133,13 +134,23 @@ func (c *CNIConfig) AddNetworkList(list *NetworkConfigList, rt *RuntimeConf) (ty
 			return nil, err
 		}
 
-		prevResult, err = invoke.ExecPluginWithResult(pluginPath, newConf.Bytes, c.args("ADD", rt))
+		prevResult, err = invoke.ExecPluginWithResult(pluginPath, newConf.Bytes, c.args(command, rt))
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return prevResult, nil
+}
+
+// AddNetworkList executes a sequence of plugins with the ADD command
+func (c *CNIConfig) AddNetworkList(list *NetworkConfigList, rt *RuntimeConf) (types.Result, error) {
+	return c.addOrGetNetworkList("ADD", list, rt)
+}
+
+// GetNetworkList executes a sequence of plugins with the GET command
+func (c *CNIConfig) GetNetworkList(list *NetworkConfigList, rt *RuntimeConf) (types.Result, error) {
+	return c.addOrGetNetworkList("GET", list, rt)
 }
 
 // DelNetworkList executes a sequence of plugins with the DEL command
@@ -165,8 +176,7 @@ func (c *CNIConfig) DelNetworkList(list *NetworkConfigList, rt *RuntimeConf) err
 	return nil
 }
 
-// AddNetwork executes the plugin with the ADD command
-func (c *CNIConfig) AddNetwork(net *NetworkConfig, rt *RuntimeConf) (types.Result, error) {
+func (c *CNIConfig) addOrGetNetwork(command string, net *NetworkConfig, rt *RuntimeConf) (types.Result, error) {
 	pluginPath, err := invoke.FindInPath(net.Network.Type, c.Path)
 	if err != nil {
 		return nil, err
@@ -177,7 +187,17 @@ func (c *CNIConfig) AddNetwork(net *NetworkConfig, rt *RuntimeConf) (types.Resul
 		return nil, err
 	}
 
-	return invoke.ExecPluginWithResult(pluginPath, net.Bytes, c.args("ADD", rt))
+	return invoke.ExecPluginWithResult(pluginPath, net.Bytes, c.args(command, rt))
+}
+
+// AddNetwork executes the plugin with the ADD command
+func (c *CNIConfig) AddNetwork(net *NetworkConfig, rt *RuntimeConf) (types.Result, error) {
+	return c.addOrGetNetwork("ADD", net, rt)
+}
+
+// GetNetwork executes the plugin with the GET command
+func (c *CNIConfig) GetNetwork(net *NetworkConfig, rt *RuntimeConf) (types.Result, error) {
+	return c.addOrGetNetwork("GET", net, rt)
 }
 
 // DelNetwork executes the plugin with the DEL command

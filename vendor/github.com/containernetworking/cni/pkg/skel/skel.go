@@ -63,6 +63,7 @@ func (t *dispatcher) getCmdArgsFromEnv() (string, *CmdArgs, error) {
 			&cmd,
 			reqForCmdEntry{
 				"ADD": true,
+				"GET": true,
 				"DEL": true,
 			},
 		},
@@ -71,6 +72,7 @@ func (t *dispatcher) getCmdArgsFromEnv() (string, *CmdArgs, error) {
 			&contID,
 			reqForCmdEntry{
 				"ADD": false,
+				"GET": false,
 				"DEL": false,
 			},
 		},
@@ -79,6 +81,7 @@ func (t *dispatcher) getCmdArgsFromEnv() (string, *CmdArgs, error) {
 			&netns,
 			reqForCmdEntry{
 				"ADD": true,
+				"GET": true,
 				"DEL": false,
 			},
 		},
@@ -87,6 +90,7 @@ func (t *dispatcher) getCmdArgsFromEnv() (string, *CmdArgs, error) {
 			&ifName,
 			reqForCmdEntry{
 				"ADD": true,
+				"GET": true,
 				"DEL": true,
 			},
 		},
@@ -95,6 +99,7 @@ func (t *dispatcher) getCmdArgsFromEnv() (string, *CmdArgs, error) {
 			&args,
 			reqForCmdEntry{
 				"ADD": false,
+				"GET": false,
 				"DEL": false,
 			},
 		},
@@ -103,6 +108,7 @@ func (t *dispatcher) getCmdArgsFromEnv() (string, *CmdArgs, error) {
 			&path,
 			reqForCmdEntry{
 				"ADD": true,
+				"GET": true,
 				"DEL": true,
 			},
 		},
@@ -159,10 +165,11 @@ func (t *dispatcher) checkVersionAndCall(cmdArgs *CmdArgs, pluginVersionInfo ver
 			Details: verErr.Details(),
 		}
 	}
+
 	return toCall(cmdArgs)
 }
 
-func (t *dispatcher) pluginMain(cmdAdd, cmdDel func(_ *CmdArgs) error, versionInfo version.PluginInfo) *types.Error {
+func (t *dispatcher) pluginMain(cmdAdd, cmdGet, cmdDel func(_ *CmdArgs) error, versionInfo version.PluginInfo) *types.Error {
 	cmd, cmdArgs, err := t.getCmdArgsFromEnv()
 	if err != nil {
 		return createTypedError(err.Error())
@@ -171,6 +178,34 @@ func (t *dispatcher) pluginMain(cmdAdd, cmdDel func(_ *CmdArgs) error, versionIn
 	switch cmd {
 	case "ADD":
 		err = t.checkVersionAndCall(cmdArgs, versionInfo, cmdAdd)
+	case "GET":
+		configVersion, err := t.ConfVersionDecoder.Decode(cmdArgs.StdinData)
+		if err != nil {
+			return createTypedError(err.Error())
+		}
+		if gtet, err := version.GreaterThanOrEqualTo(configVersion, "0.4.0"); err != nil {
+			return createTypedError(err.Error())
+		} else if !gtet {
+			return &types.Error{
+				Code: types.ErrIncompatibleCNIVersion,
+				Msg:  "config version does not allow GET",
+			}
+		}
+		for _, pluginVersion := range versionInfo.SupportedVersions() {
+			gtet, err := version.GreaterThanOrEqualTo(pluginVersion, configVersion)
+			if err != nil {
+				return createTypedError(err.Error())
+			} else if gtet {
+				if err := t.checkVersionAndCall(cmdArgs, versionInfo, cmdGet); err != nil {
+					return createTypedError(err.Error())
+				}
+				return nil
+			}
+		}
+		return &types.Error{
+			Code: types.ErrIncompatibleCNIVersion,
+			Msg:  "plugin version does not allow GET",
+		}
 	case "DEL":
 		err = t.checkVersionAndCall(cmdArgs, versionInfo, cmdDel)
 	case "VERSION":
@@ -201,25 +236,25 @@ func (t *dispatcher) pluginMain(cmdAdd, cmdDel func(_ *CmdArgs) error, versionIn
 //
 // To let this package automatically handle errors and call os.Exit(1) for you,
 // use PluginMain() instead.
-func PluginMainWithError(cmdAdd, cmdDel func(_ *CmdArgs) error, versionInfo version.PluginInfo) *types.Error {
+func PluginMainWithError(cmdAdd, cmdGet, cmdDel func(_ *CmdArgs) error, versionInfo version.PluginInfo) *types.Error {
 	return (&dispatcher{
 		Getenv: os.Getenv,
 		Stdin:  os.Stdin,
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
-	}).pluginMain(cmdAdd, cmdDel, versionInfo)
+	}).pluginMain(cmdAdd, cmdGet, cmdDel, versionInfo)
 }
 
 // PluginMain is the core "main" for a plugin which includes automatic error handling.
 //
 // The caller must also specify what CNI spec versions the plugin supports.
 //
-// When an error occurs in either cmdAdd or cmdDel, PluginMain will print the error
+// When an error occurs in either cmdAdd, cmdGet, or cmdDel, PluginMain will print the error
 // as JSON to stdout and call os.Exit(1).
 //
 // To have more control over error handling, use PluginMainWithError() instead.
-func PluginMain(cmdAdd, cmdDel func(_ *CmdArgs) error, versionInfo version.PluginInfo) {
-	if e := PluginMainWithError(cmdAdd, cmdDel, versionInfo); e != nil {
+func PluginMain(cmdAdd, cmdGet, cmdDel func(_ *CmdArgs) error, versionInfo version.PluginInfo) {
+	if e := PluginMainWithError(cmdAdd, cmdGet, cmdDel, versionInfo); e != nil {
 		if err := e.Print(); err != nil {
 			log.Print("Error writing error JSON to stdout: ", err)
 		}

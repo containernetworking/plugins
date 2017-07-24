@@ -22,19 +22,28 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 )
 
-func DelegateAdd(delegatePlugin string, netconf []byte) (types.Result, error) {
-	if os.Getenv("CNI_COMMAND") != "ADD" {
-		return nil, fmt.Errorf("CNI_COMMAND is not ADD")
-	}
-
+func delegateAddOrGet(command, delegatePlugin string, netconf []byte) (types.Result, error) {
 	paths := filepath.SplitList(os.Getenv("CNI_PATH"))
-
 	pluginPath, err := FindInPath(delegatePlugin, paths)
 	if err != nil {
 		return nil, err
 	}
 
 	return ExecPluginWithResult(pluginPath, netconf, ArgsFromEnv())
+}
+
+func DelegateAdd(delegatePlugin string, netconf []byte) (types.Result, error) {
+	if os.Getenv("CNI_COMMAND") != "ADD" {
+		return nil, fmt.Errorf("CNI_COMMAND is not ADD")
+	}
+	return delegateAddOrGet("ADD", delegatePlugin, netconf)
+}
+
+func DelegateGet(delegatePlugin string, netconf []byte) (types.Result, error) {
+	if os.Getenv("CNI_COMMAND") != "GET" {
+		return nil, fmt.Errorf("CNI_COMMAND is not GET")
+	}
+	return delegateAddOrGet("GET", delegatePlugin, netconf)
 }
 
 func DelegateDel(delegatePlugin string, netconf []byte) error {

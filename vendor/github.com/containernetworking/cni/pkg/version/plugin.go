@@ -18,6 +18,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 )
 
 // PluginInfo reports information about CNI versioning
@@ -78,4 +80,47 @@ func (*PluginDecoder) Decode(jsonBytes []byte) (PluginInfo, error) {
 		return nil, fmt.Errorf("decoding version info: missing field supportedVersions")
 	}
 	return &info, nil
+}
+
+func ParseVersion(version string) (int, int, int, error) {
+	var major, minor, micro int
+	parts := strings.Split(version, ".")
+	if len(parts) == 0 || len(parts) >= 4 {
+		return -1, -1, -1, fmt.Errorf("invalid version %q: too many or too few parts", version)
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return -1, -1, -1, fmt.Errorf("failed to convert major version part %q: %v", parts[0], err)
+	}
+
+	if len(parts) >= 2 {
+		minor, err = strconv.Atoi(parts[1])
+		if err != nil {
+			return -1, -1, -1, fmt.Errorf("failed to convert minor version part %q: %v", parts[1], err)
+		}
+	}
+
+	if len(parts) >= 3 {
+		micro, err = strconv.Atoi(parts[2])
+		if err != nil {
+			return -1, -1, -1, fmt.Errorf("failed to convert minor version part %q: %v", parts[2], err)
+		}
+	}
+
+	return major, minor, micro, nil
+}
+
+func GreaterThanOrEqualTo(version, otherVersion string) (bool, error) {
+	firstMajor, firstMinor, firstMicro, err := ParseVersion(version)
+	if err != nil {
+		return false, err
+	}
+
+	secondMajor, secondMinor, secondMicro, err := ParseVersion(otherVersion)
+	if err != nil {
+		return false, err
+	}
+
+	return firstMajor >= secondMajor && firstMinor >= secondMinor && firstMicro >= secondMicro, nil
 }
