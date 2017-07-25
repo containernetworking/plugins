@@ -189,9 +189,9 @@ var _ = Describe("DHCP Operations", func() {
 		os.Remove(pidfilePath)
 	})
 
-	It("configures and deconfigures an link with ADDDEL", func() {
+	It("configures and deconfigures an link with ADD/GET/DEL", func() {
 		conf := `{
-    "cniVersion": "0.3.1",
+    "cniVersion": "0.4.0",
     "name": "mynet",
     "type": "ipvlan",
     "ipam": {
@@ -219,6 +219,23 @@ var _ = Describe("DHCP Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(addResult.IPs)).To(Equal(1))
 			Expect(addResult.IPs[0].Address.String()).To(Equal("192.168.1.5/24"))
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		var getResult *current.Result
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			r, _, err := testutils.CmdGetWithResult(targetNS.Path(), contVethName, []byte(conf), func() error {
+				return cmdGet(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			getResult, err = current.GetResult(r)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(reflect.DeepEqual(getResult, addResult)).To(Equal(true))
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())

@@ -95,6 +95,17 @@ func cmdAdd(args *skel.CmdArgs) error {
 	return types.PrintResult(netConf.PrevResult, netConf.CNIVersion)
 }
 
+func cmdGet(args *skel.CmdArgs) error {
+	netConf, err := parseConfig(args.StdinData, args.IfName)
+	if err != nil {
+		return fmt.Errorf("failed to parse config: %v", err)
+	}
+	if netConf.PrevResult == nil {
+		return fmt.Errorf("must be called as chained plugin")
+	}
+	return types.PrintResult(netConf.PrevResult, netConf.CNIVersion)
+}
+
 func cmdDel(args *skel.CmdArgs) error {
 	netConf, err := parseConfig(args.StdinData, args.IfName)
 	if err != nil {
@@ -112,7 +123,7 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdDel, version.PluginSupports("", "0.1.0", "0.2.0", "0.3.0", version.Current()))
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.PluginSupports("", "0.1.0", "0.2.0", "0.3.0", version.Current()))
 }
 
 // parseConfig parses the supplied configuration (and prevResult) from stdin.

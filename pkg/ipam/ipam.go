@@ -31,6 +31,10 @@ func ExecAdd(plugin string, netconf []byte) (types.Result, error) {
 	return invoke.DelegateAdd(plugin, netconf)
 }
 
+func ExecGet(plugin string, netconf []byte) (types.Result, error) {
+	return invoke.DelegateGet(plugin, netconf)
+}
+
 func ExecDel(plugin string, netconf []byte) error {
 	return invoke.DelegateDel(plugin, netconf)
 }

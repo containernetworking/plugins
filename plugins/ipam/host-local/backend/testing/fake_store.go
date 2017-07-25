@@ -63,6 +63,16 @@ func (s *FakeStore) LastReservedIP(rangeID string) (net.IP, error) {
 	return ip, nil
 }
 
+func (s *FakeStore) GetReserved(id string) ([]net.IP, error) {
+	ips := make([]net.IP, 0)
+	for ip, mapID := range s.ipMap {
+		if id == mapID {
+			ips = append(ips, net.ParseIP(ip))
+		}
+	}
+	return ips, nil
+}
+
 func (s *FakeStore) Release(ip net.IP) error {
 	delete(s.ipMap, ip.String())
 	return nil

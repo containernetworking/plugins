@@ -29,8 +29,8 @@ func envCleanup() {
 	os.Unsetenv("CNI_IFNAME")
 }
 
-func CmdAddWithResult(cniNetns, cniIfname string, conf []byte, f func() error) (types.Result, []byte, error) {
-	os.Setenv("CNI_COMMAND", "ADD")
+func cmdAddOrGetWithResult(command, cniNetns, cniIfname string, conf []byte, f func() error) (types.Result, []byte, error) {
+	os.Setenv("CNI_COMMAND", command)
 	os.Setenv("CNI_PATH", os.Getenv("PATH"))
 	os.Setenv("CNI_NETNS", cniNetns)
 	os.Setenv("CNI_IFNAME", cniIfname)
@@ -72,6 +72,14 @@ func CmdAddWithResult(cniNetns, cniIfname string, conf []byte, f func() error) (
 	}
 
 	return result, out, nil
+}
+
+func CmdAddWithResult(cniNetns, cniIfname string, conf []byte, f func() error) (types.Result, []byte, error) {
+	return cmdAddOrGetWithResult("ADD", cniNetns, cniIfname, conf, f)
+}
+
+func CmdGetWithResult(cniNetns, cniIfname string, conf []byte, f func() error) (types.Result, []byte, error) {
+	return cmdAddOrGetWithResult("GET", cniNetns, cniIfname, conf, f)
 }
 
 func CmdDelWithResult(cniNetns, cniIfname string, f func() error) error {

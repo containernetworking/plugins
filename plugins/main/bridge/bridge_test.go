@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"reflect"
 	"strings"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -213,17 +214,68 @@ func ipVersion(ip net.IP) string {
 
 type cmdAddDelTester interface {
 	setNS(testNS ns.NetNS, targetNS ns.NetNS)
-	cmdAddTest(tc testCase)
+	cmdAddTest(tc testCase) types.Result
+	cmdGetTest(tc testCase, r types.Result)
 	cmdDelTest(tc testCase)
+
+	supportsGet() bool
 }
 
 func testerByVersion(version string) cmdAddDelTester {
 	switch {
+	case strings.HasPrefix(version, "0.4."):
+		return &testerV04x{tester03x: &testerV03x{}}
 	case strings.HasPrefix(version, "0.3."):
 		return &testerV03x{}
 	default:
 		return &testerV01xOr02x{}
 	}
+}
+
+type testerV04x struct {
+	tester03x *testerV03x
+	testNS    ns.NetNS
+	targetNS  ns.NetNS
+	args      *skel.CmdArgs
+}
+
+func (tester *testerV04x) setNS(testNS ns.NetNS, targetNS ns.NetNS) {
+	tester.testNS = testNS
+	tester.targetNS = targetNS
+	tester.tester03x.setNS(testNS, targetNS)
+}
+
+func (tester *testerV04x) supportsGet() bool {
+	return true
+}
+
+func (tester *testerV04x) cmdAddTest(tc testCase) types.Result {
+	tester.args = tc.createCmdArgs(tester.targetNS)
+	return tester.tester03x.cmdAddTest(tc)
+}
+
+func (tester *testerV04x) cmdGetTest(tc testCase, addResult types.Result) {
+	var getResult *current.Result
+	err := tester.testNS.Do(func(ns.NetNS) error {
+		defer GinkgoRecover()
+
+		r, _, err := testutils.CmdGetWithResult(tester.targetNS.Path(), IFNAME, tester.args.StdinData, func() error {
+			return cmdGet(tester.args)
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		getResult, err = current.GetResult(r)
+		Expect(err).NotTo(HaveOccurred())
+		return nil
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	GinkgoT().Logf("\nget %+v\nadd %+v\n", getResult, addResult)
+	Expect(reflect.DeepEqual(getResult, addResult)).To(Equal(true))
+}
+
+func (tester *testerV04x) cmdDelTest(tc testCase) {
+	tester.tester03x.cmdDelTest(tc)
 }
 
 type testerV03x struct {
@@ -238,7 +290,11 @@ func (tester *testerV03x) setNS(testNS ns.NetNS, targetNS ns.NetNS) {
 	tester.targetNS = targetNS
 }
 
-func (tester *testerV03x) cmdAddTest(tc testCase) {
+func (tester *testerV03x) supportsGet() bool {
+	return false
+}
+
+func (tester *testerV03x) cmdAddTest(tc testCase) types.Result {
 	// Generate network config and command arguments
 	tester.args = tc.createCmdArgs(tester.targetNS)
 
@@ -291,10 +347,10 @@ func (tester *testerV03x) cmdAddTest(tc testCase) {
 			Expect(found).To(Equal(true))
 		}
 
-		// Check for the veth link in the main namespace
-		links, err := netlink.LinkList()
+		// Check for the veth and bridge links in the main namespace
+		link, err = netlink.LinkByName(result.Interfaces[0].Name)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(len(links)).To(Equal(3)) // Bridge, veth, and loopback
+		Expect(link).To(BeAssignableToTypeOf(&netlink.Bridge{}))
 
 		link, err = netlink.LinkByName(result.Interfaces[1].Name)
 		Expect(err).NotTo(HaveOccurred())
@@ -362,6 +418,12 @@ func (tester *testerV03x) cmdAddTest(tc testCase) {
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
+
+	return result
+}
+
+func (tester *testerV03x) cmdGetTest(tc testCase, addResult types.Result) {
+	// 0.3 doesn't implement GET
 }
 
 func (tester *testerV03x) cmdDelTest(tc testCase) {
@@ -410,7 +472,11 @@ func (tester *testerV01xOr02x) setNS(testNS ns.NetNS, targetNS ns.NetNS) {
 	tester.targetNS = targetNS
 }
 
-func (tester *testerV01xOr02x) cmdAddTest(tc testCase) {
+func (tester *testerV01xOr02x) supportsGet() bool {
+	return false
+}
+
+func (tester *testerV01xOr02x) cmdAddTest(tc testCase) types.Result {
 	// Generate network config and calculate gateway addresses
 	tester.args = tc.createCmdArgs(tester.targetNS)
 
@@ -510,6 +576,11 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase) {
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
+
+	return result
+}
+func (tester *testerV01xOr02x) cmdGetTest(tc testCase, r types.Result) {
+	// 0.1 and 0.2 don't implement GET
 }
 
 func (tester *testerV01xOr02x) cmdDelTest(tc testCase) {
@@ -547,7 +618,11 @@ func cmdAddDelTest(testNS ns.NetNS, tc testCase) {
 	tester.setNS(testNS, targetNS)
 
 	// Test IP allocation
-	tester.cmdAddTest(tc)
+	r := tester.cmdAddTest(tc)
+
+	if tester.supportsGet() {
+		tester.cmdGetTest(tc, r)
+	}
 
 	// Test IP Release
 	tester.cmdDelTest(tc)
@@ -622,77 +697,77 @@ var _ = Describe("bridge Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("configures and deconfigures a bridge and veth with default route with ADD/DEL for 0.3.0 config", func() {
-		testCases := []testCase{
-			{
-				// IPv4 only
-				subnet:     "10.1.2.0/24",
-				expGWCIDRs: []string{"10.1.2.1/24"},
-			},
-			{
-				// IPv6 only
-				subnet:     "2001:db8::0/64",
-				expGWCIDRs: []string{"2001:db8::1/64"},
-			},
-			{
-				// Dual-Stack
-				ranges: []rangeInfo{
-					{subnet: "192.168.0.0/24"},
-					{subnet: "fd00::0/64"},
+	Context("for different CNI spec versions", func() {
+		var testCases []testCase
+		var testNS ns.NetNS
+		BeforeEach(func() {
+			testCases = []testCase{
+				{
+					// IPv4 only
+					subnet:     "10.1.2.0/24",
+					expGWCIDRs: []string{"10.1.2.1/24"},
 				},
-				expGWCIDRs: []string{
-					"192.168.0.1/24",
-					"fd00::1/64",
+				{
+					// IPv6 only
+					subnet:     "2001:db8::0/64",
+					expGWCIDRs: []string{"2001:db8::1/64"},
 				},
-			},
-			{
-				// 3 Subnets (1 IPv4 and 2 IPv6 subnets)
-				ranges: []rangeInfo{
-					{subnet: "192.168.0.0/24"},
-					{subnet: "fd00::0/64"},
-					{subnet: "2001:db8::0/64"},
+				{
+					// Dual-Stack
+					ranges: []rangeInfo{
+						{subnet: "192.168.0.0/24"},
+						{subnet: "fd00::0/64"},
+					},
+					expGWCIDRs: []string{
+						"192.168.0.1/24",
+						"fd00::1/64",
+					},
 				},
-				expGWCIDRs: []string{
-					"192.168.0.1/24",
-					"fd00::1/64",
-					"2001:db8::1/64",
+				{
+					// 3 Subnets (1 IPv4 and 2 IPv6 subnets)
+					ranges: []rangeInfo{
+						{subnet: "192.168.0.0/24"},
+						{subnet: "fd00::0/64"},
+						{subnet: "2001:db8::0/64"},
+					},
+					expGWCIDRs: []string{
+						"192.168.0.1/24",
+						"fd00::1/64",
+						"2001:db8::1/64",
+					},
 				},
-			},
-		}
-		for _, tc := range testCases {
-			tc.cniVersion = "0.3.0"
-			cmdAddDelTest(originalNS, tc)
-		}
-	})
+			}
 
-	It("configures and deconfigures a bridge and veth with default route with ADD/DEL for 0.3.1 config", func() {
-		testCases := []testCase{
-			{
-				// IPv4 only
-				subnet:     "10.1.2.0/24",
-				expGWCIDRs: []string{"10.1.2.1/24"},
-			},
-			{
-				// IPv6 only
-				subnet:     "2001:db8::0/64",
-				expGWCIDRs: []string{"2001:db8::1/64"},
-			},
-			{
-				// Dual-Stack
-				ranges: []rangeInfo{
-					{subnet: "192.168.0.0/24"},
-					{subnet: "fd00::0/64"},
-				},
-				expGWCIDRs: []string{
-					"192.168.0.1/24",
-					"fd00::1/64",
-				},
-			},
-		}
-		for _, tc := range testCases {
-			tc.cniVersion = "0.3.1"
-			cmdAddDelTest(originalNS, tc)
-		}
+			// Create a new NetNS for each sub-test
+			var err error
+			testNS, err = ns.NewNS()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			Expect(testNS.Close()).To(Succeed())
+		})
+
+		It("configures and deconfigures a bridge and veth with default route with ADD/DEL for 0.4.0 config", func() {
+			for _, tc := range testCases {
+				tc.cniVersion = "0.4.0"
+				cmdAddDelTest(testNS, tc)
+			}
+		})
+
+		It("configures and deconfigures a bridge and veth with default route with ADD/DEL for 0.3.1 config", func() {
+			for _, tc := range testCases {
+				tc.cniVersion = "0.3.1"
+				cmdAddDelTest(testNS, tc)
+			}
+		})
+
+		It("configures and deconfigures a bridge and veth with default route with ADD/DEL for 0.3.0 config", func() {
+			for _, tc := range testCases {
+				tc.cniVersion = "0.3.0"
+				cmdAddDelTest(testNS, tc)
+			}
+		})
 	})
 
 	It("deconfigures an unconfigured bridge with DEL", func() {
@@ -711,36 +786,6 @@ var _ = Describe("bridge Operations", func() {
 
 		// Execute cmdDEL on the plugin, expect no errors
 		tester.cmdDelTest(tc)
-	})
-
-	It("configures and deconfigures a bridge and veth with default route with ADD/DEL for 0.1.0 config", func() {
-		testCases := []testCase{
-			{
-				// IPv4 only
-				subnet:     "10.1.2.0/24",
-				expGWCIDRs: []string{"10.1.2.1/24"},
-			},
-			{
-				// IPv6 only
-				subnet:     "2001:db8::0/64",
-				expGWCIDRs: []string{"2001:db8::1/64"},
-			},
-			{
-				// Dual-Stack
-				ranges: []rangeInfo{
-					{subnet: "192.168.0.0/24"},
-					{subnet: "fd00::0/64"},
-				},
-				expGWCIDRs: []string{
-					"192.168.0.1/24",
-					"fd00::1/64",
-				},
-			},
-		}
-		for _, tc := range testCases {
-			tc.cniVersion = "0.1.0"
-			cmdAddDelTest(originalNS, tc)
-		}
 	})
 
 	It("ensure bridge address", func() {

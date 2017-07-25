@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"reflect"
 	"syscall"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -102,7 +103,7 @@ var _ = Describe("ipvlan Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("configures and deconfigures an iplvan link with ADD/DEL", func() {
+	It("configures and deconfigures an iplvan link with ADD/GET/DEL", func() {
 		const IFNAME = "ipvl0"
 
 		conf := fmt.Sprintf(`{
@@ -127,7 +128,7 @@ var _ = Describe("ipvlan Operations", func() {
 			StdinData:   []byte(conf),
 		}
 
-		var result *current.Result
+		var addResult *current.Result
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
@@ -136,12 +137,29 @@ var _ = Describe("ipvlan Operations", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			result, err = current.GetResult(r)
+			addResult, err = current.GetResult(r)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
+			Expect(len(addResult.Interfaces)).To(Equal(1))
+			Expect(addResult.Interfaces[0].Name).To(Equal(IFNAME))
+			Expect(len(addResult.IPs)).To(Equal(1))
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		var getResult *current.Result
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			r, _, err := testutils.CmdGetWithResult(targetNs.Path(), IFNAME, []byte(conf), func() error {
+				return cmdGet(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			getResult, err = current.GetResult(r)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(reflect.DeepEqual(getResult, addResult)).To(Equal(true))
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -154,7 +172,7 @@ var _ = Describe("ipvlan Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(link.Attrs().Name).To(Equal(IFNAME))
 
-			hwaddr, err := net.ParseMAC(result.Interfaces[0].Mac)
+			hwaddr, err := net.ParseMAC(addResult.Interfaces[0].Mac)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
 

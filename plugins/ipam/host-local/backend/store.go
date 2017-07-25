@@ -21,6 +21,7 @@ type Store interface {
 	Unlock() error
 	Close() error
 	Reserve(id string, ip net.IP, rangeID string) (bool, error)
+	GetReserved(id string) ([]net.IP, error)
 	LastReservedIP(rangeID string) (net.IP, error)
 	Release(ip net.IP) error
 	ReleaseByID(id string) error

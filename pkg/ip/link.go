@@ -23,6 +23,7 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/utils/hwaddr"
+	"github.com/safchain/ethtool"
 	"github.com/vishvananda/netlink"
 )
 
@@ -216,4 +217,37 @@ func SetHWAddrByIP(ifName string, ip4 net.IP, ip6 net.IP) error {
 	}
 
 	return nil
+}
+
+// Returns the Veth instance, the ifindex of it's peer, and an error
+func GetVethPeerIfindex(ifName string) (netlink.Link, int, error) {
+	link, err := netlink.LinkByName(ifName)
+	if err != nil {
+		return nil, -1, fmt.Errorf("could not lookup %q: %v", ifName, err)
+	}
+	if _, ok := link.(*netlink.Veth); !ok {
+		return nil, -1, fmt.Errorf("interface %q was not a veth interface", ifName)
+	}
+	// Even though veth devices should set IFLA_IFLINK to their peer
+	// interface ifindex, that doesn't seem to work or to get through
+	// vishvananda/netlink.  But since that only works on 4.0 and
+	// later kernels anyway, just use ethtool.
+	e, err := ethtool.NewEthtool()
+	if err != nil {
+		return nil, -1, fmt.Errorf("failed to initialize ethtool: %v", err)
+	}
+	defer e.Close()
+
+	stats, err := e.Stats(link.Attrs().Name)
+	if err != nil {
+		return nil, -1, fmt.Errorf("failed to request ethtool stats: %v", err)
+	}
+	n, ok := stats["peer_ifindex"]
+	if !ok {
+		return nil, -1, fmt.Errorf("failed to find 'peer_ifindex' in ethtool stats")
+	}
+	if n > 32767 || n == 0 {
+		return nil, -1, fmt.Errorf("invalid 'peer_ifindex' %d", n)
+	}
+	return link, int(n), nil
 }

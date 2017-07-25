@@ -242,6 +242,71 @@ func cmdAdd(args *skel.CmdArgs) error {
 	return types.PrintResult(result, conf.CNIVersion)
 }
 
+func cmdGet(args *skel.CmdArgs) error {
+	conf := NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("failed to load netconf: %v", err)
+	}
+
+	// run the IPAM plugin and get back the config to apply
+	r, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+	if err != nil {
+		return err
+	}
+	// Convert whatever the IPAM result was into the current Result type
+	result, err := current.NewResultFromResult(r)
+	if err != nil {
+		return err
+	}
+
+	if len(result.IPs) == 0 {
+		return errors.New("IPAM plugin returned missing IP config")
+	}
+	for _, ipc := range result.IPs {
+		// All addresses apply to the container veth interface
+		ipc.Interface = current.Int(1)
+	}
+
+	netns, err := ns.GetNS(args.Netns)
+	if err != nil {
+		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+	}
+	defer netns.Close()
+
+	var containerVeth netlink.Link
+	hostVethIndex := -1
+	if err := netns.Do(func(_ ns.NetNS) error {
+		containerVeth, hostVethIndex, err = ip.GetVethPeerIfindex(args.IfName)
+		return err
+	}); err != nil {
+		return err
+	}
+	if hostVethIndex < 0 {
+		return fmt.Errorf("failed to find container veth peer %d", hostVethIndex)
+	}
+
+	// Fetch host side
+	hostVeth, err := netlink.LinkByIndex(hostVethIndex)
+	if err != nil {
+		return fmt.Errorf("could not look up host veth peer %d: %v", hostVethIndex, err)
+	}
+
+	result.Interfaces = []*current.Interface{
+		&current.Interface{
+			Name: hostVeth.Attrs().Name,
+			Mac:  hostVeth.Attrs().HardwareAddr.String(),
+		},
+		&current.Interface{
+			Name:    args.IfName,
+			Mac:     containerVeth.Attrs().HardwareAddr.String(),
+			Sandbox: args.Netns,
+		},
+	}
+	result.DNS = conf.DNS
+
+	return types.PrintResult(result, conf.CNIVersion)
+}
+
 func cmdDel(args *skel.CmdArgs) error {
 	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
@@ -283,5 +348,5 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdDel, version.All)
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All)
 }

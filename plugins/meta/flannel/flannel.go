@@ -148,7 +148,7 @@ func consumeScratchNetConf(containerID, dataDir string) ([]byte, error) {
 	return ioutil.ReadFile(path)
 }
 
-func delegateAdd(cid, dataDir string, netconf map[string]interface{}) error {
+func delegateAddOrGet(command, cid, dataDir string, netconf map[string]interface{}) error {
 	netconfBytes, err := json.Marshal(netconf)
 	if err != nil {
 		return fmt.Errorf("error serializing delegate netconf: %v", err)
@@ -159,7 +159,16 @@ func delegateAdd(cid, dataDir string, netconf map[string]interface{}) error {
 		return err
 	}
 
-	result, err := invoke.DelegateAdd(netconf["type"].(string), netconfBytes)
+	var result types.Result
+	switch {
+	case command == "ADD":
+		result, err = invoke.DelegateAdd(netconf["type"].(string), netconfBytes)
+	case command == "GET":
+		result, err = invoke.DelegateGet(netconf["type"].(string), netconfBytes)
+	default:
+		return fmt.Errorf("unhandled command %q", command)
+	}
+	
 	if err != nil {
 		return err
 	}
@@ -177,7 +186,7 @@ func isString(i interface{}) bool {
 	return ok
 }
 
-func cmdAdd(args *skel.CmdArgs) error {
+func cmdAddOrGet(command string, args *skel.CmdArgs) error {
 	n, err := loadFlannelNetConf(args.StdinData)
 	if err != nil {
 		return err
@@ -238,7 +247,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 		},
 	}
 
-	return delegateAdd(args.ContainerID, n.DataDir, n.Delegate)
+	return delegateAddOrGet(command, args.ContainerID, n.DataDir, n.Delegate)
+}
+
+func cmdAdd(args *skel.CmdArgs) error {
+	return cmdAddOrGet("ADD", args)
+}
+
+func cmdGet(args *skel.CmdArgs) error {
+	return cmdAddOrGet("GET", args)
 }
 
 func cmdDel(args *skel.CmdArgs) error {
@@ -265,5 +282,5 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdDel, version.All)
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All)
 }

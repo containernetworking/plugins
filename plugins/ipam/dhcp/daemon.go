@@ -87,6 +87,35 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 	return nil
 }
 
+// Get returns an existing lease.
+func (d *DHCP) Get(args *skel.CmdArgs, result *current.Result) error {
+	conf := types.NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("error parsing netconf: %v", err)
+	}
+
+	clientID := args.ContainerID + "/" + conf.Name
+	l, err := GetLease(clientID, args.Netns, args.IfName, LeasePath)
+	if err != nil {
+		return err
+	}
+
+	ipn, err := l.IPNet()
+	if err != nil {
+		l.Stop()
+		return err
+	}
+
+	result.IPs = []*current.IPConfig{{
+		Version: "4",
+		Address: *ipn,
+		Gateway: l.Gateway(),
+	}}
+	result.Routes = l.Routes()
+
+	return nil
+}
+
 // Release stops maintenance of the lease acquired in Allocate()
 // and sends a release msg to the DHCP server.
 func (d *DHCP) Release(args *skel.CmdArgs, reply *struct{}) error {

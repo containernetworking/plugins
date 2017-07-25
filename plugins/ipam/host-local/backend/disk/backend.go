@@ -81,6 +81,29 @@ func (s *Store) Reserve(id string, ip net.IP, rangeID string) (bool, error) {
 	return true, nil
 }
 
+func (s *Store) GetReserved(id string) ([]net.IP, error) {
+	ips := make([]net.IP, 0)
+	err := filepath.Walk(s.dataDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		data, err := ioutil.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		if strings.TrimSpace(string(data)) == strings.TrimSpace(id) {
+			if ip := net.ParseIP(info.Name()); ip != nil {
+				ips = append(ips, ip)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return ips, nil
+}
+
 // LastReservedIP returns the last reserved IP if exists
 func (s *Store) LastReservedIP(rangeID string) (net.IP, error) {
 	ipfile := filepath.Join(s.dataDir, lastIPFilePrefix+rangeID)

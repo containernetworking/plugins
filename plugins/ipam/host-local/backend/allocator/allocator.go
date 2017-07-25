@@ -109,6 +109,37 @@ func (a *IPAllocator) Get(id string, requestedIP net.IP) (*current.IPConfig, err
 	}, nil
 }
 
+// GetAllocatedByID returns the IP currently allocated for this range
+func (a *IPAllocator) GetAllocatedByID(id string) (*current.IPConfig, error) {
+	a.store.Lock()
+	defer a.store.Unlock()
+
+	ips, err := a.store.GetReserved(id)
+	if err != nil {
+		return nil, err
+	}
+	for _, ip := range ips {
+		r, err := a.rangeset.RangeFor(ip)
+		if err != nil {
+			continue
+		}
+
+		version := "4"
+		if ip.To4() == nil {
+			version = "6"
+		}
+		return &current.IPConfig{
+			Version: version,
+			Address: net.IPNet{
+				IP: ip,
+				Mask: r.Subnet.Mask,
+			},
+			Gateway: r.Gateway,
+		}, nil
+	}
+	return nil, fmt.Errorf("no IPs found in range")
+}
+
 // Release clears all IPs allocated for the container with given ID
 func (a *IPAllocator) Release(id string) error {
 	a.store.Lock()

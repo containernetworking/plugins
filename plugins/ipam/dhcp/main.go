@@ -42,11 +42,11 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
-		skel.PluginMain(cmdAdd, cmdDel, version.All)
+		skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All)
 	}
 }
 
-func cmdAdd(args *skel.CmdArgs) error {
+func cmdAddOrGet(args *skel.CmdArgs, callName string) error {
 	// Plugin must return result in same version as specified in netconf
 	versionDecoder := &version.ConfigDecoder{}
 	confVersion, err := versionDecoder.Decode(args.StdinData)
@@ -55,11 +55,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	result := &current.Result{}
-	if err := rpcCall("DHCP.Allocate", args, result); err != nil {
+	if err := rpcCall(callName, args, result); err != nil {
 		return err
 	}
 
 	return types.PrintResult(result, confVersion)
+}
+
+func cmdAdd(args *skel.CmdArgs) error {
+	return cmdAddOrGet(args, "DHCP.Allocate")
+}
+
+func cmdGet(args *skel.CmdArgs) error {
+	return cmdAddOrGet(args, "DHCP.Get")
 }
 
 func cmdDel(args *skel.CmdArgs) error {

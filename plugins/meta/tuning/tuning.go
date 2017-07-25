@@ -99,6 +99,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 	return types.PrintResult(tuningConf.PrevResult, tuningConf.CNIVersion)
 }
 
+func cmdGet(args *skel.CmdArgs) error {
+	result := current.Result{}
+	return result.Print()
+}
+
 func cmdDel(args *skel.CmdArgs) error {
 	// TODO: the settings are not reverted to the previous values. Reverting the
 	// settings is not useful when the whole container goes away but it could be
@@ -107,5 +112,5 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdDel, version.All)
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All)
 }

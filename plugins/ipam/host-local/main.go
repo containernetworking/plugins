@@ -29,7 +29,7 @@ import (
 )
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdDel, version.All)
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All)
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
@@ -103,6 +103,45 @@ func cmdAdd(args *skel.CmdArgs) error {
 			errstr = errstr + " " + ip.String()
 		}
 		return fmt.Errorf(errstr)
+	}
+
+	result.Routes = ipamConf.Routes
+
+	return types.PrintResult(result, confVersion)
+}
+
+func cmdGet(args *skel.CmdArgs) error {
+	ipamConf, confVersion, err := allocator.LoadIPAMConfig(args.StdinData, args.Args)
+	if err != nil {
+		return err
+	}
+
+	result := &current.Result{}
+
+	if ipamConf.ResolvConf != "" {
+		dns, err := parseResolvConf(ipamConf.ResolvConf)
+		if err != nil {
+			return err
+		}
+		result.DNS = *dns
+	}
+
+	store, err := disk.New(ipamConf.Name, ipamConf.DataDir)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+
+	var errors []string
+	for idx, rangeset := range ipamConf.Ranges {
+		ipAllocator := allocator.NewIPAllocator(&rangeset, store, idx)
+
+		ipConfig, err := ipAllocator.GetAllocatedByID(args.ContainerID)
+		if err != nil {
+			errors = append(errors, err.Error())
+		} else {
+			result.IPs = append(result.IPs, ipConfig)
+		}
 	}
 
 	result.Routes = ipamConf.Routes

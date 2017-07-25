@@ -85,8 +85,8 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 	return &conf, nil
 }
 
-// cmdAdd is called for ADD requests
-func cmdAdd(args *skel.CmdArgs) error {
+// cmdAddOrGet is called for ADD and GET requests
+func cmdAddOrGet(args *skel.CmdArgs) error {
 	conf, err := parseConfig(args.StdinData)
 	if err != nil {
 		return err
@@ -141,5 +141,5 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdDel, version.PluginSupports("", "0.1.0", "0.2.0", version.Current()))
+	skel.PluginMain(cmdAddOrGet, cmdAddOrGet, cmdDel, version.PluginSupports("", "0.1.0", "0.2.0", version.Current()))
 }

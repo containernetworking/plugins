@@ -165,6 +165,57 @@ func cmdAdd(args *skel.CmdArgs) error {
 	return types.PrintResult(result, cniVersion)
 }
 
+func cmdGet(args *skel.CmdArgs) error {
+	n, cniVersion, err := loadConf(args.StdinData)
+	if err != nil {
+		return err
+	}
+
+	netns, err := ns.GetNS(args.Netns)
+	if err != nil {
+		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+	}
+	defer netns.Close()
+
+	// run the IPAM plugin and get back the config to apply
+	r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
+	if err != nil {
+		return err
+	}
+	// Convert whatever the IPAM result was into the current Result type
+	result, err := current.NewResultFromResult(r)
+	if err != nil {
+		return err
+	}
+
+	if len(result.IPs) == 0 {
+		return errors.New("IPAM plugin returned missing IP config")
+	}
+	for _, ipc := range result.IPs {
+		// All addresses belong to the vlan interface
+		ipc.Interface = current.Int(0)
+	}
+
+	var link netlink.Link
+	if err := netns.Do(func(_ ns.NetNS) error {
+		link, err = netlink.LinkByName(args.IfName)
+		return err
+	}); err != nil {
+		return err
+	}
+
+	result.Interfaces = []*current.Interface{
+		&current.Interface{
+			Name:    args.IfName,
+			Mac:     link.Attrs().HardwareAddr.String(),
+			Sandbox: args.Netns,
+		},
+	}
+	result.DNS = n.DNS
+
+	return types.PrintResult(result, cniVersion)
+}
+
 func cmdDel(args *skel.CmdArgs) error {
 	n, _, err := loadConf(args.StdinData)
 	if err != nil {
@@ -193,5 +244,5 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdDel, version.All)
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All)
 }
