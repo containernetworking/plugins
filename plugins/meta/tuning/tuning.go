@@ -34,19 +34,47 @@ import (
 // TuningConf represents the network tuning configuration.
 type TuningConf struct {
 	types.NetConf
-	SysCtl map[string]string `json:"sysctl"`
+	SysCtl        map[string]string      `json:"sysctl"`
+	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
+	PrevResult    *current.Result        `json:"-"`
+}
+
+func parseConf(data []byte) (*TuningConf, error) {
+	conf := TuningConf{}
+	if err := json.Unmarshal(data, &conf); err != nil {
+		return nil, fmt.Errorf("failed to load netconf: %v", err)
+	}
+
+	// Parse previous result.
+	if conf.RawPrevResult != nil {
+		resultBytes, err := json.Marshal(conf.RawPrevResult)
+		if err != nil {
+			return nil, fmt.Errorf("could not serialize prevResult: %v", err)
+		}
+		res, err := version.NewResult(conf.CNIVersion, resultBytes)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse prevResult: %v", err)
+		}
+		conf.RawPrevResult = nil
+		conf.PrevResult, err = current.NewResultFromResult(res)
+		if err != nil {
+			return nil, fmt.Errorf("could not convert result to current version: %v", err)
+		}
+	}
+
+	return &conf, nil
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
-	tuningConf := TuningConf{}
-	if err := json.Unmarshal(args.StdinData, &tuningConf); err != nil {
-		return fmt.Errorf("failed to load netconf: %v", err)
+	tuningConf, err := parseConf(args.StdinData)
+	if err != nil {
+		return err
 	}
 
 	// The directory /proc/sys/net is per network namespace. Enter in the
 	// network namespace before writing on it.
 
-	err := ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		for key, value := range tuningConf.SysCtl {
 			fileName := filepath.Join("/proc/sys", strings.Replace(key, ".", "/", -1))
 			fileName = filepath.Clean(fileName)
@@ -68,8 +96,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	result := current.Result{}
-	return result.Print()
+	return types.PrintResult(tuningConf.PrevResult, tuningConf.CNIVersion)
 }
 
 func cmdDel(args *skel.CmdArgs) error {
