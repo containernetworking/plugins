@@ -77,11 +77,11 @@ var _ = Describe("IP ranges", func() {
 	It("should reject invalid RangeStart and RangeEnd specifications", func() {
 		r := Range{Subnet: mustSubnet("192.0.2.0/24"), RangeStart: net.ParseIP("192.0.3.0")}
 		err := r.Canonicalize()
-		Expect(err).Should(MatchError("192.0.3.0 not in network 192.0.2.0/24"))
+		Expect(err).Should(MatchError("RangeStart 192.0.3.0 not in network 192.0.2.0/24"))
 
 		r = Range{Subnet: mustSubnet("192.0.2.0/24"), RangeEnd: net.ParseIP("192.0.4.0")}
 		err = r.Canonicalize()
-		Expect(err).Should(MatchError("192.0.4.0 not in network 192.0.2.0/24"))
+		Expect(err).Should(MatchError("RangeEnd 192.0.4.0 not in network 192.0.2.0/24"))
 
 		r = Range{
 			Subnet:     mustSubnet("192.0.2.0/24"),
@@ -89,7 +89,7 @@ var _ = Describe("IP ranges", func() {
 			RangeEnd:   net.ParseIP("192.0.2.40"),
 		}
 		err = r.Canonicalize()
-		Expect(err).Should(MatchError("192.0.2.50 is in network 192.0.2.0/24 but after end 192.0.2.40"))
+		Expect(err).Should(MatchError("RangeStart 192.0.2.50 not in network 192.0.2.0/24"))
 	})
 
 	It("should reject invalid gateways", func() {
@@ -126,15 +126,12 @@ var _ = Describe("IP ranges", func() {
 		err := r.Canonicalize()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(r.IPInRange(net.ParseIP("192.0.3.0"))).Should(MatchError(
-			"192.0.3.0 not in network 192.0.2.0/24"))
+		Expect(r.Contains(net.ParseIP("192.0.3.0"))).Should(BeFalse())
 
-		Expect(r.IPInRange(net.ParseIP("192.0.2.39"))).Should(MatchError(
-			"192.0.2.39 is in network 192.0.2.0/24 but before start 192.0.2.40"))
-		Expect(r.IPInRange(net.ParseIP("192.0.2.40"))).Should(BeNil())
-		Expect(r.IPInRange(net.ParseIP("192.0.2.50"))).Should(BeNil())
-		Expect(r.IPInRange(net.ParseIP("192.0.2.51"))).Should(MatchError(
-			"192.0.2.51 is in network 192.0.2.0/24 but after end 192.0.2.50"))
+		Expect(r.Contains(net.ParseIP("192.0.2.39"))).Should(BeFalse())
+		Expect(r.Contains(net.ParseIP("192.0.2.40"))).Should(BeTrue())
+		Expect(r.Contains(net.ParseIP("192.0.2.50"))).Should(BeTrue())
+		Expect(r.Contains(net.ParseIP("192.0.2.51"))).Should(BeFalse())
 	})
 
 	It("should accept v6 IPs in range and reject IPs out of range", func() {
@@ -145,15 +142,12 @@ var _ = Describe("IP ranges", func() {
 		}
 		err := r.Canonicalize()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(r.IPInRange(net.ParseIP("2001:db8:2::"))).Should(MatchError(
-			"2001:db8:2:: not in network 2001:db8:1::/64"))
+		Expect(r.Contains(net.ParseIP("2001:db8:2::"))).Should(BeFalse())
 
-		Expect(r.IPInRange(net.ParseIP("2001:db8:1::39"))).Should(MatchError(
-			"2001:db8:1::39 is in network 2001:db8:1::/64 but before start 2001:db8:1::40"))
-		Expect(r.IPInRange(net.ParseIP("2001:db8:1::40"))).Should(BeNil())
-		Expect(r.IPInRange(net.ParseIP("2001:db8:1::50"))).Should(BeNil())
-		Expect(r.IPInRange(net.ParseIP("2001:db8:1::51"))).Should(MatchError(
-			"2001:db8:1::51 is in network 2001:db8:1::/64 but after end 2001:db8:1::50"))
+		Expect(r.Contains(net.ParseIP("2001:db8:1::39"))).Should(BeFalse())
+		Expect(r.Contains(net.ParseIP("2001:db8:1::40"))).Should(BeTrue())
+		Expect(r.Contains(net.ParseIP("2001:db8:1::50"))).Should(BeTrue())
+		Expect(r.Contains(net.ParseIP("2001:db8:1::51"))).Should(BeFalse())
 	})
 
 	DescribeTable("Detecting overlap",

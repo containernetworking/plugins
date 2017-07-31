@@ -44,43 +44,51 @@ var _ = Describe("IPAM config", func() {
 		Expect(conf).To(Equal(&IPAMConfig{
 			Name: "mynet",
 			Type: "host-local",
-			Ranges: []Range{
-				{
-					RangeStart: net.IP{10, 1, 2, 9},
-					RangeEnd:   net.IP{10, 1, 2, 20},
-					Gateway:    net.IP{10, 1, 2, 30},
-					Subnet: types.IPNet{
-						IP:   net.IP{10, 1, 2, 0},
-						Mask: net.CIDRMask(24, 32),
+			Ranges: []RangeSet{
+				RangeSet{
+					{
+						RangeStart: net.IP{10, 1, 2, 9},
+						RangeEnd:   net.IP{10, 1, 2, 20},
+						Gateway:    net.IP{10, 1, 2, 30},
+						Subnet: types.IPNet{
+							IP:   net.IP{10, 1, 2, 0},
+							Mask: net.CIDRMask(24, 32),
+						},
 					},
 				},
 			},
 		}))
 	})
+
 	It("Should parse a new-style config", func() {
 		input := `{
-	"cniVersion": "0.3.1",
-	"name": "mynet",
-	"type": "ipvlan",
-	"master": "foo0",
-	"ipam": {
-		"type": "host-local",
-		"ranges": [
-			{
-				"subnet": "10.1.2.0/24",
-				"rangeStart": "10.1.2.9",
-				"rangeEnd": "10.1.2.20",
-				"gateway": "10.1.2.30"
-			},
-			{
-				"subnet": "11.1.2.0/24",
-				"rangeStart": "11.1.2.9",
-				"rangeEnd": "11.1.2.20",
-				"gateway": "11.1.2.30"
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"ranges": [
+					[
+						{
+							"subnet": "10.1.2.0/24",
+							"rangeStart": "10.1.2.9",
+							"rangeEnd": "10.1.2.20",
+							"gateway": "10.1.2.30"
+						},
+						{
+							"subnet": "10.1.4.0/24"
+						}
+					],
+					[{
+						"subnet": "11.1.2.0/24",
+						"rangeStart": "11.1.2.9",
+						"rangeEnd": "11.1.2.20",
+						"gateway": "11.1.2.30"
+					}]
+				]
 			}
-		]
-	}
-}`
+		}`
 		conf, version, err := LoadIPAMConfig([]byte(input), "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(version).Should(Equal("0.3.1"))
@@ -88,23 +96,36 @@ var _ = Describe("IPAM config", func() {
 		Expect(conf).To(Equal(&IPAMConfig{
 			Name: "mynet",
 			Type: "host-local",
-			Ranges: []Range{
+			Ranges: []RangeSet{
 				{
-					RangeStart: net.IP{10, 1, 2, 9},
-					RangeEnd:   net.IP{10, 1, 2, 20},
-					Gateway:    net.IP{10, 1, 2, 30},
-					Subnet: types.IPNet{
-						IP:   net.IP{10, 1, 2, 0},
-						Mask: net.CIDRMask(24, 32),
+					{
+						RangeStart: net.IP{10, 1, 2, 9},
+						RangeEnd:   net.IP{10, 1, 2, 20},
+						Gateway:    net.IP{10, 1, 2, 30},
+						Subnet: types.IPNet{
+							IP:   net.IP{10, 1, 2, 0},
+							Mask: net.CIDRMask(24, 32),
+						},
+					},
+					{
+						RangeStart: net.IP{10, 1, 4, 1},
+						RangeEnd:   net.IP{10, 1, 4, 254},
+						Gateway:    net.IP{10, 1, 4, 1},
+						Subnet: types.IPNet{
+							IP:   net.IP{10, 1, 4, 0},
+							Mask: net.CIDRMask(24, 32),
+						},
 					},
 				},
 				{
-					RangeStart: net.IP{11, 1, 2, 9},
-					RangeEnd:   net.IP{11, 1, 2, 20},
-					Gateway:    net.IP{11, 1, 2, 30},
-					Subnet: types.IPNet{
-						IP:   net.IP{11, 1, 2, 0},
-						Mask: net.CIDRMask(24, 32),
+					{
+						RangeStart: net.IP{11, 1, 2, 9},
+						RangeEnd:   net.IP{11, 1, 2, 20},
+						Gateway:    net.IP{11, 1, 2, 30},
+						Subnet: types.IPNet{
+							IP:   net.IP{11, 1, 2, 0},
+							Mask: net.CIDRMask(24, 32),
+						},
 					},
 				},
 			},
@@ -113,26 +134,26 @@ var _ = Describe("IPAM config", func() {
 
 	It("Should parse a mixed config", func() {
 		input := `{
-	"cniVersion": "0.3.1",
-	"name": "mynet",
-	"type": "ipvlan",
-	"master": "foo0",
-	"ipam": {
-		"type": "host-local",
-		"subnet": "10.1.2.0/24",
-		"rangeStart": "10.1.2.9",
-		"rangeEnd": "10.1.2.20",
-		"gateway": "10.1.2.30",
-		"ranges": [
-			{
-				"subnet": "11.1.2.0/24",
-				"rangeStart": "11.1.2.9",
-				"rangeEnd": "11.1.2.20",
-				"gateway": "11.1.2.30"
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"subnet": "10.1.2.0/24",
+				"rangeStart": "10.1.2.9",
+				"rangeEnd": "10.1.2.20",
+				"gateway": "10.1.2.30",
+				"ranges": [[
+					{
+						"subnet": "11.1.2.0/24",
+						"rangeStart": "11.1.2.9",
+						"rangeEnd": "11.1.2.20",
+						"gateway": "11.1.2.30"
+					}
+				]]
 			}
-		]
-	}
-}`
+		}`
 		conf, version, err := LoadIPAMConfig([]byte(input), "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(version).Should(Equal("0.3.1"))
@@ -140,23 +161,27 @@ var _ = Describe("IPAM config", func() {
 		Expect(conf).To(Equal(&IPAMConfig{
 			Name: "mynet",
 			Type: "host-local",
-			Ranges: []Range{
+			Ranges: []RangeSet{
 				{
-					RangeStart: net.IP{10, 1, 2, 9},
-					RangeEnd:   net.IP{10, 1, 2, 20},
-					Gateway:    net.IP{10, 1, 2, 30},
-					Subnet: types.IPNet{
-						IP:   net.IP{10, 1, 2, 0},
-						Mask: net.CIDRMask(24, 32),
+					{
+						RangeStart: net.IP{10, 1, 2, 9},
+						RangeEnd:   net.IP{10, 1, 2, 20},
+						Gateway:    net.IP{10, 1, 2, 30},
+						Subnet: types.IPNet{
+							IP:   net.IP{10, 1, 2, 0},
+							Mask: net.CIDRMask(24, 32),
+						},
 					},
 				},
 				{
-					RangeStart: net.IP{11, 1, 2, 9},
-					RangeEnd:   net.IP{11, 1, 2, 20},
-					Gateway:    net.IP{11, 1, 2, 30},
-					Subnet: types.IPNet{
-						IP:   net.IP{11, 1, 2, 0},
-						Mask: net.CIDRMask(24, 32),
+					{
+						RangeStart: net.IP{11, 1, 2, 9},
+						RangeEnd:   net.IP{11, 1, 2, 20},
+						Gateway:    net.IP{11, 1, 2, 30},
+						Subnet: types.IPNet{
+							IP:   net.IP{11, 1, 2, 0},
+							Mask: net.CIDRMask(24, 32),
+						},
 					},
 				},
 			},
@@ -165,28 +190,22 @@ var _ = Describe("IPAM config", func() {
 
 	It("Should parse CNI_ARGS env", func() {
 		input := `{
-	"cniVersion": "0.3.1",
-	"name": "mynet",
-	"type": "ipvlan",
-	"master": "foo0",
-	"ipam": {
-		"type": "host-local",
-		"ranges": [
-			{
-				"subnet": "10.1.2.0/24",
-				"rangeStart": "10.1.2.9",
-				"rangeEnd": "10.1.2.20",
-				"gateway": "10.1.2.30"
-			},
-			{
-				"subnet": "11.1.2.0/24",
-				"rangeStart": "11.1.2.9",
-				"rangeEnd": "11.1.2.20",
-				"gateway": "11.1.2.30"
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"ranges": [[
+					{
+						"subnet": "10.1.2.0/24",
+						"rangeStart": "10.1.2.9",
+						"rangeEnd": "10.1.2.20",
+						"gateway": "10.1.2.30"
+					}
+				]]
 			}
-		]
-	}
-}`
+		}`
 
 		envArgs := "IP=10.1.2.10"
 
@@ -195,38 +214,39 @@ var _ = Describe("IPAM config", func() {
 		Expect(conf.IPArgs).To(Equal([]net.IP{{10, 1, 2, 10}}))
 
 	})
+
 	It("Should parse config args", func() {
 		input := `{
-	"cniVersion": "0.3.1",
-	"name": "mynet",
-	"type": "ipvlan",
-	"master": "foo0",
-	"args": {
-		"cni": {
-			"ips": [ "10.1.2.11", "11.11.11.11", "2001:db8:1::11"]
-		}
-	},
-	"ipam": {
-		"type": "host-local",
-		"ranges": [
-			{
-				"subnet": "10.1.2.0/24",
-				"rangeStart": "10.1.2.9",
-				"rangeEnd": "10.1.2.20",
-				"gateway": "10.1.2.30"
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"args": {
+				"cni": {
+					"ips": [ "10.1.2.11", "11.11.11.11", "2001:db8:1::11"]
+				}
 			},
-			{
-				"subnet": "11.1.2.0/24",
-				"rangeStart": "11.1.2.9",
-				"rangeEnd": "11.1.2.20",
-				"gateway": "11.1.2.30"
-			},
-			{
-				"subnet": "2001:db8:1::/64"
+			"ipam": {
+				"type": "host-local",
+				"ranges": [
+					[{
+						"subnet": "10.1.2.0/24",
+						"rangeStart": "10.1.2.9",
+						"rangeEnd": "10.1.2.20",
+						"gateway": "10.1.2.30"
+					}],
+					[{
+						"subnet": "11.1.2.0/24",
+						"rangeStart": "11.1.2.9",
+						"rangeEnd": "11.1.2.20",
+						"gateway": "11.1.2.30"
+					}],
+					[{
+						"subnet": "2001:db8:1::/64"
+					}]
+				]
 			}
-		]
-	}
-}`
+		}`
 
 		envArgs := "IP=10.1.2.10"
 
@@ -239,70 +259,106 @@ var _ = Describe("IPAM config", func() {
 			net.ParseIP("2001:db8:1::11"),
 		}))
 	})
-	It("Should detect overlap", func() {
+
+	It("Should detect overlap between rangesets", func() {
 		input := `{
-	"cniVersion": "0.3.1",
-	"name": "mynet",
-	"type": "ipvlan",
-	"master": "foo0",
-	"ipam": {
-		"type": "host-local",
-		"ranges": [
-			{
-				"subnet": "10.1.2.0/24",
-				"rangeEnd": "10.1.2.128"
-			},
-			{
-				"subnet": "10.1.2.0/24",
-				"rangeStart": "10.1.2.15"
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"ranges": [
+					[
+						{"subnet": "10.1.2.0/24"},
+						{"subnet": "10.2.2.0/24"}
+					],
+					[
+						{ "subnet": "10.1.4.0/24"},
+						{ "subnet": "10.1.6.0/24"},
+						{ "subnet": "10.1.8.0/24"},
+						{ "subnet": "10.1.2.0/24"}
+					]
+				]
 			}
-		]
-	}
-}`
+		}`
 		_, _, err := LoadIPAMConfig([]byte(input), "")
-		Expect(err).To(MatchError("Range 0 overlaps with range 1"))
+		Expect(err).To(MatchError("range set 0 overlaps with 1"))
+	})
+
+	It("Should detect overlap within rangeset", func() {
+		input := `{
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"ranges": [
+					[
+						{ "subnet": "10.1.0.0/22" },
+						{ "subnet": "10.1.2.0/24" }
+					]
+				]
+			}
+		}`
+		_, _, err := LoadIPAMConfig([]byte(input), "")
+		Expect(err).To(MatchError("invalid range set 0: subnets 10.1.0.1-10.1.3.254 and 10.1.2.1-10.1.2.254 overlap"))
+	})
+
+	It("should error on rangesets with different families", func() {
+		input := `{
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"ranges": [
+					[
+						{ "subnet": "10.1.0.0/22" },
+						{ "subnet": "2001:db8:5::/64" }
+					]
+				]
+			}
+		}`
+		_, _, err := LoadIPAMConfig([]byte(input), "")
+		Expect(err).To(MatchError("invalid range set 0: mixed address families"))
+
 	})
 
 	It("Should should error on too many ranges", func() {
 		input := `{
-	"cniVersion": "0.2.0",
-	"name": "mynet",
-	"type": "ipvlan",
-	"master": "foo0",
-	"ipam": {
-		"type": "host-local",
-		"ranges": [
-			{
-				"subnet": "10.1.2.0/24"
-			},
-			{
-				"subnet": "11.1.2.0/24"
-			}
-		]
-	}
-}`
+				"cniVersion": "0.2.0",
+				"name": "mynet",
+				"type": "ipvlan",
+				"master": "foo0",
+				"ipam": {
+					"type": "host-local",
+					"ranges": [
+						[{"subnet": "10.1.2.0/24"}],
+						[{"subnet": "11.1.2.0/24"}]
+					]
+				}
+			}`
 		_, _, err := LoadIPAMConfig([]byte(input), "")
-		Expect(err).To(MatchError("CNI version 0.2.0 does not support more than 1 range per address family"))
+		Expect(err).To(MatchError("CNI version 0.2.0 does not support more than 1 address per family"))
 	})
 
 	It("Should allow one v4 and v6 range for 0.2.0", func() {
 		input := `{
-	"cniVersion": "0.2.0",
-	"name": "mynet",
-	"type": "ipvlan",
-	"master": "foo0",
-	"ipam": {
-		"type": "host-local",
-		"ranges": [
-			{
-				"subnet": "10.1.2.0/24"
-			},
-			{
-				"subnet": "2001:db8:1::/24"
-			}
-		]
-	}
-}`
+				"cniVersion": "0.2.0",
+				"name": "mynet",
+				"type": "ipvlan",
+				"master": "foo0",
+				"ipam": {
+					"type": "host-local",
+					"ranges": [
+						[{"subnet": "10.1.2.0/24"}],
+						[{"subnet": "2001:db8:1::/24"}]
+					]
+				}
+			}`
 		_, _, err := LoadIPAMConfig([]byte(input), "")
 		Expect(err).NotTo(HaveOccurred())
 	})

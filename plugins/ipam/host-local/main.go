@@ -66,13 +66,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 		requestedIPs[ip.String()] = ip
 	}
 
-	for idx, ipRange := range ipamConf.Ranges {
-		allocator := allocator.NewIPAllocator(ipamConf.Name, ipRange, store)
+	for idx, rangeset := range ipamConf.Ranges {
+		allocator := allocator.NewIPAllocator(&rangeset, store, idx)
 
 		// Check to see if there are any custom IPs requested in this range.
 		var requestedIP net.IP
 		for k, ip := range requestedIPs {
-			if ipRange.IPInRange(ip) == nil {
+			if rangeset.Contains(ip) {
 				requestedIP = ip
 				delete(requestedIPs, k)
 				break
@@ -124,8 +124,8 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	// Loop through all ranges, releasing all IPs, even if an error occurs
 	var errors []string
-	for _, ipRange := range ipamConf.Ranges {
-		ipAllocator := allocator.NewIPAllocator(ipamConf.Name, ipRange, store)
+	for idx, rangeset := range ipamConf.Ranges {
+		ipAllocator := allocator.NewIPAllocator(&rangeset, store, idx)
 
 		err := ipAllocator.Release(args.ContainerID)
 		if err != nil {

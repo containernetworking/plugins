@@ -61,8 +61,8 @@ func (r *Range) Canonicalize() error {
 			return err
 		}
 
-		if err := r.IPInRange(r.RangeStart); err != nil {
-			return err
+		if !r.Contains(r.RangeStart) {
+			return fmt.Errorf("RangeStart %s not in network %s", r.RangeStart.String(), (*net.IPNet)(&r.Subnet).String())
 		}
 	} else {
 		r.RangeStart = ip.NextIP(r.Subnet.IP)
@@ -75,8 +75,8 @@ func (r *Range) Canonicalize() error {
 			return err
 		}
 
-		if err := r.IPInRange(r.RangeEnd); err != nil {
-			return err
+		if !r.Contains(r.RangeEnd) {
+			return fmt.Errorf("RangeEnd %s not in network %s", r.RangeEnd.String(), (*net.IPNet)(&r.Subnet).String())
 		}
 	} else {
 		r.RangeEnd = lastIP(r.Subnet)
@@ -86,38 +86,39 @@ func (r *Range) Canonicalize() error {
 }
 
 // IsValidIP checks if a given ip is a valid, allocatable address in a given Range
-func (r *Range) IPInRange(addr net.IP) error {
+func (r *Range) Contains(addr net.IP) bool {
 	if err := canonicalizeIP(&addr); err != nil {
-		return err
+		return false
 	}
 
 	subnet := (net.IPNet)(r.Subnet)
 
+	// Not the same address family
 	if len(addr) != len(r.Subnet.IP) {
-		return fmt.Errorf("IP %s is not the same protocol as subnet %s",
-			addr, subnet.String())
+		return false
 	}
 
+	// Not in network
 	if !subnet.Contains(addr) {
-		return fmt.Errorf("%s not in network %s", addr, subnet.String())
+		return false
 	}
 
 	// We ignore nils here so we can use this function as we initialize the range.
 	if r.RangeStart != nil {
+		// Before the range start
 		if ip.Cmp(addr, r.RangeStart) < 0 {
-			return fmt.Errorf("%s is in network %s but before start %s",
-				addr, (*net.IPNet)(&r.Subnet).String(), r.RangeStart)
+			return false
 		}
 	}
 
 	if r.RangeEnd != nil {
 		if ip.Cmp(addr, r.RangeEnd) > 0 {
-			return fmt.Errorf("%s is in network %s but after end %s",
-				addr, (*net.IPNet)(&r.Subnet).String(), r.RangeEnd)
+			// After the  range end
+			return false
 		}
 	}
 
-	return nil
+	return true
 }
 
 // Overlaps returns true if there is any overlap between ranges
@@ -127,10 +128,14 @@ func (r *Range) Overlaps(r1 *Range) bool {
 		return false
 	}
 
-	return r.IPInRange(r1.RangeStart) == nil ||
-		r.IPInRange(r1.RangeEnd) == nil ||
-		r1.IPInRange(r.RangeStart) == nil ||
-		r1.IPInRange(r.RangeEnd) == nil
+	return r.Contains(r1.RangeStart) ||
+		r.Contains(r1.RangeEnd) ||
+		r1.Contains(r.RangeStart) ||
+		r1.Contains(r.RangeEnd)
+}
+
+func (r *Range) String() string {
+	return fmt.Sprintf("%s-%s", r.RangeStart.String(), r.RangeEnd.String())
 }
 
 // canonicalizeIP makes sure a provided ip is in standard form
