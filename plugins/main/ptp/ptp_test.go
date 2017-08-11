@@ -155,8 +155,8 @@ var _ = Describe("ptp Operations", func() {
     "ipam": {
         "type": "host-local",
 		"ranges": [
-			{ "subnet": "10.1.2.0/24"},
-			{ "subnet": "2001:db8:1::0/66"}
+			[{ "subnet": "10.1.2.0/24"}],
+			[{ "subnet": "2001:db8:1::0/66"}]
 		]
     }
 }`

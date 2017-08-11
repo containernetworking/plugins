@@ -8,24 +8,40 @@ it can include a DNS configuration from a `resolv.conf` file on the host.
 host-local IPAM plugin allocates ip addresses out of a set of address ranges.
 It stores the state locally on the host filesystem, therefore ensuring uniqueness of IP addresses on a single host.
 
+The allocator can allocate multiple ranges, and supports sets of multiple (disjoint) 
+subnets. The allocation strategy is loosely round-robin within each range set.
+
 ## Example configurations
+
+Note that the key `ranges` is a list of range sets. That is to say, the length 
+of the top-level array is the number of addresses returned. The second-level 
+array is a set of subnets to use as a pool of possible addresses.
+
+This example configuration returns 2 IP addresses.
 
 ```json
 {
 	"ipam": {
 		"type": "host-local",
 		"ranges": [
-			{
-				"subnet": "10.10.0.0/16",
-				"rangeStart": "10.10.1.20",
-				"rangeEnd": "10.10.3.50",
-				"gateway": "10.10.0.254"
-			},
-			{
-				"subnet": "3ffe:ffff:0:01ff::/64",
-				"rangeStart": "3ffe:ffff:0:01ff::0010",
-				"rangeEnd": "3ffe:ffff:0:01ff::0020"
-			}
+			[
+				{
+					"subnet": "10.10.0.0/16",
+					"rangeStart": "10.10.1.20",
+					"rangeEnd": "10.10.3.50",
+					"gateway": "10.10.0.254"
+				},
+				{
+					"subnet": "172.16.5.0/24"
+				}
+			],
+			[
+				{
+					"subnet": "3ffe:ffff:0:01ff::/64",
+					"rangeStart": "3ffe:ffff:0:01ff::0010",
+					"rangeEnd": "3ffe:ffff:0:01ff::0020"
+				}
+			]
 		],
 		"routes": [
 			{ "dst": "0.0.0.0/0" },
@@ -58,7 +74,7 @@ deprecated but still supported.
 We can test it out on the command-line:
 
 ```bash
-$ echo '{ "cniVersion": "0.3.1", "name": "examplenet", "ipam": { "type": "host-local", "ranges": [ {"subnet": "203.0.113.0/24"}, {"subnet": "2001:db8:1::/64"}], "dataDir": "/tmp/cni-example"  } }' | CNI_COMMAND=ADD CNI_CONTAINERID=example CNI_NETNS=/dev/null CNI_IFNAME=dummy0 CNI_PATH=. ./host-local
+$ echo '{ "cniVersion": "0.3.1", "name": "examplenet", "ipam": { "type": "host-local", "ranges": [ [{"subnet": "203.0.113.0/24"}], [{"subnet": "2001:db8:1::/64"}]], "dataDir": "/tmp/cni-example"  } }' | CNI_COMMAND=ADD CNI_CONTAINERID=example CNI_NETNS=/dev/null CNI_IFNAME=dummy0 CNI_PATH=. ./host-local
 
 ```
 
@@ -86,7 +102,7 @@ $ echo '{ "cniVersion": "0.3.1", "name": "examplenet", "ipam": { "type": "host-l
 * `routes` (string, optional): list of routes to add to the container namespace. Each route is a dictionary with "dst" and optional "gw" fields. If "gw" is omitted, value of "gateway" will be used.
 * `resolvConf` (string, optional): Path to a `resolv.conf` on the host to parse and return as the DNS configuration
 * `dataDir` (string, optional): Path to a directory to use for maintaining state, e.g. which IPs have been allocated to which containers
-* `ranges`, (array, required, nonempty) an array of range objects:
+* `ranges`, (array, required, nonempty) an array of arrays of range objects:
 	* `subnet` (string, required): CIDR block to allocate out of.
 	* `rangeStart` (string, optional): IP inside of "subnet" from which to start allocating addresses. Defaults to ".2" IP inside of the "subnet" block.
 	* `rangeEnd` (string, optional): IP inside of "subnet" with which to end allocating addresses. Defaults to ".254" IP inside of the "subnet" block for ipv4, ".255" for IPv6

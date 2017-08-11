@@ -94,14 +94,14 @@ const (
 	rangesStartStr = `,
         "ranges": [`
 	rangeSubnetConfStr = `
-            {
+            [{
                 "subnet":  "%s"
-            }`
+            }]`
 	rangeSubnetGWConfStr = `
-            {
+            [{
                 "subnet":  "%s",
                 "gateway": "%s"
-            }`
+            }]`
 	rangesEndStr = `
         ]`
 

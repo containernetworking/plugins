@@ -23,6 +23,16 @@ import (
 	types020 "github.com/containernetworking/cni/pkg/types/020"
 )
 
+// The top-level network config, just so we can get the IPAM block
+type Net struct {
+	Name       string      `json:"name"`
+	CNIVersion string      `json:"cniVersion"`
+	IPAM       *IPAMConfig `json:"ipam"`
+	Args       *struct {
+		A *IPAMArgs `json:"cni"`
+	} `json:"args"`
+}
+
 // IPAMConfig represents the IP related network configuration.
 // This nests Range because we initially only supported a single
 // range directly, and wish to preserve backwards compatability
@@ -33,7 +43,7 @@ type IPAMConfig struct {
 	Routes     []*types.Route `json:"routes"`
 	DataDir    string         `json:"dataDir"`
 	ResolvConf string         `json:"resolvConf"`
-	Ranges     []Range        `json:"ranges"`
+	Ranges     []RangeSet     `json:"ranges"`
 	IPArgs     []net.IP       `json:"-"` // Requested IPs from CNI_ARGS and args
 }
 
@@ -46,15 +56,7 @@ type IPAMArgs struct {
 	IPs []net.IP `json:"ips"`
 }
 
-// The top-level network config, just so we can get the IPAM block
-type Net struct {
-	Name       string      `json:"name"`
-	CNIVersion string      `json:"cniVersion"`
-	IPAM       *IPAMConfig `json:"ipam"`
-	Args       *struct {
-		A *IPAMArgs `json:"cni"`
-	} `json:"args"`
-}
+type RangeSet []Range
 
 type Range struct {
 	RangeStart net.IP      `json:"rangeStart,omitempty"` // The first ip, inclusive
@@ -97,10 +99,10 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		}
 	}
 
-	// If a single range (old-style config) is specified, move it to
+	// If a single range (old-style config) is specified, prepend it to
 	// the Ranges array
 	if n.IPAM.Range != nil && n.IPAM.Range.Subnet.IP != nil {
-		n.IPAM.Ranges = append([]Range{*n.IPAM.Range}, n.IPAM.Ranges...)
+		n.IPAM.Ranges = append([]RangeSet{{*n.IPAM.Range}}, n.IPAM.Ranges...)
 	}
 	n.IPAM.Range = nil
 
@@ -113,9 +115,10 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	numV6 := 0
 	for i, _ := range n.IPAM.Ranges {
 		if err := n.IPAM.Ranges[i].Canonicalize(); err != nil {
-			return nil, "", fmt.Errorf("Cannot understand range %d: %v", i, err)
+			return nil, "", fmt.Errorf("invalid range set %d: %s", i, err)
 		}
-		if len(n.IPAM.Ranges[i].RangeStart) == 4 {
+
+		if n.IPAM.Ranges[i][0].RangeStart.To4() != nil {
 			numV4++
 		} else {
 			numV6++
@@ -126,17 +129,17 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	if numV4 > 1 || numV6 > 1 {
 		for _, v := range types020.SupportedVersions {
 			if n.CNIVersion == v {
-				return nil, "", fmt.Errorf("CNI version %v does not support more than 1 range per address family", n.CNIVersion)
+				return nil, "", fmt.Errorf("CNI version %v does not support more than 1 address per family", n.CNIVersion)
 			}
 		}
 	}
 
 	// Check for overlaps
 	l := len(n.IPAM.Ranges)
-	for i, r1 := range n.IPAM.Ranges[:l-1] {
-		for j, r2 := range n.IPAM.Ranges[i+1:] {
-			if r1.Overlaps(&r2) {
-				return nil, "", fmt.Errorf("Range %d overlaps with range %d", i, (i + j + 1))
+	for i, p1 := range n.IPAM.Ranges[:l-1] {
+		for j, p2 := range n.IPAM.Ranges[i+1:] {
+			if p1.Overlaps(&p2) {
+				return nil, "", fmt.Errorf("range set %d overlaps with %d", i, (i + j + 1))
 			}
 		}
 	}
