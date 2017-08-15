@@ -227,6 +227,10 @@
 			"Rev": "2152b45fa28a361beba9aab0885972323a444e28"
 		},
 		{
+			"ImportPath": "github.com/safchain/ethtool",
+			"Rev": "7ff1ba29eca231991280817541cb3903f6be15d1"
+		},
+		{
 			"ImportPath": "github.com/vishvananda/netlink",
 			"Rev": "6e453822d85ef5721799774b654d4d02fed62afb"
 		},
