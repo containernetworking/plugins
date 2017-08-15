@@ -15,10 +15,16 @@
 package main
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -51,6 +57,7 @@ type DHCPLease struct {
 	clientID      string
 	ack           *dhcp4.Packet
 	opts          dhcp4.Options
+	leasefile     string
 	link          netlink.Link
 	renewalTime   time.Time
 	rebindingTime time.Time
@@ -59,14 +66,28 @@ type DHCPLease struct {
 	wg            sync.WaitGroup
 }
 
+func makeLeasefileName(clientID, netns, ifName, leaseDir string) string {
+	hash := sha1.New().Sum([]byte(fmt.Sprintf("%s%s%s", clientID, netns, ifName)))
+	return filepath.Join(leaseDir, hex.EncodeToString(hash)+".lease")
+}
+
+func GetLease(clientID, netns, ifName, leaseDir string) (*DHCPLease, error) {
+	l := &DHCPLease{
+		clientID: clientID,
+	}
+
+	return l, l.deserialize(makeLeasefileName(clientID, netns, ifName, leaseDir))
+}
+
 // AcquireLease gets an DHCP lease and then maintains it in the background
 // by periodically renewing it. The acquired lease can be released by
 // calling DHCPLease.Stop()
-func AcquireLease(clientID, netns, ifName string) (*DHCPLease, error) {
+func AcquireLease(clientID, netns, ifName, leaseDir string) (*DHCPLease, error) {
 	errCh := make(chan error, 1)
 	l := &DHCPLease{
-		clientID: clientID,
-		stop:     make(chan struct{}),
+		clientID:  clientID,
+		stop:      make(chan struct{}),
+		leasefile: makeLeasefileName(clientID, netns, ifName, leaseDir),
 	}
 
 	log.Printf("%v: acquiring lease", clientID)
@@ -139,10 +160,10 @@ func (l *DHCPLease) acquire() error {
 		return err
 	}
 
-	return l.commit(pkt)
+	return l.commit(pkt, true)
 }
 
-func (l *DHCPLease) commit(ack *dhcp4.Packet) error {
+func (l *DHCPLease) commit(ack *dhcp4.Packet, serialize bool) error {
 	opts := ack.ParseOptions()
 
 	leaseTime, err := parseLeaseTime(opts)
@@ -169,7 +190,52 @@ func (l *DHCPLease) commit(ack *dhcp4.Packet) error {
 	l.ack = ack
 	l.opts = opts
 
+	if serialize {
+		return l.serialize()
+	}
 	return nil
+}
+
+const (
+	ExpireTimeKey string = "expireTime="
+	AckKey        string = "ack="
+)
+
+func (l *DHCPLease) serialize() error {
+	contents := fmt.Sprintf("expireTime=%d\n", l.expireTime.Unix())
+	contents += fmt.Sprintf("ack=%s", hex.EncodeToString(*l.ack))
+
+	return ioutil.WriteFile(l.leasefile, []byte(contents), 0644)
+}
+
+func (l *DHCPLease) deserialize(leasefile string) error {
+	data, err := ioutil.ReadFile(leasefile)
+	if err != nil {
+		return fmt.Errorf("failed to read leasefile %s: %v", l.leasefile, err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		switch {
+		case strings.HasPrefix(line, ExpireTimeKey):
+			sec, err := strconv.ParseInt(line[len(ExpireTimeKey):], 10, 64)
+			if err != nil {
+				return fmt.Errorf("failed to parse ExpireTime %q: %v", line, err)
+			}
+			if time.Unix(sec, 0).Before(time.Now()) {
+				return fmt.Errorf("lease already expired")
+			}
+		case strings.HasPrefix(line, AckKey):
+			data, err := hex.DecodeString(line[len(AckKey):])
+			if err != nil {
+				return fmt.Errorf("failed to decode ack packet: %v", err)
+			}
+			packet := dhcp4.Packet(data)
+			l.ack = &packet
+		}
+	}
+
+	return l.commit(l.ack, false)
 }
 
 func (l *DHCPLease) maintain() {
@@ -255,8 +321,7 @@ func (l *DHCPLease) renew() error {
 		return err
 	}
 
-	l.commit(pkt)
-	return nil
+	return l.commit(pkt, true)
 }
 
 func (l *DHCPLease) release() error {
