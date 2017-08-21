@@ -21,8 +21,8 @@ matrix:
 
 script:
  - |
-   if [ "${TARGET}" == "amd64" ]; then
-     GOARCH="${TARGET}" ./test.sh
+   if [ "${TARGET}" == $( go env GOARCH ) ]; then
+     FASTBUILD=1 GOARCH="${TARGET}" ./test.sh
    else
      GOARCH="${TARGET}" ./build.sh
    fi
