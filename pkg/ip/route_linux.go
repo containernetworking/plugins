@@ -30,6 +30,15 @@ func AddRoute(ipn *net.IPNet, gw net.IP, dev netlink.Link) error {
 	})
 }
 
+// AddBlockingRoute adds a universally-scoped blocking route.
+func AddBlockingRoute(ipn *net.IPNet, rtType int) error {
+	return netlink.RouteAdd(&netlink.Route{
+		Scope: netlink.SCOPE_UNIVERSE,
+		Dst:   ipn,
+		Type:  rtType,
+	})
+}
+
 // AddHostRoute adds a host-scoped route to a device.
 func AddHostRoute(ipn *net.IPNet, gw net.IP, dev netlink.Link) error {
 	return netlink.RouteAdd(&netlink.Route{

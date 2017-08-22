@@ -15,6 +15,7 @@
 package ipam
 
 import (
+	"fmt"
 	"net"
 	"syscall"
 
@@ -41,7 +42,7 @@ func ipNetEqual(a, b *net.IPNet) bool {
 
 var _ = Describe("IPAM Operations", func() {
 	var originalNS ns.NetNS
-	var ipv4, ipv6, routev4, routev6 *net.IPNet
+	var ipv4, ipv6, routev4, routev6, blackholeIPv4 *net.IPNet
 	var ipgw4, ipgw6, routegwv4, routegwv6 net.IP
 	var result *current.Result
 
@@ -93,6 +94,10 @@ var _ = Describe("IPAM Operations", func() {
 		ipgw6 = net.ParseIP("abcd:1234:ffff::1")
 		Expect(ipgw6).NotTo(BeNil())
 
+		blackholeIPv4, err = types.ParseCIDR("10.8.11.2/32")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(blackholeIPv4).NotTo(BeNil())
+
 		result = &current.Result{
 			Interfaces: []*current.Interface{
 				{
@@ -123,6 +128,7 @@ var _ = Describe("IPAM Operations", func() {
 			Routes: []*types.Route{
 				{Dst: *routev4, GW: routegwv4},
 				{Dst: *routev6, GW: routegwv6},
+				{Dst: *blackholeIPv4, Type: "blackhole"},
 			},
 		}
 	})
@@ -181,6 +187,22 @@ var _ = Describe("IPAM Operations", func() {
 			Expect(v4found).To(Equal(true))
 			Expect(v6found).To(Equal(true))
 
+			// Start looking for v4 blocking routes
+			routes, err = netlink.RouteList(nil, netlink.FAMILY_V4)
+			Expect(err).NotTo(HaveOccurred())
+			var blockingRouteFound bool
+			fmt.Println("routes: ", routes)
+			for _, route := range routes {
+				if ipNetEqual(route.Dst, blackholeIPv4) && route.Gw == nil {
+					// The gateway is set to nil for blocking routes. The
+					// netlink library doesn't set route type enum when
+					// listing routes
+					blockingRouteFound = true
+					break
+				}
+			}
+			Expect(blockingRouteFound).To(Equal(true))
+
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -219,6 +241,22 @@ var _ = Describe("IPAM Operations", func() {
 			}
 			Expect(v4found).To(Equal(true))
 			Expect(v6found).To(Equal(true))
+
+			// Start looking for v4 blocking routes
+			routes, err = netlink.RouteList(nil, netlink.FAMILY_V4)
+			Expect(err).NotTo(HaveOccurred())
+			var blockingRouteFound bool
+			fmt.Println("routes: ", routes)
+			for _, route := range routes {
+				if ipNetEqual(route.Dst, blackholeIPv4) && route.Gw == nil {
+					// The gateway is set to nil for blocking routes. The
+					// netlink library doesn't set route type enum when
+					// listing routes
+					blockingRouteFound = true
+					break
+				}
+			}
+			Expect(blockingRouteFound).To(Equal(true))
 
 			return nil
 		})
@@ -296,4 +334,13 @@ var _ = Describe("IPAM Operations", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	It("returns an error when configuring with an unsupported route type", func() {
+		result.Routes[2].Type = "local"
+		err := originalNS.Do(func(ns.NetNS) error {
+			return ConfigureIface(LINK_NAME, result)
+		})
+		Expect(err).To(HaveOccurred())
+	})
+
 })
