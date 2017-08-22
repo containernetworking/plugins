@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"syscall"
 
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/types"
@@ -78,22 +79,36 @@ func ConfigureIface(ifName string, res *current.Result) error {
 	ip.SettleAddresses(ifName, 10)
 
 	for _, r := range res.Routes {
-		routeIsV4 := r.Dst.IP.To4() != nil
-		gw := r.GW
-		if gw == nil {
-			if routeIsV4 && v4gw != nil {
-				gw = v4gw
-			} else if !routeIsV4 && v6gw != nil {
-				gw = v6gw
-			}
+		rType, err := r.GetType()
+		if err != nil {
+			return fmt.Errorf("unable to get route type for destination '%s': %v", r.Dst, err)
 		}
-		if err = ip.AddRoute(&r.Dst, gw, link); err != nil {
-			// we skip over duplicate routes as we assume the first one wins
-			if !os.IsExist(err) {
-				return fmt.Errorf("failed to add route '%v via %v dev %v': %v", r.Dst, gw, ifName, err)
+		switch rType {
+		case syscall.RTN_UNREACHABLE, syscall.RTN_BLACKHOLE, syscall.RTN_PROHIBIT:
+			// Blocking routes, no need to set gw
+			if err := ip.AddBlockingRoute(&r.Dst, rType); err != nil && !os.IsExist(err) {
+				// we skip over duplicate routes as we assume the first one wins
+				return fmt.Errorf("failed to add blocking route type '%s' for desitnation '%s': %v'", r.Type, r.Dst, err)
 			}
+		case syscall.RTN_UNICAST:
+			routeIsV4 := r.Dst.IP.To4() != nil
+			gw := r.GW
+			if gw == nil {
+				if routeIsV4 && v4gw != nil {
+					gw = v4gw
+				} else if !routeIsV4 && v6gw != nil {
+					gw = v6gw
+				}
+			}
+			if err := ip.AddRoute(&r.Dst, gw, link); err != nil && !os.IsExist(err) {
+				// we skip over duplicate routes as we assume the first one wins
+				return fmt.Errorf("failed to add route type: '%s'; '%v via %v dev %v': %v", r.Type, r.Dst, gw, ifName, err)
+			}
+		default:
+			// If we are here, it's a bug as r.GetType() should have
+			// caught it
+			return fmt.Errorf("unrecognized route type '%s' for destination '%s'", r.Type, r.Dst)
 		}
 	}
-
 	return nil
 }
