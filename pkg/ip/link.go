@@ -158,6 +158,9 @@ func SetupVeth(contVethName string, mtu int, hostNS ns.NetNS) (net.Interface, ne
 func DelLinkByName(ifName string) error {
 	iface, err := netlink.LinkByName(ifName)
 	if err != nil {
+		if err.Error() == "Link not found" {
+			return ErrLinkNotFound
+		}
 		return fmt.Errorf("failed to lookup %q: %v", ifName, err)
 	}
 
@@ -168,9 +171,8 @@ func DelLinkByName(ifName string) error {
 	return nil
 }
 
-// DelLinkByNameAddr remove an interface returns its IP address
-// of the specified family
-func DelLinkByNameAddr(ifName string, family int) (*net.IPNet, error) {
+// DelLinkByNameAddr remove an interface and returns its addresses
+func DelLinkByNameAddr(ifName string) ([]*net.IPNet, error) {
 	iface, err := netlink.LinkByName(ifName)
 	if err != nil {
 		if err != nil && err.Error() == "Link not found" {
@@ -179,7 +181,7 @@ func DelLinkByNameAddr(ifName string, family int) (*net.IPNet, error) {
 		return nil, fmt.Errorf("failed to lookup %q: %v", ifName, err)
 	}
 
-	addrs, err := netlink.AddrList(iface, family)
+	addrs, err := netlink.AddrList(iface, netlink.FAMILY_ALL)
 	if err != nil || len(addrs) == 0 {
 		return nil, fmt.Errorf("failed to get IP addresses for %q: %v", ifName, err)
 	}
@@ -188,7 +190,14 @@ func DelLinkByNameAddr(ifName string, family int) (*net.IPNet, error) {
 		return nil, fmt.Errorf("failed to delete %q: %v", ifName, err)
 	}
 
-	return addrs[0].IPNet, nil
+	out := []*net.IPNet{}
+	for _, addr := range addrs {
+		if addr.IP.IsGlobalUnicast() {
+			out = append(out, addr.IPNet)
+		}
+	}
+
+	return out, nil
 }
 
 func SetHWAddrByIP(ifName string, ip4 net.IP, ip6 net.IP) error {

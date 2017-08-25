@@ -27,7 +27,6 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 
 	"github.com/vishvananda/netlink"
-	"github.com/vishvananda/netlink/nl"
 )
 
 func getHwAddr(linkname string) string {
@@ -133,7 +132,7 @@ var _ = Describe("Link", func() {
 				defer GinkgoRecover()
 
 				// This string should match the expected error codes in the cmdDel functions of some of the plugins
-				_, err := ip.DelLinkByNameAddr("THIS_DONT_EXIST", netlink.FAMILY_V4)
+				_, err := ip.DelLinkByNameAddr("THIS_DONT_EXIST")
 				Expect(err).To(Equal(ip.ErrLinkNotFound))
 
 				return nil
@@ -220,16 +219,14 @@ var _ = Describe("Link", func() {
 		})
 	})
 
-	It("DelLinkByNameAddr must throw an error for configured interfaces", func() {
+	It("DelLinkByNameAddr should return no IPs when no IPs are configured", func() {
 		_ = containerNetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
 			// this will delete the host endpoint too
-			addr, err := ip.DelLinkByNameAddr(containerVethName, nl.FAMILY_V4)
-			Expect(err).To(HaveOccurred())
-
-			var ipNetNil *net.IPNet
-			Expect(addr).To(Equal(ipNetNil))
+			addr, err := ip.DelLinkByNameAddr(containerVethName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(addr).To(HaveLen(0))
 			return nil
 		})
 	})
