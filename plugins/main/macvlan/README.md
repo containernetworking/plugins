@@ -32,3 +32,4 @@ Since each macvlan interface has its own MAC address, it makes it easy to use wi
 
 * If are testing on a laptop, please remember that most wireless cards do not support being enslaved by macvlan.
 * A single master interface can not be enslaved by both `macvlan` and `ipvlan`.
+* each node in the cluster should be config with different subnet with `ipam` in order to escape from IP confilct
