@@ -29,7 +29,7 @@ fi
 split=(${TEST// / })
 TEST=${split[@]/#/${REPO_PATH}/}
 
-sudo -E bash -c "umask 0; PATH=${GOROOT}/bin:$(pwd)/bin:${PATH} go test ${TEST}"
+sudo -E bash -c "umask 0; PATH=${GOROOT}/bin:$(pwd)/bin:${PATH} go test ${TEST} -test.parallel 1"
 
 echo "Checking gofmt..."
 fmtRes=$(gofmt -l $FMT)
