@@ -22,7 +22,7 @@ import (
 
 // AddRoute adds a universally-scoped route to a device.
 func AddRoute(ipn *net.IPNet, gw net.IP, dev netlink.Link) error {
-	return netlink.RouteAdd(&netlink.Route{
+	return netlink.RouteReplace(&netlink.Route{
 		LinkIndex: dev.Attrs().Index,
 		Scope:     netlink.SCOPE_UNIVERSE,
 		Dst:       ipn,
@@ -32,7 +32,7 @@ func AddRoute(ipn *net.IPNet, gw net.IP, dev netlink.Link) error {
 
 // AddHostRoute adds a host-scoped route to a device.
 func AddHostRoute(ipn *net.IPNet, gw net.IP, dev netlink.Link) error {
-	return netlink.RouteAdd(&netlink.Route{
+	return netlink.RouteReplace(&netlink.Route{
 		LinkIndex: dev.Attrs().Index,
 		Scope:     netlink.SCOPE_HOST,
 		Dst:       ipn,

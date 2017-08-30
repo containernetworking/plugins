@@ -43,7 +43,8 @@ func makeVethPair(name, peer string, mtu int) (netlink.Link, error) {
 		return nil, err
 	}
 
-	return veth, nil
+	// refetch to get correct hardware address
+	return netlink.LinkByName(name)
 }
 
 func peerExists(name string) bool {

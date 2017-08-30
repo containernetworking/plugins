@@ -63,7 +63,7 @@ func ConfigureIface(ifName string, res *current.Result) error {
 		}
 
 		addr := &netlink.Addr{IPNet: &ipc.Address, Label: ""}
-		if err = netlink.AddrAdd(link, addr); err != nil {
+		if err = netlink.AddrReplace(link, addr); err != nil {
 			return fmt.Errorf("failed to add IP addr %v to %q: %v", ipc, ifName, err)
 		}
 
