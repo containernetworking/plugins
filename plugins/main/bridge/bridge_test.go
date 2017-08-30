@@ -25,7 +25,6 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-	"github.com/containernetworking/plugins/pkg/utils/hwaddr"
 
 	"github.com/vishvananda/netlink"
 
@@ -266,6 +265,7 @@ func (tester *testerV03x) cmdAddTest(tc testCase) {
 		Expect(link.Attrs().Name).To(Equal(BRNAME))
 		Expect(link).To(BeAssignableToTypeOf(&netlink.Bridge{}))
 		Expect(link.Attrs().HardwareAddr.String()).To(Equal(result.Interfaces[0].Mac))
+		bridgeMAC := link.Attrs().HardwareAddr.String()
 
 		// Ensure bridge has expected gateway address(es)
 		addrs, err := netlink.AddrList(link, netlink.FAMILY_ALL)
@@ -274,10 +274,6 @@ func (tester *testerV03x) cmdAddTest(tc testCase) {
 		for _, cidr := range tc.expGWCIDRs {
 			ip, subnet, err := net.ParseCIDR(cidr)
 			Expect(err).NotTo(HaveOccurred())
-			if ip.To4() != nil {
-				hwAddr := fmt.Sprintf("%s", link.Attrs().HardwareAddr)
-				Expect(hwAddr).To(HavePrefix(hwaddr.PrivateMACPrefixString))
-			}
 
 			found := false
 			subnetPrefix, subnetBits := subnet.Mask.Size()
@@ -300,6 +296,12 @@ func (tester *testerV03x) cmdAddTest(tc testCase) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(link).To(BeAssignableToTypeOf(&netlink.Veth{}))
 		tester.vethName = result.Interfaces[1].Name
+
+		// Check that the bridge has a different mac from the veth
+		// If not, it means the bridge has an unstable mac and will change
+		// as ifs are added and removed
+		Expect(link.Attrs().HardwareAddr.String()).NotTo(Equal(bridgeMAC))
+
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
@@ -314,14 +316,11 @@ func (tester *testerV03x) cmdAddTest(tc testCase) {
 		Expect(link).To(BeAssignableToTypeOf(&netlink.Veth{}))
 
 		expCIDRsV4, expCIDRsV6 := tc.expectedCIDRs()
-		if expCIDRsV4 != nil {
-			hwAddr := fmt.Sprintf("%s", link.Attrs().HardwareAddr)
-			Expect(hwAddr).To(HavePrefix(hwaddr.PrivateMACPrefixString))
-		}
 		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(addrs)).To(Equal(len(expCIDRsV4)))
 		addrs, err = netlink.AddrList(link, netlink.FAMILY_V6)
+		Expect(len(addrs)).To(Equal(len(expCIDRsV6) + 1)) //add one for the link-local
 		Expect(err).NotTo(HaveOccurred())
 		// Ignore link local address which may or may not be
 		// ready when we read addresses.
@@ -442,10 +441,6 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase) {
 		for _, cidr := range tc.expGWCIDRs {
 			ip, subnet, err := net.ParseCIDR(cidr)
 			Expect(err).NotTo(HaveOccurred())
-			if ip.To4() != nil {
-				hwAddr := fmt.Sprintf("%s", link.Attrs().HardwareAddr)
-				Expect(hwAddr).To(HavePrefix(hwaddr.PrivateMACPrefixString))
-			}
 
 			found := false
 			subnetPrefix, subnetBits := subnet.Mask.Size()
@@ -479,10 +474,6 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase) {
 		Expect(link).To(BeAssignableToTypeOf(&netlink.Veth{}))
 
 		expCIDRsV4, expCIDRsV6 := tc.expectedCIDRs()
-		if expCIDRsV4 != nil {
-			hwAddr := fmt.Sprintf("%s", link.Attrs().HardwareAddr)
-			Expect(hwAddr).To(HavePrefix(hwaddr.PrivateMACPrefixString))
-		}
 		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(addrs)).To(Equal(len(expCIDRsV4)))
@@ -891,5 +882,29 @@ var _ = Describe("bridge Operations", func() {
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
+	})
+	It("creates a bridge with a stable MAC addresses", func() {
+		testCases := []testCase{
+			{
+				subnet: "10.1.2.0/24",
+			},
+			{
+				subnet: "2001:db8:42::/64",
+			},
+		}
+
+		for _, tc := range testCases {
+			tc.cniVersion = "0.3.1"
+			_, _, err := setupBridge(tc.netConf())
+			link, err := netlink.LinkByName(BRNAME)
+			Expect(err).NotTo(HaveOccurred())
+			origMac := link.Attrs().HardwareAddr
+
+			cmdAddDelTest(originalNS, tc)
+
+			link, err = netlink.LinkByName(BRNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr).To(Equal(origMac))
+		}
 	})
 })

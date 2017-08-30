@@ -32,6 +32,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/utils"
+	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
 )
 
@@ -172,6 +173,13 @@ func ensureBridgeAddr(br *netlink.Bridge, family int, ipn *net.IPNet, forceAddre
 	if err := netlink.AddrAdd(br, addr); err != nil {
 		return fmt.Errorf("could not add IP address to %q: %v", br.Name, err)
 	}
+
+	// Set the bridge's MAC to itself. Otherwise, the bridge will take the
+	// lowest-numbered mac on the bridge, and will change as ifs churn
+	if err := netlink.LinkSetHardwareAddr(br, br.HardwareAddr); err != nil {
+		return fmt.Errorf("could not set bridge's mac: %v", err)
+	}
+
 	return nil
 }
 
@@ -294,8 +302,15 @@ func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
 }
 
 // disableIPV6DAD disables IPv6 Duplicate Address Detection (DAD)
-// for an interface.
+// for an interface, if the interface does not support enhanced_dad.
+// We do this because interfaces with hairpin mode will see their own DAD packets
 func disableIPV6DAD(ifName string) error {
+	// ehanced_dad sends a nonce with the DAD packets, so that we can safely
+	// ignore ourselves
+	enh, err := ioutil.ReadFile(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/enhanced_dad", ifName))
+	if err == nil && string(enh) == "1\n" {
+		return nil
+	}
 	f := fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_dad", ifName)
 	return ioutil.WriteFile(f, []byte("0"), 0644)
 }
@@ -363,32 +378,34 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// Configure the container hardware address and IP address(es)
 	if err := netns.Do(func(_ ns.NetNS) error {
-		// Disable IPv6 DAD just in case hairpin mode is enabled on the
-		// bridge. Hairpin mode causes echos of neighbor solicitation
-		// packets, which causes DAD failures.
-		// TODO: (short term) Disable DAD conditional on actual hairpin mode
-		// TODO: (long term) Use enhanced DAD when that becomes available in kernels.
-		if err := disableIPV6DAD(args.IfName); err != nil {
+		contVeth, err := net.InterfaceByName(args.IfName)
+		if err != nil {
 			return err
 		}
 
+		// Disable IPv6 DAD just in case hairpin mode is enabled on the
+		// bridge. Hairpin mode causes echos of neighbor solicitation
+		// packets, which causes DAD failures.
+		for _, ipc := range result.IPs {
+			if ipc.Version == "6" && (n.HairpinMode || n.PromiscMode) {
+				if err := disableIPV6DAD(args.IfName); err != nil {
+					return err
+				}
+				break
+			}
+		}
+
+		// Add the IP to the interface
 		if err := ipam.ConfigureIface(args.IfName, result); err != nil {
 			return err
 		}
 
-		if result.IPs[0].Address.IP.To4() != nil {
-			if err := ip.SetHWAddrByIP(args.IfName, result.IPs[0].Address.IP, nil /* TODO IPv6 */); err != nil {
-				return err
+		// Send a gratuitous arp
+		for _, ipc := range result.IPs {
+			if ipc.Version == "4" {
+				_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
 			}
 		}
-
-		// Refetch the veth since its MAC address may changed
-		link, err := netlink.LinkByName(args.IfName)
-		if err != nil {
-			return fmt.Errorf("could not lookup %q: %v", args.IfName, err)
-		}
-		containerInterface.Mac = link.Attrs().HardwareAddr.String()
-
 		return nil
 	}); err != nil {
 		return err
@@ -413,12 +430,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 				if err = enableIPForward(gws.family); err != nil {
 					return fmt.Errorf("failed to enable forwarding: %v", err)
 				}
-			}
-		}
-
-		if firstV4Addr != nil {
-			if err := ip.SetHWAddrByIP(n.BrName, firstV4Addr, nil /* TODO IPv6 */); err != nil {
-				return err
 			}
 		}
 	}
