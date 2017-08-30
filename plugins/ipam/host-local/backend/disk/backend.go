@@ -31,7 +31,7 @@ var defaultDataDir = "/var/lib/cni/networks"
 // Store is a simple disk-backed store that creates one file per IP
 // address in a given directory. The contents of the file are the container ID.
 type Store struct {
-	FileLock
+	*FileLock
 	dataDir string
 }
 
@@ -51,7 +51,7 @@ func New(network, dataDir string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{*lk, dir}, nil
+	return &Store{lk, dir}, nil
 }
 
 func (s *Store) Reserve(id string, ip net.IP, rangeID string) (bool, error) {
