@@ -8,7 +8,7 @@ go:
 
 env:
   global:
-  - PATH=$GOROOT/bin:$PATH
+  - PATH=$GOROOT/bin:$GOPATH/bin:$PATH
   matrix:
   - TARGET=amd64
   - TARGET=arm
@@ -18,6 +18,9 @@ env:
 
 matrix:
   fast_finish: true
+
+install:
+  - go get github.com/onsi/ginkgo/ginkgo
 
 script:
  - |
