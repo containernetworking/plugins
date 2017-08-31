@@ -12,33 +12,34 @@ echo "Running tests"
 
 # test everything that's not in vendor
 pushd "$GOPATH/src/$REPO_PATH" >/dev/null
-  TESTABLE="$(go list ./... | grep -v vendor | xargs echo)"
+  ALL_PKGS="$(go list ./... | grep -v vendor | xargs echo)"
 popd >/dev/null
+
+GINKGO_FLAGS="-p --randomizeAllSpecs --randomizeSuites --failOnPending --progress"
 
 # user has not provided PKG override
 if [ -z "$PKG" ]; then
-	TEST=$TESTABLE
-	FMT=$TESTABLE
+  GINKGO_FLAGS="$GINKGO_FLAGS -r ."
+  LINT_TARGETS="$ALL_PKGS"
 
 # user has provided PKG override
 else
-	TEST=$PKG
-
-	# only run gofmt on packages provided by user
-	FMT="$TEST"
+  GINKGO_FLAGS="$GINKGO_FLAGS $PKG"
+  LINT_TARGETS="$PKG"
 fi
 
-sudo -E bash -c "umask 0; PATH=${GOROOT}/bin:$(pwd)/bin:${PATH} go test ${TEST}"
+cd "$GOPATH/src/$REPO_PATH"
+sudo -E bash -c "umask 0; PATH=${GOROOT}/bin:$(pwd)/bin:${PATH} ginkgo ${GINKGO_FLAGS}"
 
 echo "Checking gofmt..."
-fmtRes=$(go fmt $FMT)
+fmtRes=$(go fmt $LINT_TARGETS)
 if [ -n "${fmtRes}" ]; then
 	echo -e "go fmt checking failed:\n${fmtRes}"
 	exit 255
 fi
 
 echo "Checking govet..."
-vetRes=$(go vet $TEST)
+vetRes=$(go vet $LINT_TARGETS)
 if [ -n "${vetRes}" ]; then
 	echo -e "govet checking failed:\n${vetRes}"
 	exit 255
