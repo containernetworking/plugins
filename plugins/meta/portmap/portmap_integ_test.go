@@ -28,19 +28,20 @@ import (
 	"github.com/coreos/go-iptables/iptables"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gexec"
 	"github.com/vishvananda/netlink"
 )
 
 const TIMEOUT = 90
 
 var _ = Describe("portmap integration tests", func() {
-	rand.Seed(time.Now().UTC().UnixNano())
-
-	var configList *libcni.NetworkConfigList
-	var cniConf *libcni.CNIConfig
-	var targetNS ns.NetNS
-	var containerPort int
-	var closeChan chan interface{}
+	var (
+		configList    *libcni.NetworkConfigList
+		cniConf       *libcni.CNIConfig
+		targetNS      ns.NetNS
+		containerPort int
+		session       *gexec.Session
+	)
 
 	BeforeEach(func() {
 		var err error
@@ -80,12 +81,12 @@ var _ = Describe("portmap integration tests", func() {
 		fmt.Fprintln(GinkgoWriter, "namespace:", targetNS.Path())
 
 		// Start an echo server and get the port
-		containerPort, closeChan, err = RunEchoServerInNS(targetNS)
+		containerPort, session, err = StartEchoServerInNamespace(targetNS)
 		Expect(err).NotTo(HaveOccurred())
-
 	})
 
 	AfterEach(func() {
+		session.Terminate().Wait()
 		if targetNS != nil {
 			targetNS.Close()
 		}
@@ -163,7 +164,7 @@ var _ = Describe("portmap integration tests", func() {
 		snatOK := testEchoServer(fmt.Sprintf("%s:%d", "127.0.0.1", hostPort))
 
 		// Cleanup
-		close(closeChan)
+		session.Terminate()
 		err = deleteNetwork()
 		Expect(err).NotTo(HaveOccurred())
 
