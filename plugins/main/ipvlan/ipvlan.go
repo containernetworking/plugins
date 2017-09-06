@@ -194,7 +194,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	// There is a netns so try to clean up. Delete can be called multiple times
 	// so don't return an error if the device is already removed.
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
-		if _, err := ip.DelLinkByNameAddr(args.IfName, netlink.FAMILY_V4); err != nil {
+		if err := ip.DelLinkByName(args.IfName); err != nil {
 			if err != ip.ErrLinkNotFound {
 				return err
 			}
