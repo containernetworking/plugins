@@ -16,7 +16,7 @@ import (
 var binaryPath string
 
 var _ = SynchronizedBeforeSuite(func() []byte {
-	binaryPath, err := gexec.Build("github.com/containernetworking/plugins/plugins/meta/portmap/echosvr")
+	binaryPath, err := gexec.Build("github.com/containernetworking/plugins/pkg/testutils/echosvr")
 	Expect(err).NotTo(HaveOccurred())
 	return []byte(binaryPath)
 }, func(data []byte) {
