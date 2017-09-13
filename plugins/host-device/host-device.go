@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
@@ -64,6 +65,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
 	}
 	defer containerNs.Close()
+	defer (&current.Result{}).Print()
 	return addLink(cfg.Device, cfg.HWAddr, cfg.KernelPath, containerNs)
 }
 
@@ -77,6 +79,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
 	}
 	defer containerNs.Close()
+	defer fmt.Println(`{}`)
 	return removeLink(cfg.Device, cfg.HWAddr, cfg.KernelPath, containerNs)
 }
 
