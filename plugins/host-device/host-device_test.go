@@ -15,23 +15,27 @@
 package main
 
 import (
-	"github.com/containernetworking/cni/pkg/ns"
+	"fmt"
+	"math/rand"
+
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/testutils"
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 )
 
-var ifname = "dummy0"
-
 var _ = Describe("base functionality", func() {
 	var originalNS ns.NetNS
+	var ifname string
 
 	BeforeEach(func() {
 		var err error
 		originalNS, err = ns.NewNS()
 		Expect(err).NotTo(HaveOccurred())
+
+		ifname = fmt.Sprintf("dummy-%x", rand.Int31())
 	})
 
 	AfterEach(func() {
@@ -61,19 +65,23 @@ var _ = Describe("base functionality", func() {
 		targetNS, err := ns.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
-		conf := `{
+		conf := fmt.Sprintf(`{
 			"cniVersion": "0.3.0",
 			"name": "cni-plugin-host-device-test",
 			"type": "host-device",
-			"device": ifname
-		}`
+			"device": %q
+		}`, ifname)
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
 			Netns:       targetNS.Path(),
 			IfName:      ifname,
 			StdinData:   []byte(conf),
 		}
-		_, _, err = testutils.CmdAddWithResult(targetNS.Path(), ifname, []byte(conf), func() error { return cmdAdd(args) })
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			_, _, err := testutils.CmdAddWithResult(targetNS.Path(), ifname, []byte(conf), func() error { return cmdAdd(args) })
+			return err
+		})
 		Expect(err).NotTo(HaveOccurred())
 
 		// assert that dummy0 is now in the target namespace

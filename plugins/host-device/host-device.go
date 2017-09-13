@@ -24,9 +24,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
 )
 
@@ -64,6 +65,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
 	}
 	defer containerNs.Close()
+	defer (&current.Result{}).Print()
 	return addLink(cfg.Device, cfg.HWAddr, cfg.KernelPath, containerNs)
 }
 
@@ -77,6 +79,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
 	}
 	defer containerNs.Close()
+	defer fmt.Println(`{}`)
 	return removeLink(cfg.Device, cfg.HWAddr, cfg.KernelPath, containerNs)
 }
 
@@ -115,9 +118,7 @@ func getLink(devname, hwaddr, kernelpath string) (netlink.Link, error) {
 	}
 
 	if len(devname) > 0 {
-		if m, err := netlink.LinkByName(devname); err == nil {
-			return m, nil
-		}
+		return netlink.LinkByName(devname)
 	} else if len(hwaddr) > 0 {
 		hwAddr, err := net.ParseMAC(hwaddr)
 		if err != nil {
