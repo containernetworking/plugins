@@ -115,9 +115,7 @@ func getLink(devname, hwaddr, kernelpath string) (netlink.Link, error) {
 	}
 
 	if len(devname) > 0 {
-		if m, err := netlink.LinkByName(devname); err == nil {
-			return m, nil
-		}
+		return netlink.LinkByName(devname)
 	} else if len(hwaddr) > 0 {
 		hwAddr, err := net.ParseMAC(hwaddr)
 		if err != nil {
