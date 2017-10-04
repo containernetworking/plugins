@@ -26,6 +26,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -33,6 +34,7 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/version"
+	"math/big"
 )
 
 const (
@@ -42,9 +44,10 @@ const (
 
 type NetConf struct {
 	types.NetConf
-	SubnetFile string                 `json:"subnetFile"`
-	DataDir    string                 `json:"dataDir"`
-	Delegate   map[string]interface{} `json:"delegate"`
+	SubnetFile      string                 `json:"subnetFile"`
+	DataDir         string                 `json:"dataDir"`
+	Delegate        map[string]interface{} `json:"delegate"`
+	WindowsDelegate map[string]interface{} `json:"windowsDelegate"`
 }
 
 type subnetEnv struct {
@@ -188,6 +191,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	if runtime.GOOS == "windows" {
+		return cmdAddWindows(args.ContainerID, n, fenv)
+	}
+
 	if n.Delegate == nil {
 		n.Delegate = make(map[string]interface{})
 	} else {
@@ -239,6 +246,119 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	return delegateAdd(args.ContainerID, n.DataDir, n.Delegate)
+}
+
+func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
+	if n.WindowsDelegate == nil {
+		n.WindowsDelegate = make(map[string]interface{})
+	} else {
+		if hasKey(n.WindowsDelegate, "type") && !isString(n.WindowsDelegate["type"]) {
+			return fmt.Errorf("'windowsDelegate' dictionary, if present, must have (string) 'type' field")
+		}
+		if hasKey(n.WindowsDelegate, "name") {
+			return fmt.Errorf("'windowsDelegate' dictionary must not have 'name' field, it'll be set by flannel")
+		}
+		if hasKey(n.WindowsDelegate, "ipam") {
+			return fmt.Errorf("'windowsDelegate' dictionary must not have 'ipam' field, it'll be set by flannel")
+		}
+	}
+
+	n.WindowsDelegate["name"] = n.Name
+
+	if !hasKey(n.WindowsDelegate, "type") {
+		n.WindowsDelegate["type"] = "wincni.exe"
+	}
+
+	updateOutboundNat(&n.WindowsDelegate, fenv)
+
+	n.WindowsDelegate["cniVersion"] = "0.2.0"
+	if n.CNIVersion != "" {
+		n.WindowsDelegate["cniVersion"] = n.CNIVersion
+	}
+
+	n.WindowsDelegate["ipam"] = map[string]interface{}{
+		"subnet": fenv.sn.String(),
+		"routes": []interface{}{
+				map[string]interface{}{
+					"GW": calcGatewayIPforWindows(fenv.sn),
+				},
+			},
+		}
+
+	return delegateAdd(containerID, n.DataDir, n.WindowsDelegate)
+}
+
+func updateOutboundNat(windowsDelegate *map[string]interface{}, fenv *subnetEnv) {
+	if !*fenv.ipmasq {
+		return
+	}
+
+	if !hasKey(*windowsDelegate, "AdditionalArgs") {
+		(*windowsDelegate)["AdditionalArgs"] = []interface{}{}
+	}
+	addlArgs := (*windowsDelegate)["AdditionalArgs"].([]interface{})
+	nwToNat := fenv.nw.String()
+	for _, policy := range addlArgs {
+		pt := policy.(map[string]interface{})
+		if hasKey(pt, "Value") {
+			policyValue := pt["Value"]
+			switch pv := policyValue.(type) {
+			case map[string]interface{}:
+				if hasKey(pv, "Type") {
+					if strings.EqualFold(pv["Type"].(string), "OutBoundNAT") {
+						if !hasKey(pv, "ExceptionList") {
+							// add the exception since there weren't any
+							pv["ExceptionList"] = []interface{}{nwToNat}
+							return
+						}
+
+						nets := pv["ExceptionList"].([]interface{})
+						for _, net := range nets {
+							if net.(string) == nwToNat {
+								// found it - do nothing
+								return
+							}
+						}
+
+						// its not in the list of exceptions, add it
+						pv["ExceptionList"] = append(nets, nwToNat)
+						return
+					}
+				}
+			}
+		}
+	}
+
+	// didn't find the policy, add it
+	natEntry := map[string]interface{}{
+		"Name": "EndpointPolicy",
+		"Value": map[string]interface{}{
+			"Type": "OutBoundNAT",
+			"ExceptionList": []interface{}{
+				nwToNat,
+			},
+		},
+	}
+	(*windowsDelegate)["AdditionalArgs"] = append(addlArgs, natEntry)
+}
+
+func calcGatewayIPforWindows(ipn *net.IPNet) net.IP {
+	// HNS currently requires x.x.x.2
+	// TODO: rakesh: file a bug somewhere to remove this when HNS the HNS limitation is fixed
+	nid := ipn.IP.Mask(ipn.Mask)
+	i := ipToInt(nid)
+	return intToIP(i.Add(i, big.NewInt(2)))
+}
+
+func ipToInt(ip net.IP) *big.Int {
+	if v := ip.To4(); v != nil {
+		return big.NewInt(0).SetBytes(v)
+	}
+	return big.NewInt(0).SetBytes(ip.To16())
+}
+
+func intToIP(i *big.Int) net.IP {
+	return net.IP(i.Bytes())
 }
 
 func cmdDel(args *skel.CmdArgs) error {
