@@ -253,10 +253,34 @@
 		{
 			"ImportPath": "golang.org/x/net/ipv4",
 			"Rev": "e90d6d0afc4c315a0d87a568ae68577cc15149a0"
+                },
+                { 
+			"ImportPath": "github.com/Microsoft/go-winio",
+			"Comment": "v0.4.5",
+			"Rev": "78439966b38d69bf38227fbf57ac8a6fee70f69a"
+		},
+		{
+			"ImportPath": "github.com/Microsoft/hcsshim",
+			"Comment": "v0.6.7",
+			"Rev": "34a629f78a5d50f7de07727e41a948685c45e026"
+		},
+		{
+			"ImportPath": "github.com/sirupsen/logrus",
+			"Comment": "v1.0.4",
+			"Rev": "d682213848ed68c0a260ca37d6dd5ace8423f5ba"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/ssh/terminal",
+			"Rev": "94eea52f7b742c7cbe0b03b22f0c4c8631ece122"
 		},
 		{
 			"ImportPath": "golang.org/x/sys/unix",
-			"Rev": "076b546753157f758b316e59bcb51e6807c04057"
+			"Rev": "d5840adf789d732bc8b00f37b26ca956a7cc8e79"
+		},
+		{
+			"ImportPath": "golang.org/x/sys/windows",
+			"Rev": "d5840adf789d732bc8b00f37b26ca956a7cc8e79"
 		}
+
 	]
 }

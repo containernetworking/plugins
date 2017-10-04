@@ -12,7 +12,9 @@ Some CNI network plugins, maintained by the containernetworking team. For more i
 * `macvlan`: Creates a new MAC address, forwards all traffic to that to the container
 * `ptp`: Creates a veth pair.
 * `vlan`: Allocates a vlan device.
-
+#### Windows: windows specific
+* `l2bridge`: Creates a bridge, adds the host and the container to it.
+* `overlay`: Creates an overlay interface to the container
 ### IPAM: IP address allocation
 * `dhcp`: Runs a daemon on the host to make DHCP requests on behalf of the container
 * `host-local`: maintains a local database of allocated IPs
