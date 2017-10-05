@@ -44,10 +44,9 @@ const (
 
 type NetConf struct {
 	types.NetConf
-	SubnetFile      string                 `json:"subnetFile"`
-	DataDir         string                 `json:"dataDir"`
-	Delegate        map[string]interface{} `json:"delegate"`
-	WindowsDelegate map[string]interface{} `json:"windowsDelegate"`
+	SubnetFile string                 `json:"subnetFile"`
+	DataDir    string                 `json:"dataDir"`
+	Delegate   map[string]interface{} `json:"delegate"`
 }
 
 type subnetEnv struct {
@@ -191,10 +190,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if runtime.GOOS == "windows" {
-		return cmdAddWindows(args.ContainerID, n, fenv)
-	}
-
 	if n.Delegate == nil {
 		n.Delegate = make(map[string]interface{})
 	} else {
@@ -207,6 +202,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if hasKey(n.Delegate, "ipam") {
 			return fmt.Errorf("'delegate' dictionary must not have 'ipam' field, it'll be set by flannel")
 		}
+	}
+
+	if runtime.GOOS == "windows" {
+		return cmdAddWindows(args.ContainerID, n, fenv)
 	}
 
 	n.Delegate["name"] = n.Name
@@ -249,84 +248,75 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
-	if n.WindowsDelegate == nil {
-		n.WindowsDelegate = make(map[string]interface{})
-	} else {
-		if hasKey(n.WindowsDelegate, "type") && !isString(n.WindowsDelegate["type"]) {
-			return fmt.Errorf("'windowsDelegate' dictionary, if present, must have (string) 'type' field")
-		}
-		if hasKey(n.WindowsDelegate, "name") {
-			return fmt.Errorf("'windowsDelegate' dictionary must not have 'name' field, it'll be set by flannel")
-		}
-		if hasKey(n.WindowsDelegate, "ipam") {
-			return fmt.Errorf("'windowsDelegate' dictionary must not have 'ipam' field, it'll be set by flannel")
-		}
+
+	n.Delegate["name"] = n.Name
+
+	if !hasKey(n.Delegate, "type") {
+		n.Delegate["type"] = "wincni.exe"
 	}
 
-	n.WindowsDelegate["name"] = n.Name
+	updateOutboundNat(n.Delegate, fenv)
 
-	if !hasKey(n.WindowsDelegate, "type") {
-		n.WindowsDelegate["type"] = "wincni.exe"
-	}
-
-	updateOutboundNat(&n.WindowsDelegate, fenv)
-
-	n.WindowsDelegate["cniVersion"] = "0.2.0"
+	n.Delegate["cniVersion"] = "0.2.0"
 	if n.CNIVersion != "" {
-		n.WindowsDelegate["cniVersion"] = n.CNIVersion
+		n.Delegate["cniVersion"] = n.CNIVersion
 	}
 
-	n.WindowsDelegate["ipam"] = map[string]interface{}{
+	// for now get Windows HNS to do IPAM
+	n.Delegate["ipam"] = map[string]interface{}{
 		"subnet": fenv.sn.String(),
 		"routes": []interface{}{
-				map[string]interface{}{
-					"GW": calcGatewayIPforWindows(fenv.sn),
-				},
+			map[string]interface{}{
+				"GW": calcGatewayIPforWindows(fenv.sn),
 			},
-		}
+		},
+	}
 
-	return delegateAdd(containerID, n.DataDir, n.WindowsDelegate)
+	return delegateAdd(containerID, n.DataDir, n.Delegate)
 }
 
-func updateOutboundNat(windowsDelegate *map[string]interface{}, fenv *subnetEnv) {
+func updateOutboundNat(delegate map[string]interface{}, fenv *subnetEnv) {
 	if !*fenv.ipmasq {
 		return
 	}
 
-	if !hasKey(*windowsDelegate, "AdditionalArgs") {
-		(*windowsDelegate)["AdditionalArgs"] = []interface{}{}
+	if !hasKey(delegate, "AdditionalArgs") {
+		delegate["AdditionalArgs"] = []interface{}{}
 	}
-	addlArgs := (*windowsDelegate)["AdditionalArgs"].([]interface{})
+	addlArgs := delegate["AdditionalArgs"].([]interface{})
 	nwToNat := fenv.nw.String()
 	for _, policy := range addlArgs {
 		pt := policy.(map[string]interface{})
-		if hasKey(pt, "Value") {
-			policyValue := pt["Value"]
-			switch pv := policyValue.(type) {
-			case map[string]interface{}:
-				if hasKey(pv, "Type") {
-					if strings.EqualFold(pv["Type"].(string), "OutBoundNAT") {
-						if !hasKey(pv, "ExceptionList") {
-							// add the exception since there weren't any
-							pv["ExceptionList"] = []interface{}{nwToNat}
-							return
-						}
+		if !hasKey(pt, "Value") {
+			continue
+		}
 
-						nets := pv["ExceptionList"].([]interface{})
-						for _, net := range nets {
-							if net.(string) == nwToNat {
-								// found it - do nothing
-								return
-							}
-						}
+		pv, ok := pt["Value"].(map[string]interface{})
+		if !ok || !hasKey(pv, "Type") {
+			continue
+		}
 
-						// its not in the list of exceptions, add it
-						pv["ExceptionList"] = append(nets, nwToNat)
-						return
-					}
-				}
+		if !strings.EqualFold(pv["Type"].(string), "OutBoundNAT") {
+			continue
+		}
+
+		if !hasKey(pv, "ExceptionList") {
+			// add the exception since there weren't any
+			pv["ExceptionList"] = []interface{}{nwToNat}
+			return
+		}
+
+		nets := pv["ExceptionList"].([]interface{})
+		for _, net := range nets {
+			if net.(string) == nwToNat {
+				// found it - do nothing
+				return
 			}
 		}
+
+		// its not in the list of exceptions, add it and we're done
+		pv["ExceptionList"] = append(nets, nwToNat)
+		return
 	}
 
 	// didn't find the policy, add it
@@ -339,15 +329,14 @@ func updateOutboundNat(windowsDelegate *map[string]interface{}, fenv *subnetEnv)
 			},
 		},
 	}
-	(*windowsDelegate)["AdditionalArgs"] = append(addlArgs, natEntry)
+	delegate["AdditionalArgs"] = append(addlArgs, natEntry)
 }
 
 func calcGatewayIPforWindows(ipn *net.IPNet) net.IP {
 	// HNS currently requires x.x.x.2
-	// TODO: rakesh: file a bug somewhere to remove this when HNS the HNS limitation is fixed
 	nid := ipn.IP.Mask(ipn.Mask)
-	i := ipToInt(nid)
-	return intToIP(i.Add(i, big.NewInt(2)))
+	nid[len(nid)-1] += 2
+	return nid
 }
 
 func ipToInt(ip net.IP) *big.Int {
