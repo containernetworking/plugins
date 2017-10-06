@@ -14,9 +14,9 @@
 package main
 
 import (
-	"testing"
-	"net"
 	"github.com/stretchr/testify/assert"
+	"net"
+	"testing"
 )
 
 func TestFlannelSetsWindowsOutboundNatWhenNotSet(t *testing.T) {
@@ -25,9 +25,9 @@ func TestFlannelSetsWindowsOutboundNatWhenNotSet(t *testing.T) {
 	_, sn, _ := net.ParseCIDR("192.168.10.0/24")
 	ipmasq := true
 	fenv := &subnetEnv{
-		nw: nw,
-		sn: sn,
-		ipmasq:	&ipmasq,
+		nw:     nw,
+		sn:     sn,
+		ipmasq: &ipmasq,
 	}
 
 	// apply it
@@ -62,9 +62,9 @@ func TestFlannelAppendsOutboundNatToExistingPolicy(t *testing.T) {
 	_, sn, _ := net.ParseCIDR("192.168.10.0/24")
 	ipmasq := true
 	fenv := &subnetEnv{
-		nw: nw,
-		sn: sn,
-		ipmasq:	&ipmasq,
+		nw:     nw,
+		sn:     sn,
+		ipmasq: &ipmasq,
 	}
 
 	// first set it
