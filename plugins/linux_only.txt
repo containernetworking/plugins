@@ -1,6 +1,5 @@
 plugins/host-device
 plugins/ipam/dhcp
-plugins/ipam/host-local
 plugins/main/bridge
 plugins/main/ipvlan
 plugins/main/loopback

@@ -28,6 +28,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
+	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/disk"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -37,7 +38,7 @@ var _ = Describe("host-local Operations", func() {
 		const ifname string = "eth0"
 		const nspath string = "/some/where"
 
-		tmpDir, err := ioutil.TempDir("", "host_local_artifacts")
+		tmpDir, err := getTmpDir()
 		Expect(err).NotTo(HaveOccurred())
 		defer os.RemoveAll(tmpDir)
 
@@ -45,26 +46,26 @@ var _ = Describe("host-local Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		conf := fmt.Sprintf(`{
-"cniVersion": "0.3.1",
-"name": "mynet",
-"type": "ipvlan",
-"master": "foo0",
-	"ipam": {
-		"type": "host-local",
-		"dataDir": "%s",
-		"resolvConf": "%s/resolv.conf",
-		"ranges": [
-			[{ "subnet": "10.1.2.0/24" }, {"subnet": "10.2.2.0/24"}],
-			[{ "subnet": "2001:db8:1::0/64" }]
-		],
-		"routes": [
-			{"dst": "0.0.0.0/0"},
-			{"dst": "::/0"},
-			{"dst": "192.168.0.0/16", "gw": "1.1.1.1"},
-			{"dst": "2001:db8:2::0/64", "gw": "2001:db8:3::1"}
-		]
-	}
-}`, tmpDir, tmpDir)
+		"cniVersion": "0.3.1",
+		"name": "mynet",
+		"type": "ipvlan",
+		"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"dataDir": "%s",
+				"resolvConf": "%s/resolv.conf",
+				"ranges": [
+					[{ "subnet": "10.1.2.0/24" }, {"subnet": "10.2.2.0/24"}],
+					[{ "subnet": "2001:db8:1::0/64" }]
+				],
+				"routes": [
+					{"dst": "0.0.0.0/0"},
+					{"dst": "::/0"},
+					{"dst": "192.168.0.0/16", "gw": "1.1.1.1"},
+					{"dst": "2001:db8:2::0/64", "gw": "2001:db8:3::1"}
+				]
+			}
+		}`, tmpDir, tmpDir)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -112,7 +113,7 @@ var _ = Describe("host-local Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(contents)).To(Equal("dummy"))
 
-		ipFilePath2 := filepath.Join(tmpDir, "mynet", "2001:db8:1::2")
+		ipFilePath2 := filepath.Join(tmpDir, disk.GetEscapedPath("mynet", "2001:db8:1::2"))
 		contents, err = ioutil.ReadFile(ipFilePath2)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(contents)).To(Equal("dummy"))
@@ -142,21 +143,21 @@ var _ = Describe("host-local Operations", func() {
 		const ifname string = "eth0"
 		const nspath string = "/some/where"
 
-		tmpDir, err := ioutil.TempDir("", "host_local_artifacts")
+		tmpDir, err := getTmpDir()
 		Expect(err).NotTo(HaveOccurred())
 		defer os.RemoveAll(tmpDir)
 
 		conf := fmt.Sprintf(`{
-	"cniVersion": "0.3.0",
-	"name": "mynet",
-	"type": "ipvlan",
-	"master": "foo0",
-	"ipam": {
-		"type": "host-local",
-		"subnet": "10.1.2.0/24",
-		"dataDir": "%s"
-	}
-}`, tmpDir)
+			"cniVersion": "0.3.0",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"subnet": "10.1.2.0/24",
+				"dataDir": "%s"
+			}
+		}`, tmpDir)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -176,7 +177,7 @@ var _ = Describe("host-local Operations", func() {
 		const ifname string = "eth0"
 		const nspath string = "/some/where"
 
-		tmpDir, err := ioutil.TempDir("", "host_local_artifacts")
+		tmpDir, err := getTmpDir()
 		Expect(err).NotTo(HaveOccurred())
 		defer os.RemoveAll(tmpDir)
 
@@ -184,17 +185,17 @@ var _ = Describe("host-local Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		conf := fmt.Sprintf(`{
-	"cniVersion": "0.1.0",
-	"name": "mynet",
-	"type": "ipvlan",
-	"master": "foo0",
-	"ipam": {
-		"type": "host-local",
-		"subnet": "10.1.2.0/24",
-		"dataDir": "%s",
-		"resolvConf": "%s/resolv.conf"
-	}
-}`, tmpDir, tmpDir)
+			"cniVersion": "0.1.0",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"subnet": "10.1.2.0/24",
+				"dataDir": "%s",
+				"resolvConf": "%s/resolv.conf"
+			}
+		}`, tmpDir, tmpDir)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -245,21 +246,21 @@ var _ = Describe("host-local Operations", func() {
 		const ifname string = "eth0"
 		const nspath string = "/some/where"
 
-		tmpDir, err := ioutil.TempDir("", "host_local_artifacts")
+		tmpDir, err := getTmpDir()
 		Expect(err).NotTo(HaveOccurred())
 		defer os.RemoveAll(tmpDir)
 
 		conf := fmt.Sprintf(`{
-	"cniVersion": "0.3.1",
-	"name": "mynet",
-	"type": "ipvlan",
-	"master": "foo0",
-	"ipam": {
-		"type": "host-local",
-		"subnet": "10.1.2.0/24",
-		"dataDir": "%s"
-	}
-}`, tmpDir)
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"subnet": "10.1.2.0/24",
+				"dataDir": "%s"
+			}
+		}`, tmpDir)
 
 		args := &skel.CmdArgs{
 			ContainerID: "   dummy\n ",
@@ -296,21 +297,21 @@ var _ = Describe("host-local Operations", func() {
 		const ifname string = "eth0"
 		const nspath string = "/some/where"
 
-		tmpDir, err := ioutil.TempDir("", "host_local_artifacts")
+		tmpDir, err := getTmpDir()
 		Expect(err).NotTo(HaveOccurred())
 		defer os.RemoveAll(tmpDir)
 
 		conf := fmt.Sprintf(`{
-	"cniVersion": "0.2.0",
-	"name": "mynet",
-	"type": "ipvlan",
-	"master": "foo0",
-	"ipam": {
-		"type": "host-local",
-		"subnet": "10.1.2.0/24",
-		"dataDir": "%s"
-	}
-}`, tmpDir)
+			"cniVersion": "0.2.0",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"subnet": "10.1.2.0/24",
+				"dataDir": "%s"
+			}
+		}`, tmpDir)
 
 		args := &skel.CmdArgs{
 			ContainerID: "testing",
@@ -331,28 +332,28 @@ var _ = Describe("host-local Operations", func() {
 		const ifname string = "eth0"
 		const nspath string = "/some/where"
 
-		tmpDir, err := ioutil.TempDir("", "host_local_artifacts")
+		tmpDir, err := getTmpDir()
 		Expect(err).NotTo(HaveOccurred())
 		defer os.RemoveAll(tmpDir)
 
 		conf := fmt.Sprintf(`{
-	"cniVersion": "0.3.1",
-	"name": "mynet",
-	"type": "ipvlan",
-	"master": "foo0",
-	"ipam": {
-		"type": "host-local",
-		"dataDir": "%s",
-		"ranges": [
-			[{ "subnet": "10.1.2.0/24" }]
-		]
-	},
-	"args": {
-		"cni": {
-			"ips": ["10.1.2.88"]
-		}
-	}
-}`, tmpDir)
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"dataDir": "%s",
+				"ranges": [
+					[{ "subnet": "10.1.2.0/24" }]
+				]
+			},
+			"args": {
+				"cni": {
+					"ips": ["10.1.2.88"]
+				}
+			}
+		}`, tmpDir)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -376,7 +377,7 @@ var _ = Describe("host-local Operations", func() {
 		const ifname string = "eth0"
 		const nspath string = "/some/where"
 
-		tmpDir, err := ioutil.TempDir("", "host_local_artifacts")
+		tmpDir, err := getTmpDir()
 		Expect(err).NotTo(HaveOccurred())
 		defer os.RemoveAll(tmpDir)
 
@@ -384,24 +385,24 @@ var _ = Describe("host-local Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		conf := fmt.Sprintf(`{
-	"cniVersion": "0.3.1",
-	"name": "mynet",
-	"type": "ipvlan",
-	"master": "foo0",
-	"ipam": {
-		"type": "host-local",
-		"dataDir": "%s",
-		"ranges": [
-			[{ "subnet": "10.1.2.0/24" }],
-			[{ "subnet": "10.1.3.0/24" }]
-		]
-	},
-	"args": {
-		"cni": {
-			"ips": ["10.1.2.88", "10.1.3.77"]
-		}
-	}
-}`, tmpDir)
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"dataDir": "%s",
+				"ranges": [
+					[{ "subnet": "10.1.2.0/24" }],
+					[{ "subnet": "10.1.3.0/24" }]
+				]
+			},
+			"args": {
+				"cni": {
+					"ips": ["10.1.2.88", "10.1.3.77"]
+				}
+			}
+		}`, tmpDir)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -426,7 +427,7 @@ var _ = Describe("host-local Operations", func() {
 		const ifname string = "eth0"
 		const nspath string = "/some/where"
 
-		tmpDir, err := ioutil.TempDir("", "host_local_artifacts")
+		tmpDir, err := getTmpDir()
 		Expect(err).NotTo(HaveOccurred())
 		defer os.RemoveAll(tmpDir)
 
@@ -434,24 +435,24 @@ var _ = Describe("host-local Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		conf := fmt.Sprintf(`{
-	"cniVersion": "0.3.1",
-	"name": "mynet",
-	"type": "ipvlan",
-	"master": "foo0",
-	"ipam": {
-		"type": "host-local",
-		"dataDir": "%s",
-		"ranges": [
-			[{"subnet":"172.16.1.0/24"}, { "subnet": "10.1.2.0/24" }],
-			[{ "subnet": "2001:db8:1::/24" }]
-		]
-	},
-	"args": {
-		"cni": {
-			"ips": ["10.1.2.88", "2001:db8:1::999"]
-		}
-	}
-}`, tmpDir)
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"dataDir": "%s",
+				"ranges": [
+					[{"subnet":"172.16.1.0/24"}, { "subnet": "10.1.2.0/24" }],
+					[{ "subnet": "2001:db8:1::/24" }]
+				]
+			},
+			"args": {
+				"cni": {
+					"ips": ["10.1.2.88", "2001:db8:1::999"]
+				}
+			}
+		}`, tmpDir)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -476,29 +477,29 @@ var _ = Describe("host-local Operations", func() {
 		const ifname string = "eth0"
 		const nspath string = "/some/where"
 
-		tmpDir, err := ioutil.TempDir("", "host_local_artifacts")
+		tmpDir, err := getTmpDir()
 		Expect(err).NotTo(HaveOccurred())
 		defer os.RemoveAll(tmpDir)
 
 		conf := fmt.Sprintf(`{
-	"cniVersion": "0.3.1",
-	"name": "mynet",
-	"type": "ipvlan",
-	"master": "foo0",
-	"ipam": {
-		"type": "host-local",
-		"dataDir": "%s",
-		"ranges": [
-			[{ "subnet": "10.1.2.0/24" }],
-			[{ "subnet": "10.1.3.0/24" }]
-		]
-	},
-	"args": {
-		"cni": {
-			"ips": ["10.1.2.88", "10.1.2.77"]
-		}
-	}
-}`, tmpDir)
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"dataDir": "%s",
+				"ranges": [
+					[{ "subnet": "10.1.2.0/24" }],
+					[{ "subnet": "10.1.3.0/24" }]
+				]
+			},
+			"args": {
+				"cni": {
+					"ips": ["10.1.2.88", "10.1.2.77"]
+				}
+			}
+		}`, tmpDir)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -516,6 +517,15 @@ var _ = Describe("host-local Operations", func() {
 		Expect(err.Error()).To(HavePrefix("failed to allocate all requested IPs: 10.1.2."))
 	})
 })
+
+func getTmpDir() (string, error) {
+	tmpDir, err := ioutil.TempDir("", "host_local_artifacts")
+	if err == nil {
+		tmpDir = filepath.ToSlash(tmpDir)
+	}
+
+	return tmpDir, err
+}
 
 func mustCIDR(s string) net.IPNet {
 	ip, n, err := net.ParseCIDR(s)
