@@ -25,6 +25,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"net"
 )
 
 var _ = Describe("Flannel", func() {
@@ -156,6 +157,77 @@ FLANNEL_IPMASQ=true
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Describe("windowsOutboundNat", func() {
+		Context("when not set by user", func() {
+			It("sets it by adding a policy", func() {
+				// given a subnet config that requests ipmasq
+				_, nw, _ := net.ParseCIDR("192.168.0.0/16")
+				_, sn, _ := net.ParseCIDR("192.168.10.0/24")
+				ipmasq := true
+				fenv := &subnetEnv{
+					nw:     nw,
+					sn:     sn,
+					ipmasq: &ipmasq,
+				}
+
+				// apply it
+				delegate := make(map[string]interface{})
+				updateOutboundNat(delegate, fenv)
+
+				Expect(delegate).Should(HaveKey("AdditionalArgs"))
+
+				addlArgs := (delegate["AdditionalArgs"]).([]interface{})
+				Expect(addlArgs).Should(HaveLen(1))
+
+				policy := addlArgs[0].(map[string]interface{})
+				Expect(policy).Should(HaveKey("Name"))
+				Expect(policy).Should(HaveKey("Value"))
+				Expect(policy["Name"]).Should(Equal("EndpointPolicy"))
+
+				value := policy["Value"].(map[string]interface{})
+				Expect(value).Should(HaveKey("Type"))
+				Expect(value).Should(HaveKey("ExceptionList"))
+				Expect(value["Type"]).Should(Equal("OutBoundNAT"))
+
+				exceptionList := value["ExceptionList"].([]interface{})
+				Expect(exceptionList).Should(HaveLen(1))
+				Expect(exceptionList[0].(string)).Should(Equal(nw.String()))
+			})
+		})
+
+		Context("when set by user", func() {
+			It("appends exceptions to the existing policy", func() {
+				// given a subnet config that requests ipmasq
+				_, nw, _ := net.ParseCIDR("192.168.0.0/16")
+				_, sn, _ := net.ParseCIDR("192.168.10.0/24")
+				ipmasq := true
+				fenv := &subnetEnv{
+					nw:     nw,
+					sn:     sn,
+					ipmasq: &ipmasq,
+				}
+
+				// first set it
+				delegate := make(map[string]interface{})
+				updateOutboundNat(delegate, fenv)
+
+				// then attempt to update it
+				_, nw2, _ := net.ParseCIDR("10.244.0.0/16")
+				fenv.nw = nw2
+				updateOutboundNat(delegate, fenv)
+
+				// but it stays the same!
+				addlArgs := (delegate["AdditionalArgs"]).([]interface{})
+				policy := addlArgs[0].(map[string]interface{})
+				value := policy["Value"].(map[string]interface{})
+				exceptionList := value["ExceptionList"].([]interface{})
+
+				Expect(exceptionList[0].(string)).Should(Equal(nw.String()))
+				Expect(exceptionList[1].(string)).Should(Equal(nw2.String()))
+			})
 		})
 	})
 
