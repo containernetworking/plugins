@@ -20,7 +20,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -31,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 
+	"encoding/binary"
 	"errors"
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
@@ -205,11 +205,24 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	}
 
-	if runtime.GOOS == "windows" {
-		return cmdAddWindows(args.ContainerID, n, fenv)
+	if n.CNIVersion != "" {
+		n.Delegate["cniVersion"] = n.CNIVersion
 	}
 
 	n.Delegate["name"] = n.Name
+
+	if runtime.GOOS == "windows" {
+		if err := prepareAddWindows(n, fenv); err != nil {
+			return err
+		}
+	} else {
+		prepareAddLinux(n, fenv)
+	}
+
+	return delegateAdd(args.ContainerID, n.DataDir, n.Delegate)
+}
+
+func prepareAddLinux(n *NetConf, fenv *subnetEnv) {
 
 	if !hasKey(n.Delegate, "type") {
 		n.Delegate["type"] = "bridge"
@@ -231,9 +244,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 			n.Delegate["isGateway"] = true
 		}
 	}
-	if n.CNIVersion != "" {
-		n.Delegate["cniVersion"] = n.CNIVersion
-	}
 
 	n.Delegate["ipam"] = map[string]interface{}{
 		"type":   "host-local",
@@ -244,24 +254,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 			},
 		},
 	}
-
-	return delegateAdd(args.ContainerID, n.DataDir, n.Delegate)
 }
 
-func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
-
-	n.Delegate["name"] = n.Name
+func prepareAddWindows(n *NetConf, fenv *subnetEnv) error {
 
 	if !hasKey(n.Delegate, "type") {
 		n.Delegate["type"] = "wincni.exe"
 	}
 
 	updateOutboundNat(n.Delegate, fenv)
-
-	n.Delegate["cniVersion"] = "0.2.0"
-	if n.CNIVersion != "" {
-		n.Delegate["cniVersion"] = n.CNIVersion
-	}
 
 	backendType := "host-gw"
 	if hasKey(n.Delegate, "backendType") {
@@ -307,7 +308,7 @@ func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
 		return fmt.Errorf("backendType [%v] is not supported on windows", backendType)
 	}
 
-	return delegateAdd(containerID, n.DataDir, n.Delegate)
+	return nil
 }
 
 // https://stackoverflow.com/questions/36166791/how-to-get-broadcast-address-of-ipv4-net-ipnet
