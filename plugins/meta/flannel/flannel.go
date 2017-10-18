@@ -20,6 +20,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -30,11 +31,11 @@ import (
 	"strconv"
 	"strings"
 
+	"errors"
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/version"
-	"math/big"
 )
 
 const (
@@ -262,17 +263,61 @@ func cmdAddWindows(containerID string, n *NetConf, fenv *subnetEnv) error {
 		n.Delegate["cniVersion"] = n.CNIVersion
 	}
 
-	// for now get Windows HNS to do IPAM
-	n.Delegate["ipam"] = map[string]interface{}{
-		"subnet": fenv.sn.String(),
-		"routes": []interface{}{
-			map[string]interface{}{
-				"GW": calcGatewayIPforWindows(fenv.sn),
+	backendType := "host-gw"
+	if hasKey(n.Delegate, "backendType") {
+		backendType = n.Delegate["backendType"].(string)
+	}
+
+	switch backendType {
+	case "host-gw":
+		// let HNS do IPAM for hostgw (L2 bridge) mode
+		gw := fenv.sn.IP.Mask(fenv.sn.Mask)
+		gw[len(gw)-1] += 2
+
+		n.Delegate["ipam"] = map[string]interface{}{
+			"subnet": fenv.sn.String(),
+			"routes": []interface{}{
+				map[string]interface{}{
+					"GW": gw.String(),
+				},
 			},
-		},
+		}
+	case "vxlan":
+		// for vxlan (Overlay) mode the gw is on the cluster CIDR
+		gw := fenv.nw.IP.Mask(fenv.nw.Mask)
+		gw[len(gw)-1] += 1
+
+		// but restrict allocation to the node's pod CIDR
+		rs := fenv.sn.IP.Mask(fenv.sn.Mask).To4()
+		rs[len(rs)-1] += 2
+		re, err := lastAddr(fenv.sn)
+		if err != nil {
+			return err
+		}
+		re[len(re)-1] -= 1
+		n.Delegate["ipam"] = map[string]interface{}{
+			"type":       "host-local",
+			"subnet":     fenv.nw.String(),
+			"rangeStart": rs.String(),
+			"rangeEnd":   re.String(),
+			"gateway":    gw.String(),
+		}
+
+	default:
+		return fmt.Errorf("backendType [%v] is not supported on windows", backendType)
 	}
 
 	return delegateAdd(containerID, n.DataDir, n.Delegate)
+}
+
+// https://stackoverflow.com/questions/36166791/how-to-get-broadcast-address-of-ipv4-net-ipnet
+func lastAddr(n *net.IPNet) (net.IP, error) { // works when the n is a prefix, otherwise...
+	if n.IP.To4() == nil {
+		return net.IP{}, errors.New("does not support IPv6 addresses.")
+	}
+	ip := make(net.IP, len(n.IP.To4()))
+	binary.BigEndian.PutUint32(ip, binary.BigEndian.Uint32(n.IP.To4())|^binary.BigEndian.Uint32(net.IP(n.Mask).To4()))
+	return ip, nil
 }
 
 func updateOutboundNat(delegate map[string]interface{}, fenv *subnetEnv) {
@@ -330,24 +375,6 @@ func updateOutboundNat(delegate map[string]interface{}, fenv *subnetEnv) {
 		},
 	}
 	delegate["AdditionalArgs"] = append(addlArgs, natEntry)
-}
-
-func calcGatewayIPforWindows(ipn *net.IPNet) net.IP {
-	// HNS currently requires x.x.x.2
-	nid := ipn.IP.Mask(ipn.Mask)
-	nid[len(nid)-1] += 2
-	return nid
-}
-
-func ipToInt(ip net.IP) *big.Int {
-	if v := ip.To4(); v != nil {
-		return big.NewInt(0).SetBytes(v)
-	}
-	return big.NewInt(0).SetBytes(ip.To16())
-}
-
-func intToIP(i *big.Int) net.IP {
-	return net.IP(i.Bytes())
 }
 
 func cmdDel(args *skel.CmdArgs) error {
