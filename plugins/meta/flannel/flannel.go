@@ -26,9 +26,12 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
+	"encoding/binary"
+	"errors"
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -202,7 +205,24 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	}
 
+	if n.CNIVersion != "" {
+		n.Delegate["cniVersion"] = n.CNIVersion
+	}
+
 	n.Delegate["name"] = n.Name
+
+	if runtime.GOOS == "windows" {
+		if err := prepareAddWindows(n, fenv); err != nil {
+			return err
+		}
+	} else {
+		prepareAddLinux(n, fenv)
+	}
+
+	return delegateAdd(args.ContainerID, n.DataDir, n.Delegate)
+}
+
+func prepareAddLinux(n *NetConf, fenv *subnetEnv) {
 
 	if !hasKey(n.Delegate, "type") {
 		n.Delegate["type"] = "bridge"
@@ -224,9 +244,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 			n.Delegate["isGateway"] = true
 		}
 	}
-	if n.CNIVersion != "" {
-		n.Delegate["cniVersion"] = n.CNIVersion
-	}
 
 	n.Delegate["ipam"] = map[string]interface{}{
 		"type":   "host-local",
@@ -237,8 +254,128 @@ func cmdAdd(args *skel.CmdArgs) error {
 			},
 		},
 	}
+}
 
-	return delegateAdd(args.ContainerID, n.DataDir, n.Delegate)
+func prepareAddWindows(n *NetConf, fenv *subnetEnv) error {
+
+	if !hasKey(n.Delegate, "type") {
+		n.Delegate["type"] = "wincni.exe"
+	}
+
+	updateOutboundNat(n.Delegate, fenv)
+
+	backendType := "host-gw"
+	if hasKey(n.Delegate, "backendType") {
+		backendType = n.Delegate["backendType"].(string)
+	}
+
+	switch backendType {
+	case "host-gw":
+		// let HNS do IPAM for hostgw (L2 bridge) mode
+		gw := fenv.sn.IP.Mask(fenv.sn.Mask)
+		gw[len(gw)-1] += 2
+
+		n.Delegate["ipam"] = map[string]interface{}{
+			"subnet": fenv.sn.String(),
+			"routes": []interface{}{
+				map[string]interface{}{
+					"GW": gw.String(),
+				},
+			},
+		}
+	case "vxlan":
+		// for vxlan (Overlay) mode the gw is on the cluster CIDR
+		gw := fenv.nw.IP.Mask(fenv.nw.Mask)
+		gw[len(gw)-1] += 1
+
+		// but restrict allocation to the node's pod CIDR
+		rs := fenv.sn.IP.Mask(fenv.sn.Mask).To4()
+		rs[len(rs)-1] += 2
+		re, err := lastAddr(fenv.sn)
+		if err != nil {
+			return err
+		}
+		re[len(re)-1] -= 1
+		n.Delegate["ipam"] = map[string]interface{}{
+			"type":       "host-local",
+			"subnet":     fenv.nw.String(),
+			"rangeStart": rs.String(),
+			"rangeEnd":   re.String(),
+			"gateway":    gw.String(),
+		}
+
+	default:
+		return fmt.Errorf("backendType [%v] is not supported on windows", backendType)
+	}
+
+	return nil
+}
+
+// https://stackoverflow.com/questions/36166791/how-to-get-broadcast-address-of-ipv4-net-ipnet
+func lastAddr(n *net.IPNet) (net.IP, error) { // works when the n is a prefix, otherwise...
+	if n.IP.To4() == nil {
+		return net.IP{}, errors.New("does not support IPv6 addresses.")
+	}
+	ip := make(net.IP, len(n.IP.To4()))
+	binary.BigEndian.PutUint32(ip, binary.BigEndian.Uint32(n.IP.To4())|^binary.BigEndian.Uint32(net.IP(n.Mask).To4()))
+	return ip, nil
+}
+
+func updateOutboundNat(delegate map[string]interface{}, fenv *subnetEnv) {
+	if !*fenv.ipmasq {
+		return
+	}
+
+	if !hasKey(delegate, "AdditionalArgs") {
+		delegate["AdditionalArgs"] = []interface{}{}
+	}
+	addlArgs := delegate["AdditionalArgs"].([]interface{})
+	nwToNat := fenv.nw.String()
+	for _, policy := range addlArgs {
+		pt := policy.(map[string]interface{})
+		if !hasKey(pt, "Value") {
+			continue
+		}
+
+		pv, ok := pt["Value"].(map[string]interface{})
+		if !ok || !hasKey(pv, "Type") {
+			continue
+		}
+
+		if !strings.EqualFold(pv["Type"].(string), "OutBoundNAT") {
+			continue
+		}
+
+		if !hasKey(pv, "ExceptionList") {
+			// add the exception since there weren't any
+			pv["ExceptionList"] = []interface{}{nwToNat}
+			return
+		}
+
+		nets := pv["ExceptionList"].([]interface{})
+		for _, net := range nets {
+			if net.(string) == nwToNat {
+				// found it - do nothing
+				return
+			}
+		}
+
+		// its not in the list of exceptions, add it and we're done
+		pv["ExceptionList"] = append(nets, nwToNat)
+		return
+	}
+
+	// didn't find the policy, add it
+	natEntry := map[string]interface{}{
+		"Name": "EndpointPolicy",
+		"Value": map[string]interface{}{
+			"Type": "OutBoundNAT",
+			"ExceptionList": []interface{}{
+				nwToNat,
+			},
+		},
+	}
+	delegate["AdditionalArgs"] = append(addlArgs, natEntry)
 }
 
 func cmdDel(args *skel.CmdArgs) error {

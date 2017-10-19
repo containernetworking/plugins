@@ -25,6 +25,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"net"
 )
 
 var _ = Describe("Flannel", func() {
@@ -156,6 +157,204 @@ FLANNEL_IPMASQ=true
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Describe("windowsOutboundNat", func() {
+		Context("when not set by user", func() {
+			It("sets it by adding a policy", func() {
+				// given a subnet config that requests ipmasq
+				_, nw, _ := net.ParseCIDR("192.168.0.0/16")
+				_, sn, _ := net.ParseCIDR("192.168.10.0/24")
+				ipmasq := true
+				fenv := &subnetEnv{
+					nw:     nw,
+					sn:     sn,
+					ipmasq: &ipmasq,
+				}
+
+				// apply it
+				delegate := make(map[string]interface{})
+				updateOutboundNat(delegate, fenv)
+
+				Expect(delegate).Should(HaveKey("AdditionalArgs"))
+
+				addlArgs := (delegate["AdditionalArgs"]).([]interface{})
+				Expect(addlArgs).Should(HaveLen(1))
+
+				policy := addlArgs[0].(map[string]interface{})
+				Expect(policy).Should(HaveKey("Name"))
+				Expect(policy).Should(HaveKey("Value"))
+				Expect(policy["Name"]).Should(Equal("EndpointPolicy"))
+
+				value := policy["Value"].(map[string]interface{})
+				Expect(value).Should(HaveKey("Type"))
+				Expect(value).Should(HaveKey("ExceptionList"))
+				Expect(value["Type"]).Should(Equal("OutBoundNAT"))
+
+				exceptionList := value["ExceptionList"].([]interface{})
+				Expect(exceptionList).Should(HaveLen(1))
+				Expect(exceptionList[0].(string)).Should(Equal(nw.String()))
+			})
+		})
+
+		Context("when set by user", func() {
+			It("appends exceptions to the existing policy", func() {
+				// given a subnet config that requests ipmasq
+				_, nw, _ := net.ParseCIDR("192.168.0.0/16")
+				_, sn, _ := net.ParseCIDR("192.168.10.0/24")
+				ipmasq := true
+				fenv := &subnetEnv{
+					nw:     nw,
+					sn:     sn,
+					ipmasq: &ipmasq,
+				}
+
+				// first set it
+				delegate := make(map[string]interface{})
+				updateOutboundNat(delegate, fenv)
+
+				// then attempt to update it
+				_, nw2, _ := net.ParseCIDR("10.244.0.0/16")
+				fenv.nw = nw2
+				updateOutboundNat(delegate, fenv)
+
+				// but it stays the same!
+				addlArgs := (delegate["AdditionalArgs"]).([]interface{})
+				policy := addlArgs[0].(map[string]interface{})
+				value := policy["Value"].(map[string]interface{})
+				exceptionList := value["ExceptionList"].([]interface{})
+
+				Expect(exceptionList[0].(string)).Should(Equal(nw.String()))
+				Expect(exceptionList[1].(string)).Should(Equal(nw2.String()))
+			})
+		})
+	})
+
+	Describe("windows delegate preparation", func() {
+		var (
+			fenv *subnetEnv
+			n    *NetConf
+		)
+		BeforeEach(func() {
+			_, nw, _ := net.ParseCIDR("192.168.0.0/16")
+			_, sn, _ := net.ParseCIDR("192.168.10.0/24")
+			ipmasq := true
+			fenv = &subnetEnv{
+				nw:     nw,
+				sn:     sn,
+				ipmasq: &ipmasq,
+			}
+		})
+		Context("when backendType is unknown", func() {
+			BeforeEach(func() {
+				cniConf := []byte(`
+{
+	"name": "someNetwork",
+	"type": "flannel",
+	"delegate": {
+		"backendType": "randomBackend"
+	}
+}
+				`)
+				n, _ = loadFlannelNetConf(cniConf)
+			})
+			It("fails with and error", func() {
+				err := prepareAddWindows(n, fenv)
+				Expect(err).Should(HaveOccurred())
+			})
+		})
+		Context("when backendType is empty", func() {
+			BeforeEach(func() {
+				cniConf := []byte(`
+{
+	"name": "someNetwork",
+	"type": "flannel",
+	"delegate": {
+	}
+}
+				`)
+				n, _ = loadFlannelNetConf(cniConf)
+			})
+			It("uses a default", func() {
+				err := prepareAddWindows(n, fenv)
+				Expect(err).ShouldNot(HaveOccurred())
+
+			})
+		})
+		Context("when backendType is host-gw", func() {
+			var (
+				err error
+			)
+			BeforeEach(func() {
+				cniConf := []byte(`
+{
+	"name": "someNetwork",
+	"type": "flannel",
+	"delegate": {
+		"backendType": "host-gw"
+	}
+}
+				`)
+				n, _ = loadFlannelNetConf(cniConf)
+				err = prepareAddWindows(n, fenv)
+			})
+			It("is able to prepare", func() {
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+			It("configures IPAM as HNS", func() {
+				Expect(hasKey(n.Delegate, "ipam")).Should(BeTrue())
+
+				ipam := n.Delegate["ipam"].(map[string]interface{})
+				Expect(hasKey(ipam, "type")).Should(BeFalse())
+				Expect(hasKey(ipam, "subnet")).Should(BeTrue())
+				Expect(ipam["subnet"].(string)).Should(Equal("192.168.10.0/24"))
+				Expect(hasKey(ipam, "routes")).Should(BeTrue())
+
+				routes := ipam["routes"].([]interface{})
+				Expect(routes).Should(HaveLen(1))
+				route := routes[0].(map[string]interface{})
+				Expect(hasKey(route, "GW")).Should(BeTrue())
+				Expect(route["GW"].(string)).Should(Equal("192.168.10.2"))
+			})
+		})
+		Context("when backendType is vxlan", func() {
+			var (
+				err error
+			)
+			BeforeEach(func() {
+				cniConf := []byte(`
+{
+	"name": "someNetwork",
+	"type": "flannel",
+	"delegate": {
+		"backendType": "vxlan",
+		"endpointMacPrefix": "0E-2A"
+	}
+}
+				`)
+				n, _ = loadFlannelNetConf(cniConf)
+				err = prepareAddWindows(n, fenv)
+			})
+			It("is able to prepare", func() {
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+			It("configures IPAM as host-local", func() {
+				Expect(hasKey(n.Delegate, "ipam")).Should(BeTrue())
+
+				ipam := n.Delegate["ipam"].(map[string]interface{})
+				Expect(hasKey(ipam, "type")).Should(BeTrue())
+				Expect(ipam["type"].(string)).Should(Equal("host-local"))
+				Expect(hasKey(ipam, "subnet")).Should(BeTrue())
+				Expect(ipam["subnet"].(string)).Should(Equal("192.168.0.0/16"))
+				Expect(hasKey(ipam, "rangeStart")).Should(BeTrue())
+				Expect(ipam["rangeStart"].(string)).Should(Equal("192.168.10.2"))
+				Expect(hasKey(ipam, "rangeEnd")).Should(BeTrue())
+				Expect(ipam["rangeEnd"].(string)).Should(Equal("192.168.10.254"))
+				Expect(hasKey(ipam, "gateway")).Should(BeTrue())
+				Expect(ipam["gateway"].(string)).Should(Equal("192.168.0.1"))
+				Expect(hasKey(ipam, "routes")).Should(BeFalse())
+			})
 		})
 	})
 
