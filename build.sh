@@ -24,7 +24,7 @@ for d in $PLUGINS; do
 	if [ -d "$d" ]; then
 		plugin="$(basename "$d")"
 		echo "  $plugin"
-		go build -o "${PWD}/bin/$plugin" -pkgdir "$GOPATH/pkg" "$@" "$REPO_PATH/$d" &
+		go build -o ${PWD}/bin/$plugin -i -pkgdir "$GOPATH/pkg" "$@" "$REPO_PATH/$d" &
 	fi
 done
 
