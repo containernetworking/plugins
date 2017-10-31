@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"strconv"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -32,9 +33,10 @@ import (
 
 type NetConf struct {
 	types.NetConf
-	Master string `json:"master"`
-	VlanId int    `json:"vlanId"`
-	MTU    int    `json:"mtu,omitempty"`
+	Master            string `json:"master"`
+	MasterInContainer bool   `json:"masterInContainer"`
+	VlanId            int    `json:"vlanId"`
+	MTU               int    `json:"mtu,omitempty"`
 }
 
 func init() {
@@ -60,10 +62,29 @@ func loadConf(bytes []byte) (*NetConf, string, error) {
 
 func createVlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interface, error) {
 	vlan := &current.Interface{}
+	var curNetns ns.NetNS
+	var m netlink.Link
+	var err error
 
-	m, err := netlink.LinkByName(conf.Master)
+	if conf.MasterInContainer != false {
+		curNetns = netns
+	} else {
+		curNetns, err = ns.GetCurrentNS()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get init netns: %v", err)
+		}
+	}
+
+	err = curNetns.Do(func(_ ns.NetNS) error {
+		m, err = netlink.LinkByName(conf.Master)
+		if err != nil {
+			return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
+		}
+		return nil
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
+		return nil, err
 	}
 
 	// due to kernel bug we have to create with tmpname or it might
@@ -87,8 +108,15 @@ func createVlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interfac
 		VlanId: conf.VlanId,
 	}
 
-	if err := netlink.LinkAdd(v); err != nil {
-		return nil, fmt.Errorf("failed to create vlan: %v", err)
+	err = curNetns.Do(func(_ ns.NetNS) error {
+		if err = netlink.LinkAdd(v); err != nil {
+			return fmt.Errorf("failed to create vlan: %v", err)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	err = netns.Do(func(_ ns.NetNS) error {
@@ -115,6 +143,10 @@ func createVlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interfac
 	return vlan, nil
 }
 
+func getIfName(ifname string, vlan int) string {
+	return ifname + "." + strconv.Itoa(vlan)
+}
+
 func cmdAdd(args *skel.CmdArgs) error {
 	n, cniVersion, err := loadConf(args.StdinData)
 	if err != nil {
@@ -126,6 +158,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
 	}
 	defer netns.Close()
+
+	if n.MasterInContainer != false {
+		args.IfName = getIfName(n.Master, n.VlanId)
+	}
 
 	vlanInterface, err := createVlan(n, args.IfName, netns)
 	if err != nil {
@@ -178,6 +214,10 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	if args.Netns == "" {
 		return nil
+	}
+
+	if n.MasterInContainer != false {
+		args.IfName = getIfName(n.Master, n.VlanId)
 	}
 
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
