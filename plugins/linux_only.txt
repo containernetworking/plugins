@@ -1,0 +1,11 @@
+plugins/host-device
+plugins/ipam/dhcp
+plugins/ipam/host-local
+plugins/main/bridge
+plugins/main/ipvlan
+plugins/main/loopback
+plugins/main/macvlan
+plugins/main/ptp
+plugins/main/vlan
+plugins/meta/portmap
+plugins/meta/tuning

@@ -37,7 +37,7 @@ var _ = Describe("Echosvr", func() {
 	})
 
 	AfterEach(func() {
-		session.Terminate().Wait()
+		session.Kill().Wait()
 	})
 
 	It("starts and doesn't terminate immediately", func() {
