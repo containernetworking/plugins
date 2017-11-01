@@ -138,11 +138,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	ipvlanInterface, err := createIpvlan(n, args.IfName, netns)
-	if err != nil {
-		return err
-	}
-
 	// run the IPAM plugin and get back the config to apply
 	r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
 	if err != nil {
@@ -157,6 +152,21 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if len(result.IPs) == 0 {
 		return errors.New("IPAM plugin returned missing IP config")
 	}
+
+	if n.Master == "ipam" {
+		// Use an IPAM supplied master interface
+		if len(result.Interfaces) == 1 && result.Interfaces[0].Name != "" {
+			n.Master = result.Interfaces[0].Name
+		} else {
+			return errors.New("IPAM plugin returned missing master interface")
+		}
+	}
+
+	ipvlanInterface, err := createIpvlan(n, args.IfName, netns)
+	if err != nil {
+		return err
+	}
+
 	for _, ipc := range result.IPs {
 		// All addresses belong to the ipvlan interface
 		ipc.Interface = current.Int(0)

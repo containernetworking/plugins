@@ -27,7 +27,7 @@ Because all ipvlan interfaces share the MAC address with the host interface, DHC
 
 * `name` (string, required): the name of the network.
 * `type` (string, required): "ipvlan".
-* `master` (string, required): name of the host interface to enslave.
+* `master` (string, required): name of the host interface to enslave or "ipam" to enslave an interface returned by ipam.
 * `mode` (string, optional): one of "l2", "l3". Defaults to "l2".
 * `mtu` (integer, optional): explicitly set MTU to the specified value. Defaults to the value chosen by the kernel.
 * `ipam` (dictionary, required): IPAM configuration to be used for this network.
@@ -38,3 +38,4 @@ Because all ipvlan interfaces share the MAC address with the host interface, DHC
 Therefore the container will not be able to reach the host via `ipvlan` interface.
 Be sure to also have container join a network that provides connectivity to the host (e.g. `ptp`).
 * A single master interface can not be enslaved by both `macvlan` and `ipvlan`.
+* For IP allocation schemes that cannot be interface agnostic, master can be set to `ipam`. In this configuration, the ipam plugin is required to return a single interface name for the ipvlan plugin to enslave.

@@ -224,4 +224,40 @@ var _ = Describe("ipvlan Operations", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	It("errors if master should originate from ipam but an ipam interface is not returned", func() {
+		const IFNAME = "ipvl0"
+
+		conf := `{
+    "cniVersion": "0.3.1",
+    "name": "mynet",
+    "type": "ipvlan",
+    "master": "ipam",
+    "ipam": {
+        "type": "host-local",
+        "subnet": "10.1.2.0/24"
+    }
+}`
+		targetNs, err := ns.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+		defer targetNs.Close()
+
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNs.Path(),
+			IfName:      IFNAME,
+			StdinData:   []byte(conf),
+		}
+
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			_, _, err := testutils.CmdAddWithResult(targetNs.Path(), IFNAME, []byte(conf), func() error {
+				return cmdAdd(args)
+			})
+			Expect(err.Error()).To(Equal("IPAM plugin returned missing master interface"))
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
 })
