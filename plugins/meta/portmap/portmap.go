@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"sort"
 	"strconv"
 
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
@@ -24,33 +25,26 @@ import (
 )
 
 // This creates the chains to be added to iptables. The basic structure is
-// a bit complex for efficiencies sake. We create 2 chains: a summary chain
+// a bit complex for efficiency's sake. We create 2 chains: a summary chain
 // that is shared between invocations, and an invocation (container)-specific
 // chain. This minimizes the number of operations on the top level, but allows
 // for easy cleanup.
 //
-// We also create DNAT chains to rewrite destinations, and SNAT chains so that
-// connections to localhost work.
-//
 // The basic setup (all operations are on the nat table) is:
 //
 // DNAT case (rewrite destination IP and port):
-// PREROUTING, OUTPUT: --dst-type local -j CNI-HOSTPORT_DNAT
-// CNI-HOSTPORT-DNAT: -j CNI-DN-abcd123
+// PREROUTING, OUTPUT: --dst-type local -j CNI-HOSTPORT-DNAT
+// CNI-HOSTPORT-DNAT: --destination-ports 8080,8081 -j CNI-DN-abcd123
 // CNI-DN-abcd123: -p tcp --dport 8080 -j DNAT --to-destination 192.0.2.33:80
 // CNI-DN-abcd123: -p tcp --dport 8081 -j DNAT ...
-//
-// SNAT case (rewrite source IP from localhost after dnat):
-// POSTROUTING: -s 127.0.0.1 ! -d 127.0.0.1 -j CNI-HOSTPORT-SNAT
-// CNI-HOSTPORT-SNAT: -j CNI-SN-abcd123
-// CNI-SN-abcd123: -p tcp -s 127.0.0.1 -d 192.0.2.33 --dport 80 -j MASQUERADE
-// CNI-SN-abcd123: -p tcp -s 127.0.0.1 -d 192.0.2.33 --dport 90 -j MASQUERADE
 
 // The names of the top-level summary chains.
 // These should never be changed, or else upgrading will require manual
 // intervention.
 const TopLevelDNATChainName = "CNI-HOSTPORT-DNAT"
-const TopLevelSNATChainName = "CNI-HOSTPORT-SNAT"
+const SetMarkChainName = "CNI-HOSTPORT-SETMARK"
+const MarkMasqChainName = "CNI-HOSTPORT-MASQ"
+const OldTopLevelSNATChainName = "CNI-HOSTPORT-SNAT"
 
 // forwardPorts establishes port forwarding to a given container IP.
 // containerIP can be either v4 or v6.
@@ -59,48 +53,35 @@ func forwardPorts(config *PortMapConf, containerIP net.IP) error {
 
 	var ipt *iptables.IPTables
 	var err error
-	var conditions *[]string
 
 	if isV6 {
 		ipt, err = iptables.NewWithProtocol(iptables.ProtocolIPv6)
-		conditions = config.ConditionsV6
 	} else {
 		ipt, err = iptables.NewWithProtocol(iptables.ProtocolIPv4)
-		conditions = config.ConditionsV4
 	}
 	if err != nil {
 		return fmt.Errorf("failed to open iptables: %v", err)
 	}
 
-	toplevelDnatChain := genToplevelDnatChain()
-	if err := toplevelDnatChain.setup(ipt, nil); err != nil {
-		return fmt.Errorf("failed to create top-level DNAT chain: %v", err)
-	}
+	// Enable masquerading for traffic as necessary.
+	// The DNAT chain sets a mark bit for traffic that needs masq:
+	// - connections from localhost
+	// - hairpin traffic back to the container
+	// Idempotently create the rule that masquerades traffic with this mark.
+	// Need to do this first; the DNAT rules reference these chains
+	if *config.SNAT {
+		if config.ExternalSetMarkChain == nil {
+			setMarkChain := genSetMarkChain(*config.MarkMasqBit)
+			if err := setMarkChain.setup(ipt); err != nil {
+				return fmt.Errorf("unable to create chain %s: %v", setMarkChain.name, err)
+			}
 
-	dnatChain := genDnatChain(config.Name, config.ContainerID, conditions)
-	_ = dnatChain.teardown(ipt) // If we somehow collide on this container ID + network, cleanup
-
-	dnatRules := dnatRules(config.RuntimeConfig.PortMaps, containerIP)
-	if err := dnatChain.setup(ipt, dnatRules); err != nil {
-		return fmt.Errorf("unable to setup DNAT: %v", err)
-	}
-
-	// Enable SNAT for connections to localhost.
-	// This won't work for ipv6, since the kernel doesn't have the equvalent
-	// route_localnet sysctl.
-	if *config.SNAT && !isV6 {
-		toplevelSnatChain := genToplevelSnatChain(isV6)
-		if err := toplevelSnatChain.setup(ipt, nil); err != nil {
-			return fmt.Errorf("failed to create top-level SNAT chain: %v", err)
+			masqChain := genMarkMasqChain(*config.MarkMasqBit)
+			if err := masqChain.setup(ipt); err != nil {
+				return fmt.Errorf("unable to create chain %s: %v", setMarkChain.name, err)
+			}
 		}
 
-		snatChain := genSnatChain(config.Name, config.ContainerID)
-		_ = snatChain.teardown(ipt)
-
-		snatRules := snatRules(config.RuntimeConfig.PortMaps, containerIP)
-		if err := snatChain.setup(ipt, snatRules); err != nil {
-			return fmt.Errorf("unable to setup SNAT: %v", err)
-		}
 		if !isV6 {
 			// Set the route_localnet bit on the host interface, so that
 			// 127/8 can cross a routing boundary.
@@ -111,6 +92,20 @@ func forwardPorts(config *PortMapConf, containerIP net.IP) error {
 				}
 			}
 		}
+	}
+
+	// Generate the DNAT (actual port forwarding) rules
+	toplevelDnatChain := genToplevelDnatChain()
+	if err := toplevelDnatChain.setup(ipt); err != nil {
+		return fmt.Errorf("failed to create top-level DNAT chain: %v", err)
+	}
+
+	dnatChain := genDnatChain(config.Name, config.ContainerID)
+	// First, idempotently tear down this chain in case there was some
+	// sort of collision or bad state.
+	fillDnatRules(&dnatChain, config, containerIP)
+	if err := dnatChain.setup(ipt); err != nil {
+		return fmt.Errorf("unable to setup DNAT: %v", err)
 	}
 
 	return nil
@@ -124,106 +119,153 @@ func genToplevelDnatChain() chain {
 	return chain{
 		table: "nat",
 		name:  TopLevelDNATChainName,
-		entryRule: []string{
+		entryRules: [][]string{{
 			"-m", "addrtype",
 			"--dst-type", "LOCAL",
-		},
+		}},
 		entryChains: []string{"PREROUTING", "OUTPUT"},
 	}
 }
 
 // genDnatChain creates the per-container chain.
 // Conditions are any static entry conditions for the chain.
-func genDnatChain(netName, containerID string, conditions *[]string) chain {
-	name := formatChainName("DN-", netName, containerID)
-	comment := fmt.Sprintf(`dnat name: "%s" id: "%s"`, netName, containerID)
-
-	ch := chain{
-		table: "nat",
-		name:  name,
-		entryRule: []string{
-			"-m", "comment",
-			"--comment", comment,
-		},
+func genDnatChain(netName, containerID string) chain {
+	return chain{
+		table:       "nat",
+		name:        formatChainName("DN-", netName, containerID),
 		entryChains: []string{TopLevelDNATChainName},
 	}
-	if conditions != nil && len(*conditions) != 0 {
-		ch.entryRule = append(ch.entryRule, *conditions...)
-	}
-
-	return ch
 }
 
 // dnatRules generates the destination NAT rules, one per port, to direct
 // traffic from hostip:hostport to podip:podport
-func dnatRules(entries []PortMapEntry, containerIP net.IP) [][]string {
-	out := make([][]string, 0, len(entries))
+func fillDnatRules(c *chain, config *PortMapConf, containerIP net.IP) {
+	isV6 := (containerIP.To4() == nil)
+	comment := trimComment(fmt.Sprintf(`dnat name: "%s" id: "%s"`, config.Name, config.ContainerID))
+	entries := config.RuntimeConfig.PortMaps
+	setMarkChainName := SetMarkChainName
+	if config.ExternalSetMarkChain != nil {
+		setMarkChainName = *config.ExternalSetMarkChain
+	}
+
+	//Generate the dnat entry rules. We'll use multiport, but it ony accepts
+	// up to 15 rules, so partition the list if needed.
+	// Do it in a stable order for testing
+	protoPorts := groupByProto(entries)
+	protos := []string{}
+	for proto := range protoPorts {
+		protos = append(protos, proto)
+	}
+	sort.Strings(protos)
+	for _, proto := range protos {
+		for _, portSpec := range splitPortList(protoPorts[proto]) {
+			r := []string{
+				"-m", "comment",
+				"--comment", comment,
+				"-m", "multiport",
+				"-p", proto,
+				"--destination-ports", portSpec,
+			}
+
+			if isV6 && config.ConditionsV6 != nil && len(*config.ConditionsV6) > 0 {
+				r = append(r, *config.ConditionsV6...)
+			} else if !isV6 && config.ConditionsV4 != nil && len(*config.ConditionsV4) > 0 {
+				r = append(r, *config.ConditionsV4...)
+			}
+			c.entryRules = append(c.entryRules, r)
+		}
+	}
+
+	// For every entry, generate 3 rules:
+	// - mark hairpin for masq
+	// - mark localhost for masq (for v4)
+	// - do dnat
+	// the ordering is important here; the mark rules must be first.
+	c.rules = make([][]string, 0, 3*len(entries))
 	for _, entry := range entries {
-		rule := []string{
+		ruleBase := []string{
 			"-p", entry.Protocol,
 			"--dport", strconv.Itoa(entry.HostPort)}
-
 		if entry.HostIP != "" {
-			rule = append(rule,
+			ruleBase = append(ruleBase,
 				"-d", entry.HostIP)
 		}
 
-		rule = append(rule,
+		// Add mark-to-masquerade rules for hairpin and localhost
+		if *config.SNAT {
+			// hairpin
+			hpRule := make([]string, len(ruleBase), len(ruleBase)+4)
+			copy(hpRule, ruleBase)
+
+			hpRule = append(hpRule,
+				"-s", containerIP.String(),
+				"-j", setMarkChainName,
+			)
+			c.rules = append(c.rules, hpRule)
+
+			if !isV6 {
+				// localhost
+				localRule := make([]string, len(ruleBase), len(ruleBase)+4)
+				copy(localRule, ruleBase)
+
+				localRule = append(localRule,
+					"-s", "127.0.0.1",
+					"-j", setMarkChainName,
+				)
+				c.rules = append(c.rules, localRule)
+			}
+		}
+
+		// The actual dnat rule
+		dnatRule := make([]string, len(ruleBase), len(ruleBase)+4)
+		copy(dnatRule, ruleBase)
+		dnatRule = append(dnatRule,
 			"-j", "DNAT",
-			"--to-destination", fmtIpPort(containerIP, entry.ContainerPort))
-
-		out = append(out, rule)
-	}
-	return out
-}
-
-// genToplevelSnatChain creates the top-level summary snat chain.
-// IMPORTANT: do not change this, or else upgrading plugins will require
-// manual intervention
-func genToplevelSnatChain(isV6 bool) chain {
-	return chain{
-		table: "nat",
-		name:  TopLevelSNATChainName,
-		entryRule: []string{
-			"-s", localhostIP(isV6),
-			"!", "-d", localhostIP(isV6),
-		},
-		entryChains: []string{"POSTROUTING"},
+			"--to-destination", fmtIpPort(containerIP, entry.ContainerPort),
+		)
+		c.rules = append(c.rules, dnatRule)
 	}
 }
 
-// genSnatChain creates the snat (localhost) chain for this container.
-func genSnatChain(netName, containerID string) chain {
-	name := formatChainName("SN-", netName, containerID)
-	comment := fmt.Sprintf(`snat name: "%s" id: "%s"`, netName, containerID)
-
-	return chain{
+// genSetMarkChain creates the SETMARK chain - the chain that sets the
+// "to-be-masqueraded" mark and returns.
+// Chains are idempotent, so we'll always create this.
+func genSetMarkChain(markBit int) chain {
+	markValue := 1 << uint(markBit)
+	markDef := fmt.Sprintf("%#x/%#x", markValue, markValue)
+	ch := chain{
 		table: "nat",
-		name:  name,
-		entryRule: []string{
+		name:  SetMarkChainName,
+		rules: [][]string{{
 			"-m", "comment",
-			"--comment", comment,
-		},
-		entryChains: []string{TopLevelSNATChainName},
+			"--comment", "CNI portfwd masquerade mark",
+			"-j", "MARK",
+			"--set-xmark", markDef,
+		}},
 	}
+	return ch
 }
 
-// snatRules sets up masquerading for connections to localhost:hostport,
-// rewriting the source so that returning packets are correct.
-func snatRules(entries []PortMapEntry, containerIP net.IP) [][]string {
-	isV6 := (containerIP.To4() == nil)
-
-	out := make([][]string, 0, len(entries))
-	for _, entry := range entries {
-		out = append(out, []string{
-			"-p", entry.Protocol,
-			"-s", localhostIP(isV6),
-			"-d", containerIP.String(),
-			"--dport", strconv.Itoa(entry.ContainerPort),
+// genMarkMasqChain creates the chain that masquerades all packets marked
+// in the SETMARK chain
+func genMarkMasqChain(markBit int) chain {
+	markValue := 1 << uint(markBit)
+	markDef := fmt.Sprintf("%#x/%#x", markValue, markValue)
+	ch := chain{
+		table:       "nat",
+		name:        MarkMasqChainName,
+		entryChains: []string{"POSTROUTING"},
+		entryRules: [][]string{{
+			"-m", "comment",
+			"--comment", "CNI portfwd requiring masquerade",
+		}},
+		rules: [][]string{{
+			"-m", "mark",
+			"--mark", markDef,
 			"-j", "MASQUERADE",
-		})
+		}},
 	}
-	return out
+	return ch
 }
 
 // enableLocalnetRouting tells the kernel not to treat 127/8 as a martian,
@@ -232,6 +274,18 @@ func enableLocalnetRouting(ifName string) error {
 	routeLocalnetPath := "net.ipv4.conf." + ifName + ".route_localnet"
 	_, err := sysctl.Sysctl(routeLocalnetPath, "1")
 	return err
+}
+
+// genOldSnatChain is no longer used, but used to be created. We'll try and
+// tear it down in case the plugin version changed between ADD and DEL
+func genOldSnatChain(netName, containerID string) chain {
+	name := formatChainName("SN-", netName, containerID)
+
+	return chain{
+		table:       "nat",
+		name:        name,
+		entryChains: []string{OldTopLevelSNATChainName},
+	}
 }
 
 // unforwardPorts deletes any iptables rules created by this plugin.
@@ -245,8 +299,10 @@ func enableLocalnetRouting(ifName string) error {
 // So, we first check that iptables is "generally OK" by doing a check. If
 // not, we ignore the error, unless neither v4 nor v6 are OK.
 func unforwardPorts(config *PortMapConf) error {
-	dnatChain := genDnatChain(config.Name, config.ContainerID, nil)
-	snatChain := genSnatChain(config.Name, config.ContainerID)
+	dnatChain := genDnatChain(config.Name, config.ContainerID)
+
+	// Might be lying around from old versions
+	oldSnatChain := genOldSnatChain(config.Name, config.ContainerID)
 
 	ip4t := maybeGetIptables(false)
 	ip6t := maybeGetIptables(true)
@@ -258,16 +314,14 @@ func unforwardPorts(config *PortMapConf) error {
 		if err := dnatChain.teardown(ip4t); err != nil {
 			return fmt.Errorf("could not teardown ipv4 dnat: %v", err)
 		}
-		if err := snatChain.teardown(ip4t); err != nil {
-			return fmt.Errorf("could not teardown ipv4 snat: %v", err)
-		}
+		oldSnatChain.teardown(ip4t)
 	}
 
 	if ip6t != nil {
 		if err := dnatChain.teardown(ip6t); err != nil {
 			return fmt.Errorf("could not teardown ipv6 dnat: %v", err)
 		}
-		// no SNAT teardown because it doesn't work for v6
+		oldSnatChain.teardown(ip6t)
 	}
 	return nil
 }

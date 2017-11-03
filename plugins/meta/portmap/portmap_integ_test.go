@@ -15,12 +15,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"time"
+	"strconv"
 
 	"github.com/containernetworking/cni/libcni"
 	"github.com/containernetworking/cni/pkg/types/current"
@@ -124,12 +126,19 @@ var _ = Describe("portmap integration tests", func() {
 		// we'll also manually check the iptables chains
 		ipt, err := iptables.NewWithProtocol(iptables.ProtocolIPv4)
 		Expect(err).NotTo(HaveOccurred())
-		dnatChainName := genDnatChain("cni-portmap-unit-test", runtimeConfig.ContainerID, nil).name
+		dnatChainName := genDnatChain("cni-portmap-unit-test", runtimeConfig.ContainerID).name
 
 		// Create the network
 		resI, err := cniConf.AddNetworkList(configList, &runtimeConfig)
 		Expect(err).NotTo(HaveOccurred())
 		defer deleteNetwork()
+
+		// Undo Docker's forwarding policy
+		cmd := exec.Command("iptables", "-t", "filter",
+			"-P", "FORWARD", "ACCEPT")
+		cmd.Stderr = GinkgoWriter
+		err = cmd.Run()
+		Expect(err).NotTo(HaveOccurred())
 
 		// Check the chain exists
 		_, err = ipt.List("nat", dnatChainName)
@@ -155,13 +164,16 @@ var _ = Describe("portmap integration tests", func() {
 			hostIP, hostPort, contIP, containerPort)
 
 		// Sanity check: verify that the container is reachable directly
-		contOK := testEchoServer(fmt.Sprintf("%s:%d", contIP.String(), containerPort))
+		contOK := testEchoServer(contIP.String(), containerPort, "")
 
 		// Verify that a connection to the forwarded port works
-		dnatOK := testEchoServer(fmt.Sprintf("%s:%d", hostIP, hostPort))
+		dnatOK := testEchoServer(hostIP, hostPort, "")
 
 		// Verify that a connection to localhost works
-		snatOK := testEchoServer(fmt.Sprintf("%s:%d", "127.0.0.1", hostPort))
+		snatOK := testEchoServer("127.0.0.1", hostPort, "")
+
+		// verify that hairpin works
+		hairpinOK := testEchoServer(hostIP, hostPort, targetNS.Path())
 
 		// Cleanup
 		session.Terminate()
@@ -182,6 +194,9 @@ var _ = Describe("portmap integration tests", func() {
 		if !snatOK {
 			Fail("connection to 127.0.0.1 was not forwarded")
 		}
+		if !hairpinOK {
+			Fail("Hairpin connection failed")
+		}
 
 		close(done)
 
@@ -189,40 +204,33 @@ var _ = Describe("portmap integration tests", func() {
 })
 
 // testEchoServer returns true if we found an echo server on the port
-func testEchoServer(address string) bool {
-	fmt.Fprintln(GinkgoWriter, "dialing", address)
-	conn, err := net.Dial("tcp", address)
-	if err != nil {
-		fmt.Fprintln(GinkgoWriter, "connection to", address, "failed:", err)
-		return false
-	}
-	defer conn.Close()
-
-	conn.SetDeadline(time.Now().Add(TIMEOUT * time.Second))
-	fmt.Fprintln(GinkgoWriter, "connected to", address)
-
+func testEchoServer(address string, port int, netns string) bool {
 	message := "Aliquid melius quam pessimum optimum non est."
-	_, err = fmt.Fprint(conn, message)
+
+	bin, err := exec.LookPath("nc")
+	Expect(err).NotTo(HaveOccurred())
+	var cmd *exec.Cmd
+	if netns != "" {
+		netns = filepath.Base(netns)
+		cmd = exec.Command("ip", "netns", "exec", netns, bin, "-v", address, strconv.Itoa(port))
+	} else {
+		cmd = exec.Command("nc", address, strconv.Itoa(port))
+	}
+	cmd.Stdin = bytes.NewBufferString(message)
+	cmd.Stderr = GinkgoWriter
+	out, err := cmd.Output()
 	if err != nil {
-		fmt.Fprintln(GinkgoWriter, "sending message to", address, " failed:", err)
+		fmt.Fprintln(GinkgoWriter, "got non-zero exit from ", cmd.Args)
 		return false
 	}
 
-	conn.SetDeadline(time.Now().Add(TIMEOUT * time.Second))
-	fmt.Fprintln(GinkgoWriter, "reading...")
-	response := make([]byte, len(message))
-	_, err = conn.Read(response)
-	if err != nil {
-		fmt.Fprintln(GinkgoWriter, "receiving message from", address, " failed:", err)
+	if string(out) != message {
+		fmt.Fprintln(GinkgoWriter, "returned message didn't match?")
+		fmt.Fprintln(GinkgoWriter, string(out))
 		return false
 	}
 
-	fmt.Fprintln(GinkgoWriter, "read...")
-	if string(response) == message {
-		return true
-	}
-	fmt.Fprintln(GinkgoWriter, "returned message didn't match?")
-	return false
+	return true
 }
 
 func getLocalIP() string {

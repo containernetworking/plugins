@@ -15,6 +15,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 
 	. "github.com/onsi/ginkgo"
@@ -24,13 +25,6 @@ import (
 var _ = Describe("portmapping configuration", func() {
 	netName := "testNetName"
 	containerID := "icee6giejonei6sohng6ahngee7laquohquee9shiGo7fohferakah3Feiyoolu2pei7ciPhoh7shaoX6vai3vuf0ahfaeng8yohb9ceu0daez5hashee8ooYai5wa3y"
-
-	mappings := []PortMapEntry{
-		{80, 90, "tcp", ""},
-		{1000, 2000, "udp", ""},
-	}
-	ipv4addr := net.ParseIP("192.2.0.1")
-	ipv6addr := net.ParseIP("2001:db8::1")
 
 	Context("config parsing", func() {
 		It("Correctly parses an ADD config", func() {
@@ -156,18 +150,137 @@ var _ = Describe("portmapping configuration", func() {
 
 	Describe("Generating chains", func() {
 		Context("for DNAT", func() {
-			It("generates a correct container chain", func() {
-				ch := genDnatChain(netName, containerID, &[]string{"-m", "hello"})
+			It("generates a correct standard container chain", func() {
+				ch := genDnatChain(netName, containerID)
 
 				Expect(ch).To(Equal(chain{
-					table: "nat",
-					name:  "CNI-DN-bfd599665540dd91d5d28",
-					entryRule: []string{
-						"-m", "comment",
-						"--comment", `dnat name: "testNetName" id: "` + containerID + `"`,
-						"-m", "hello",
-					},
+					table:       "nat",
+					name:        "CNI-DN-bfd599665540dd91d5d28",
 					entryChains: []string{TopLevelDNATChainName},
+				}))
+				configBytes := []byte(`{
+	"name": "test",
+	"type": "portmap",
+	"cniVersion": "0.3.1",
+	"runtimeConfig": {
+		"portMappings": [
+			{ "hostPort": 8080, "containerPort": 80, "protocol": "tcp"},
+			{ "hostPort": 8081, "containerPort": 80, "protocol": "tcp"},
+			{ "hostPort": 8080, "containerPort": 81, "protocol": "udp"},
+			{ "hostPort": 8082, "containerPort": 82, "protocol": "udp"}
+		]
+	},
+	"snat": true,
+	"conditionsV4": ["a", "b"],
+	"conditionsV6": ["c", "d"]
+}`)
+
+				conf, err := parseConfig(configBytes, "foo")
+				Expect(err).NotTo(HaveOccurred())
+				conf.ContainerID = containerID
+
+				ch = genDnatChain(conf.Name, containerID)
+				Expect(ch).To(Equal(chain{
+					table:       "nat",
+					name:        "CNI-DN-67e92b96e692a494b6b85",
+					entryChains: []string{"CNI-HOSTPORT-DNAT"},
+				}))
+
+				fillDnatRules(&ch, conf, net.ParseIP("10.0.0.2"))
+
+				Expect(ch.entryRules).To(Equal([][]string{
+					{"-m", "comment", "--comment",
+						fmt.Sprintf("dnat name: \"test\" id: \"%s\"", containerID),
+						"-m", "multiport",
+						"-p", "tcp",
+						"--destination-ports", "8080,8081",
+						"a", "b"},
+					{"-m", "comment", "--comment",
+						fmt.Sprintf("dnat name: \"test\" id: \"%s\"", containerID),
+						"-m", "multiport",
+						"-p", "udp",
+						"--destination-ports", "8080,8082",
+						"a", "b"},
+				}))
+
+				Expect(ch.rules).To(Equal([][]string{
+					{"-p", "tcp", "--dport", "8080", "-s", "10.0.0.2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "tcp", "--dport", "8080", "-s", "127.0.0.1", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "tcp", "--dport", "8080", "-j", "DNAT", "--to-destination", "10.0.0.2:80"},
+					{"-p", "tcp", "--dport", "8081", "-s", "10.0.0.2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "tcp", "--dport", "8081", "-s", "127.0.0.1", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "tcp", "--dport", "8081", "-j", "DNAT", "--to-destination", "10.0.0.2:80"},
+					{"-p", "udp", "--dport", "8080", "-s", "10.0.0.2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "udp", "--dport", "8080", "-s", "127.0.0.1", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "udp", "--dport", "8080", "-j", "DNAT", "--to-destination", "10.0.0.2:81"},
+					{"-p", "udp", "--dport", "8082", "-s", "10.0.0.2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "udp", "--dport", "8082", "-s", "127.0.0.1", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "udp", "--dport", "8082", "-j", "DNAT", "--to-destination", "10.0.0.2:82"},
+				}))
+
+				ch.rules = nil
+				ch.entryRules = nil
+
+				fillDnatRules(&ch, conf, net.ParseIP("2001:db8::2"))
+
+				Expect(ch.rules).To(Equal([][]string{
+					{"-p", "tcp", "--dport", "8080", "-s", "2001:db8::2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "tcp", "--dport", "8080", "-j", "DNAT", "--to-destination", "[2001:db8::2]:80"},
+					{"-p", "tcp", "--dport", "8081", "-s", "2001:db8::2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "tcp", "--dport", "8081", "-j", "DNAT", "--to-destination", "[2001:db8::2]:80"},
+					{"-p", "udp", "--dport", "8080", "-s", "2001:db8::2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "udp", "--dport", "8080", "-j", "DNAT", "--to-destination", "[2001:db8::2]:81"},
+					{"-p", "udp", "--dport", "8082", "-s", "2001:db8::2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "udp", "--dport", "8082", "-j", "DNAT", "--to-destination", "[2001:db8::2]:82"},
+				}))
+
+				// Disable snat, generate rules
+				ch.rules = nil
+				ch.entryRules = nil
+				fvar := false
+				conf.SNAT = &fvar
+
+				fillDnatRules(&ch, conf, net.ParseIP("10.0.0.2"))
+				Expect(ch.rules).To(Equal([][]string{
+					{"-p", "tcp", "--dport", "8080", "-j", "DNAT", "--to-destination", "10.0.0.2:80"},
+					{"-p", "tcp", "--dport", "8081", "-j", "DNAT", "--to-destination", "10.0.0.2:80"},
+					{"-p", "udp", "--dport", "8080", "-j", "DNAT", "--to-destination", "10.0.0.2:81"},
+					{"-p", "udp", "--dport", "8082", "-j", "DNAT", "--to-destination", "10.0.0.2:82"},
+				}))
+			})
+
+			It("generates a correct chain with external mark", func() {
+				ch := genDnatChain(netName, containerID)
+
+				Expect(ch).To(Equal(chain{
+					table:       "nat",
+					name:        "CNI-DN-bfd599665540dd91d5d28",
+					entryChains: []string{TopLevelDNATChainName},
+				}))
+				configBytes := []byte(`{
+	"name": "test",
+	"type": "portmap",
+	"cniVersion": "0.3.1",
+	"runtimeConfig": {
+		"portMappings": [
+			{ "hostPort": 8080, "containerPort": 80, "protocol": "tcp"}
+		]
+	},
+	"externalSetMarkChain": "PLZ-SET-MARK",
+	"conditionsV4": ["a", "b"],
+	"conditionsV6": ["c", "d"]
+}`)
+
+				conf, err := parseConfig(configBytes, "foo")
+				Expect(err).NotTo(HaveOccurred())
+				conf.ContainerID = containerID
+
+				ch = genDnatChain(conf.Name, containerID)
+				fillDnatRules(&ch, conf, net.ParseIP("10.0.0.2"))
+				Expect(ch.rules).To(Equal([][]string{
+					{"-p", "tcp", "--dport", "8080", "-s", "10.0.0.2", "-j", "PLZ-SET-MARK"},
+					{"-p", "tcp", "--dport", "8080", "-s", "127.0.0.1", "-j", "PLZ-SET-MARK"},
+					{"-p", "tcp", "--dport", "8080", "-j", "DNAT", "--to-destination", "10.0.0.2:80"},
 				}))
 			})
 
@@ -175,82 +288,41 @@ var _ = Describe("portmapping configuration", func() {
 				ch := genToplevelDnatChain()
 
 				Expect(ch).To(Equal(chain{
-					table: "nat",
-					name:  "CNI-HOSTPORT-DNAT",
-					entryRule: []string{
-						"-m", "addrtype",
-						"--dst-type", "LOCAL",
-					},
+					table:       "nat",
+					name:        "CNI-HOSTPORT-DNAT",
 					entryChains: []string{"PREROUTING", "OUTPUT"},
+					entryRules:  [][]string{{"-m", "addrtype", "--dst-type", "LOCAL"}},
 				}))
 			})
-		})
 
-		Context("for SNAT", func() {
-			It("generates a correct container chain", func() {
-				ch := genSnatChain(netName, containerID)
-
+			It("generates the correct mark chains", func() {
+				masqBit := 5
+				ch := genSetMarkChain(masqBit)
 				Expect(ch).To(Equal(chain{
 					table: "nat",
-					name:  "CNI-SN-bfd599665540dd91d5d28",
-					entryRule: []string{
+					name:  "CNI-HOSTPORT-SETMARK",
+					rules: [][]string{{
 						"-m", "comment",
-						"--comment", `snat name: "testNetName" id: "` + containerID + `"`,
-					},
-					entryChains: []string{TopLevelSNATChainName},
+						"--comment", "CNI portfwd masquerade mark",
+						"-j", "MARK",
+						"--set-xmark", "0x20/0x20",
+					}},
 				}))
-			})
 
-			It("generates a correct top-level chain", func() {
-				Context("for ipv4", func() {
-					ch := genToplevelSnatChain(false)
-					Expect(ch).To(Equal(chain{
-						table: "nat",
-						name:  "CNI-HOSTPORT-SNAT",
-						entryRule: []string{
-							"-s", "127.0.0.1",
-							"!", "-d", "127.0.0.1",
-						},
-						entryChains: []string{"POSTROUTING"},
-					}))
-				})
-			})
-		})
-	})
-
-	Describe("Forwarding rules", func() {
-		Context("for DNAT", func() {
-			It("generates correct ipv4 rules", func() {
-				rules := dnatRules(mappings, ipv4addr)
-				Expect(rules).To(Equal([][]string{
-					{"-p", "tcp", "--dport", "80", "-j", "DNAT", "--to-destination", "192.2.0.1:90"},
-					{"-p", "udp", "--dport", "1000", "-j", "DNAT", "--to-destination", "192.2.0.1:2000"},
-				}))
-			})
-			It("generates correct ipv6 rules", func() {
-				rules := dnatRules(mappings, ipv6addr)
-				Expect(rules).To(Equal([][]string{
-					{"-p", "tcp", "--dport", "80", "-j", "DNAT", "--to-destination", "[2001:db8::1]:90"},
-					{"-p", "udp", "--dport", "1000", "-j", "DNAT", "--to-destination", "[2001:db8::1]:2000"},
-				}))
-			})
-		})
-
-		Context("for SNAT", func() {
-
-			It("generates correct ipv4 rules", func() {
-				rules := snatRules(mappings, ipv4addr)
-				Expect(rules).To(Equal([][]string{
-					{"-p", "tcp", "-s", "127.0.0.1", "-d", "192.2.0.1", "--dport", "90", "-j", "MASQUERADE"},
-					{"-p", "udp", "-s", "127.0.0.1", "-d", "192.2.0.1", "--dport", "2000", "-j", "MASQUERADE"},
-				}))
-			})
-
-			It("generates correct ipv6 rules", func() {
-				rules := snatRules(mappings, ipv6addr)
-				Expect(rules).To(Equal([][]string{
-					{"-p", "tcp", "-s", "::1", "-d", "2001:db8::1", "--dport", "90", "-j", "MASQUERADE"},
-					{"-p", "udp", "-s", "::1", "-d", "2001:db8::1", "--dport", "2000", "-j", "MASQUERADE"},
+				ch = genMarkMasqChain(masqBit)
+				Expect(ch).To(Equal(chain{
+					table:       "nat",
+					name:        "CNI-HOSTPORT-MASQ",
+					entryChains: []string{"POSTROUTING"},
+					entryRules: [][]string{{
+						"-m", "comment",
+						"--comment", "CNI portfwd requiring masquerade",
+					}},
+					rules: [][]string{{
+						"-m", "mark",
+						"--mark", "0x20/0x20",
+						"-j", "MASQUERADE",
+					}},
 				}))
 			})
 		})
