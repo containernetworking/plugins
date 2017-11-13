@@ -7,6 +7,10 @@
 	],
 	"Deps": [
 		{
+			"ImportPath": "github.com/alexflint/go-filemutex",
+			"Rev": "72bdc8eae2aef913234599b837f5dda445ca9bd9"
+		},
+		{
 			"ImportPath": "github.com/containernetworking/cni/libcni",
 			"Comment": "v0.6.0-rc1",
 			"Rev": "a2da8f8d7fd8e6dc25f336408a8ac86f050fbd88"
