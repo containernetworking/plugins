@@ -1,6 +1,6 @@
-plugins/host-device
 plugins/ipam/dhcp
 plugins/main/bridge
+plugins/main/host-device
 plugins/main/ipvlan
 plugins/main/loopback
 plugins/main/macvlan
