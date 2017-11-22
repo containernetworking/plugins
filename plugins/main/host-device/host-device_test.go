@@ -19,6 +19,8 @@ import (
 	"math/rand"
 
 	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 	. "github.com/onsi/ginkgo"
@@ -44,6 +46,8 @@ var _ = Describe("base functionality", func() {
 
 	It("Works with a valid config", func() {
 
+		var origLink netlink.Link
+
 		// prepare ifname in original namespace
 		err := originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
@@ -53,9 +57,9 @@ var _ = Describe("base functionality", func() {
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			link, err := netlink.LinkByName(ifname)
+			origLink, err = netlink.LinkByName(ifname)
 			Expect(err).NotTo(HaveOccurred())
-			err = netlink.LinkSetUp(link)
+			err = netlink.LinkSetUp(origLink)
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
@@ -77,12 +81,25 @@ var _ = Describe("base functionality", func() {
 			IfName:      ifname,
 			StdinData:   []byte(conf),
 		}
+		var resI types.Result
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
-			_, _, err := testutils.CmdAddWithResult(targetNS.Path(), ifname, []byte(conf), func() error { return cmdAdd(args) })
+			var err error
+			resI, _, err = testutils.CmdAddWithResult(targetNS.Path(), ifname, []byte(conf), func() error { return cmdAdd(args) })
 			return err
 		})
 		Expect(err).NotTo(HaveOccurred())
+
+		// check that the result was sane
+		res, err := current.NewResultFromResult(resI)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Interfaces).To(Equal([]*current.Interface{
+			{
+				Name:    ifname,
+				Mac:     origLink.Attrs().HardwareAddr.String(),
+				Sandbox: targetNS.Path(),
+			},
+		}))
 
 		// assert that dummy0 is now in the target namespace
 		err = targetNS.Do(func(ns.NetNS) error {
@@ -102,6 +119,19 @@ var _ = Describe("base functionality", func() {
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
+
+		// Check that deleting the device moves it back
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			err = testutils.CmdDelWithResult(targetNS.Path(), ifname, func() error { return cmdDel(args) })
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err := netlink.LinkByName(ifname)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
 	})
 
 	It("fails an invalid config", func() {
