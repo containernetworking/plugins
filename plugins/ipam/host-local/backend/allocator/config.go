@@ -23,12 +23,16 @@ import (
 	types020 "github.com/containernetworking/cni/pkg/types/020"
 )
 
-// The top-level network config, just so we can get the IPAM block
+// The top-level network config - IPAM plugins are passed the full configuration
+// of the calling plugin, not just the IPAM section.
 type Net struct {
-	Name       string      `json:"name"`
-	CNIVersion string      `json:"cniVersion"`
-	IPAM       *IPAMConfig `json:"ipam"`
-	Args       *struct {
+	Name          string      `json:"name"`
+	CNIVersion    string      `json:"cniVersion"`
+	IPAM          *IPAMConfig `json:"ipam"`
+	RuntimeConfig struct {    // The capability arg
+		IPRanges []RangeSet `json:"ipRanges,omitempty"`
+	} `json:"runtimeConfig,omitempty"`
+	Args *struct {
 		A *IPAMArgs `json:"cni"`
 	} `json:"args"`
 }
@@ -105,6 +109,11 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		n.IPAM.Ranges = append([]RangeSet{{*n.IPAM.Range}}, n.IPAM.Ranges...)
 	}
 	n.IPAM.Range = nil
+
+	// If a range is supplied as a runtime config, prepend it to the Ranges
+	if len(n.RuntimeConfig.IPRanges) > 0 {
+		n.IPAM.Ranges = append(n.RuntimeConfig.IPRanges, n.IPAM.Ranges...)
+	}
 
 	if len(n.IPAM.Ranges) == 0 {
 		return nil, "", fmt.Errorf("no IP ranges specified")
