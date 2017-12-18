@@ -65,7 +65,9 @@ func ConfigureIface(ifName string, res *current.Result) error {
 		}
 	}
 
-	ip.SettleAddresses(ifName, 10)
+	if v6gw != nil {
+		ip.SettleAddresses(ifName, 10)
+	}
 
 	for _, r := range res.Routes {
 		routeIsV4 := r.Dst.IP.To4() != nil
