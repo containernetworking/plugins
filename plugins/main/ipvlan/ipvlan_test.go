@@ -33,6 +33,79 @@ import (
 
 const MASTER_NAME = "eth0"
 
+func ipvlanAddDelTest(conf, IFNAME string, originalNS ns.NetNS) {
+	targetNs, err := ns.NewNS()
+	Expect(err).NotTo(HaveOccurred())
+	defer targetNs.Close()
+
+	args := &skel.CmdArgs{
+		ContainerID: "dummy",
+		Netns:       targetNs.Path(),
+		IfName:      IFNAME,
+		StdinData:   []byte(conf),
+	}
+
+	var result *current.Result
+	err = originalNS.Do(func(ns.NetNS) error {
+		defer GinkgoRecover()
+
+		r, _, err := testutils.CmdAddWithResult(targetNs.Path(), IFNAME, []byte(conf), func() error {
+			return cmdAdd(args)
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		result, err = current.GetResult(r)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(len(result.Interfaces)).To(Equal(1))
+		Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+		Expect(len(result.IPs)).To(Equal(1))
+		return nil
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	// Make sure ipvlan link exists in the target namespace
+	err = targetNs.Do(func(ns.NetNS) error {
+		defer GinkgoRecover()
+
+		link, err := netlink.LinkByName(IFNAME)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link.Attrs().Name).To(Equal(IFNAME))
+
+		hwaddr, err := net.ParseMAC(result.Interfaces[0].Mac)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
+
+		addrs, err := netlink.AddrList(link, syscall.AF_INET)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(addrs)).To(Equal(1))
+		return nil
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	err = originalNS.Do(func(ns.NetNS) error {
+		defer GinkgoRecover()
+
+		err = testutils.CmdDelWithResult(targetNs.Path(), IFNAME, func() error {
+			return cmdDel(args)
+		})
+		Expect(err).NotTo(HaveOccurred())
+		return nil
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	// Make sure ipvlan link has been deleted
+	err = targetNs.Do(func(ns.NetNS) error {
+		defer GinkgoRecover()
+
+		link, err := netlink.LinkByName(IFNAME)
+		Expect(err).To(HaveOccurred())
+		Expect(link).To(BeNil())
+		return nil
+	})
+	Expect(err).NotTo(HaveOccurred())
+}
+
 var _ = Describe("ipvlan Operations", func() {
 	var originalNS ns.NetNS
 
@@ -116,76 +189,35 @@ var _ = Describe("ipvlan Operations", func() {
     }
 }`, MASTER_NAME)
 
-		targetNs, err := ns.NewNS()
-		Expect(err).NotTo(HaveOccurred())
-		defer targetNs.Close()
+		ipvlanAddDelTest(conf, IFNAME, originalNS)
+	})
 
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNs.Path(),
-			IfName:      IFNAME,
-			StdinData:   []byte(conf),
-		}
+	It("configures and deconfigures an iplvan link with ADD/DEL when chained", func() {
+		const IFNAME = "ipvl0"
 
-		var result *current.Result
-		err = originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+		conf := fmt.Sprintf(`{
+    "cniVersion": "0.3.1",
+    "name": "mynet",
+    "type": "ipvlan",
+    "prevResult": {
+            "interfaces": [
+                    {
+                            "name": "%s"
+                    }
+            ],
+            "ips": [
+                    {
+                            "version": "4",
+                            "address": "10.1.2.2/24",
+                            "gateway": "10.1.2.1",
+                            "interface": 0
+                    }
+            ],
+            "routes": []
+    }
+}`, MASTER_NAME)
 
-			r, _, err := testutils.CmdAddWithResult(targetNs.Path(), IFNAME, []byte(conf), func() error {
-				return cmdAdd(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			result, err = current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make sure ipvlan link exists in the target namespace
-		err = targetNs.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Name).To(Equal(IFNAME))
-
-			hwaddr, err := net.ParseMAC(result.Interfaces[0].Mac)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
-
-			addrs, err := netlink.AddrList(link, syscall.AF_INET)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(addrs)).To(Equal(1))
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		err = originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			err = testutils.CmdDelWithResult(targetNs.Path(), IFNAME, func() error {
-				return cmdDel(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make sure ipvlan link has been deleted
-		err = targetNs.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).To(HaveOccurred())
-			Expect(link).To(BeNil())
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
+		ipvlanAddDelTest(conf, IFNAME, originalNS)
 	})
 
 	It("deconfigures an unconfigured ipvlan link with DEL", func() {
@@ -220,42 +252,6 @@ var _ = Describe("ipvlan Operations", func() {
 				return cmdDel(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("errors if master should originate from ipam but an ipam interface is not returned", func() {
-		const IFNAME = "ipvl0"
-
-		conf := `{
-    "cniVersion": "0.3.1",
-    "name": "mynet",
-    "type": "ipvlan",
-    "master": "ipam",
-    "ipam": {
-        "type": "host-local",
-        "subnet": "10.1.2.0/24"
-    }
-}`
-		targetNs, err := ns.NewNS()
-		Expect(err).NotTo(HaveOccurred())
-		defer targetNs.Close()
-
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNs.Path(),
-			IfName:      IFNAME,
-			StdinData:   []byte(conf),
-		}
-
-		err = originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			_, _, err := testutils.CmdAddWithResult(targetNs.Path(), IFNAME, []byte(conf), func() error {
-				return cmdAdd(args)
-			})
-			Expect(err.Error()).To(Equal("IPAM plugin returned missing master interface"))
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
