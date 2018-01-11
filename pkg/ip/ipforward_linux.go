@@ -15,6 +15,7 @@
 package ip
 
 import (
+	"bytes"
 	"io/ioutil"
 
 	"github.com/containernetworking/cni/pkg/types/current"
@@ -51,5 +52,10 @@ func EnableForward(ips []*current.IPConfig) error {
 }
 
 func echo1(f string) error {
+	if content, err := ioutil.ReadFile(f); err == nil {
+		if bytes.Equal(bytes.TrimSpace(content), []byte("1")) {
+			return nil
+		}
+	}
 	return ioutil.WriteFile(f, []byte("1"), 0644)
 }
