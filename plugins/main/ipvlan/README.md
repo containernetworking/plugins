@@ -28,7 +28,7 @@ Because all ipvlan interfaces share the MAC address with the host interface, DHC
 * `name` (string, required): the name of the network.
 * `type` (string, required): "ipvlan".
 * `master` (string, required): name of the host interface to enslave.
-* `mode` (string, optional): one of "l2", "l3". Defaults to "l2".
+* `mode` (string, optional): one of "l2", "l3", "l3s". Defaults to "l2".
 * `mtu` (integer, optional): explicitly set MTU to the specified value. Defaults to the value chosen by the kernel.
 * `ipam` (dictionary, required): IPAM configuration to be used for this network.
 
