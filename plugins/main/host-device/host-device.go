@@ -68,15 +68,20 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer containerNs.Close()
 
-	dev, err := moveLinkIn(cfg.Device, cfg.HWAddr, cfg.KernelPath, containerNs)
+	hostDev, err := getLink(cfg.Device, cfg.HWAddr, cfg.KernelPath)
+	if err != nil {
+		return fmt.Errorf("failed to find host device: %v", err)
+	}
+
+	contDev, err := moveLinkIn(hostDev, containerNs, args.IfName)
 	if err != nil {
 		return fmt.Errorf("failed to move link %v", err)
 	}
-	return printLink(dev, cfg.CNIVersion, containerNs)
+	return printLink(contDev, cfg.CNIVersion, containerNs)
 }
 
 func cmdDel(args *skel.CmdArgs) error {
-	cfg, err := loadConf(args.StdinData)
+	_, err := loadConf(args.StdinData)
 	if err != nil {
 		return err
 	}
@@ -85,44 +90,67 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
 	}
 	defer containerNs.Close()
-	defer fmt.Println(`{}`)
-	return moveLinkOut(cfg.Device, cfg.HWAddr, cfg.KernelPath, containerNs)
+
+	if err := moveLinkOut(containerNs, args.IfName); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func moveLinkIn(device, hwAddr, kernelPath string, containerNs ns.NetNS) (netlink.Link, error) {
-	dev, err := getLink(device, hwAddr, kernelPath)
-	if err != nil {
-		return nil, err
-	}
-	if err := netlink.LinkSetNsFd(dev, int(containerNs.Fd())); err != nil {
+func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, ifName string) (netlink.Link, error) {
+	if err := netlink.LinkSetNsFd(hostDev, int(containerNs.Fd())); err != nil {
 		return nil, err
 	}
 
+	var contDev netlink.Link
 	if err := containerNs.Do(func(_ ns.NetNS) error {
-		dev, err = netlink.LinkByName(dev.Attrs().Name)
+		var err error
+		contDev, err = netlink.LinkByName(hostDev.Attrs().Name)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to find %q: %v", hostDev.Attrs().Name, err)
+		}
+		// Save host device name into the container device's alias property
+		if err := netlink.LinkSetAlias(contDev, hostDev.Attrs().Name); err != nil {
+			return fmt.Errorf("failed to set alias to %q: %v", hostDev.Attrs().Name, err)
+		}
+		// Rename container device to respect args.IfName
+		if err := netlink.LinkSetName(contDev, ifName); err != nil {
+			return fmt.Errorf("failed to rename device %q to %q: %v", hostDev.Attrs().Name, ifName, err)
+		}
+		// Retrieve link again to get up-to-date name and attributes
+		contDev, err = netlink.LinkByName(ifName)
+		if err != nil {
+			return fmt.Errorf("failed to find %q: %v", ifName, err)
 		}
 		return nil
 	}); err != nil {
 		return nil, err
 	}
 
-	return dev, nil
+	return contDev, nil
 }
 
-func moveLinkOut(device, hwAddr, kernelPath string, containerNs ns.NetNS) error {
+func moveLinkOut(containerNs ns.NetNS, ifName string) error {
 	defaultNs, err := ns.GetCurrentNS()
 	if err != nil {
 		return err
 	}
+	defer defaultNs.Close()
 
 	return containerNs.Do(func(_ ns.NetNS) error {
-		dev, err := getLink(device, hwAddr, kernelPath)
+		dev, err := netlink.LinkByName(ifName)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to find %q: %v", ifName, err)
 		}
-		return netlink.LinkSetNsFd(dev, int(defaultNs.Fd()))
+		// Rename device to it's original name
+		if err := netlink.LinkSetName(dev, dev.Attrs().Alias); err != nil {
+			return fmt.Errorf("failed to restore %q to original name %q: %v", ifName, dev.Attrs().Alias, err)
+		}
+		if err := netlink.LinkSetNsFd(dev, int(defaultNs.Fd())); err != nil {
+			return fmt.Errorf("failed to move %q to host netns: %v", dev.Attrs().Alias, err)
+		}
+		return nil
 	})
 }
 

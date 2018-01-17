@@ -45,7 +45,6 @@ var _ = Describe("base functionality", func() {
 	})
 
 	It("Works with a valid config", func() {
-
 		var origLink netlink.Link
 
 		// prepare ifname in original namespace
@@ -69,6 +68,7 @@ var _ = Describe("base functionality", func() {
 		targetNS, err := ns.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
+		CNI_IFNAME := "eth0"
 		conf := fmt.Sprintf(`{
 			"cniVersion": "0.3.0",
 			"name": "cni-plugin-host-device-test",
@@ -78,14 +78,14 @@ var _ = Describe("base functionality", func() {
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
 			Netns:       targetNS.Path(),
-			IfName:      ifname,
+			IfName:      CNI_IFNAME,
 			StdinData:   []byte(conf),
 		}
 		var resI types.Result
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			var err error
-			resI, _, err = testutils.CmdAddWithResult(targetNS.Path(), ifname, []byte(conf), func() error { return cmdAdd(args) })
+			resI, _, err = testutils.CmdAddWithResult(targetNS.Path(), CNI_IFNAME, []byte(conf), func() error { return cmdAdd(args) })
 			return err
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -95,7 +95,7 @@ var _ = Describe("base functionality", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Interfaces).To(Equal([]*current.Interface{
 			{
-				Name:    ifname,
+				Name:    CNI_IFNAME,
 				Mac:     origLink.Attrs().HardwareAddr.String(),
 				Sandbox: targetNS.Path(),
 			},
@@ -104,9 +104,9 @@ var _ = Describe("base functionality", func() {
 		// assert that dummy0 is now in the target namespace
 		err = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
-			link, err := netlink.LinkByName(ifname)
+			link, err := netlink.LinkByName(CNI_IFNAME)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Name).To(Equal(ifname))
+			Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -120,10 +120,10 @@ var _ = Describe("base functionality", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		// Check that deleting the device moves it back
+		// Check that deleting the device moves it back and restores the name
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
-			err = testutils.CmdDelWithResult(targetNS.Path(), ifname, func() error { return cmdDel(args) })
+			err = testutils.CmdDelWithResult(targetNS.Path(), CNI_IFNAME, func() error { return cmdDel(args) })
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err := netlink.LinkByName(ifname)
