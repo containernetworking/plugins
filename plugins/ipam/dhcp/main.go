@@ -33,11 +33,13 @@ const socketPath = "/run/cni/dhcp.sock"
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "daemon" {
 		var pidfilePath string
+		var hostPrefix string
 		daemonFlags := flag.NewFlagSet("daemon", flag.ExitOnError)
 		daemonFlags.StringVar(&pidfilePath, "pidfile", "", "optional path to write daemon PID to")
+		daemonFlags.StringVar(&hostPrefix, "hostprefix", "", "optional prefix to netns")
 		daemonFlags.Parse(os.Args[2:])
 
-		if err := runDaemon(pidfilePath); err != nil {
+		if err := runDaemon(pidfilePath, hostPrefix); err != nil {
 			log.Printf(err.Error())
 			os.Exit(1)
 		}
