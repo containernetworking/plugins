@@ -120,6 +120,10 @@ The following [args conventions](https://github.com/containernetworking/cni/blob
 
 * `ips` (array of strings): A list of custom IPs to attempt to allocate
 
+The following [Capability Args](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md) are supported:
+
+* `ipRanges`: The exact same as the `ranges` array - a list of address pools
+
 ### Custom IP allocation
 For every requested custom IP, the `host-local` allocator will request that IP
 if it falls within one of the `range` objects. Thus it is possible to specify

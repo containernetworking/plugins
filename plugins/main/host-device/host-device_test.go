@@ -19,6 +19,8 @@ import (
 	"math/rand"
 
 	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 	. "github.com/onsi/ginkgo"
@@ -43,6 +45,7 @@ var _ = Describe("base functionality", func() {
 	})
 
 	It("Works with a valid config", func() {
+		var origLink netlink.Link
 
 		// prepare ifname in original namespace
 		err := originalNS.Do(func(ns.NetNS) error {
@@ -53,9 +56,9 @@ var _ = Describe("base functionality", func() {
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			link, err := netlink.LinkByName(ifname)
+			origLink, err = netlink.LinkByName(ifname)
 			Expect(err).NotTo(HaveOccurred())
-			err = netlink.LinkSetUp(link)
+			err = netlink.LinkSetUp(origLink)
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
@@ -65,6 +68,7 @@ var _ = Describe("base functionality", func() {
 		targetNS, err := ns.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
+		CNI_IFNAME := "eth0"
 		conf := fmt.Sprintf(`{
 			"cniVersion": "0.3.0",
 			"name": "cni-plugin-host-device-test",
@@ -74,22 +78,35 @@ var _ = Describe("base functionality", func() {
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
 			Netns:       targetNS.Path(),
-			IfName:      ifname,
+			IfName:      CNI_IFNAME,
 			StdinData:   []byte(conf),
 		}
+		var resI types.Result
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
-			_, _, err := testutils.CmdAddWithResult(targetNS.Path(), ifname, []byte(conf), func() error { return cmdAdd(args) })
+			var err error
+			resI, _, err = testutils.CmdAddWithResult(targetNS.Path(), CNI_IFNAME, []byte(conf), func() error { return cmdAdd(args) })
 			return err
 		})
 		Expect(err).NotTo(HaveOccurred())
 
+		// check that the result was sane
+		res, err := current.NewResultFromResult(resI)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Interfaces).To(Equal([]*current.Interface{
+			{
+				Name:    CNI_IFNAME,
+				Mac:     origLink.Attrs().HardwareAddr.String(),
+				Sandbox: targetNS.Path(),
+			},
+		}))
+
 		// assert that dummy0 is now in the target namespace
 		err = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
-			link, err := netlink.LinkByName(ifname)
+			link, err := netlink.LinkByName(CNI_IFNAME)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Name).To(Equal(ifname))
+			Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -102,6 +119,19 @@ var _ = Describe("base functionality", func() {
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
+
+		// Check that deleting the device moves it back and restores the name
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			err = testutils.CmdDelWithResult(targetNS.Path(), CNI_IFNAME, func() error { return cmdDel(args) })
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err := netlink.LinkByName(ifname)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
 	})
 
 	It("fails an invalid config", func() {

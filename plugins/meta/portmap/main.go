@@ -47,10 +47,12 @@ type PortMapEntry struct {
 
 type PortMapConf struct {
 	types.NetConf
-	SNAT          *bool     `json:"snat,omitempty"`
-	ConditionsV4  *[]string `json:"conditionsV4"`
-	ConditionsV6  *[]string `json:"conditionsV6"`
-	RuntimeConfig struct {
+	SNAT                 *bool     `json:"snat,omitempty"`
+	ConditionsV4         *[]string `json:"conditionsV4"`
+	ConditionsV6         *[]string `json:"conditionsV6"`
+	MarkMasqBit          *int      `json:"markMasqBit"`
+	ExternalSetMarkChain *string   `json:"externalSetMarkChain"`
+	RuntimeConfig        struct {
 		PortMaps []PortMapEntry `json:"portMappings,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
 	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
@@ -62,6 +64,10 @@ type PortMapConf struct {
 	ContIPv4    net.IP `json:"-"`
 	ContIPv6    net.IP `json:"-"`
 }
+
+// The default mark bit to signal that masquerading is required
+// Kubernetes uses 14 and 15, Calico uses 20-31.
+const DefaultMarkBit = 13
 
 func cmdAdd(args *skel.CmdArgs) error {
 	netConf, err := parseConfig(args.StdinData, args.IfName)
@@ -143,6 +149,19 @@ func parseConfig(stdin []byte, ifName string) (*PortMapConf, error) {
 	if conf.SNAT == nil {
 		tvar := true
 		conf.SNAT = &tvar
+	}
+
+	if conf.MarkMasqBit != nil && conf.ExternalSetMarkChain != nil {
+		return nil, fmt.Errorf("Cannot specify externalSetMarkChain and markMasqBit")
+	}
+
+	if conf.MarkMasqBit == nil {
+		bvar := DefaultMarkBit // go constants are "special"
+		conf.MarkMasqBit = &bvar
+	}
+
+	if *conf.MarkMasqBit < 0 || *conf.MarkMasqBit > 31 {
+		return nil, fmt.Errorf("MasqMarkBit must be between 0 and 31")
 	}
 
 	// Reject invalid port numbers

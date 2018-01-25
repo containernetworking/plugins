@@ -18,6 +18,8 @@ import (
 	"crypto/sha512"
 	"fmt"
 	"net"
+	"strconv"
+	"strings"
 
 	"github.com/vishvananda/netlink"
 )
@@ -64,4 +66,52 @@ func formatChainName(prefix, name, id string) string {
 	chainBytes := sha512.Sum512([]byte(name + id))
 	chain := fmt.Sprintf("CNI-%s%x", prefix, chainBytes)
 	return chain[:maxChainNameLength]
+}
+
+// groupByProto groups port numbers by protocol
+func groupByProto(entries []PortMapEntry) map[string][]int {
+	if len(entries) == 0 {
+		return map[string][]int{}
+	}
+	out := map[string][]int{}
+	for _, e := range entries {
+		_, ok := out[e.Protocol]
+		if ok {
+			out[e.Protocol] = append(out[e.Protocol], e.HostPort)
+		} else {
+			out[e.Protocol] = []int{e.HostPort}
+		}
+	}
+
+	return out
+}
+
+// splitPortList splits a list of integers in to one or more comma-separated
+// string values, for use by multiport. Multiport only allows up to 15 ports
+// per entry.
+func splitPortList(l []int) []string {
+	out := []string{}
+
+	acc := []string{}
+	for _, i := range l {
+		acc = append(acc, strconv.Itoa(i))
+		if len(acc) == 15 {
+			out = append(out, strings.Join(acc, ","))
+			acc = []string{}
+		}
+	}
+
+	if len(acc) > 0 {
+		out = append(out, strings.Join(acc, ","))
+	}
+	return out
+}
+
+// trimComment makes sure no comment is over the iptables limit of 255 chars
+func trimComment(val string) string {
+	if len(val) <= 255 {
+		return val
+	}
+
+	return val[0:253] + "..."
 }

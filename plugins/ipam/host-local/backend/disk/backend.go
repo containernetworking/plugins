@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend"
+	"runtime"
 )
 
 const lastIPFilePrefix = "last_reserved_ip."
@@ -55,7 +56,8 @@ func New(network, dataDir string) (*Store, error) {
 }
 
 func (s *Store) Reserve(id string, ip net.IP, rangeID string) (bool, error) {
-	fname := filepath.Join(s.dataDir, ip.String())
+	fname := GetEscapedPath(s.dataDir, ip.String())
+
 	f, err := os.OpenFile(fname, os.O_RDWR|os.O_EXCL|os.O_CREATE, 0644)
 	if os.IsExist(err) {
 		return false, nil
@@ -73,7 +75,7 @@ func (s *Store) Reserve(id string, ip net.IP, rangeID string) (bool, error) {
 		return false, err
 	}
 	// store the reserved ip in lastIPFile
-	ipfile := filepath.Join(s.dataDir, lastIPFilePrefix+rangeID)
+	ipfile := GetEscapedPath(s.dataDir, lastIPFilePrefix+rangeID)
 	err = ioutil.WriteFile(ipfile, []byte(ip.String()), 0644)
 	if err != nil {
 		return false, err
@@ -83,7 +85,7 @@ func (s *Store) Reserve(id string, ip net.IP, rangeID string) (bool, error) {
 
 // LastReservedIP returns the last reserved IP if exists
 func (s *Store) LastReservedIP(rangeID string) (net.IP, error) {
-	ipfile := filepath.Join(s.dataDir, lastIPFilePrefix+rangeID)
+	ipfile := GetEscapedPath(s.dataDir, lastIPFilePrefix+rangeID)
 	data, err := ioutil.ReadFile(ipfile)
 	if err != nil {
 		return nil, err
@@ -92,7 +94,7 @@ func (s *Store) LastReservedIP(rangeID string) (net.IP, error) {
 }
 
 func (s *Store) Release(ip net.IP) error {
-	return os.Remove(filepath.Join(s.dataDir, ip.String()))
+	return os.Remove(GetEscapedPath(s.dataDir, ip.String()))
 }
 
 // N.B. This function eats errors to be tolerant and
@@ -114,4 +116,11 @@ func (s *Store) ReleaseByID(id string) error {
 		return nil
 	})
 	return err
+}
+
+func GetEscapedPath(dataDir string, fname string) string {
+	if runtime.GOOS == "windows" {
+		fname = strings.Replace(fname, ":", "_", -1)
+	}
+	return filepath.Join(dataDir, fname)
 }

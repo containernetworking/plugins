@@ -49,8 +49,12 @@ var _ = Describe("chain tests", func() {
 		testChain = chain{
 			table:       TABLE,
 			name:        chainName,
-			entryRule:   []string{"-d", "203.0.113.1"},
 			entryChains: []string{tlChainName},
+			entryRules:  [][]string{{"-d", "203.0.113.1"}},
+			rules: [][]string{
+				{"-m", "comment", "--comment", "test 1", "-j", "RETURN"},
+				{"-m", "comment", "--comment", "test 2", "-j", "RETURN"},
+			},
 		}
 
 		ipt, err = iptables.NewWithProtocol(iptables.ProtocolIPv4)
@@ -90,11 +94,7 @@ var _ = Describe("chain tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create the chain
-		chainRules := [][]string{
-			{"-m", "comment", "--comment", "test 1", "-j", "RETURN"},
-			{"-m", "comment", "--comment", "test 2", "-j", "RETURN"},
-		}
-		err = testChain.setup(ipt, chainRules)
+		err = testChain.setup(ipt)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Verify the chain exists
@@ -151,15 +151,11 @@ var _ = Describe("chain tests", func() {
 	It("creates chains idempotently", func() {
 		defer cleanup()
 
-		// Create the chain
-		chainRules := [][]string{
-			{"-m", "comment", "--comment", "test", "-j", "RETURN"},
-		}
-		err := testChain.setup(ipt, chainRules)
+		err := testChain.setup(ipt)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create it again!
-		err = testChain.setup(ipt, chainRules)
+		err = testChain.setup(ipt)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Make sure there are only two rules
@@ -167,18 +163,14 @@ var _ = Describe("chain tests", func() {
 		rules, err := ipt.List(TABLE, testChain.name)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(len(rules)).To(Equal(2))
+		Expect(len(rules)).To(Equal(3))
 
 	})
 
 	It("deletes chains idempotently", func() {
 		defer cleanup()
 
-		// Create the chain
-		chainRules := [][]string{
-			{"-m", "comment", "--comment", "test", "-j", "RETURN"},
-		}
-		err := testChain.setup(ipt, chainRules)
+		err := testChain.setup(ipt)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = testChain.teardown(ipt)

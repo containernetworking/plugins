@@ -39,7 +39,7 @@ func ipNetEqual(a, b *net.IPNet) bool {
 	return a.IP.Equal(b.IP)
 }
 
-var _ = Describe("IPAM Operations", func() {
+var _ = Describe("ConfigureIface", func() {
 	var originalNS ns.NetNS
 	var ipv4, ipv6, routev4, routev6 *net.IPNet
 	var ipgw4, ipgw6, routegwv4, routegwv6 net.IP

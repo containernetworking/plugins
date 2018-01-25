@@ -182,7 +182,7 @@ func DelLinkByNameAddr(ifName string) ([]*net.IPNet, error) {
 	}
 
 	addrs, err := netlink.AddrList(iface, netlink.FAMILY_ALL)
-	if err != nil || len(addrs) == 0 {
+	if err != nil {
 		return nil, fmt.Errorf("failed to get IP addresses for %q: %v", ifName, err)
 	}
 
