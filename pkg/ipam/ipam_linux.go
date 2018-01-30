@@ -21,8 +21,13 @@ import (
 
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ip"
+	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 
 	"github.com/vishvananda/netlink"
+)
+
+const (
+	DisableIPv6SysctlTemplate = "net.ipv6.conf.%s.disable_ipv6"
 )
 
 // ConfigureIface takes the result of IPAM plugin and
@@ -42,6 +47,7 @@ func ConfigureIface(ifName string, res *current.Result) error {
 	}
 
 	var v4gw, v6gw net.IP
+	var has_enabled_ipv6 bool = false
 	for _, ipc := range res.IPs {
 		if ipc.Interface == nil {
 			continue
@@ -50,6 +56,30 @@ func ConfigureIface(ifName string, res *current.Result) error {
 		if intIdx < 0 || intIdx >= len(res.Interfaces) || res.Interfaces[intIdx].Name != ifName {
 			// IP address is for a different interface
 			return fmt.Errorf("failed to add IP addr %v to %q: invalid interface index", ipc, ifName)
+		}
+
+		// Make sure sysctl "disable_ipv6" is 0 if we are about to add
+		// an IPv6 address to the interface
+		if !has_enabled_ipv6 && ipc.Version == "6" {
+			// Enabled IPv6 for loopback "lo" and the interface
+			// being configured
+			for _, iface := range [2]string{"lo", ifName} {
+				ipv6SysctlValueName := fmt.Sprintf(DisableIPv6SysctlTemplate, iface)
+
+				// Read current sysctl value
+				value, err := sysctl.Sysctl(ipv6SysctlValueName)
+				if err != nil || value == "0" {
+					// FIXME: log warning if unable to read sysctl value
+					continue
+				}
+
+				// Write sysctl to enable IPv6
+				_, err = sysctl.Sysctl(ipv6SysctlValueName, "0")
+				if err != nil {
+					return fmt.Errorf("failed to enable IPv6 for interface %q (%s=%s): %v", iface, ipv6SysctlValueName, value, err)
+				}
+			}
+			has_enabled_ipv6 = true
 		}
 
 		addr := &netlink.Addr{IPNet: &ipc.Address, Label: ""}
