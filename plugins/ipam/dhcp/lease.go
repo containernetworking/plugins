@@ -292,8 +292,26 @@ func (l *DHCPLease) Gateway() net.IP {
 }
 
 func (l *DHCPLease) Routes() []*types.Route {
-	routes := parseRoutes(l.opts)
-	return append(routes, parseCIDRRoutes(l.opts)...)
+	routes := []*types.Route{}
+
+	// RFC 3442 states that if Classless Static Routes (option 121)
+	// exist, we ignore Static Routes (option 33) and the Router/Gateway.
+	opt121_routes := parseCIDRRoutes(l.opts)
+	if len(opt121_routes) > 0 {
+		return append(routes, opt121_routes...)
+	}
+
+	// Append Static Routes
+	routes = append(routes, parseRoutes(l.opts)...)
+
+	// The CNI spec says even if there is a gateway specified, we must
+	// add a default route in the routes section.
+	if gw := l.Gateway(); gw != nil {
+		_, defaultRoute, _ := net.ParseCIDR("0.0.0.0/0")
+		routes = append(routes, &types.Route{Dst: *defaultRoute, GW: gw})
+	}
+
+	return routes
 }
 
 // jitter returns a random value within [-span, span) range
