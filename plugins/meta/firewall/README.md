@@ -2,23 +2,41 @@
 
 ## Overview
 
-This plugin creates firewall rules to allow traffic to/from the host network interface given by "ifName".
+This plugin creates firewall rules to allow traffic to/from container IP address via the host network .
 It does not create any network interfaces and therefore does not set up connectivity by itself.
 It is only useful when used in addition to other plugins.
 
 ## Operation
 The following network configuration file
-```
+
+```json
 {
-  "name": "mynet",
-  "type": "firewall",
-  "ifName": "cni0"
+    "cniVersion": "0.3.1",
+    "name": "bridge-firewalld",
+    "plugins": [
+      {
+        "type": "bridge",
+        "bridge": "cni0",
+        "isGateway": true,
+        "ipMasq": true,
+        "ipam": {
+            "type": "host-local",
+            "subnet": "10.88.0.0/16",
+            "routes": [
+                { "dst": "0.0.0.0/0" }
+            ]
+        }
+      },
+      {
+        "type": "firewall",
+      }
+    ]
 }
 ```
 
-will allow the given interface to send/receive traffic via the host.
+will allow any IP addresses configured by earlier plugins to send/receive traffic via the host.
 
-A successful result would simply be an empty result, unless a previous plugin passed a previous result, in which case this plugin will return that verbatim.
+A successful result would simply be an empty result, unless a previous plugin passed a previous result, in which case this plugin will return that previous result.
 
 ## Backends
 
