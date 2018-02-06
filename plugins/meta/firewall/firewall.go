@@ -74,20 +74,22 @@ func parseConf(data []byte) (*FirewallNetConf, error) {
 	}
 
 	// Parse previous result.
-	if conf.RawPrevResult != nil {
-		resultBytes, err := json.Marshal(conf.RawPrevResult)
-		if err != nil {
-			return nil, fmt.Errorf("could not serialize prevResult: %v", err)
-		}
-		res, err := version.NewResult(conf.CNIVersion, resultBytes)
-		if err != nil {
-			return nil, fmt.Errorf("could not parse prevResult: %v", err)
-		}
-		conf.RawPrevResult = nil
-		conf.PrevResult, err = current.NewResultFromResult(res)
-		if err != nil {
-			return nil, fmt.Errorf("could not convert result to current version: %v", err)
-		}
+	if conf.RawPrevResult == nil {
+		return nil, fmt.Errorf("missing prevResult from earlier plugin")
+	}
+
+	resultBytes, err := json.Marshal(conf.RawPrevResult)
+	if err != nil {
+		return nil, fmt.Errorf("could not serialize prevResult: %v", err)
+	}
+	res, err := version.NewResult(conf.CNIVersion, resultBytes)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse prevResult: %v", err)
+	}
+	conf.RawPrevResult = nil
+	conf.PrevResult, err = current.NewResultFromResult(res)
+	if err != nil {
+		return nil, fmt.Errorf("could not convert result to current version: %v", err)
 	}
 
 	return &conf, nil
