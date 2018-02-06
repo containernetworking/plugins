@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/containernetworking/plugins",
 	"GoVersion": "go1.7",
-	"GodepVersion": "v79",
+	"GodepVersion": "v80",
 	"Packages": [
 		"./..."
 	],
@@ -66,6 +66,11 @@
 		{
 			"ImportPath": "github.com/d2g/dhcp4server",
 			"Rev": "1b74244053681c90de5cf1af3d6b5c93b74e3abb"
+		},
+		{
+			"ImportPath": "github.com/godbus/dbus",
+			"Comment": "v4.1.0-6-g885f9cc",
+			"Rev": "885f9cc04c9c1a6a61a2008e211d36c5737be3f5"
 		},
 		{
 			"ImportPath": "github.com/j-keck/arping",
