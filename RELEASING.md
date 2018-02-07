@@ -33,3 +33,7 @@ Creating a new release produces the following artifacts:
 1. Add the release note to the release.
 1. Announce the release on at least the CNI mailing, IRC and Slack.
 
+## Building a local RPM based on the current commit
+1. make -f .copr/Makefile
+1. Notes the path of the srpm from the previous step.
+1. rpmbuild --rebuild <path_to_srpm>
