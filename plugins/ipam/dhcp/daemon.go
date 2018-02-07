@@ -93,6 +93,7 @@ func (d *DHCP) Release(args *skel.CmdArgs, reply *struct{}) error {
 
 	if l := d.getLease(args.ContainerID, conf.Name); l != nil {
 		l.Stop()
+		d.clearLease(args.ContainerID, conf.Name)
 	}
 
 	return nil
@@ -116,6 +117,14 @@ func (d *DHCP) setLease(contID, netName string, l *DHCPLease) {
 
 	// TODO(eyakubovich): hash it to avoid collisions
 	d.leases[contID+netName] = l
+}
+
+func (d *DHCP) clearLease(contID, netName string) {
+	d.mux.Lock()
+	defer d.mux.Unlock()
+
+	// TODO(eyakubovich): hash it to avoid collisions
+	delete(d.leases, contID+netName)
 }
 
 func getListener() (net.Listener, error) {
