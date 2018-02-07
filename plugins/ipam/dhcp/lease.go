@@ -20,6 +20,7 @@ import (
 	"math/rand"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/d2g/dhcp4"
@@ -55,6 +56,7 @@ type DHCPLease struct {
 	renewalTime   time.Time
 	rebindingTime time.Time
 	expireTime    time.Time
+	stopping      uint32
 	stop          chan struct{}
 	wg            sync.WaitGroup
 }
@@ -106,7 +108,9 @@ func AcquireLease(clientID, netns, ifName string) (*DHCPLease, error) {
 // Stop terminates the background task that maintains the lease
 // and issues a DHCP Release
 func (l *DHCPLease) Stop() {
-	close(l.stop)
+	if atomic.CompareAndSwapUint32(&l.stopping, 0, 1) {
+		close(l.stop)
+	}
 	l.wg.Wait()
 }
 

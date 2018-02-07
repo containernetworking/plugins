@@ -251,4 +251,69 @@ var _ = Describe("DHCP Operations", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	It("correctly handles multiple DELs for the same container", func() {
+		conf := `{
+    "cniVersion": "0.3.1",
+    "name": "mynet",
+    "type": "ipvlan",
+    "ipam": {
+        "type": "dhcp"
+    }
+}`
+
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNS.Path(),
+			IfName:      contVethName,
+			StdinData:   []byte(conf),
+		}
+
+		var addResult *current.Result
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			r, _, err := testutils.CmdAddWithResult(targetNS.Path(), contVethName, []byte(conf), func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			addResult, err = current.GetResult(r)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(addResult.IPs)).To(Equal(1))
+			Expect(addResult.IPs[0].Address.String()).To(Equal("192.168.1.5/24"))
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		wg := sync.WaitGroup{}
+		wg.Add(3)
+		started := sync.WaitGroup{}
+		started.Add(3)
+		for i := 0; i < 3; i++ {
+			go func() {
+				defer GinkgoRecover()
+
+				// Wait until all goroutines are running
+				started.Done()
+				started.Wait()
+
+				err = originalNS.Do(func(ns.NetNS) error {
+					return testutils.CmdDelWithResult(targetNS.Path(), contVethName, func() error {
+						return cmdDel(args)
+					})
+				})
+				Expect(err).NotTo(HaveOccurred())
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+
+		err = originalNS.Do(func(ns.NetNS) error {
+			return testutils.CmdDelWithResult(targetNS.Path(), contVethName, func() error {
+				return cmdDel(args)
+			})
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
 })
