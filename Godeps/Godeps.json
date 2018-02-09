@@ -64,6 +64,10 @@
 			"Rev": "bed07e1bc5b85f69c6f0fd73393aa35ec68ed892"
 		},
 		{
+			"ImportPath": "github.com/d2g/dhcp4server",
+			"Rev": "1b74244053681c90de5cf1af3d6b5c93b74e3abb"
+		},
+		{
 			"ImportPath": "github.com/j-keck/arping",
 			"Rev": "2cf9dc699c5640a7e2c81403a44127bf28033600"
 		},
@@ -233,6 +237,18 @@
 		{
 			"ImportPath": "github.com/vishvananda/netns",
 			"Rev": "54f0e4339ce73702a0607f49922aaa1e749b418d"
+		},
+		{
+			"ImportPath": "golang.org/x/net/bpf",
+			"Rev": "e90d6d0afc4c315a0d87a568ae68577cc15149a0"
+		},
+		{
+			"ImportPath": "golang.org/x/net/internal/iana",
+			"Rev": "e90d6d0afc4c315a0d87a568ae68577cc15149a0"
+		},
+		{
+			"ImportPath": "golang.org/x/net/ipv4",
+			"Rev": "e90d6d0afc4c315a0d87a568ae68577cc15149a0"
 		},
 		{
 			"ImportPath": "golang.org/x/sys/unix",
