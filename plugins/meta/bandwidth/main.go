@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
@@ -30,17 +31,9 @@ type PluginConf struct {
 	types.NetConf
 	RuntimeConfig *struct{} `json:"runtimeConfig"`
 
-	// This is the previous result, when called in the context of a chained
-	// plugin. Because this plugin supports multiple versions, we'll have to
-	// parse this in two passes. If your plugin is not chained, this can be
-	// removed (though you may wish to error if a non-chainable plugin is
-	// chained.
-	// If you need to modify the result before returning it, you will need
-	// to actually convert it to a concrete versioned struct.
 	RawPrevResult *map[string]interface{} `json:"prevResult"`
 	PrevResult    *current.Result         `json:"-"`
 
-	// Add plugin-specifc flags here
 	IngressRate  int `json:"ingressRate"`  //Bandwidth rate in Kbps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
 	IngressBurst int `json:"ingressBurst"` //Bandwidth burst in Kb for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
 
@@ -56,7 +49,6 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 		return nil, fmt.Errorf("failed to parse network configuration: %v", err)
 	}
 
-	// Parse previous result. Remove this if your plugin is not chained.
 	if conf.RawPrevResult != nil {
 		resultBytes, err := json.Marshal(conf.RawPrevResult)
 		if err != nil {
@@ -72,7 +64,6 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 			return nil, fmt.Errorf("could not convert result to current version: %v", err)
 		}
 	}
-	// End previous result parsing
 
 	err := validateRateAndBurst(conf.IngressRate, conf.IngressBurst)
 	if err != nil {
@@ -131,7 +122,6 @@ func getHostInterface(interfaces []*current.Interface) (*current.Interface, erro
 	return nil, errors.New("no host interface found")
 }
 
-// cmdAdd is called for ADD requests
 func cmdAdd(args *skel.CmdArgs) error {
 	conf, err := parseConfig(args.StdinData)
 	if err != nil {
@@ -190,11 +180,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	}
 
-	// Pass through the result for the next plugin
 	return types.PrintResult(conf.PrevResult, conf.CNIVersion)
 }
 
-// cmdDel is called for DELETE requests
 func cmdDel(args *skel.CmdArgs) error {
 	conf, err := parseConfig(args.StdinData)
 	if err != nil {
