@@ -15,15 +15,8 @@ package bandwidth
 // limitations under the License.
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"bytes"
 	"fmt"
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/onsi/gomega/gbytes"
-	"github.com/onsi/gomega/gexec"
-	"github.com/vishvananda/netlink"
 	"io"
 	"net"
 	"os/exec"
@@ -31,6 +24,15 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/onsi/gomega/gbytes"
+	"github.com/onsi/gomega/gexec"
+
+	"github.com/vishvananda/netlink"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 func TestTBF(t *testing.T) {

@@ -15,21 +15,23 @@
 package bandwidth
 
 import (
-	"fmt"
-
 	"encoding/json"
+	"fmt"
+	"net"
+	"time"
+
+	"github.com/vishvananda/netlink"
+
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
-	"github.com/vishvananda/netlink"
-	"net"
-	"time"
 )
 
 var _ = Describe("bandwidth test", func() {

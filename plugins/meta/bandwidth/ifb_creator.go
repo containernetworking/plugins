@@ -16,10 +16,12 @@ package bandwidth
 
 import (
 	"fmt"
-	"github.com/containernetworking/plugins/pkg/ip"
-	"github.com/vishvananda/netlink"
 	"net"
 	"syscall"
+
+	"github.com/containernetworking/plugins/pkg/ip"
+
+	"github.com/vishvananda/netlink"
 )
 
 const latencyInMillis = 25
