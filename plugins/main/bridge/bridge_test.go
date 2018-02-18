@@ -414,7 +414,6 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase) {
 	tester.args = tc.createCmdArgs(tester.targetNS)
 
 	// Execute cmdADD on the plugin
-	var result *types020.Result
 	err := tester.testNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
@@ -425,7 +424,7 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase) {
 		Expect(strings.Index(string(raw), "\"ip\":")).Should(BeNumerically(">", 0))
 
 		// We expect a version 0.1.0 result
-		result, err = types020.GetResult(r)
+		_, err = types020.GetResult(r)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Make sure bridge link exists
