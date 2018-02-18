@@ -91,6 +91,46 @@ var _ = Describe("Link", func() {
 		rand.Reader = originalRandReader
 	})
 
+	Describe("GetVethPeerIfindex", func() {
+		It("returns the link and peer index of the named interface", func() {
+			By("looking up the container veth index using the host veth name")
+			_ = hostNetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				gotHostLink, gotContainerIndex, err := ip.GetVethPeerIfindex(hostVethName)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("checking we got back the host link")
+				attrs := gotHostLink.Attrs()
+				Expect(attrs.Index).To(Equal(hostVeth.Index))
+				Expect(attrs.Name).To(Equal(hostVeth.Name))
+
+				By("checking we got back the container veth index")
+				Expect(gotContainerIndex).To(Equal(containerVeth.Index))
+
+				return nil
+			})
+
+			By("looking up the host veth index using the container veth name")
+			_ = containerNetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				gotContainerLink, gotHostIndex, err := ip.GetVethPeerIfindex(containerVethName)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("checking we got back the container link")
+				attrs := gotContainerLink.Attrs()
+				Expect(attrs.Index).To(Equal(containerVeth.Index))
+				Expect(attrs.Name).To(Equal(containerVeth.Name))
+
+				By("checking we got back the host veth index")
+				Expect(gotHostIndex).To(Equal(hostVeth.Index))
+
+				return nil
+			})
+		})
+	})
+
 	It("SetupVeth must put the veth endpoints into the separate namespaces", func() {
 		_ = containerNetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
