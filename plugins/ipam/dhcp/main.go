@@ -67,7 +67,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 func cmdDel(args *skel.CmdArgs) error {
 	result := struct{}{}
 	if err := rpcCall("DHCP.Release", args, &result); err != nil {
-		return fmt.Errorf("error dialing DHCP daemon: %v", err)
+		return err
 	}
 	return nil
 }
