@@ -27,10 +27,10 @@ import (
 
 var _ = Describe("Basic PTP using cnitool", func() {
 	var (
-		env         TestEnv
-		nsShortName string
-		nsLongName  string
-		cnitoolBin  string
+		env        TestEnv
+		hostNS     NSShortName
+		contNS     NSShortName
+		cnitoolBin string
 	)
 
 	BeforeEach(func() {
@@ -47,32 +47,37 @@ var _ = Describe("Basic PTP using cnitool", func() {
 			"PATH=" + os.Getenv("PATH"),
 		})
 
-		nsShortName = fmt.Sprintf("cni-test-%x", rand.Int31())
-		nsLongName = fmt.Sprintf("/var/run/netns/" + nsShortName)
+		hostNS = NSShortName(fmt.Sprintf("cni-test-host-%x", rand.Int31()))
+		hostNS.Add()
+
+		contNS = NSShortName(fmt.Sprintf("cni-test-cont-%x", rand.Int31()))
+		contNS.Add()
 	})
+
+	AfterEach(func() {
+		contNS.Del()
+		hostNS.Del()
+	})
+
+	basicAssertion := func(netName, expectedIPPrefix string) {
+		env.runInNS(hostNS, cnitoolBin, "add", netName, contNS.LongName())
+
+		addrOutput := env.runInNS(contNS, "ip", "addr")
+		Expect(addrOutput).To(ContainSubstring(expectedIPPrefix))
+
+		env.runInNS(hostNS, cnitoolBin, "del", netName, contNS.LongName())
+	}
 
 	It("supports basic network add and del operations", func() {
-		env.run("ip", "netns", "add", nsShortName)
-		defer env.run("ip", "netns", "del", nsShortName)
-
-		env.run(cnitoolBin, "add", "basic-ptp", nsLongName)
-
-		addrOutput := env.run("ip", "netns", "exec", nsShortName, "ip", "addr")
-		Expect(addrOutput).To(ContainSubstring("10.1.2."))
-
-		env.run(cnitoolBin, "del", "basic-ptp", nsLongName)
+		basicAssertion("basic-ptp", "10.1.2.")
 	})
 
-	It("supports add and del with chained plugins", func() {
-		env.run("ip", "netns", "add", nsShortName)
-		defer env.run("ip", "netns", "del", nsShortName)
+	It("supports add and del with ptp + bandwidth", func() {
+		basicAssertion("chained-ptp-bandwidth", "10.9.2.")
+	})
 
-		env.run(cnitoolBin, "add", "chained-ptp-bandwidth", nsLongName)
-
-		addrOutput := env.run("ip", "netns", "exec", nsShortName, "ip", "addr")
-		Expect(addrOutput).To(ContainSubstring("10.9.2."))
-
-		env.run(cnitoolBin, "del", "chained-ptp-bandwidth", nsLongName)
+	It("supports add and del with bridge + bandwidth", func() {
+		basicAssertion("chained-bridge-bandwidth", "10.11.2.")
 	})
 })
 
@@ -85,4 +90,23 @@ func (e TestEnv) run(bin string, args ...string) string {
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(session, "5s").Should(gexec.Exit(0))
 	return string(session.Out.Contents())
+}
+
+func (e TestEnv) runInNS(nsShortName NSShortName, bin string, args ...string) string {
+	a := append([]string{"netns", "exec", string(nsShortName), bin}, args...)
+	return e.run("ip", a...)
+}
+
+type NSShortName string
+
+func (n NSShortName) LongName() string {
+	return fmt.Sprintf("/var/run/netns/%s", n)
+}
+
+func (n NSShortName) Add() {
+	(TestEnv{}).run("ip", "netns", "add", string(n))
+}
+
+func (n NSShortName) Del() {
+	(TestEnv{}).run("ip", "netns", "del", string(n))
 }
