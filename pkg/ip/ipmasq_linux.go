@@ -89,13 +89,31 @@ func TeardownIPMasq(ipn *net.IPNet, chain string, comment string) error {
 		return fmt.Errorf("failed to locate iptables: %v", err)
 	}
 
-	if err = ipt.Delete("nat", "POSTROUTING", "-s", ipn.String(), "-j", chain, "-m", "comment", "--comment", comment); err != nil {
+	err = ipt.Delete("nat", "POSTROUTING", "-s", ipn.String(), "-j", chain, "-m", "comment", "--comment", comment)
+	if err != nil && !isNotExist(err) {
 		return err
 	}
 
-	if err = ipt.ClearChain("nat", chain); err != nil {
+	err = ipt.ClearChain("nat", chain)
+	if err != nil && !isNotExist(err) {
+		return err
+
+	}
+
+	err = ipt.DeleteChain("nat", chain)
+	if err != nil && !isNotExist(err) {
 		return err
 	}
 
-	return ipt.DeleteChain("nat", chain)
+	return nil
+}
+
+// isNotExist returnst true if the error is from iptables indicating
+// that the target does not exist.
+func isNotExist(err error) bool {
+	e, ok := err.(*iptables.Error)
+	if !ok {
+		return false
+	}
+	return e.IsNotExist()
 }

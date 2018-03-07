@@ -41,6 +41,13 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("running %v: exit status %v: %v", e.cmd.Args, e.ExitStatus(), e.msg)
 }
 
+// IsNotExist returns true if the error is due to the chain or rule not existing
+func (e *Error) IsNotExist() bool {
+	return e.ExitStatus() == 1 &&
+		(e.msg == "iptables: Bad rule (does a matching rule exist in that chain?).\n" ||
+			e.msg == "iptables: No chain/target/match by that name.\n")
+}
+
 // Protocol to differentiate between IPv4 and IPv6
 type Protocol byte
 
@@ -287,6 +294,11 @@ func (ipt *IPTables) RenameChain(table, oldChain, newChain string) error {
 // The chain must be empty
 func (ipt *IPTables) DeleteChain(table, chain string) error {
 	return ipt.run("-t", table, "-X", chain)
+}
+
+// ChangePolicy changes policy on chain to target
+func (ipt *IPTables) ChangePolicy(table, chain, target string) error {
+	return ipt.run("-t", table, "-P", chain, target)
 }
 
 // run runs an iptables command with the given arguments, ignoring
