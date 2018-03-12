@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gexec"
 )
 
 func TestIntegration(t *testing.T) {
@@ -27,6 +28,17 @@ func TestIntegration(t *testing.T) {
 	RunSpecs(t, "Integration Suite")
 }
 
-var _ = BeforeSuite(func() {
+var echoServerBinaryPath string
+
+var _ = SynchronizedBeforeSuite(func() []byte {
+	binaryPath, err := gexec.Build("github.com/containernetworking/plugins/pkg/testutils/echosvr")
+	Expect(err).NotTo(HaveOccurred())
+	return []byte(binaryPath)
+}, func(data []byte) {
+	echoServerBinaryPath = string(data)
 	rand.Seed(config.GinkgoConfig.RandomSeed + int64(GinkgoParallelNode()))
+})
+
+var _ = SynchronizedAfterSuite(func() {}, func() {
+	gexec.CleanupBuildArtifacts()
 })

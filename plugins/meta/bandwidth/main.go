@@ -17,7 +17,6 @@ package main
 import (
 	"crypto/sha1"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -25,7 +24,9 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 
+	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/vishvananda/netlink"
+	"errors"
 )
 
 type PluginConf struct {
@@ -112,15 +113,16 @@ func getMTU(deviceName string) (int, error) {
 }
 
 func getHostInterface(interfaces []*current.Interface) (*current.Interface, error) {
-	for _, prevIface := range interfaces {
-		if prevIface.Sandbox != "" {
-			continue
+	var err error
+	for _, iface := range interfaces {
+		if iface.Sandbox == "" { // host interface
+			_, _, err = ip.GetVethPeerIfindex(iface.Name)
+			if err == nil {
+				return iface, err
+			}
 		}
-
-		return prevIface, nil
 	}
-
-	return nil, errors.New("no host interface found")
+	return nil, errors.New("no host interface found: " + err.Error())
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
