@@ -24,9 +24,9 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 
+	"errors"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/vishvananda/netlink"
-	"errors"
 )
 
 type PluginConf struct {
@@ -113,6 +113,10 @@ func getMTU(deviceName string) (int, error) {
 }
 
 func getHostInterface(interfaces []*current.Interface) (*current.Interface, error) {
+	if len(interfaces) == 0 {
+		return nil, errors.New("no interfaces provided")
+	}
+
 	var err error
 	for _, iface := range interfaces {
 		if iface.Sandbox == "" { // host interface
@@ -122,7 +126,7 @@ func getHostInterface(interfaces []*current.Interface) (*current.Interface, erro
 			}
 		}
 	}
-	return nil, errors.New("no host interface found: " + err.Error())
+	return nil, errors.New(fmt.Sprintf("no host interface found. last error: %s", err))
 }
 
 func cmdAdd(args *skel.CmdArgs) error {

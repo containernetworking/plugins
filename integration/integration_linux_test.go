@@ -105,9 +105,6 @@ var _ = Describe("Basic PTP using cnitool", func() {
 			basicBridgeEnv                                    TestEnv
 			chainedBridgeBandwidthEnv                         TestEnv
 			chainedBridgeBandwidthSession, basicBridgeSession *gexec.Session
-			chainedBridgeBandwidthPort, basicBridgePort       int
-			chainedBridgeIP, basicBridgeIP                    string
-			runtimeWithLimit, runtimeWithoutLimit             time.Duration
 		)
 
 		BeforeEach(func() {
@@ -154,43 +151,38 @@ var _ = Describe("Basic PTP using cnitool", func() {
 		Measure("limits traffic only on the restricted bandwith veth device", func(b Benchmarker) {
 			ipRegexp := regexp.MustCompile("10\\.11\\.2\\.\\d{1,3}")
 
-			By(fmt.Sprintf("adding %s to %s\n\n", "chained-bridge-bandwidth", contNS1.ShortName()), func() {
-				chainedBridgeBandwidthEnv.runInNS(hostNS, cnitoolBin, "add", "network-chain-test", contNS1.LongName())
-				chainedBridgeIP = ipRegexp.FindString(chainedBridgeBandwidthEnv.runInNS(contNS1, "ip", "addr"))
-				Expect(chainedBridgeIP).To(ContainSubstring("10.11.2."))
-			})
+			By(fmt.Sprintf("adding %s to %s\n\n", "chained-bridge-bandwidth", contNS1.ShortName()))
+			chainedBridgeBandwidthEnv.runInNS(hostNS, cnitoolBin, "add", "network-chain-test", contNS1.LongName())
+			chainedBridgeIP := ipRegexp.FindString(chainedBridgeBandwidthEnv.runInNS(contNS1, "ip", "addr"))
+			Expect(chainedBridgeIP).To(ContainSubstring("10.11.2."))
 
-			By(fmt.Sprintf("adding %s to %s\n\n", "basic-bridge", contNS2.ShortName()), func() {
-				basicBridgeEnv.runInNS(hostNS, cnitoolBin, "add", "network-chain-test", contNS2.LongName())
-				basicBridgeIP = ipRegexp.FindString(basicBridgeEnv.runInNS(contNS2, "ip", "addr"))
-				Expect(basicBridgeIP).To(ContainSubstring("10.11.2."))
-			})
+			By(fmt.Sprintf("adding %s to %s\n\n", "basic-bridge", contNS2.ShortName()))
+			basicBridgeEnv.runInNS(hostNS, cnitoolBin, "add", "network-chain-test", contNS2.LongName())
+			basicBridgeIP := ipRegexp.FindString(basicBridgeEnv.runInNS(contNS2, "ip", "addr"))
+			Expect(basicBridgeIP).To(ContainSubstring("10.11.2."))
 
+			var chainedBridgeBandwidthPort, basicBridgePort int
 			var err error
 
-			By(fmt.Sprintf("starting echo server in %s\n\n", contNS1.ShortName()), func() {
-				chainedBridgeBandwidthPort, chainedBridgeBandwidthSession, err = startEchoServerInNamespace(contNS1)
-				Expect(err).ToNot(HaveOccurred())
-			})
+			By(fmt.Sprintf("starting echo server in %s\n\n", contNS1.ShortName()))
+			chainedBridgeBandwidthPort, chainedBridgeBandwidthSession, err = startEchoServerInNamespace(contNS1)
+			Expect(err).ToNot(HaveOccurred())
 
-			By(fmt.Sprintf("starting echo server in %s\n\n", contNS2.ShortName()), func() {
-				basicBridgePort, basicBridgeSession, err = startEchoServerInNamespace(contNS2)
-				Expect(err).ToNot(HaveOccurred())
-			})
+			By(fmt.Sprintf("starting echo server in %s\n\n", contNS2.ShortName()))
+			basicBridgePort, basicBridgeSession, err = startEchoServerInNamespace(contNS2)
+			Expect(err).ToNot(HaveOccurred())
 
 			packetInBytes := 20000 // The shaper needs to 'warm'. Send enough to cause it to throttle,
 			// balanced by run time.
 
-			By(fmt.Sprintf("sending tcp traffic to the chained, bridged, traffic shaped container on ip address '%s:%d'\n\n", chainedBridgeIP, chainedBridgeBandwidthPort), func() {
-				runtimeWithLimit = b.Time("with chained bridge and bandwidth plugins", func() {
-					makeTcpClientInNS(hostNS.ShortName(), chainedBridgeIP, chainedBridgeBandwidthPort, packetInBytes)
-				})
+			By(fmt.Sprintf("sending tcp traffic to the chained, bridged, traffic shaped container on ip address '%s:%d'\n\n", chainedBridgeIP, chainedBridgeBandwidthPort))
+			runtimeWithLimit := b.Time("with chained bridge and bandwidth plugins", func() {
+				makeTcpClientInNS(hostNS.ShortName(), chainedBridgeIP, chainedBridgeBandwidthPort, packetInBytes)
 			})
 
-			By(fmt.Sprintf("sending tcp traffic to the basic bridged container on ip address '%s:%d'\n\n", basicBridgeIP, basicBridgePort), func() {
-				runtimeWithoutLimit = b.Time("with basic bridged plugin", func() {
-					makeTcpClientInNS(hostNS.ShortName(), basicBridgeIP, basicBridgePort, packetInBytes)
-				})
+			By(fmt.Sprintf("sending tcp traffic to the basic bridged container on ip address '%s:%d'\n\n", basicBridgeIP, basicBridgePort))
+			runtimeWithoutLimit := b.Time("with basic bridged plugin", func() {
+				makeTcpClientInNS(hostNS.ShortName(), basicBridgeIP, basicBridgePort, packetInBytes)
 			})
 
 			Expect(runtimeWithLimit).To(BeNumerically(">", runtimeWithoutLimit+1000*time.Millisecond))
