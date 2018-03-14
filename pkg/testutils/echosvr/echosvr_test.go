@@ -68,7 +68,7 @@ var _ = Describe("Echosvr", func() {
 		Expect(err).NotTo(HaveOccurred())
 		defer conn.Close()
 
-		fmt.Fprintf(conn, "hello")
+		fmt.Fprintf(conn, "hello\n")
 		Expect(ioutil.ReadAll(conn)).To(Equal([]byte("hello")))
 	})
 })

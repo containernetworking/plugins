@@ -7,8 +7,13 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"net"
+	"os"
+	"strings"
+	"time"
 )
 
 func main() {
@@ -31,8 +36,22 @@ func main() {
 }
 
 func handleConnection(conn net.Conn) {
-	buf := make([]byte, 512)
-	nBytesRead, _ := conn.Read(buf)
-	conn.Write(buf[0:nBytesRead])
-	conn.Close()
+	conn.SetReadDeadline(time.Now().Add(1 * time.Minute))
+	content, err := bufio.NewReader(conn).ReadString('\n')
+	if err != nil && err != io.EOF {
+		fmt.Fprint(os.Stderr, err.Error())
+		return
+	}
+
+	conn.SetWriteDeadline(time.Now().Add(1 * time.Minute))
+	if _, err = conn.Write([]byte(strings.TrimSuffix(content, "\n"))); err != nil {
+		fmt.Fprint(os.Stderr, err.Error())
+		return
+	}
+
+	if err = conn.Close(); err != nil {
+		fmt.Fprint(os.Stderr, err.Error())
+		return
+	}
+
 }

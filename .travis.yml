@@ -21,6 +21,7 @@ matrix:
 
 install:
   - go get github.com/onsi/ginkgo/ginkgo
+  - go get github.com/containernetworking/cni/cnitool
 
 script:
  - |
