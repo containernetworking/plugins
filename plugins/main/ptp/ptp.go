@@ -49,7 +49,7 @@ type NetConf struct {
 
 func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Result) (*current.Interface, *current.Interface, error) {
 	// The IPAM result will be something like IP=192.168.3.5/24, GW=192.168.3.1.
-	// What we want is really a point-to-point link but veth does not support IFF_POINTOPONT.
+	// What we want is really a point-to-point link but veth does not support IFF_POINTTOPOINT.
 	// Next best thing would be to let it ARP but set interface to 192.168.3.5/32 and
 	// add a route like "192.168.3.0/24 via 192.168.3.1 dev $ifName".
 	// Unfortunately that won't work as the GW will be outside the interface's subnet.
