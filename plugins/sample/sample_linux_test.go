@@ -29,7 +29,7 @@ var _ = Describe("sample test", func() {
 
 	BeforeEach(func() {
 		var err error
-		targetNs, err = ns.NewNS()
+		targetNs, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 	})
 

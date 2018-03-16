@@ -35,7 +35,7 @@ var _ = Describe("ptp Operations", func() {
 	BeforeEach(func() {
 		// Create a new NetNS so we don't modify the host
 		var err error
-		originalNS, err = ns.NewNS()
+		originalNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -46,7 +46,7 @@ var _ = Describe("ptp Operations", func() {
 	doTest := func(conf string, numIPs int) {
 		const IFNAME = "ptp0"
 
-		targetNs, err := ns.NewNS()
+		targetNs, err := testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 		defer targetNs.Close()
 
@@ -179,7 +179,7 @@ var _ = Describe("ptp Operations", func() {
     }
 }`
 
-		targetNs, err := ns.NewNS()
+		targetNs, err := testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 		defer targetNs.Close()
 

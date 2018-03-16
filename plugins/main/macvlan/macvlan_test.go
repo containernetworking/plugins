@@ -39,7 +39,7 @@ var _ = Describe("macvlan Operations", func() {
 	BeforeEach(func() {
 		// Create a new NetNS so we don't modify the host
 		var err error
-		originalNS, err = ns.NewNS()
+		originalNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
 		err = originalNS.Do(func(ns.NetNS) error {
@@ -75,7 +75,7 @@ var _ = Describe("macvlan Operations", func() {
 			MTU:    1500,
 		}
 
-		targetNs, err := ns.NewNS()
+		targetNs, err := testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 		defer targetNs.Close()
 
@@ -114,7 +114,7 @@ var _ = Describe("macvlan Operations", func() {
     }
 }`, MASTER_NAME)
 
-		targetNs, err := ns.NewNS()
+		targetNs, err := testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 		defer targetNs.Close()
 
@@ -200,7 +200,7 @@ var _ = Describe("macvlan Operations", func() {
     }
 }`, MASTER_NAME)
 
-		targetNs, err := ns.NewNS()
+		targetNs, err := testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 		defer targetNs.Close()
 

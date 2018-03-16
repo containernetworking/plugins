@@ -531,7 +531,7 @@ func cmdAddDelTest(testNS ns.NetNS, tc testCase) {
 	// Get a Add/Del tester based on test case version
 	tester := testerByVersion(tc.cniVersion)
 
-	targetNS, err := ns.NewNS()
+	targetNS, err := testutils.NewNS()
 	Expect(err).NotTo(HaveOccurred())
 	defer targetNS.Close()
 	tester.setNS(testNS, targetNS)
@@ -552,7 +552,7 @@ var _ = Describe("bridge Operations", func() {
 	BeforeEach(func() {
 		// Create a new NetNS so we don't modify the host
 		var err error
-		originalNS, err = ns.NewNS()
+		originalNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -693,7 +693,7 @@ var _ = Describe("bridge Operations", func() {
 		}
 
 		tester := testerV03x{}
-		targetNS, err := ns.NewNS()
+		targetNS, err := testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 		defer targetNS.Close()
 		tester.setNS(originalNS, targetNS)

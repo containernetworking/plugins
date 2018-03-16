@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -39,7 +40,7 @@ var _ = Describe("Loopback", func() {
 		command = exec.Command(pathToLoPlugin)
 
 		var err error
-		networkNS, err = ns.NewNS()
+		networkNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
 		environ = []string{
