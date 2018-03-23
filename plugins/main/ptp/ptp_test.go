@@ -36,12 +36,11 @@ var _ = Describe("ptp Operations", func() {
 		// Create a new NetNS so we don't modify the host
 		var err error
 		originalNS, err = ns.NewNS()
-		fmt.Println("original NS: ", originalNS)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		//Expect(originalNS.Close()).To(Succeed())
+		Expect(originalNS.Close()).To(Succeed())
 	})
 
 	createPTP := func(ifName, containerID, conf string, numIPs int) (ns.NetNS, []*current.IPConfig) {
@@ -134,12 +133,10 @@ var _ = Describe("ptp Operations", func() {
 		const IFNAME = "ptp0"
 
 		srcNS, sips := createPTP(IFNAME, "dummy_src", conf, numIPs)
-		//defer srcNS.Close()
-		fmt.Println("src NS ", srcNS.Path())
+		defer srcNS.Close()
 
 		dstNS, dips := createPTP(IFNAME, "dummy_dst", conf, numIPs)
-		//defer dstNS.Close()
-		fmt.Println("dst NS ", dstNS.Path())
+		defer dstNS.Close()
 
 		err := srcNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
