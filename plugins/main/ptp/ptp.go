@@ -30,14 +30,14 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/utils"
-	"github.com/j-keck/arping"
+	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 	"github.com/vishvananda/netlink"
 )
 
 func init() {
-	// this ensures that main runs only on main thread (thread group leader).
+	// This ensures that main runs only on main thread (thread group leader).
 	// since namespace ops (unshare, setns) are done for a single thread, we
-	// must ensure that the goroutine does not jump from OS thread to thread
+	// must ensure that the goroutine does not jump from OS thread to thread.
 	runtime.LockOSThread()
 }
 
@@ -58,7 +58,6 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 	// "192.168.3.0/24 dev $ifName" route that was automatically added. Then we add
 	// "192.168.3.1/32 dev $ifName" and "192.168.3.0/24 via 192.168.3.1 dev $ifName".
 	// In other words we force all traffic to ARP via the gateway except for GW itself.
-
 	hostInterface := &current.Interface{}
 	containerInterface := &current.Interface{}
 
@@ -74,7 +73,7 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 		containerInterface.Sandbox = netns.Path()
 
 		for _, ipc := range pr.IPs {
-			// All addresses apply to the container veth interface
+			// All addresses apply to the container veth interface.
 			ipc.Interface = current.Int(1)
 		}
 
@@ -90,7 +89,7 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 		}
 
 		for _, ipc := range pr.IPs {
-			// Delete the route that was automatically added
+			// Delete the route that was automatically added.
 			route := netlink.Route{
 				LinkIndex: contVeth.Index,
 				Dst: &net.IPNet{
@@ -136,13 +135,6 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 			}
 		}
 
-		// Send a gratuitous arp for all v4 addresses
-		for _, ipc := range pr.IPs {
-			if ipc.Version == "4" {
-				_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
-			}
-		}
-
 		return nil
 	})
 	if err != nil {
@@ -152,7 +144,7 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 }
 
 func setupHostVeth(vethName string, result *current.Result) error {
-	// hostVeth moved namespaces and may have a new ifindex
+	// hostVeth moved namespaces and may have a new ifindex.
 	veth, err := netlink.LinkByName(vethName)
 	if err != nil {
 		return fmt.Errorf("failed to lookup %q: %v", vethName, err)
@@ -160,8 +152,12 @@ func setupHostVeth(vethName string, result *current.Result) error {
 
 	for _, ipc := range result.IPs {
 		maskLen := 128
-		if ipc.Address.IP.To4() != nil {
+		if ipc.Version == "4" {
 			maskLen = 32
+			// Relax revserve path filtering on hostVeth.
+			if _, err = sysctl.Sysctl(fmt.Sprintf("net.ipv4.conf.%s.rp_filter", vethName), "2"); err != nil {
+				return fmt.Errorf("failed to set rp_filter=2 on interface %q: %v", vethName, err)
+			}
 		}
 
 		ipn := &net.IPNet{
@@ -177,7 +173,7 @@ func setupHostVeth(vethName string, result *current.Result) error {
 			IP:   ipc.Address.IP,
 			Mask: net.CIDRMask(maskLen, maskLen),
 		}
-		// dst happens to be the same as IP/net of host veth
+		// dst happens to be the same as IP/net of host veth.
 		if err = ip.AddHostRoute(ipn, nil, veth); err != nil && !os.IsExist(err) {
 			return fmt.Errorf("failed to add route on host: %v", err)
 		}
@@ -192,12 +188,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	// run the IPAM plugin and get back the config to apply
+	// Run the IPAM plugin and get back the config to apply.
 	r, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
 	if err != nil {
 		return err
 	}
-	// Convert whatever the IPAM result was into the current Result type
+	// Convert whatever the IPAM result was into the current Result type.
 	result, err := current.NewResultFromResult(r)
 	if err != nil {
 		return err
@@ -208,7 +204,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	if err := ip.EnableForward(result.IPs); err != nil {
-		return fmt.Errorf("Could not enable IP forwarding: %v", err)
+		return fmt.Errorf("could not enable IP forwarding: %v", err)
 	}
 
 	netns, err := ns.GetNS(args.Netns)

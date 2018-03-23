@@ -43,20 +43,18 @@ var _ = Describe("ptp Operations", func() {
 		Expect(originalNS.Close()).To(Succeed())
 	})
 
-	doTest := func(conf string, numIPs int) {
-		const IFNAME = "ptp0"
-
-		targetNs, err := ns.NewNS()
+	createPTP := func(ifName, containerID, conf string, numIPs int) (ns.NetNS, []*current.IPConfig) {
+		targetNS, err := ns.NewNS()
 		Expect(err).NotTo(HaveOccurred())
-		defer targetNs.Close()
 
 		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNs.Path(),
-			IfName:      IFNAME,
+			ContainerID: containerID,
+			Netns:       targetNS.Path(),
+			IfName:      ifName,
 			StdinData:   []byte(conf),
 		}
 
+		var ips []*current.IPConfig
 		var resI types.Result
 		var res *current.Result
 
@@ -64,7 +62,7 @@ var _ = Describe("ptp Operations", func() {
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			resI, _, err = testutils.CmdAddWithResult(targetNs.Path(), IFNAME, []byte(conf), func() error {
+			resI, _, err = testutils.CmdAddWithResult(targetNS.Path(), ifName, []byte(conf), func() error {
 				return cmdAdd(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -76,40 +74,42 @@ var _ = Describe("ptp Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Make sure ptp link exists in the target namespace
-		// Then, ping the gateway
-		seenIPs := 0
-		err = targetNs.Do(func(ns.NetNS) error {
+		err = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			link, err := netlink.LinkByName(IFNAME)
+			link, err := netlink.LinkByName(ifName)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Name).To(Equal(IFNAME))
+			Expect(link.Attrs().Name).To(Equal(ifName))
 
 			for _, ipc := range res.IPs {
 				if *ipc.Interface != 1 {
 					continue
 				}
-				seenIPs += 1
-				saddr := ipc.Address.IP.String()
-				daddr := ipc.Gateway.String()
-				fmt.Fprintln(GinkgoWriter, "ping", saddr, "->", daddr)
-
-				if err := testutils.Ping(saddr, daddr, (ipc.Version == "6"), 30); err != nil {
-					return fmt.Errorf("ping %s -> %s failed: %s", saddr, daddr, err)
-				}
+				ips = append(ips, ipc)
 			}
 
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(seenIPs).To(Equal(numIPs))
+		Expect(len(ips)).To(Equal(numIPs))
+
+		return targetNS, ips
+	}
+
+	deletePTP := func(ifName, containerID, conf string, targetNS ns.NetNS) {
+		args := &skel.CmdArgs{
+			ContainerID: containerID,
+			Netns:       targetNS.Path(),
+			IfName:      ifName,
+			StdinData:   []byte(conf),
+		}
 
 		// Call the plugins with the DEL command, deleting the veth endpoints
-		err = originalNS.Do(func(ns.NetNS) error {
+		err := originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			err := testutils.CmdDelWithResult(targetNs.Path(), IFNAME, func() error {
+			err := testutils.CmdDelWithResult(targetNS.Path(), ifName, func() error {
 				return cmdDel(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -118,15 +118,44 @@ var _ = Describe("ptp Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Make sure ptp link has been deleted
-		err = targetNs.Do(func(ns.NetNS) error {
+		err = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			link, err := netlink.LinkByName(IFNAME)
+			link, err := netlink.LinkByName(ifName)
 			Expect(err).To(HaveOccurred())
 			Expect(link).To(BeNil())
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
+	}
+
+	doTest := func(conf string, numIPs int) {
+		const IFNAME = "ptp0"
+
+		srcNS, sips := createPTP(IFNAME, "dummy_src", conf, numIPs)
+		defer srcNS.Close()
+
+		dstNS, dips := createPTP(IFNAME, "dummy_dst", conf, numIPs)
+		defer dstNS.Close()
+
+		err := srcNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			for i := 0; i < numIPs; i++ {
+				saddr := sips[i].Address.IP.String()
+				daddr := dips[i].Address.IP.String()
+				fmt.Fprintln(GinkgoWriter, "ping", saddr, "->", daddr)
+
+				if err := testutils.Ping(saddr, daddr, (sips[i].Version == "6"), 30); err != nil {
+					return fmt.Errorf("ping %s -> %s failed: %s", saddr, daddr, err)
+				}
+			}
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		deletePTP(IFNAME, "dummy_src", conf, srcNS)
+		deletePTP(IFNAME, "dummy_dst", conf, dstNS)
 	}
 
 	It("configures and deconfigures a ptp link with ADD/DEL", func() {
