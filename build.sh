@@ -15,6 +15,7 @@ fi
 
 export GO15VENDOREXPERIMENT=1
 export GOPATH=${PWD}/gopath
+export GO="${GO:-go}"
 
 mkdir -p "${PWD}/bin"
 
@@ -27,9 +28,9 @@ for d in $PLUGINS; do
 		# use go install so we don't duplicate work
 		if [ -n "$FASTBUILD" ]
 		then
-			GOBIN=${PWD}/bin go install -pkgdir $GOPATH/pkg "$@" $REPO_PATH/$d
+			GOBIN=${PWD}/bin $GO install -pkgdir $GOPATH/pkg "$@" $REPO_PATH/$d
 		else
-			go build -o "${PWD}/bin/$plugin" -pkgdir "$GOPATH/pkg" "$@" "$REPO_PATH/$d"
+			$GO build -o "${PWD}/bin/$plugin" -pkgdir "$GOPATH/pkg" "$@" "$REPO_PATH/$d"
 		fi
 	fi
 done
