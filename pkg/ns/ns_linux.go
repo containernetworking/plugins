@@ -125,7 +125,7 @@ func (ns *netNS) Close() error {
 	ns.closed = true
 
 	if ns.mounted {
-		if err := unix.Unmount(ns.file.Name(), unix.MNT_DETACH); err != nil {
+		if err := unix.Unmount(ns.file.Name(), 0); err != nil {
 			return fmt.Errorf("Failed to unmount namespace %s: %v", ns.file.Name(), err)
 		}
 		if err := os.RemoveAll(ns.file.Name()); err != nil {
