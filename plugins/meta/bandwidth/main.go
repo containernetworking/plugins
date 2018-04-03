@@ -17,30 +17,39 @@ package main
 import (
 	"crypto/sha1"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
-
-	"errors"
 	"github.com/containernetworking/plugins/pkg/ip"
+
 	"github.com/vishvananda/netlink"
 )
 
-type PluginConf struct {
-	types.NetConf
-	RuntimeConfig *struct{} `json:"runtimeConfig"`
-
-	RawPrevResult *map[string]interface{} `json:"prevResult"`
-	PrevResult    *current.Result         `json:"-"`
-
+// BandWidthEntry corresponds to a single entry in the bandwidth argument,
+// see CONVENTIONS.md
+type BandWidthEntry struct {
 	IngressRate  int `json:"ingressRate"`  //Bandwidth rate in Kbps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
 	IngressBurst int `json:"ingressBurst"` //Bandwidth burst in Kb for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
 
 	EgressRate  int `json:"egressRate"`  //Bandwidth rate in Kbps for traffic through container. 0 for no limit. If egressRate is set, egressBurst must also be set
 	EgressBurst int `json:"egressBurst"` //Bandwidth burst in Kb for traffic through container. 0 for no limit. If egressBurst is set, egressRate must also be set
+}
+
+type PluginConf struct {
+	types.NetConf
+
+	RuntimeConfig struct {
+		BandWidth *BandWidthEntry `json:"bandWidth,omitempty"`
+	} `json:"runtimeConfig,omitempty"`
+
+	// RuntimeConfig *struct{} `json:"runtimeConfig"`
+
+	RawPrevResult *map[string]interface{} `json:"prevResult"`
+	PrevResult    *current.Result         `json:"-"`
 }
 
 // parseConfig parses the supplied configuration (and prevResult) from stdin.
@@ -67,13 +76,15 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 		}
 	}
 
-	err := validateRateAndBurst(conf.IngressRate, conf.IngressBurst)
-	if err != nil {
-		return nil, err
-	}
-	err = validateRateAndBurst(conf.EgressRate, conf.EgressBurst)
-	if err != nil {
-		return nil, err
+	if conf.RuntimeConfig.BandWidth != nil {
+		err := validateRateAndBurst(conf.RuntimeConfig.BandWidth.IngressRate, conf.RuntimeConfig.BandWidth.IngressBurst)
+		if err != nil {
+			return nil, err
+		}
+		err = validateRateAndBurst(conf.RuntimeConfig.BandWidth.EgressRate, conf.RuntimeConfig.BandWidth.EgressBurst)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &conf, nil
@@ -135,8 +146,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	bandwidth := conf.RuntimeConfig.BandWidth
 	//no traffic shaping was requested, so just no-op and quit
-	if conf.IngressRate == 0 && conf.IngressBurst == 0 && conf.EgressRate == 0 && conf.EgressBurst == 0 {
+	if bandwidth == nil || (bandwidth.IngressRate == 0 && bandwidth.IngressBurst == 0 && bandwidth.EgressRate == 0 && bandwidth.EgressBurst == 0) {
 		return types.PrintResult(conf.PrevResult, conf.CNIVersion)
 	}
 
@@ -149,14 +161,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if conf.IngressRate > 0 && conf.IngressBurst > 0 {
-		err = CreateIngressQdisc(conf.IngressRate, conf.IngressBurst, hostInterface.Name)
+	if bandwidth.IngressRate > 0 && bandwidth.IngressBurst > 0 {
+		err = CreateIngressQdisc(bandwidth.IngressRate, bandwidth.IngressBurst, hostInterface.Name)
 		if err != nil {
 			return err
 		}
 	}
 
-	if conf.EgressRate > 0 && conf.EgressBurst > 0 {
+	if bandwidth.EgressRate > 0 && bandwidth.EgressBurst > 0 {
 		mtu, err := getMTU(hostInterface.Name)
 		if err != nil {
 			return err
@@ -181,7 +193,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			Name: ifbDeviceName,
 			Mac:  ifbDevice.Attrs().HardwareAddr.String(),
 		})
-		err = CreateEgressQdisc(conf.EgressRate, conf.EgressBurst, hostInterface.Name, ifbDeviceName)
+		err = CreateEgressQdisc(bandwidth.EgressRate, bandwidth.EgressBurst, hostInterface.Name, ifbDeviceName)
 		if err != nil {
 			return err
 		}

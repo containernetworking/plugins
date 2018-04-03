@@ -77,10 +77,14 @@ var _ = Describe("bandwidth test", func() {
 	"cniVersion": "0.3.0",
 	"name": "cni-plugin-bandwidth-test",
 	"type": "bandwidth",
-	"ingressRate": 8,
-	"ingressBurst": 8,
-	"egressRate": 16,
-	"egressBurst": 9,
+	"runtimeConfig": {
+		"bandWidth": {
+			"ingressRate": 8,
+			"ingressBurst": 8,
+			"egressRate": 16,
+			"egressBurst": 9
+		}
+	},
 	"prevResult": {
 		"interfaces": [
 			{
@@ -174,10 +178,14 @@ var _ = Describe("bandwidth test", func() {
 	"cniVersion": "0.3.0",
 	"name": "cni-plugin-bandwidth-test",
 	"type": "bandwidth",
-	"ingressRate": 0,
-	"ingressBurst": 0,
-	"egressRate": 8,
-	"egressBurst": 1,
+	"runtimeConfig": {
+		"bandWidth": {
+			"ingressRate": 0,
+			"ingressBurst": 0,
+			"egressRate": 8,
+			"egressBurst": 1
+		}
+	},
 	"prevResult": {
 		"interfaces": [
 			{
@@ -243,10 +251,14 @@ var _ = Describe("bandwidth test", func() {
 	"cniVersion": "0.3.0",
 	"name": "cni-plugin-bandwidth-test",
 	"type": "bandwidth",
-	"egressRate": 0,
-	"egressBurst": 0,
-	"ingressRate": 8,
-	"ingressBurst": 1,
+	"runtimeConfig": {
+		"bandWidth": {
+			"egressRate": 0,
+			"egressBurst": 0,
+			"ingressRate": 8,
+			"ingressBurst": 1
+		}
+	},
 	"prevResult": {
 		"interfaces": [
 			{
@@ -314,10 +326,14 @@ var _ = Describe("bandwidth test", func() {
 	"cniVersion": "0.3.0",
 	"name": "cni-plugin-bandwidth-test",
 	"type": "bandwidth",
-	"ingressRate": 0,
-	"ingressBurst": 123,
-	"egressRate": 123,
-	"egressBurst": 123,
+	"runtimeConfig": {
+		"bandWidth": {
+			"ingressRate": 0,
+			"ingressBurst": 123,
+			"egressRate": 123,
+			"egressBurst": 123
+		}
+	},
 	"prevResult": {
 		"interfaces": [
 			{
@@ -366,10 +382,14 @@ var _ = Describe("bandwidth test", func() {
 	"cniVersion": "0.3.0",
 	"name": "cni-plugin-bandwidth-test",
 	"type": "bandwidth",
-	"ingressRate": 8,
-	"ingressBurst": 8,
-	"egressRate": 9,
-	"egressBurst": 9,
+	"runtimeConfig": {
+		"bandWidth": {
+			"ingressRate": 8,
+			"ingressBurst": 8,
+			"egressRate": 9,
+			"egressBurst": 9
+		}
+	},
 	"prevResult": {
 		"interfaces": [
 			{
@@ -484,7 +504,8 @@ var _ = Describe("bandwidth test", func() {
 				containerWithTbfResult, err := current.GetResult(containerWithTbfRes)
 				Expect(err).NotTo(HaveOccurred())
 
-				tbfPluginConf := PluginConf{
+				tbfPluginConf := PluginConf{}
+				tbfPluginConf.RuntimeConfig.BandWidth = &BandWidthEntry{
 					IngressBurst: burstInBits,
 					IngressRate:  rateInBits,
 					EgressBurst:  burstInBits,
