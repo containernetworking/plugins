@@ -14,10 +14,14 @@
         },
         {
             "type": "bandwidth",
-            "ingressRate": 8000,
-            "ingressBurst": 16000,
-            "egressRate": 8000,
-            "egressBurst": 16000
+            "runtimeConfig": {
+                "bandWidth": {
+                    "ingressRate": 8000,
+                    "ingressBurst": 16000,
+                    "egressRate": 8000,
+                    "egressBurst": 16000
+                }
+            }
         }
     ]
 }

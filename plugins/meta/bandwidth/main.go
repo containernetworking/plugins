@@ -29,9 +29,9 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-// BandWidthEntry corresponds to a single entry in the bandwidth argument,
+// BandwidthEntry corresponds to a single entry in the bandwidth argument,
 // see CONVENTIONS.md
-type BandWidthEntry struct {
+type BandwidthEntry struct {
 	IngressRate  int `json:"ingressRate"`  //Bandwidth rate in Kbps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
 	IngressBurst int `json:"ingressBurst"` //Bandwidth burst in Kb for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
 
@@ -39,17 +39,22 @@ type BandWidthEntry struct {
 	EgressBurst int `json:"egressBurst"` //Bandwidth burst in Kb for traffic through container. 0 for no limit. If egressBurst is set, egressRate must also be set
 }
 
+func (bw *BandwidthEntry) isZero() bool {
+	return bw.IngressBurst == 0 && bw.IngressRate == 0 && bw.EgressBurst == 0 && bw.EgressRate == 0
+}
+
 type PluginConf struct {
 	types.NetConf
 
 	RuntimeConfig struct {
-		BandWidth *BandWidthEntry `json:"bandWidth,omitempty"`
+		Bandwidth *BandwidthEntry `json:"bandwidth,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
 
 	// RuntimeConfig *struct{} `json:"runtimeConfig"`
 
 	RawPrevResult *map[string]interface{} `json:"prevResult"`
 	PrevResult    *current.Result         `json:"-"`
+	*BandwidthEntry
 }
 
 // parseConfig parses the supplied configuration (and prevResult) from stdin.
@@ -75,13 +80,13 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 			return nil, fmt.Errorf("could not convert result to current version: %v", err)
 		}
 	}
-
-	if conf.RuntimeConfig.BandWidth != nil {
-		err := validateRateAndBurst(conf.RuntimeConfig.BandWidth.IngressRate, conf.RuntimeConfig.BandWidth.IngressBurst)
+	bandwidth := getBandwidth(&conf)
+	if bandwidth != nil {
+		err := validateRateAndBurst(bandwidth.IngressRate, bandwidth.IngressBurst)
 		if err != nil {
 			return nil, err
 		}
-		err = validateRateAndBurst(conf.RuntimeConfig.BandWidth.EgressRate, conf.RuntimeConfig.BandWidth.EgressBurst)
+		err = validateRateAndBurst(bandwidth.EgressRate, bandwidth.EgressBurst)
 		if err != nil {
 			return nil, err
 		}
@@ -89,6 +94,13 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 
 	return &conf, nil
 
+}
+
+func getBandwidth(conf *PluginConf) *BandwidthEntry {
+	if conf.BandwidthEntry == nil && conf.RuntimeConfig.Bandwidth != nil {
+		return conf.RuntimeConfig.Bandwidth
+	}
+	return conf.BandwidthEntry
 }
 
 func validateRateAndBurst(rate int, burst int) error {
@@ -146,9 +158,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	bandwidth := conf.RuntimeConfig.BandWidth
-	//no traffic shaping was requested, so just no-op and quit
-	if bandwidth == nil || (bandwidth.IngressRate == 0 && bandwidth.IngressBurst == 0 && bandwidth.EgressRate == 0 && bandwidth.EgressBurst == 0) {
+	bandwidth := getBandwidth(conf)
+	if bandwidth == nil || bandwidth.isZero() {
 		return types.PrintResult(conf.PrevResult, conf.CNIVersion)
 	}
 
