@@ -78,12 +78,14 @@ var _ = Describe("ptp Operations", func() {
 		// Make sure ptp link exists in the target namespace
 		// Then, ping the gateway
 		seenIPs := 0
+
+		wantMac := ""
 		err = targetNs.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
 			link, err := netlink.LinkByName(IFNAME)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Name).To(Equal(IFNAME))
+			wantMac = link.Attrs().HardwareAddr.String()
 
 			for _, ipc := range res.IPs {
 				if *ipc.Interface != 1 {
@@ -104,6 +106,17 @@ var _ = Describe("ptp Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(seenIPs).To(Equal(numIPs))
+
+		// make sure the interfaces are correct
+		Expect(res.Interfaces).To(HaveLen(2))
+
+		Expect(res.Interfaces[0].Name).To(HavePrefix("veth"))
+		Expect(res.Interfaces[0].Mac).To(HaveLen(17))
+		Expect(res.Interfaces[0].Sandbox).To(BeEmpty())
+
+		Expect(res.Interfaces[1].Name).To(Equal(IFNAME))
+		Expect(res.Interfaces[1].Mac).To(Equal(wantMac))
+		Expect(res.Interfaces[1].Sandbox).To(Equal(targetNs.Path()))
 
 		// Call the plugins with the DEL command, deleting the veth endpoints
 		err = originalNS.Do(func(ns.NetNS) error {
