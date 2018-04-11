@@ -37,7 +37,7 @@ var _ = Describe("Flannel", func() {
 
 	BeforeEach(func() {
 		var err error
-		originalNS, err = ns.NewNS()
+		originalNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -88,7 +88,7 @@ FLANNEL_IPMASQ=true
 		It("uses dataDir for storing network configuration", func() {
 			const IFNAME = "eth0"
 
-			targetNs, err := ns.NewNS()
+			targetNs, err := testutils.NewNS()
 			Expect(err).NotTo(HaveOccurred())
 			defer targetNs.Close()
 

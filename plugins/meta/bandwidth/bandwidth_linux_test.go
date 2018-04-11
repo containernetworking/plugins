@@ -52,10 +52,10 @@ var _ = Describe("bandwidth test", func() {
 		hostIfname = "host-veth"
 		containerIfname = "container-veth"
 
-		hostNs, err = ns.NewNS()
+		hostNs, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
-		containerNs, err = ns.NewNS()
+		containerNs, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
 		hostIP = net.IP{169, 254, 0, 1}
@@ -455,10 +455,10 @@ var _ = Describe("bandwidth test", func() {
 			containerWithoutTbfIFName := "ptp1"
 
 			var err error
-			containerWithTbfNS, err = ns.NewNS()
+			containerWithTbfNS, err = testutils.NewNS()
 			Expect(err).NotTo(HaveOccurred())
 
-			containerWithoutTbfNS, err = ns.NewNS()
+			containerWithoutTbfNS, err = testutils.NewNS()
 			Expect(err).NotTo(HaveOccurred())
 
 			By("create two containers, and use the bandwidth plugin on one of them")

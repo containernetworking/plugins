@@ -21,6 +21,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 
 	"github.com/vishvananda/netlink"
 
@@ -48,7 +49,7 @@ var _ = Describe("ConfigureIface", func() {
 	BeforeEach(func() {
 		// Create a new NetNS so we don't modify the host
 		var err error
-		originalNS, err = ns.NewNS()
+		originalNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
 		err = originalNS.Do(func(ns.NetNS) error {

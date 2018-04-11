@@ -25,6 +25,7 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 
 	"github.com/vishvananda/netlink"
 )
@@ -58,10 +59,10 @@ var _ = Describe("Link", func() {
 	BeforeEach(func() {
 		var err error
 
-		hostNetNS, err = ns.NewNS()
+		hostNetNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
-		containerNetNS, err = ns.NewNS()
+		containerNetNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
 		fakeBytes := make([]byte, 20)

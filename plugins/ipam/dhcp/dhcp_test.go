@@ -120,10 +120,10 @@ var _ = Describe("DHCP Operations", func() {
 
 		// Create a new NetNS so we don't modify the host
 		var err error
-		originalNS, err = ns.NewNS()
+		originalNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
-		targetNS, err = ns.NewNS()
+		targetNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
 		serverIP := net.IPNet{

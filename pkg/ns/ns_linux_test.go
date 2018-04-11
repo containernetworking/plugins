@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"golang.org/x/sys/unix"
@@ -65,16 +66,19 @@ var _ = Describe("Linux namespace operations", func() {
 		BeforeEach(func() {
 			var err error
 
-			originalNetNS, err = ns.NewNS()
+			originalNetNS, err = testutils.NewNS()
 			Expect(err).NotTo(HaveOccurred())
 
-			targetNetNS, err = ns.NewNS()
+			targetNetNS, err = testutils.NewNS()
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
-			Expect(targetNetNS.Close()).To(Succeed())
-			Expect(originalNetNS.Close()).To(Succeed())
+			targetNetNS.Close()
+			originalNetNS.Close()
+
+			Expect(testutils.UnmountNS(targetNetNS)).To(Succeed())
+			Expect(testutils.UnmountNS(originalNetNS)).To(Succeed())
 		})
 
 		It("executes the callback within the target network namespace", func() {
@@ -155,13 +159,14 @@ var _ = Describe("Linux namespace operations", func() {
 
 			It("should not leak a closed netns onto any threads in the process", func() {
 				By("creating a new netns")
-				createdNetNS, err := ns.NewNS()
+				createdNetNS, err := testutils.NewNS()
 				Expect(err).NotTo(HaveOccurred())
 
 				By("discovering the inode of the created netns")
 				createdNetNSInode, err := getInodeNS(createdNetNS)
 				Expect(err).NotTo(HaveOccurred())
 				createdNetNS.Close()
+				Expect(testutils.UnmountNS(createdNetNS)).NotTo(HaveOccurred())
 
 				By("comparing against the netns inode of every thread in the process")
 				for _, netnsPath := range allNetNSInCurrentProcess() {
@@ -188,7 +193,8 @@ var _ = Describe("Linux namespace operations", func() {
 
 		Describe("closing a network namespace", func() {
 			It("should prevent further operations", func() {
-				createdNetNS, err := ns.NewNS()
+				createdNetNS, err := testutils.NewNS()
+				defer testutils.UnmountNS(createdNetNS)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = createdNetNS.Close()
@@ -202,8 +208,9 @@ var _ = Describe("Linux namespace operations", func() {
 			})
 
 			It("should only work once", func() {
-				createdNetNS, err := ns.NewNS()
+				createdNetNS, err := testutils.NewNS()
 				Expect(err).NotTo(HaveOccurred())
+				defer testutils.UnmountNS(createdNetNS)
 
 				err = createdNetNS.Close()
 				Expect(err).NotTo(HaveOccurred())
@@ -216,7 +223,8 @@ var _ = Describe("Linux namespace operations", func() {
 
 	Describe("IsNSorErr", func() {
 		It("should detect a namespace", func() {
-			createdNetNS, err := ns.NewNS()
+			createdNetNS, err := testutils.NewNS()
+			defer testutils.UnmountNS(createdNetNS)
 			err = ns.IsNSorErr(createdNetNS.Path())
 			Expect(err).NotTo(HaveOccurred())
 		})

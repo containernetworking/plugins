@@ -34,7 +34,7 @@ var _ = Describe("base functionality", func() {
 
 	BeforeEach(func() {
 		var err error
-		originalNS, err = ns.NewNS()
+		originalNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
 		ifname = fmt.Sprintf("dummy-%x", rand.Int31())
@@ -65,7 +65,7 @@ var _ = Describe("base functionality", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// call CmdAdd
-		targetNS, err := ns.NewNS()
+		targetNS, err := testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
 		CNI_IFNAME := "eth0"

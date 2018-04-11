@@ -20,6 +20,7 @@ import (
 	"runtime"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/coreos/go-iptables/iptables"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -40,7 +41,7 @@ var _ = Describe("chain tests", func() {
 		currNs, err := ns.GetCurrentNS()
 		Expect(err).NotTo(HaveOccurred())
 
-		testNs, err := ns.NewNS()
+		testNs, err := testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
 		tlChainName := fmt.Sprintf("cni-test-%d", rand.Intn(10000000))
