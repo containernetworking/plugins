@@ -42,8 +42,14 @@ func makeVethPair(name, peer string, mtu int) (netlink.Link, error) {
 	if err := netlink.LinkAdd(veth); err != nil {
 		return nil, err
 	}
+	// Re-fetch the link to get its creation-time parameters, e.g. index and mac
+	veth2, err := netlink.LinkByName(name)
+	if err != nil {
+		netlink.LinkDel(veth) // try and clean up the link if possible.
+		return nil, err
+	}
 
-	return veth, nil
+	return veth2, nil
 }
 
 func peerExists(name string) bool {
