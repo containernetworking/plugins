@@ -23,5 +23,5 @@ import (
 
 func TestMacvlan(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "macvlan Suite")
+	RunSpecs(t, "plugins/main/macvlan")
 }

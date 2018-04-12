@@ -37,7 +37,7 @@ func TestPortmap(t *testing.T) {
 	rand.Seed(config.GinkgoConfig.RandomSeed)
 
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "portmap Suite")
+	RunSpecs(t, "plugins/meta/portmap")
 }
 
 var echoServerBinaryPath string

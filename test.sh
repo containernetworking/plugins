@@ -10,17 +10,12 @@ source ./build.sh
 
 echo "Running tests"
 
-# test everything that's not in vendor
-pushd "$GOPATH/src/$REPO_PATH" >/dev/null
-  ALL_PKGS="$(go list ./... | grep -v vendor | xargs echo)"
-popd >/dev/null
-
 GINKGO_FLAGS="-p --randomizeAllSpecs --randomizeSuites --failOnPending --progress"
 
 # user has not provided PKG override
 if [ -z "$PKG" ]; then
   GINKGO_FLAGS="$GINKGO_FLAGS -r ."
-  LINT_TARGETS="$ALL_PKGS"
+  LINT_TARGETS="./..."
 
 # user has provided PKG override
 else
@@ -28,9 +23,9 @@ else
   LINT_TARGETS="$PKG"
 fi
 
-cd "$GOPATH/src/$REPO_PATH"
-sudo -E bash -c "umask 0; PATH=${GOROOT}/bin:$(pwd)/bin:${PATH} ginkgo ${GINKGO_FLAGS}"
+sudo -E bash -c "umask 0; cd ${GOPATH}/src/${REPO_PATH}; PATH=${GOROOT}/bin:$(pwd)/bin:${PATH} ginkgo ${GINKGO_FLAGS}"
 
+cd ${GOPATH}/src/${REPO_PATH};
 echo "Checking gofmt..."
 fmtRes=$(go fmt $LINT_TARGETS)
 if [ -n "${fmtRes}" ]; then

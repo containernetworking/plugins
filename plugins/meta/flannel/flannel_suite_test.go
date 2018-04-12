@@ -22,5 +22,5 @@ import (
 
 func TestFlannel(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Flannel Suite")
+	RunSpecs(t, "plugins/meta/flannel")
 }

@@ -23,5 +23,5 @@ import (
 
 func TestPtp(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "ptp Suite")
+	RunSpecs(t, "plugins/main/ptp")
 }

@@ -23,5 +23,5 @@ import (
 
 func TestLock(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Disk Suite")
+	RunSpecs(t, "plugins/ipam/host-local/backend/disk")
 }

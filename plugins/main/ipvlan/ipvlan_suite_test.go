@@ -23,5 +23,5 @@ import (
 
 func TestIpvlan(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "ipvlan Suite")
+	RunSpecs(t, "plugins/main/ipvlan")
 }
