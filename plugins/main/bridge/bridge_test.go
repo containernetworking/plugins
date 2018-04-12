@@ -257,7 +257,14 @@ func (tester *testerV03x) cmdAddTest(tc testCase) {
 
 		Expect(len(result.Interfaces)).To(Equal(3))
 		Expect(result.Interfaces[0].Name).To(Equal(BRNAME))
+		Expect(result.Interfaces[0].Mac).To(HaveLen(17))
+
+		Expect(result.Interfaces[1].Name).To(HavePrefix("veth"))
+		Expect(result.Interfaces[1].Mac).To(HaveLen(17))
+
 		Expect(result.Interfaces[2].Name).To(Equal(IFNAME))
+		Expect(result.Interfaces[2].Mac).To(HaveLen(17)) //mac is random
+		Expect(result.Interfaces[2].Sandbox).To(Equal(tester.targetNS.Path()))
 
 		// Make sure bridge link exists
 		link, err := netlink.LinkByName(result.Interfaces[0].Name)
