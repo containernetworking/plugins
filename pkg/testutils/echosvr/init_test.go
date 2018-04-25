@@ -9,5 +9,5 @@ import (
 
 func TestEchosvr(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Testutils Echosvr Suite")
+	RunSpecs(t, "pkg/testutils/echosvr")
 }

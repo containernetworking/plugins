@@ -23,5 +23,5 @@ import (
 
 func TestDHCP(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "DHCP Suite")
+	RunSpecs(t, "plugins/ipam/dhcp")
 }

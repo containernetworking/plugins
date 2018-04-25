@@ -23,5 +23,5 @@ import (
 
 func TestVlan(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "host-device Suite")
+	RunSpecs(t, "plugins/main/host-device")
 }

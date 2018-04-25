@@ -27,7 +27,7 @@ var pathToLoPlugin string
 
 func TestLoopback(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Loopback Suite")
+	RunSpecs(t, "plugins/main/loopback")
 }
 
 var _ = BeforeSuite(func() {

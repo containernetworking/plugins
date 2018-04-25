@@ -23,5 +23,5 @@ import (
 
 func TestHostLocal(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "HostLocal Suite")
+	RunSpecs(t, "plugins/ipam/host-local")
 }

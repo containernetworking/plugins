@@ -11,5 +11,5 @@ import (
 
 func TestSample(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "sample suite")
+	RunSpecs(t, "plugins/sample")
 }

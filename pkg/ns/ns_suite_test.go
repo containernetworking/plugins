@@ -30,5 +30,5 @@ func TestNs(t *testing.T) {
 	runtime.LockOSThread()
 
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "pkg/ns Suite")
+	RunSpecs(t, "pkg/ns")
 }

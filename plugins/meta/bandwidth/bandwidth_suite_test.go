@@ -36,7 +36,7 @@ import (
 
 func TestTBF(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "bandwidth suite")
+	RunSpecs(t, "plugins/meta/bandwidth")
 }
 
 var echoServerBinaryPath string
