@@ -143,6 +143,11 @@ func moveLinkOut(containerNs ns.NetNS, ifName string) error {
 		if err != nil {
 			return fmt.Errorf("failed to find %q: %v", ifName, err)
 		}
+
+		// Devices can be renamed only when down
+		if err := netlink.LinkSetDown(dev); err != nil {
+			return fmt.Errorf("failed to set %q down: %v", ifName, err)
+		}
 		// Rename device to it's original name
 		if err := netlink.LinkSetName(dev, dev.Attrs().Alias); err != nil {
 			return fmt.Errorf("failed to restore %q to original name %q: %v", ifName, dev.Attrs().Alias, err)
