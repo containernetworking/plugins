@@ -231,7 +231,7 @@ var _ = Describe("DHCP Operations", func() {
 		err := originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			r, _, err := testutils.CmdAddWithResult(targetNS.Path(), contVethName, []byte(conf), func() error {
+			r, _, err := testutils.CmdAddWithArgs(args, func() error {
 				return cmdAdd(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -245,7 +245,7 @@ var _ = Describe("DHCP Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		err = originalNS.Do(func(ns.NetNS) error {
-			return testutils.CmdDelWithResult(targetNS.Path(), contVethName, func() error {
+			return testutils.CmdDelWithArgs(args, func() error {
 				return cmdDel(args)
 			})
 		})
@@ -273,7 +273,7 @@ var _ = Describe("DHCP Operations", func() {
 		err := originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			r, _, err := testutils.CmdAddWithResult(targetNS.Path(), contVethName, []byte(conf), func() error {
+			r, _, err := testutils.CmdAddWithArgs(args, func() error {
 				return cmdAdd(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -299,7 +299,7 @@ var _ = Describe("DHCP Operations", func() {
 				started.Wait()
 
 				err = originalNS.Do(func(ns.NetNS) error {
-					return testutils.CmdDelWithResult(targetNS.Path(), contVethName, func() error {
+					return testutils.CmdDelWithArgs(args, func() error {
 						return cmdDel(args)
 					})
 				})
@@ -310,7 +310,7 @@ var _ = Describe("DHCP Operations", func() {
 		wg.Wait()
 
 		err = originalNS.Do(func(ns.NetNS) error {
-			return testutils.CmdDelWithResult(targetNS.Path(), contVethName, func() error {
+			return testutils.CmdDelWithArgs(args, func() error {
 				return cmdDel(args)
 			})
 		})

@@ -67,7 +67,7 @@ var _ = Describe("static Operations", func() {
 		}
 
 		// Allocate the IP
-		r, raw, err := testutils.CmdAddWithResult(nspath, ifname, []byte(conf), func() error {
+		r, raw, err := testutils.CmdAddWithArgs(args, func() error {
 			return cmdAdd(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -100,7 +100,7 @@ var _ = Describe("static Operations", func() {
 		}))
 
 		// Release the IP
-		err = testutils.CmdDelWithResult(nspath, ifname, func() error {
+		err = testutils.CmdDelWithArgs(args, func() error {
 			return cmdDel(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -143,7 +143,7 @@ var _ = Describe("static Operations", func() {
 		}
 
 		// Release the IP
-		err := testutils.CmdDelWithResult(nspath, ifname, func() error {
+		err := testutils.CmdDelWithArgs(args, func() error {
 			return cmdDel(args)
 		})
 		Expect(err).NotTo(HaveOccurred())

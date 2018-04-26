@@ -103,7 +103,7 @@ FLANNEL_IPMASQ=true
 				defer GinkgoRecover()
 
 				By("calling ADD")
-				resI, _, err := testutils.CmdAddWithResult(targetNs.Path(), IFNAME, []byte(input), func() error {
+				resI, _, err := testutils.CmdAddWithArgs(args, func() error {
 					return cmdAdd(args)
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -138,7 +138,7 @@ FLANNEL_IPMASQ=true
 				Expect(result.IPs).To(HaveLen(1))
 
 				By("calling DEL")
-				err = testutils.CmdDelWithResult(targetNs.Path(), IFNAME, func() error {
+				err = testutils.CmdDelWithArgs(args, func() error {
 					return cmdDel(args)
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -147,7 +147,7 @@ FLANNEL_IPMASQ=true
 				Expect(path).ShouldNot(BeAnExistingFile())
 
 				By("calling DEL again")
-				err = testutils.CmdDelWithResult(targetNs.Path(), IFNAME, func() error {
+				err = testutils.CmdDelWithArgs(args, func() error {
 					return cmdDel(args)
 				})
 				By("check that plugin does not fail due to missing net config")

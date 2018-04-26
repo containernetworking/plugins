@@ -30,10 +30,9 @@ import (
 
 var _ = Describe("Loopback", func() {
 	var (
-		networkNS   ns.NetNS
-		containerID string
-		command     *exec.Cmd
-		environ     []string
+		networkNS ns.NetNS
+		command   *exec.Cmd
+		environ   []string
 	)
 
 	BeforeEach(func() {
@@ -44,7 +43,7 @@ var _ = Describe("Loopback", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		environ = []string{
-			fmt.Sprintf("CNI_CONTAINERID=%s", containerID),
+			fmt.Sprintf("CNI_CONTAINERID=%s", "dummy"),
 			fmt.Sprintf("CNI_NETNS=%s", networkNS.Path()),
 			fmt.Sprintf("CNI_IFNAME=%s", "this is ignored"),
 			fmt.Sprintf("CNI_ARGS=%s", "none"),

@@ -148,12 +148,15 @@ func (tc testCase) rangesConfig() string {
 	return conf + rangesEndStr
 }
 
+var counter uint
+
 // createCmdArgs generates network configuration and creates command
 // arguments for a test case.
 func (tc testCase) createCmdArgs(targetNS ns.NetNS) *skel.CmdArgs {
 	conf := tc.netConfJSON()
+	defer func() { counter += 1 }()
 	return &skel.CmdArgs{
-		ContainerID: "dummy",
+		ContainerID: fmt.Sprintf("dummy-%d", counter),
 		Netns:       targetNS.Path(),
 		IfName:      IFNAME,
 		StdinData:   []byte(conf),
@@ -246,7 +249,7 @@ func (tester *testerV03x) cmdAddTest(tc testCase) {
 	err := tester.testNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
-		r, raw, err := testutils.CmdAddWithResult(tester.targetNS.Path(), IFNAME, tester.args.StdinData, func() error {
+		r, raw, err := testutils.CmdAddWithArgs(tester.args, func() error {
 			return cmdAdd(tester.args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -374,7 +377,7 @@ func (tester *testerV03x) cmdDelTest(tc testCase) {
 	err := tester.testNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
-		err := testutils.CmdDelWithResult(tester.targetNS.Path(), IFNAME, func() error {
+		err := testutils.CmdDelWithArgs(tester.args, func() error {
 			return cmdDel(tester.args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -424,7 +427,7 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase) {
 	err := tester.testNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
-		r, raw, err := testutils.CmdAddWithResult(tester.targetNS.Path(), IFNAME, tester.args.StdinData, func() error {
+		r, raw, err := testutils.CmdAddWithArgs(tester.args, func() error {
 			return cmdAdd(tester.args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -513,7 +516,7 @@ func (tester *testerV01xOr02x) cmdDelTest(tc testCase) {
 	err := tester.testNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
-		err := testutils.CmdDelWithResult(tester.targetNS.Path(), IFNAME, func() error {
+		err := testutils.CmdDelWithArgs(tester.args, func() error {
 			return cmdDel(tester.args)
 		})
 		Expect(err).NotTo(HaveOccurred())
