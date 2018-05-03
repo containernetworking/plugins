@@ -24,6 +24,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -52,8 +53,7 @@ const (
         "gateway": "10.0.0.1",
         "interface": 0
       }
-    ],
-    "routes": []
+    ]
   }
 }`
 	ifname = "eth0"
@@ -192,5 +192,87 @@ var _ = Describe("firewalld test", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fwd.zone).To(Equal("trusted"))
 		Expect(fwd.source).To(Equal("10.0.0.2/32"))
+	})
+
+	It("defaults to the firewalld backend", func() {
+		conf := `{
+		  "cniVersion": "0.3.1",
+		  "name": "firewalld-test",
+		  "type": "firewall",
+		  "zone": "trusted",
+		  "prevResult": {
+		    "cniVersion": "0.3.0",
+		    "interfaces": [
+		      {"name": "eth0", "sandbox": "/foobar"}
+		    ],
+		    "ips": [
+		      {
+			"version": "4",
+			"address": "10.0.0.2/24",
+			"gateway": "10.0.0.1",
+			"interface": 0
+		      }
+		    ]
+		  }
+		}`
+
+		Expect(isFirewalldRunning()).To(BeTrue())
+
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNs.Path(),
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+		_, _, err := testutils.CmdAddWithResult(targetNs.Path(), ifname, []byte(conf), func() error {
+			return cmdAdd(args)
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fwd.zone).To(Equal("trusted"))
+		Expect(fwd.source).To(Equal("10.0.0.2/32"))
+	})
+
+	It("passes through the prevResult", func() {
+		conf := `{
+		  "cniVersion": "0.3.1",
+		  "name": "firewalld-test",
+		  "type": "firewall",
+		  "zone": "trusted",
+		  "prevResult": {
+		    "cniVersion": "0.3.0",
+		    "interfaces": [
+		      {"name": "eth0", "sandbox": "/foobar"}
+		    ],
+		    "ips": [
+		      {
+			"version": "4",
+			"address": "10.0.0.2/24",
+			"gateway": "10.0.0.1",
+			"interface": 0
+		      }
+		    ]
+		  }
+		}`
+
+		Expect(isFirewalldRunning()).To(BeTrue())
+
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNs.Path(),
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+		r, _, err := testutils.CmdAddWithResult(targetNs.Path(), ifname, []byte(conf), func() error {
+			return cmdAdd(args)
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		result, err := current.GetResult(r)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(len(result.Interfaces)).To(Equal(1))
+		Expect(result.Interfaces[0].Name).To(Equal("eth0"))
+		Expect(len(result.IPs)).To(Equal(1))
+		Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 	})
 })
