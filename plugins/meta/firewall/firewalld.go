@@ -16,10 +16,23 @@ package main
 
 import (
 	"fmt"
-
-	"github.com/containernetworking/plugins/pkg/firewalld"
+	"strings"
 
 	"github.com/godbus/dbus"
+)
+
+const (
+	dbusName               = "org.freedesktop.DBus"
+	dbusPath               = "/org/freedesktop/DBus"
+	dbusGetNameOwnerMethod = "GetNameOwner"
+
+	firewalldName               = "org.fedoraproject.FirewallD1"
+	firewalldPath               = "/org/fedoraproject/FirewallD1"
+	firewalldZoneInterface      = "org.fedoraproject.FirewallD1.zone"
+	firewalldAddSourceMethod    = "addSource"
+	firewalldRemoveSourceMethod = "removeSource"
+
+	errZoneAlreadySet = "ZONE_ALREADY_SET"
 )
 
 // Only used for testcases to override the D-Bus connection
@@ -39,12 +52,20 @@ func getConn() (*dbus.Conn, error) {
 	return dbus.SystemBus()
 }
 
+// isFirewalldRunning checks whether firewalld is running.
 func isFirewalldRunning() bool {
 	conn, err := getConn()
 	if err != nil {
 		return false
 	}
-	return firewalld.IsRunning(conn)
+
+	dbusObj := conn.Object(dbusName, dbusPath)
+	var res string
+	if err := dbusObj.Call(dbusName+"."+dbusGetNameOwnerMethod, 0, firewalldName).Store(&res); err != nil {
+		return false
+	}
+
+	return true
 }
 
 func newFirewalldBackend(conf *FirewallNetConf) (FirewallBackend, error) {
@@ -61,8 +82,14 @@ func newFirewalldBackend(conf *FirewallNetConf) (FirewallBackend, error) {
 
 func (fb *fwdBackend) Add(conf *FirewallNetConf) error {
 	for _, ip := range conf.PrevResult.IPs {
-		if err := firewalld.AddSourceToZone(fb.conn, ip.Address.IP, conf.FirewalldZone); err != nil {
-			return fmt.Errorf("failed to add the address %v to %v zone: %v", ip.Address.IP, conf.FirewalldZone, err)
+		ipStr := ipString(ip.Address)
+		// Add a firewalld rule which assigns the given source IP to the given zone
+		firewalldObj := fb.conn.Object(firewalldName, firewalldPath)
+		var res string
+		if err := firewalldObj.Call(firewalldZoneInterface+"."+firewalldAddSourceMethod, 0, conf.FirewalldZone, ipStr).Store(&res); err != nil {
+			if !strings.Contains(err.Error(), errZoneAlreadySet) {
+				return fmt.Errorf("failed to add the address %v to %v zone: %v", ipStr, conf.FirewalldZone, err)
+			}
 		}
 	}
 	return nil
@@ -70,7 +97,11 @@ func (fb *fwdBackend) Add(conf *FirewallNetConf) error {
 
 func (fb *fwdBackend) Del(conf *FirewallNetConf) error {
 	for _, ip := range conf.PrevResult.IPs {
-		firewalld.RemoveSourceFromZone(fb.conn, ip.Address.IP, conf.FirewalldZone)
+		ipStr := ipString(ip.Address)
+		// Remove firewalld rules which assigned the given source IP to the given zone
+		firewalldObj := fb.conn.Object(firewalldName, firewalldPath)
+		var res string
+		firewalldObj.Call(firewalldZoneInterface+"."+firewalldRemoveSourceMethod, 0, conf.FirewalldZone, ipStr).Store(&res)
 	}
 	return nil
 }

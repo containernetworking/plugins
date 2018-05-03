@@ -24,7 +24,6 @@ import (
 
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/plugins/pkg/firewalld"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -141,7 +140,7 @@ var _ = Describe("firewalld test", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start our fake firewalld
-		reply, err := conn.RequestName(firewalld.FirewalldName, dbus.NameFlagDoNotQueue)
+		reply, err := conn.RequestName(firewalldName, dbus.NameFlagDoNotQueue)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(reply).To(Equal(dbus.RequestNameReplyPrimaryOwner))
 
@@ -150,17 +149,17 @@ var _ = Describe("firewalld test", func() {
 		// because in Go lower-case methods are private, we need to remap
 		// Go public methods to the D-Bus name
 		methods := map[string]string{
-			"AddSource":    "addSource",
-			"RemoveSource": "removeSource",
+			"AddSource":    firewalldAddSourceMethod,
+			"RemoveSource": firewalldRemoveSourceMethod,
 		}
-		conn.ExportWithMap(fwd, methods, firewalld.FirewalldPath, firewalld.FirewalldZoneInterface)
+		conn.ExportWithMap(fwd, methods, firewalldPath, firewalldZoneInterface)
 
 		// Make sure the plugin uses our private session bus
 		testConn = conn
 	})
 
 	AfterEach(func() {
-		_, err := conn.ReleaseName(firewalld.FirewalldName)
+		_, err := conn.ReleaseName(firewalldName)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = cmd.Process.Signal(syscall.SIGTERM)
@@ -170,7 +169,7 @@ var _ = Describe("firewalld test", func() {
 	})
 
 	It("works with a 0.3.1 config", func() {
-		Expect(firewalld.IsRunning(conn)).To(BeTrue())
+		Expect(isFirewalldRunning()).To(BeTrue())
 
 		conf := fmt.Sprintf(confTmpl, ifname, targetNs.Path())
 		args := &skel.CmdArgs{
