@@ -18,6 +18,7 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/version"
 )
@@ -27,13 +28,15 @@ func envCleanup() {
 	os.Unsetenv("CNI_PATH")
 	os.Unsetenv("CNI_NETNS")
 	os.Unsetenv("CNI_IFNAME")
+	os.Unsetenv("CNI_CONTAINERID")
 }
 
-func CmdAddWithResult(cniNetns, cniIfname string, conf []byte, f func() error) (types.Result, []byte, error) {
+func CmdAdd(cniNetns, cniContainerID, cniIfname string, conf []byte, f func() error) (types.Result, []byte, error) {
 	os.Setenv("CNI_COMMAND", "ADD")
 	os.Setenv("CNI_PATH", os.Getenv("PATH"))
 	os.Setenv("CNI_NETNS", cniNetns)
 	os.Setenv("CNI_IFNAME", cniIfname)
+	os.Setenv("CNI_CONTAINERID", cniContainerID)
 	defer envCleanup()
 
 	// Redirect stdout to capture plugin result
@@ -74,12 +77,21 @@ func CmdAddWithResult(cniNetns, cniIfname string, conf []byte, f func() error) (
 	return result, out, nil
 }
 
-func CmdDelWithResult(cniNetns, cniIfname string, f func() error) error {
+func CmdAddWithArgs(args *skel.CmdArgs, f func() error) (types.Result, []byte, error) {
+	return CmdAdd(args.Netns, args.ContainerID, args.IfName, args.StdinData, f)
+}
+
+func CmdDel(cniNetns, cniContainerID, cniIfname string, f func() error) error {
 	os.Setenv("CNI_COMMAND", "DEL")
 	os.Setenv("CNI_PATH", os.Getenv("PATH"))
 	os.Setenv("CNI_NETNS", cniNetns)
 	os.Setenv("CNI_IFNAME", cniIfname)
+	os.Setenv("CNI_CONTAINERID", cniContainerID)
 	defer envCleanup()
 
 	return f()
+}
+
+func CmdDelWithArgs(args *skel.CmdArgs, f func() error) error {
+	return CmdDel(args.Netns, args.ContainerID, args.IfName, f)
 }

@@ -85,7 +85,7 @@ var _ = Describe("base functionality", func() {
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			var err error
-			resI, _, err = testutils.CmdAddWithResult(targetNS.Path(), CNI_IFNAME, []byte(conf), func() error { return cmdAdd(args) })
+			resI, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
 			return err
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -123,7 +123,9 @@ var _ = Describe("base functionality", func() {
 		// Check that deleting the device moves it back and restores the name
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
-			err = testutils.CmdDelWithResult(targetNS.Path(), CNI_IFNAME, func() error { return cmdDel(args) })
+			err = testutils.CmdDelWithArgs(args, func() error {
+				return cmdDel(args)
+			})
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err := netlink.LinkByName(ifname)
@@ -147,7 +149,7 @@ var _ = Describe("base functionality", func() {
 			IfName:      ifname,
 			StdinData:   []byte(conf),
 		}
-		_, _, err := testutils.CmdAddWithResult(originalNS.Path(), ifname, []byte(conf), func() error { return cmdAdd(args) })
+		_, _, err := testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
 		Expect(err).To(MatchError(`specify either "device", "hwaddr" or "kernelpath"`))
 
 	})

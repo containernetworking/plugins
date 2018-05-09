@@ -75,7 +75,7 @@ var _ = Describe("host-local Operations", func() {
 		}
 
 		// Allocate the IP
-		r, raw, err := testutils.CmdAddWithResult(nspath, ifname, []byte(conf), func() error {
+		r, raw, err := testutils.CmdAddWithArgs(args, func() error {
 			return cmdAdd(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -111,12 +111,12 @@ var _ = Describe("host-local Operations", func() {
 		ipFilePath1 := filepath.Join(tmpDir, "mynet", "10.1.2.2")
 		contents, err := ioutil.ReadFile(ipFilePath1)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(contents)).To(Equal("dummy"))
+		Expect(string(contents)).To(Equal(args.ContainerID))
 
 		ipFilePath2 := filepath.Join(tmpDir, disk.GetEscapedPath("mynet", "2001:db8:1::2"))
 		contents, err = ioutil.ReadFile(ipFilePath2)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(contents)).To(Equal("dummy"))
+		Expect(string(contents)).To(Equal(args.ContainerID))
 
 		lastFilePath1 := filepath.Join(tmpDir, "mynet", "last_reserved_ip.0")
 		contents, err = ioutil.ReadFile(lastFilePath1)
@@ -128,7 +128,7 @@ var _ = Describe("host-local Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(contents)).To(Equal("2001:db8:1::2"))
 		// Release the IP
-		err = testutils.CmdDelWithResult(nspath, ifname, func() error {
+		err = testutils.CmdDelWithArgs(args, func() error {
 			return cmdDel(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -167,7 +167,7 @@ var _ = Describe("host-local Operations", func() {
 		}
 
 		// Release the IP
-		err = testutils.CmdDelWithResult(nspath, ifname, func() error {
+		err = testutils.CmdDelWithArgs(args, func() error {
 			return cmdDel(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -205,7 +205,7 @@ var _ = Describe("host-local Operations", func() {
 		}
 
 		// Allocate the IP
-		r, raw, err := testutils.CmdAddWithResult(nspath, ifname, []byte(conf), func() error {
+		r, raw, err := testutils.CmdAddWithArgs(args, func() error {
 			return cmdAdd(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -223,7 +223,7 @@ var _ = Describe("host-local Operations", func() {
 		ipFilePath := filepath.Join(tmpDir, "mynet", "10.1.2.2")
 		contents, err := ioutil.ReadFile(ipFilePath)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(contents)).To(Equal("dummy"))
+		Expect(string(contents)).To(Equal(args.ContainerID))
 
 		lastFilePath := filepath.Join(tmpDir, "mynet", "last_reserved_ip.0")
 		contents, err = ioutil.ReadFile(lastFilePath)
@@ -233,7 +233,7 @@ var _ = Describe("host-local Operations", func() {
 		Expect(result.DNS).To(Equal(types.DNS{Nameservers: []string{"192.0.2.3"}}))
 
 		// Release the IP
-		err = testutils.CmdDelWithResult(nspath, ifname, func() error {
+		err = testutils.CmdDelWithArgs(args, func() error {
 			return cmdDel(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -270,7 +270,7 @@ var _ = Describe("host-local Operations", func() {
 		}
 
 		// Allocate the IP
-		r, _, err := testutils.CmdAddWithResult(nspath, ifname, []byte(conf), func() error {
+		r, _, err := testutils.CmdAddWithArgs(args, func() error {
 			return cmdAdd(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -284,7 +284,7 @@ var _ = Describe("host-local Operations", func() {
 		Expect(string(contents)).To(Equal("dummy"))
 
 		// Release the IP
-		err = testutils.CmdDelWithResult(nspath, ifname, func() error {
+		err = testutils.CmdDelWithArgs(args, func() error {
 			return cmdDel(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -321,7 +321,7 @@ var _ = Describe("host-local Operations", func() {
 		}
 
 		// Allocate the IP
-		_, out, err := testutils.CmdAddWithResult(nspath, ifname, []byte(conf), func() error {
+		_, out, err := testutils.CmdAddWithArgs(args, func() error {
 			return cmdAdd(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -363,7 +363,7 @@ var _ = Describe("host-local Operations", func() {
 		}
 
 		// Allocate the IP
-		r, _, err := testutils.CmdAddWithResult(nspath, ifname, []byte(conf), func() error {
+		r, _, err := testutils.CmdAddWithArgs(args, func() error {
 			return cmdAdd(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -412,7 +412,7 @@ var _ = Describe("host-local Operations", func() {
 		}
 
 		// Allocate the IP
-		r, _, err := testutils.CmdAddWithResult(nspath, ifname, []byte(conf), func() error {
+		r, _, err := testutils.CmdAddWithArgs(args, func() error {
 			return cmdAdd(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -462,7 +462,7 @@ var _ = Describe("host-local Operations", func() {
 		}
 
 		// Allocate the IP
-		r, _, err := testutils.CmdAddWithResult(nspath, ifname, []byte(conf), func() error {
+		r, _, err := testutils.CmdAddWithArgs(args, func() error {
 			return cmdAdd(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -509,7 +509,7 @@ var _ = Describe("host-local Operations", func() {
 		}
 
 		// Allocate the IP
-		_, _, err = testutils.CmdAddWithResult(nspath, ifname, []byte(conf), func() error {
+		_, _, err = testutils.CmdAddWithArgs(args, func() error {
 			return cmdAdd(args)
 		})
 		Expect(err).To(HaveOccurred())

@@ -64,7 +64,7 @@ var _ = Describe("ptp Operations", func() {
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			resI, _, err = testutils.CmdAddWithResult(targetNs.Path(), IFNAME, []byte(conf), func() error {
+			resI, _, err = testutils.CmdAddWithArgs(args, func() error {
 				return cmdAdd(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -122,7 +122,7 @@ var _ = Describe("ptp Operations", func() {
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			err := testutils.CmdDelWithResult(targetNs.Path(), IFNAME, func() error {
+			err := testutils.CmdDelWithArgs(args, func() error {
 				return cmdDel(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -207,7 +207,7 @@ var _ = Describe("ptp Operations", func() {
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			err := testutils.CmdDelWithResult(targetNs.Path(), IFNAME, func() error {
+			err := testutils.CmdDelWithArgs(args, func() error {
 				return cmdDel(args)
 			})
 			Expect(err).NotTo(HaveOccurred())

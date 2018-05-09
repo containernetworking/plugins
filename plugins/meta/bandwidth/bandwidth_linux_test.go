@@ -114,7 +114,7 @@ var _ = Describe("bandwidth test", func() {
 
 			Expect(hostNs.Do(func(netNS ns.NetNS) error {
 				defer GinkgoRecover()
-				r, out, err := testutils.CmdAddWithResult(containerNs.Path(), "", []byte(conf), func() error { return cmdAdd(args) })
+				r, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
 				Expect(err).NotTo(HaveOccurred(), string(out))
 				result, err := current.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
@@ -212,7 +212,7 @@ var _ = Describe("bandwidth test", func() {
 			Expect(hostNs.Do(func(netNS ns.NetNS) error {
 				defer GinkgoRecover()
 
-				_, out, err := testutils.CmdAddWithResult(containerNs.Path(), ifbDeviceName, []byte(conf), func() error { return cmdAdd(args) })
+				_, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, ifbDeviceName, []byte(conf), func() error { return cmdAdd(args) })
 				Expect(err).NotTo(HaveOccurred(), string(out))
 
 				_, err = netlink.LinkByName(ifbDeviceName)
@@ -281,7 +281,7 @@ var _ = Describe("bandwidth test", func() {
 			Expect(hostNs.Do(func(netNS ns.NetNS) error {
 				defer GinkgoRecover()
 
-				_, out, err := testutils.CmdAddWithResult(containerNs.Path(), ifbDeviceName, []byte(conf), func() error { return cmdAdd(args) })
+				_, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, ifbDeviceName, []byte(conf), func() error { return cmdAdd(args) })
 				Expect(err).NotTo(HaveOccurred(), string(out))
 
 				_, err = netlink.LinkByName(ifbDeviceName)
@@ -353,7 +353,7 @@ var _ = Describe("bandwidth test", func() {
 			Expect(hostNs.Do(func(netNS ns.NetNS) error {
 				defer GinkgoRecover()
 
-				_, _, err := testutils.CmdAddWithResult(containerNs.Path(), "", []byte(conf), func() error { return cmdAdd(args) })
+				_, _, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
 				Expect(err).To(MatchError("if burst is set, rate must also be set"))
 				return nil
 			})).To(Succeed())
@@ -405,7 +405,7 @@ var _ = Describe("bandwidth test", func() {
 
 			Expect(hostNs.Do(func(netNS ns.NetNS) error {
 				defer GinkgoRecover()
-				r, out, err := testutils.CmdAddWithResult(containerNs.Path(), "", []byte(conf), func() error { return cmdAdd(args) })
+				r, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
 				Expect(err).NotTo(HaveOccurred(), string(out))
 				result, err := current.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
@@ -512,7 +512,7 @@ var _ = Describe("bandwidth test", func() {
 			Expect(hostNs.Do(func(netNS ns.NetNS) error {
 				defer GinkgoRecover()
 
-				_, _, err := testutils.CmdAddWithResult(containerNs.Path(), "", []byte(conf), func() error { return cmdAdd(args) })
+				_, _, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
 				Expect(err).To(MatchError("if burst is set, rate must also be set"))
 				return nil
 			})).To(Succeed())
@@ -562,10 +562,10 @@ var _ = Describe("bandwidth test", func() {
 
 			Expect(hostNs.Do(func(netNS ns.NetNS) error {
 				defer GinkgoRecover()
-				_, out, err := testutils.CmdAddWithResult(containerNs.Path(), "", []byte(conf), func() error { return cmdAdd(args) })
+				_, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
 				Expect(err).NotTo(HaveOccurred(), string(out))
 
-				err = testutils.CmdDelWithResult(containerNs.Path(), "", func() error { return cmdDel(args) })
+				err = testutils.CmdDel(containerNs.Path(), args.ContainerID, "", func() error { return cmdDel(args) })
 				Expect(err).NotTo(HaveOccurred(), string(out))
 
 				_, err = netlink.LinkByName(ifbDeviceName)
@@ -624,7 +624,7 @@ var _ = Describe("bandwidth test", func() {
 			Expect(hostNs.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
-				containerWithTbfRes, _, err = testutils.CmdAddWithResult(containerWithTbfNS.Path(), containerWithTbfIFName, []byte(ptpConf), func() error {
+				containerWithTbfRes, _, err = testutils.CmdAdd(containerWithTbfNS.Path(), "dummy", containerWithTbfIFName, []byte(ptpConf), func() error {
 					r, err := invoke.DelegateAdd("ptp", []byte(ptpConf))
 					Expect(r.Print()).To(Succeed())
 
@@ -632,7 +632,7 @@ var _ = Describe("bandwidth test", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 
-				containerWithoutTbfRes, _, err = testutils.CmdAddWithResult(containerWithoutTbfNS.Path(), containerWithoutTbfIFName, []byte(ptpConf), func() error {
+				containerWithoutTbfRes, _, err = testutils.CmdAdd(containerWithoutTbfNS.Path(), "dummy2", containerWithoutTbfIFName, []byte(ptpConf), func() error {
 					r, err := invoke.DelegateAdd("ptp", []byte(ptpConf))
 					Expect(r.Print()).To(Succeed())
 
@@ -667,13 +667,13 @@ var _ = Describe("bandwidth test", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				args := &skel.CmdArgs{
-					ContainerID: "dummy",
+					ContainerID: "dummy3",
 					Netns:       containerWithTbfNS.Path(),
 					IfName:      containerWithTbfIFName,
 					StdinData:   []byte(conf),
 				}
 
-				_, out, err := testutils.CmdAddWithResult(containerWithTbfNS.Path(), "", []byte(conf), func() error { return cmdAdd(args) })
+				_, out, err := testutils.CmdAdd(containerWithTbfNS.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
 				Expect(err).NotTo(HaveOccurred(), string(out))
 
 				return nil
