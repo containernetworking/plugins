@@ -128,7 +128,7 @@ func (d *DHCP) clearLease(contID, netName string) {
 }
 
 func getListener() (net.Listener, error) {
-	l, err := activation.Listeners(true)
+	l, err := activation.Listeners()
 	if err != nil {
 		return nil, err
 	}
