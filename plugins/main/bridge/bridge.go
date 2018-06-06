@@ -48,6 +48,7 @@ type NetConf struct {
 	MTU          int    `json:"mtu"`
 	HairpinMode  bool   `json:"hairpinMode"`
 	PromiscMode  bool   `json:"promiscMode"`
+	ProxyArp     bool   `json:"proxyArp"`
 }
 
 type gwInfo struct {
@@ -205,7 +206,7 @@ func bridgeByName(name string) (*netlink.Bridge, error) {
 	return br, nil
 }
 
-func ensureBridge(brName string, mtu int, promiscMode bool) (*netlink.Bridge, error) {
+func ensureBridge(brName string, mtu int, promiscMode bool, proxyArp bool) (*netlink.Bridge, error) {
 	br := &netlink.Bridge{
 		LinkAttrs: netlink.LinkAttrs{
 			Name: brName,
@@ -226,6 +227,15 @@ func ensureBridge(brName string, mtu int, promiscMode bool) (*netlink.Bridge, er
 	if promiscMode {
 		if err := netlink.SetPromiscOn(br); err != nil {
 			return nil, fmt.Errorf("could not set promiscuous mode on %q: %v", brName, err)
+		}
+	}
+
+	// In case the address assigned to container is in the same network as the
+	// host then it would be necessary to enable proxy arp so it can be access
+	// by external hosts.
+	if proxyArp {
+		if err := netlink.LinkSetBrProxyArp(br, true); err != nil {
+			return nil, fmt.Errorf("could not set proxy arp on %q: %v", brName, err)
 		}
 	}
 
@@ -290,7 +300,7 @@ func calcGatewayIP(ipn *net.IPNet) net.IP {
 
 func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
 	// create bridge if necessary
-	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode)
+	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, n.ProxyArp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create bridge %q: %v", n.BrName, err)
 	}
