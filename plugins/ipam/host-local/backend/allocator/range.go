@@ -40,6 +40,9 @@ func (r *Range) Canonicalize() error {
 		return fmt.Errorf("IPNet IP and Mask version mismatch")
 	}
 
+	// Ensure Subnet IP is the network address, not some other address
+	r.Subnet.IP = r.Subnet.IP.Mask(r.Subnet.Mask)
+
 	// If the gateway is nil, claim .1
 	if r.Gateway == nil {
 		r.Gateway = ip.NextIP(r.Subnet.IP)

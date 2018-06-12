@@ -25,7 +25,7 @@ import (
 )
 
 var _ = Describe("IP ranges", func() {
-	It("should generate sane defaults for ipv4", func() {
+	It("should generate sane defaults for ipv4 with a clean prefix", func() {
 		snstr := "192.0.2.0/24"
 		r := Range{Subnet: mustSubnet(snstr)}
 
@@ -33,7 +33,21 @@ var _ = Describe("IP ranges", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(r).To(Equal(Range{
-			Subnet:     mustSubnet(snstr),
+			Subnet:     networkSubnet(snstr),
+			RangeStart: net.IP{192, 0, 2, 1},
+			RangeEnd:   net.IP{192, 0, 2, 254},
+			Gateway:    net.IP{192, 0, 2, 1},
+		}))
+	})
+	It("should generate sane defaults for ipv4 with a masked address", func() {
+		snstr := "192.0.2.12/24"
+		r := Range{Subnet: mustSubnet(snstr)}
+
+		err := r.Canonicalize()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(r).To(Equal(Range{
+			Subnet:     networkSubnet(snstr),
 			RangeStart: net.IP{192, 0, 2, 1},
 			RangeEnd:   net.IP{192, 0, 2, 254},
 			Gateway:    net.IP{192, 0, 2, 1},
@@ -47,13 +61,27 @@ var _ = Describe("IP ranges", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(r).To(Equal(Range{
-			Subnet:     mustSubnet(snstr),
+			Subnet:     networkSubnet(snstr),
 			RangeStart: net.IP{192, 0, 2, 1},
 			RangeEnd:   net.IP{192, 0, 2, 126},
 			Gateway:    net.IP{192, 0, 2, 1},
 		}))
 	})
-	It("should generate sane defaults for ipv6", func() {
+	It("should generate sane defaults for ipv6 with a masked address", func() {
+		snstr := "2001:DB8:1::24:19ff:fee1:c44a/64"
+		r := Range{Subnet: mustSubnet(snstr)}
+
+		err := r.Canonicalize()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(r).To(Equal(Range{
+			Subnet:     networkSubnet(snstr),
+			RangeStart: net.ParseIP("2001:DB8:1::1"),
+			RangeEnd:   net.ParseIP("2001:DB8:1::ffff:ffff:ffff:ffff"),
+			Gateway:    net.ParseIP("2001:DB8:1::1"),
+		}))
+	})
+	It("should generate sane defaults for ipv6 with a clean prefix", func() {
 		snstr := "2001:DB8:1::/64"
 		r := Range{Subnet: mustSubnet(snstr)}
 
@@ -61,7 +89,7 @@ var _ = Describe("IP ranges", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(r).To(Equal(Range{
-			Subnet:     mustSubnet(snstr),
+			Subnet:     networkSubnet(snstr),
 			RangeStart: net.ParseIP("2001:DB8:1::1"),
 			RangeEnd:   net.ParseIP("2001:DB8:1::ffff:ffff:ffff:ffff"),
 			Gateway:    net.ParseIP("2001:DB8:1::1"),
@@ -75,16 +103,17 @@ var _ = Describe("IP ranges", func() {
 	})
 
 	It("should reject invalid RangeStart and RangeEnd specifications", func() {
-		r := Range{Subnet: mustSubnet("192.0.2.0/24"), RangeStart: net.ParseIP("192.0.3.0")}
+		snstr := "192.0.2.0/24"
+		r := Range{Subnet: mustSubnet(snstr), RangeStart: net.ParseIP("192.0.3.0")}
 		err := r.Canonicalize()
 		Expect(err).Should(MatchError("RangeStart 192.0.3.0 not in network 192.0.2.0/24"))
 
-		r = Range{Subnet: mustSubnet("192.0.2.0/24"), RangeEnd: net.ParseIP("192.0.4.0")}
+		r = Range{Subnet: mustSubnet(snstr), RangeEnd: net.ParseIP("192.0.4.0")}
 		err = r.Canonicalize()
 		Expect(err).Should(MatchError("RangeEnd 192.0.4.0 not in network 192.0.2.0/24"))
 
 		r = Range{
-			Subnet:     mustSubnet("192.0.2.0/24"),
+			Subnet:     networkSubnet(snstr),
 			RangeStart: net.ParseIP("192.0.2.50"),
 			RangeEnd:   net.ParseIP("192.0.2.40"),
 		}
@@ -99,8 +128,9 @@ var _ = Describe("IP ranges", func() {
 	})
 
 	It("should parse all fields correctly", func() {
+		snstr := "192.0.2.0/24"
 		r := Range{
-			Subnet:     mustSubnet("192.0.2.0/24"),
+			Subnet:     mustSubnet(snstr),
 			RangeStart: net.ParseIP("192.0.2.40"),
 			RangeEnd:   net.ParseIP("192.0.2.50"),
 			Gateway:    net.ParseIP("192.0.2.254"),
@@ -109,7 +139,7 @@ var _ = Describe("IP ranges", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(r).To(Equal(Range{
-			Subnet:     mustSubnet("192.0.2.0/24"),
+			Subnet:     networkSubnet(snstr),
 			RangeStart: net.IP{192, 0, 2, 40},
 			RangeEnd:   net.IP{192, 0, 2, 50},
 			Gateway:    net.IP{192, 0, 2, 254},
@@ -206,4 +236,10 @@ func mustSubnet(s string) types.IPNet {
 	}
 	canonicalizeIP(&n.IP)
 	return types.IPNet(*n)
+}
+
+func networkSubnet(s string) types.IPNet {
+	net := mustSubnet(s)
+	net.IP = net.IP.Mask(net.Mask)
+	return net
 }
