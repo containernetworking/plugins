@@ -20,9 +20,9 @@ import (
 )
 
 func ExecAdd(plugin string, netconf []byte) (types.Result, error) {
-	return invoke.DelegateAdd(plugin, netconf)
+	return invoke.DelegateAdd(plugin, netconf, nil)
 }
 
 func ExecDel(plugin string, netconf []byte) error {
-	return invoke.DelegateDel(plugin, netconf)
+	return invoke.DelegateDel(plugin, netconf, nil)
 }

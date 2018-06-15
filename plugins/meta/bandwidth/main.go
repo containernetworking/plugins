@@ -232,5 +232,11 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdDel, version.PluginSupports("0.3.0", "0.3.1", version.Current()))
+	// TODO: implement plugin version
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.PluginSupports("0.3.0", "0.3.1", version.Current()), "TODO")
+}
+
+func cmdGet(args *skel.CmdArgs) error {
+	// TODO: implement
+	return fmt.Errorf("not implemented")
 }

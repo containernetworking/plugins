@@ -625,7 +625,7 @@ var _ = Describe("bandwidth test", func() {
 				defer GinkgoRecover()
 
 				containerWithTbfRes, _, err = testutils.CmdAdd(containerWithTbfNS.Path(), "dummy", containerWithTbfIFName, []byte(ptpConf), func() error {
-					r, err := invoke.DelegateAdd("ptp", []byte(ptpConf))
+					r, err := invoke.DelegateAdd("ptp", []byte(ptpConf), nil)
 					Expect(r.Print()).To(Succeed())
 
 					return err
@@ -633,7 +633,7 @@ var _ = Describe("bandwidth test", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				containerWithoutTbfRes, _, err = testutils.CmdAdd(containerWithoutTbfNS.Path(), "dummy2", containerWithoutTbfIFName, []byte(ptpConf), func() error {
-					r, err := invoke.DelegateAdd("ptp", []byte(ptpConf))
+					r, err := invoke.DelegateAdd("ptp", []byte(ptpConf), nil)
 					Expect(r.Print()).To(Succeed())
 
 					return err
