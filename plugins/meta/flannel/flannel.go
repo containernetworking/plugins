@@ -159,7 +159,7 @@ func delegateAdd(cid, dataDir string, netconf map[string]interface{}) error {
 		return err
 	}
 
-	result, err := invoke.DelegateAdd(netconf["type"].(string), netconfBytes)
+	result, err := invoke.DelegateAdd(netconf["type"].(string), netconfBytes, nil)
 	if err != nil {
 		return err
 	}
@@ -261,9 +261,15 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to parse netconf: %v", err)
 	}
 
-	return invoke.DelegateDel(n.Type, netconfBytes)
+	return invoke.DelegateDel(n.Type, netconfBytes, nil)
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdDel, version.All)
+	// TODO: implement plugin version
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+}
+
+func cmdGet(args *skel.CmdArgs) error {
+	// TODO: implement
+	return fmt.Errorf("not implemented")
 }

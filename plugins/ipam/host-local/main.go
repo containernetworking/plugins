@@ -29,7 +29,13 @@ import (
 )
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdDel, version.All)
+	// TODO: implement plugin version
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+}
+
+func cmdGet(args *skel.CmdArgs) error {
+	// TODO: implement
+	return fmt.Errorf("not implemented")
 }
 
 func cmdAdd(args *skel.CmdArgs) error {

@@ -44,7 +44,8 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
-		skel.PluginMain(cmdAdd, cmdDel, version.All)
+		// TODO: implement plugin version
+		skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
 	}
 }
 
@@ -70,6 +71,11 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 	return nil
+}
+
+func cmdGet(args *skel.CmdArgs) error {
+	// TODO: implement
+	return fmt.Errorf("not implemented")
 }
 
 func rpcCall(method string, args *skel.CmdArgs, result interface{}) error {
