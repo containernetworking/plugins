@@ -30,17 +30,27 @@ import (
 // The top-level network config - IPAM plugins are passed the full configuration
 // of the calling plugin, not just the IPAM section.
 type Net struct {
-	Name       string      `json:"name"`
-	CNIVersion string      `json:"cniVersion"`
-	IPAM       *IPAMConfig `json:"ipam"`
+	Name          string      `json:"name"`
+	CNIVersion    string      `json:"cniVersion"`
+	IPAM          *IPAMConfig `json:"ipam"`
+	RuntimeConfig struct {
+		Addresses []Address `json:"addresses,omitempty"`
+	} `json:"runtimeConfig,omitempty"`
 }
 
 type IPAMConfig struct {
 	Name      string
 	Type      string         `json:"type"`
 	Routes    []*types.Route `json:"routes"`
-	Addresses []Address      `json:"addresses"`
+	Addresses []Address      `json:"addresses,omitempty"`
 	DNS       types.DNS      `json:"dns"`
+}
+
+type IPAMEnvArgs struct {
+	types.CommonArgs
+	IP      net.IP                     `json:"ip,omitempty"`
+	SUBNET  types.UnmarshallableString `json:"subnet,omitempty"`
+	GATEWAY net.IP                     `json:"gateway,omitempty"`
 }
 
 type Address struct {
@@ -77,9 +87,14 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		return nil, "", fmt.Errorf("IPAM config missing 'ipam' key")
 	}
 
+	if len(n.RuntimeConfig.Addresses) != 0 {
+		n.IPAM.Addresses = append(n.RuntimeConfig.Addresses, n.IPAM.Addresses...)
+	}
+
 	// Validate all ranges
 	numV4 := 0
 	numV6 := 0
+
 	for i := range n.IPAM.Addresses {
 		ip, addr, err := net.ParseCIDR(n.IPAM.Addresses[i].AddressStr)
 		if err != nil {
@@ -98,6 +113,34 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		} else {
 			n.IPAM.Addresses[i].Version = "6"
 			numV6++
+		}
+	}
+
+	if envArgs != "" {
+		e := IPAMEnvArgs{}
+		err := types.LoadArgs(envArgs, &e)
+		if err != nil {
+			return nil, "", err
+		}
+
+		if e.IP != nil && e.SUBNET != "" {
+			_, subnet, err := net.ParseCIDR(string(e.SUBNET))
+			if err != nil {
+				return nil, "", fmt.Errorf("invalid CIDR %s: %s", e.SUBNET, err)
+			}
+
+			addr := Address{Address: net.IPNet{IP: e.IP, Mask: subnet.Mask}}
+			if e.GATEWAY != nil {
+				addr.Gateway = e.GATEWAY
+			}
+			if addr.Address.IP.To4() != nil {
+				addr.Version = "4"
+				numV4++
+			} else {
+				addr.Version = "6"
+				numV6++
+			}
+			n.IPAM.Addresses = append(n.IPAM.Addresses, addr)
 		}
 	}
 
