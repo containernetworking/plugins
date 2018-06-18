@@ -84,6 +84,18 @@ var _ = Describe("host-local Operations", func() {
 		result, err := current.GetResult(r)
 		Expect(err).NotTo(HaveOccurred())
 
+		// Check that GET returns the same result
+		r1, _, err := testutils.CmdGetWithArgs(args, func() error {
+			return cmdGet(args)
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		getResult, err := current.GetResult(r1)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(getResult).To(Equal(result))
+
+		// Check that the result has what we expect
+
 		// Gomega is cranky about slices with different caps
 		Expect(*result.IPs[0]).To(Equal(
 			current.IPConfig{
@@ -108,15 +120,16 @@ var _ = Describe("host-local Operations", func() {
 			{Dst: mustCIDR("2001:db8:2::0/64"), GW: net.ParseIP("2001:db8:3::1")},
 		}))
 
+		// Check that the store on disk matches what we expect
 		ipFilePath1 := filepath.Join(tmpDir, "mynet", "10.1.2.2")
 		contents, err := ioutil.ReadFile(ipFilePath1)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(contents)).To(Equal(args.ContainerID))
+		Expect(string(contents)).To(MatchJSON(`{"kind":"host-local-v1","value":{"id":"dummy","if":"eth0"}}`))
 
 		ipFilePath2 := filepath.Join(tmpDir, disk.GetEscapedPath("mynet", "2001:db8:1::2"))
 		contents, err = ioutil.ReadFile(ipFilePath2)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(contents)).To(Equal(args.ContainerID))
+		Expect(string(contents)).To(MatchJSON(`{"kind":"host-local-v1","value":{"id":"dummy","if":"eth0"}}`))
 
 		lastFilePath1 := filepath.Join(tmpDir, "mynet", "last_reserved_ip.0")
 		contents, err = ioutil.ReadFile(lastFilePath1)
@@ -127,6 +140,7 @@ var _ = Describe("host-local Operations", func() {
 		contents, err = ioutil.ReadFile(lastFilePath2)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(contents)).To(Equal("2001:db8:1::2"))
+
 		// Release the IP
 		err = testutils.CmdDelWithArgs(args, func() error {
 			return cmdDel(args)
@@ -139,7 +153,7 @@ var _ = Describe("host-local Operations", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("doesn't error when passed an unknown ID on DEL", func() {
+	It("does the right thing when passed an unknown ID on GET and DEL", func() {
 		const ifname string = "eth0"
 		const nspath string = "/some/where"
 
@@ -164,6 +178,18 @@ var _ = Describe("host-local Operations", func() {
 			Netns:       nspath,
 			IfName:      ifname,
 			StdinData:   []byte(conf),
+		}
+
+		_, _, err = testutils.CmdGetWithArgs(args, func() error {
+			return cmdGet(args)
+		})
+
+		Expect(err).To(HaveOccurred())
+		switch e := err.(type) {
+		case *types.Error:
+			Expect(e.Code).To(Equal(uint(3)))
+		default:
+			Fail("unexpected error type")
 		}
 
 		// Release the IP
@@ -223,7 +249,7 @@ var _ = Describe("host-local Operations", func() {
 		ipFilePath := filepath.Join(tmpDir, "mynet", "10.1.2.2")
 		contents, err := ioutil.ReadFile(ipFilePath)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(contents)).To(Equal(args.ContainerID))
+		Expect(string(contents)).To(MatchJSON(`{"kind":"host-local-v1","value":{"id":"dummy","if":"eth0"}}`))
 
 		lastFilePath := filepath.Join(tmpDir, "mynet", "last_reserved_ip.0")
 		contents, err = ioutil.ReadFile(lastFilePath)
@@ -231,57 +257,6 @@ var _ = Describe("host-local Operations", func() {
 		Expect(string(contents)).To(Equal("10.1.2.2"))
 
 		Expect(result.DNS).To(Equal(types.DNS{Nameservers: []string{"192.0.2.3"}}))
-
-		// Release the IP
-		err = testutils.CmdDelWithArgs(args, func() error {
-			return cmdDel(args)
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		_, err = os.Stat(ipFilePath)
-		Expect(err).To(HaveOccurred())
-	})
-
-	It("ignores whitespace in disk files", func() {
-		const ifname string = "eth0"
-		const nspath string = "/some/where"
-
-		tmpDir, err := getTmpDir()
-		Expect(err).NotTo(HaveOccurred())
-		defer os.RemoveAll(tmpDir)
-
-		conf := fmt.Sprintf(`{
-			"cniVersion": "0.3.1",
-			"name": "mynet",
-			"type": "ipvlan",
-			"master": "foo0",
-			"ipam": {
-				"type": "host-local",
-				"subnet": "10.1.2.0/24",
-				"dataDir": "%s"
-			}
-		}`, tmpDir)
-
-		args := &skel.CmdArgs{
-			ContainerID: "   dummy\n ",
-			Netns:       nspath,
-			IfName:      ifname,
-			StdinData:   []byte(conf),
-		}
-
-		// Allocate the IP
-		r, _, err := testutils.CmdAddWithArgs(args, func() error {
-			return cmdAdd(args)
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		result, err := current.GetResult(r)
-		Expect(err).NotTo(HaveOccurred())
-
-		ipFilePath := filepath.Join(tmpDir, "mynet", result.IPs[0].Address.IP.String())
-		contents, err := ioutil.ReadFile(ipFilePath)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(contents)).To(Equal("dummy"))
 
 		// Release the IP
 		err = testutils.CmdDelWithArgs(args, func() error {

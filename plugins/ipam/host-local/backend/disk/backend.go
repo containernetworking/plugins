@@ -15,14 +15,15 @@
 package disk
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend"
-	"runtime"
 )
 
 const lastIPFilePrefix = "last_reserved_ip."
@@ -39,6 +40,7 @@ type Store struct {
 // Store implements the Store interface
 var _ backend.Store = &Store{}
 
+// New creates a new store
 func New(network, dataDir string) (*Store, error) {
 	if dataDir == "" {
 		dataDir = defaultDataDir
@@ -55,7 +57,9 @@ func New(network, dataDir string) (*Store, error) {
 	return &Store{lk, dir}, nil
 }
 
-func (s *Store) Reserve(id string, ip net.IP, rangeID string) (bool, error) {
+// Reserve attempts to claim an ip in the name of a container with the given id.
+// The store should be locked before calling this.
+func (s *Store) Reserve(id backend.Key, ip net.IP, rangeID string) (bool, error) {
 	fname := GetEscapedPath(s.dataDir, ip.String())
 
 	f, err := os.OpenFile(fname, os.O_RDWR|os.O_EXCL|os.O_CREATE, 0644)
@@ -65,7 +69,7 @@ func (s *Store) Reserve(id string, ip net.IP, rangeID string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if _, err := f.WriteString(strings.TrimSpace(id)); err != nil {
+	if _, err := f.Write(WriteKey(&id)); err != nil {
 		f.Close()
 		os.Remove(f.Name())
 		return false, err
@@ -93,27 +97,72 @@ func (s *Store) LastReservedIP(rangeID string) (net.IP, error) {
 	return net.ParseIP(string(data)), nil
 }
 
+// Release will mark a given ip as released, regardless of which container holds it.
 func (s *Store) Release(ip net.IP) error {
 	return os.Remove(GetEscapedPath(s.dataDir, ip.String()))
 }
 
+// ReleaseByID releases all IPs held by a container of the given id.
 // N.B. This function eats errors to be tolerant and
 // release as much as possible
-func (s *Store) ReleaseByID(id string) error {
+//
+func (s *Store) ReleaseByID(id backend.Key) error {
+	err := s.walkReservations(func(path string, _ net.IP, b []byte) error {
+		match, err := Matches(&id, b)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "WARN: host-local: Failed to parse ip reservation file %s: %v", path, err)
+			return nil
+		}
+		if match {
+			err := os.Remove(path)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "WARN host-local: failed to remove ip reservation file %s: %v", path, err)
+			}
+		}
+		return nil
+	})
+	return err
+}
+
+// GetByID returns all IPs reserved by a given container ID
+func (s *Store) GetByID(id backend.Key) ([]net.IP, error) {
+	out := []net.IP{}
+	err := s.walkReservations(func(path string, ip net.IP, b []byte) error {
+		matches, err := Matches(&id, b)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "WARN: host-local: Failed to parse ip reservation file %s: %v", path, err)
+			return nil
+		}
+
+		if matches {
+			out = append(out, ip)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// walkReservations executes f(ip, keyBytes) for every reservation
+func (s *Store) walkReservations(f func(string, net.IP, []byte) error) error {
 	err := filepath.Walk(s.dataDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
-		data, err := ioutil.ReadFile(path)
-		if err != nil {
+		ip := UnescapePath(info.Name())
+		if len(ip) == 0 { // not a reservation file
 			return nil
 		}
-		if strings.TrimSpace(string(data)) == strings.TrimSpace(id) {
-			if err := os.Remove(path); err != nil {
-				return nil
-			}
+
+		b, err := ioutil.ReadFile(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "WARN: host-local: Failed to read ip reservation file %s: %v", path, err)
+			return nil
 		}
-		return nil
+
+		return f(path, ip, b)
 	})
 	return err
 }
@@ -123,4 +172,11 @@ func GetEscapedPath(dataDir string, fname string) string {
 		fname = strings.Replace(fname, ":", "_", -1)
 	}
 	return filepath.Join(dataDir, fname)
+}
+
+func UnescapePath(fname string) net.IP {
+	if runtime.GOOS == "windows" {
+		fname = strings.Replace(fname, "_", ":", -1)
+	}
+	return net.ParseIP(fname)
 }

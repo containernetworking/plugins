@@ -20,6 +20,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend"
 	fakestore "github.com/containernetworking/plugins/plugins/ipam/host-local/backend/testing"
 
 	. "github.com/onsi/ginkgo"
@@ -28,7 +29,7 @@ import (
 
 type AllocatorTestCase struct {
 	subnets      []string
-	ipmap        map[string]string
+	ipmap        map[string]backend.Key
 	expectResult string
 	lastIP       string
 }
@@ -38,7 +39,7 @@ func mkalloc() IPAllocator {
 		Range{Subnet: mustSubnet("192.168.1.0/29")},
 	}
 	p.Canonicalize()
-	store := fakestore.NewFakeStore(map[string]string{}, map[string]net.IP{})
+	store := fakestore.NewFakeStore(map[string]backend.Key{}, map[string]net.IP{})
 
 	alloc := IPAllocator{
 		rangeset: &p,
@@ -70,10 +71,12 @@ func (t AllocatorTestCase) run(idx int) (*current.IPConfig, error) {
 		rangeID:  "rangeid",
 	}
 
-	return alloc.Get("ID", nil)
+	k1 := backend.Key{ID: "id1", IF: "eth0"}
+	return alloc.Get(k1, nil)
 }
 
 var _ = Describe("host-local ip allocator", func() {
+	k1 := backend.Key{ID: "id1", IF: "eth0"}
 	Context("RangeIter", func() {
 		It("should loop correctly from the beginning", func() {
 			a := mkalloc()
@@ -88,8 +91,8 @@ var _ = Describe("host-local ip allocator", func() {
 
 		It("should loop correctly from the end", func() {
 			a := mkalloc()
-			a.store.Reserve("ID", net.IP{192, 168, 1, 6}, a.rangeID)
-			a.store.ReleaseByID("ID")
+			a.store.Reserve(k1, net.IP{192, 168, 1, 6}, a.rangeID)
+			a.store.ReleaseByID(k1)
 			r, _ := a.GetIter()
 			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 2}))
 			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 3}))
@@ -100,8 +103,8 @@ var _ = Describe("host-local ip allocator", func() {
 		})
 		It("should loop correctly from the middle", func() {
 			a := mkalloc()
-			a.store.Reserve("ID", net.IP{192, 168, 1, 3}, a.rangeID)
-			a.store.ReleaseByID("ID")
+			a.store.Reserve(k1, net.IP{192, 168, 1, 3}, a.rangeID)
+			a.store.ReleaseByID(k1)
 			r, _ := a.GetIter()
 			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 4}))
 			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 5}))
@@ -113,31 +116,33 @@ var _ = Describe("host-local ip allocator", func() {
 	})
 
 	Context("when has free ip", func() {
+		k1 := backend.Key{ID: "id1", IF: "eth0"}
+
 		It("should allocate ips in round robin", func() {
 			testCases := []AllocatorTestCase{
 				// fresh start
 				{
 					subnets:      []string{"10.0.0.0/29"},
-					ipmap:        map[string]string{},
+					ipmap:        map[string]backend.Key{},
 					expectResult: "10.0.0.2",
 					lastIP:       "",
 				},
 				{
 					subnets:      []string{"2001:db8:1::0/64"},
-					ipmap:        map[string]string{},
+					ipmap:        map[string]backend.Key{},
 					expectResult: "2001:db8:1::2",
 					lastIP:       "",
 				},
 				{
 					subnets:      []string{"10.0.0.0/30"},
-					ipmap:        map[string]string{},
+					ipmap:        map[string]backend.Key{},
 					expectResult: "10.0.0.2",
 					lastIP:       "",
 				},
 				{
 					subnets: []string{"10.0.0.0/29"},
-					ipmap: map[string]string{
-						"10.0.0.2": "id",
+					ipmap: map[string]backend.Key{
+						"10.0.0.2": k1,
 					},
 					expectResult: "10.0.0.3",
 					lastIP:       "",
@@ -145,15 +150,15 @@ var _ = Describe("host-local ip allocator", func() {
 				// next ip of last reserved ip
 				{
 					subnets:      []string{"10.0.0.0/29"},
-					ipmap:        map[string]string{},
+					ipmap:        map[string]backend.Key{},
 					expectResult: "10.0.0.6",
 					lastIP:       "10.0.0.5",
 				},
 				{
 					subnets: []string{"10.0.0.0/29"},
-					ipmap: map[string]string{
-						"10.0.0.4": "id",
-						"10.0.0.5": "id",
+					ipmap: map[string]backend.Key{
+						"10.0.0.4": k1,
+						"10.0.0.5": k1,
 					},
 					expectResult: "10.0.0.6",
 					lastIP:       "10.0.0.3",
@@ -161,8 +166,8 @@ var _ = Describe("host-local ip allocator", func() {
 				// round robin to the beginning
 				{
 					subnets: []string{"10.0.0.0/29"},
-					ipmap: map[string]string{
-						"10.0.0.6": "id",
+					ipmap: map[string]backend.Key{
+						"10.0.0.6": k1,
 					},
 					expectResult: "10.0.0.2",
 					lastIP:       "10.0.0.5",
@@ -170,8 +175,8 @@ var _ = Describe("host-local ip allocator", func() {
 				// lastIP is out of range
 				{
 					subnets: []string{"10.0.0.0/29"},
-					ipmap: map[string]string{
-						"10.0.0.2": "id",
+					ipmap: map[string]backend.Key{
+						"10.0.0.2": k1,
 					},
 					expectResult: "10.0.0.3",
 					lastIP:       "10.0.0.128",
@@ -180,11 +185,11 @@ var _ = Describe("host-local ip allocator", func() {
 				// wrap around and reserve lastIP
 				{
 					subnets: []string{"10.0.0.0/29"},
-					ipmap: map[string]string{
-						"10.0.0.2": "id",
-						"10.0.0.4": "id",
-						"10.0.0.5": "id",
-						"10.0.0.6": "id",
+					ipmap: map[string]backend.Key{
+						"10.0.0.2": k1,
+						"10.0.0.4": k1,
+						"10.0.0.5": k1,
+						"10.0.0.6": k1,
 					},
 					expectResult: "10.0.0.3",
 					lastIP:       "10.0.0.3",
@@ -193,21 +198,21 @@ var _ = Describe("host-local ip allocator", func() {
 				{
 					subnets:      []string{"10.0.0.0/30", "10.0.1.0/30"},
 					expectResult: "10.0.0.2",
-					ipmap:        map[string]string{},
+					ipmap:        map[string]backend.Key{},
 				},
 				// advance to next subnet
 				{
 					subnets:      []string{"10.0.0.0/30", "10.0.1.0/30"},
 					lastIP:       "10.0.0.2",
 					expectResult: "10.0.1.2",
-					ipmap:        map[string]string{},
+					ipmap:        map[string]backend.Key{},
 				},
 				// Roll to start subnet
 				{
 					subnets:      []string{"10.0.0.0/30", "10.0.1.0/30", "10.0.2.0/30"},
 					lastIP:       "10.0.2.2",
 					expectResult: "10.0.0.2",
-					ipmap:        map[string]string{},
+					ipmap:        map[string]backend.Key{},
 				},
 			}
 
@@ -221,28 +226,28 @@ var _ = Describe("host-local ip allocator", func() {
 		It("should not allocate the broadcast address", func() {
 			alloc := mkalloc()
 			for i := 2; i < 7; i++ {
-				res, err := alloc.Get("ID", nil)
+				res, err := alloc.Get(k1, nil)
 				Expect(err).ToNot(HaveOccurred())
 				s := fmt.Sprintf("192.168.1.%d/29", i)
 				Expect(s).To(Equal(res.Address.String()))
 				fmt.Fprintln(GinkgoWriter, "got ip", res.Address.String())
 			}
 
-			x, err := alloc.Get("ID", nil)
+			x, err := alloc.Get(k1, nil)
 			fmt.Fprintln(GinkgoWriter, "got ip", x)
 			Expect(err).To(HaveOccurred())
 		})
 
 		It("should allocate in a round-robin fashion", func() {
 			alloc := mkalloc()
-			res, err := alloc.Get("ID", nil)
+			res, err := alloc.Get(k1, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Address.String()).To(Equal("192.168.1.2/29"))
 
-			err = alloc.Release("ID")
+			err = alloc.Release(k1)
 			Expect(err).ToNot(HaveOccurred())
 
-			res, err = alloc.Get("ID", nil)
+			res, err = alloc.Get(k1, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Address.String()).To(Equal("192.168.1.3/29"))
 
@@ -252,7 +257,7 @@ var _ = Describe("host-local ip allocator", func() {
 			It("must allocate the requested IP", func() {
 				alloc := mkalloc()
 				requestedIP := net.IP{192, 168, 1, 5}
-				res, err := alloc.Get("ID", requestedIP)
+				res, err := alloc.Get(k1, requestedIP)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res.Address.IP.String()).To(Equal(requestedIP.String()))
 			})
@@ -260,11 +265,11 @@ var _ = Describe("host-local ip allocator", func() {
 			It("must fail when the requested IP is allocated", func() {
 				alloc := mkalloc()
 				requestedIP := net.IP{192, 168, 1, 5}
-				res, err := alloc.Get("ID", requestedIP)
+				res, err := alloc.Get(k1, requestedIP)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res.Address.IP.String()).To(Equal(requestedIP.String()))
 
-				_, err = alloc.Get("ID", requestedIP)
+				_, err = alloc.Get(k1, requestedIP)
 				Expect(err).To(MatchError(`requested IP address 192.168.1.5 is not available in range set 192.168.1.1-192.168.1.6`))
 			})
 
@@ -272,7 +277,7 @@ var _ = Describe("host-local ip allocator", func() {
 				alloc := mkalloc()
 				(*alloc.rangeset)[0].RangeEnd = net.IP{192, 168, 1, 4}
 				requestedIP := net.IP{192, 168, 1, 5}
-				_, err := alloc.Get("ID", requestedIP)
+				_, err := alloc.Get(k1, requestedIP)
 				Expect(err).To(HaveOccurred())
 			})
 
@@ -280,36 +285,47 @@ var _ = Describe("host-local ip allocator", func() {
 				alloc := mkalloc()
 				(*alloc.rangeset)[0].RangeStart = net.IP{192, 168, 1, 3}
 				requestedIP := net.IP{192, 168, 1, 2}
-				_, err := alloc.Get("ID", requestedIP)
+				_, err := alloc.Get(k1, requestedIP)
 				Expect(err).To(HaveOccurred())
 			})
 		})
 
+		It("Returns the same result in GetByID", func() {
+			alloc := mkalloc()
+			res1, err := alloc.Get(k1, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			res2, err := alloc.GetByID(k1)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(res1).To(Equal(res2))
+		})
 	})
+
 	Context("when out of ips", func() {
 		It("returns a meaningful error", func() {
 			testCases := []AllocatorTestCase{
 				{
 					subnets: []string{"10.0.0.0/30"},
-					ipmap: map[string]string{
-						"10.0.0.2": "id",
+					ipmap: map[string]backend.Key{
+						"10.0.0.2": k1,
 					},
 				},
 				{
 					subnets: []string{"10.0.0.0/29"},
-					ipmap: map[string]string{
-						"10.0.0.2": "id",
-						"10.0.0.3": "id",
-						"10.0.0.4": "id",
-						"10.0.0.5": "id",
-						"10.0.0.6": "id",
+					ipmap: map[string]backend.Key{
+						"10.0.0.2": k1,
+						"10.0.0.3": k1,
+						"10.0.0.4": k1,
+						"10.0.0.5": k1,
+						"10.0.0.6": k1,
 					},
 				},
 				{
 					subnets: []string{"10.0.0.0/30", "10.0.1.0/30"},
-					ipmap: map[string]string{
-						"10.0.0.2": "id",
-						"10.0.1.2": "id",
+					ipmap: map[string]backend.Key{
+						"10.0.0.2": k1,
+						"10.0.1.2": k1,
 					},
 				},
 			}

@@ -22,14 +22,14 @@ import (
 )
 
 type FakeStore struct {
-	ipMap          map[string]string
+	ipMap          map[string]backend.Key
 	lastReservedIP map[string]net.IP
 }
 
 // FakeStore implements the Store interface
 var _ backend.Store = &FakeStore{}
 
-func NewFakeStore(ipmap map[string]string, lastIPs map[string]net.IP) *FakeStore {
+func NewFakeStore(ipmap map[string]backend.Key, lastIPs map[string]net.IP) *FakeStore {
 	return &FakeStore{ipmap, lastIPs}
 }
 
@@ -45,7 +45,7 @@ func (s *FakeStore) Close() error {
 	return nil
 }
 
-func (s *FakeStore) Reserve(id string, ip net.IP, rangeID string) (bool, error) {
+func (s *FakeStore) Reserve(id backend.Key, ip net.IP, rangeID string) (bool, error) {
 	key := ip.String()
 	if _, ok := s.ipMap[key]; !ok {
 		s.ipMap[key] = id
@@ -68,10 +68,10 @@ func (s *FakeStore) Release(ip net.IP) error {
 	return nil
 }
 
-func (s *FakeStore) ReleaseByID(id string) error {
+func (s *FakeStore) ReleaseByID(id backend.Key) error {
 	toDelete := []string{}
 	for k, v := range s.ipMap {
-		if v == id {
+		if id.Equals(&v) {
 			toDelete = append(toDelete, k)
 		}
 	}
@@ -81,6 +81,17 @@ func (s *FakeStore) ReleaseByID(id string) error {
 	return nil
 }
 
-func (s *FakeStore) SetIPMap(m map[string]string) {
+func (s *FakeStore) GetByID(id backend.Key) ([]net.IP, error) {
+	out := []net.IP{}
+
+	for k, v := range s.ipMap {
+		if id.Equals(&v) {
+			out = append(out, net.ParseIP(k))
+		}
+	}
+	return out, nil
+}
+
+func (s *FakeStore) SetIPMap(m map[string]backend.Key) {
 	s.ipMap = m
 }

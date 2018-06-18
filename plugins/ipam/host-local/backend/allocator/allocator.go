@@ -41,7 +41,7 @@ func NewIPAllocator(s *RangeSet, store backend.Store, id int) *IPAllocator {
 }
 
 // Get alocates an IP
-func (a *IPAllocator) Get(id string, requestedIP net.IP) (*current.IPConfig, error) {
+func (a *IPAllocator) Get(id backend.Key, requestedIP net.IP) (*current.IPConfig, error) {
 	a.store.Lock()
 	defer a.store.Unlock()
 
@@ -110,11 +110,47 @@ func (a *IPAllocator) Get(id string, requestedIP net.IP) (*current.IPConfig, err
 }
 
 // Release clears all IPs allocated for the container with given ID
-func (a *IPAllocator) Release(id string) error {
+func (a *IPAllocator) Release(id backend.Key) error {
 	a.store.Lock()
 	defer a.store.Unlock()
 
 	return a.store.ReleaseByID(id)
+}
+
+// GetByID returns all IPs already allocated for a given store key
+func (a *IPAllocator) GetByID(id backend.Key) (*current.IPConfig, error) {
+	a.store.Lock()
+	defer a.store.Unlock()
+
+	// This may return IPs not in this allocator
+	ips, err := a.store.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, ip := range ips {
+		// For every IP allocated for this container, find if this allocator is configured for it
+		// This is so we can recompute the gateway
+		r, _ := a.rangeset.RangeFor(ip)
+		if r != nil {
+			version := "4"
+			if ip.To4() == nil {
+				version = "6"
+			} else {
+				ip = ip.To4() // re-canonicalize the datatype; just used for unit tests.
+			}
+
+			return &current.IPConfig{
+				Version: version,
+				Address: net.IPNet{IP: ip, Mask: r.Subnet.Mask},
+				Gateway: r.Gateway,
+			}, nil
+
+		}
+	}
+
+	// This range has no allocated IPs (because perhaps the configuration changed)
+	return nil, nil
 }
 
 type RangeIter struct {

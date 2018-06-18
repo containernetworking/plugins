@@ -16,12 +16,34 @@ package backend
 
 import "net"
 
+// Key is the primary key for the store
+type Key struct {
+	ID string // the container ID
+	IF string // The container interface name
+}
+
+// Equals checks for key equality
+func (k *Key) Equals(k1 *Key) bool {
+	if k == nil && k1 == nil {
+		return true
+	}
+	if k == nil {
+		return false
+	}
+	if k1 == nil {
+		return false
+	}
+
+	return k.ID == k1.ID && k.IF == k1.IF
+}
+
 type Store interface {
 	Lock() error
 	Unlock() error
 	Close() error
-	Reserve(id string, ip net.IP, rangeID string) (bool, error)
+	Reserve(key Key, ip net.IP, rangeID string) (bool, error)
 	LastReservedIP(rangeID string) (net.IP, error)
 	Release(ip net.IP) error
-	ReleaseByID(id string) error
+	ReleaseByID(id Key) error
+	GetByID(id Key) ([]net.IP, error)
 }
