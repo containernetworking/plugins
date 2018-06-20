@@ -40,6 +40,12 @@ func (r *Range) Canonicalize() error {
 		return fmt.Errorf("IPNet IP and Mask version mismatch")
 	}
 
+	// Ensure Subnet IP is the network address, not some other address
+	networkIP := r.Subnet.IP.Mask(r.Subnet.Mask)
+	if !r.Subnet.IP.Equal(networkIP) {
+		return fmt.Errorf("Network has host bits set. For a subnet mask of length %d the network address is %s", ones, networkIP.String())
+	}
+
 	// If the gateway is nil, claim .1
 	if r.Gateway == nil {
 		r.Gateway = ip.NextIP(r.Subnet.IP)
