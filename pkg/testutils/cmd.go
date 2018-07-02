@@ -31,8 +31,8 @@ func envCleanup() {
 	os.Unsetenv("CNI_CONTAINERID")
 }
 
-func CmdAdd(cniNetns, cniContainerID, cniIfname string, conf []byte, f func() error) (types.Result, []byte, error) {
-	os.Setenv("CNI_COMMAND", "ADD")
+func cmdAddOrGet(command, cniNetns, cniContainerID, cniIfname string, conf []byte, f func() error) (types.Result, []byte, error) {
+	os.Setenv("CNI_COMMAND", command)
 	os.Setenv("CNI_PATH", os.Getenv("PATH"))
 	os.Setenv("CNI_NETNS", cniNetns)
 	os.Setenv("CNI_IFNAME", cniIfname)
@@ -77,8 +77,20 @@ func CmdAdd(cniNetns, cniContainerID, cniIfname string, conf []byte, f func() er
 	return result, out, nil
 }
 
+func CmdAdd(cniNetns, cniContainerID, cniIfname string, conf []byte, f func() error) (types.Result, []byte, error) {
+	return cmdAddOrGet("ADD", cniNetns, cniContainerID, cniIfname, conf, f)
+}
+
+func CmdGet(cniNetns, cniContainerID, cniIfname string, conf []byte, f func() error) (types.Result, []byte, error) {
+	return cmdAddOrGet("GET", cniNetns, cniContainerID, cniIfname, conf, f)
+}
+
 func CmdAddWithArgs(args *skel.CmdArgs, f func() error) (types.Result, []byte, error) {
 	return CmdAdd(args.Netns, args.ContainerID, args.IfName, args.StdinData, f)
+}
+
+func CmdGetWithArgs(args *skel.CmdArgs, f func() error) (types.Result, []byte, error) {
+	return CmdGet(args.Netns, args.ContainerID, args.IfName, args.StdinData, f)
 }
 
 func CmdDel(cniNetns, cniContainerID, cniIfname string, f func() error) error {
