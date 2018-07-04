@@ -4,6 +4,8 @@
 # plugins
 Some CNI network plugins, maintained by the containernetworking team. For more information, see the individual READMEs.
 
+Read [CONTRIBUTING](CONTRIBUTING.md) for build and test instructions.
+
 ## Plugins supplied:
 ### Main: interface-creating
 * `bridge`: Creates a bridge, adds the host and the container to it.
