@@ -507,6 +507,77 @@ func main() {
 }
 
 func cmdGet(args *skel.CmdArgs) error {
-	// TODO: implement
-	return fmt.Errorf("not implemented")
+	n, cniVersion, err := loadNetConf(args.StdinData)
+	if err != nil {
+		return err
+	}
+
+	netns, err := ns.GetNS(args.Netns)
+	if err != nil {
+		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+	}
+	defer netns.Close()
+
+	// run the IPAM plugin and get back the config to apply
+	r, err := ipam.ExecGet(n.IPAM.Type, args.StdinData)
+	if err != nil {
+		return err
+	}
+
+	// Convert whatever the IPAM result was into the current Result type
+	result, err := current.NewResultFromResult(r)
+	if err != nil {
+		return err
+	}
+
+	if len(result.IPs) == 0 {
+		return errors.New("IPAM plugin returned missing IP config")
+	}
+
+	// Gather gateway information for each IP family
+	if _, _, err := calcGateways(result, n); err != nil {
+		return err
+	}
+
+	br, err := bridgeByName(n.BrName)
+	if err != nil {
+		return err
+	}
+
+	var containerVeth netlink.Link
+	hostVethIndex := -1
+	if err := netns.Do(func(_ ns.NetNS) error {
+		containerVeth, hostVethIndex, err = ip.GetVethPeerIfindex(args.IfName)
+		return err
+	}); err != nil {
+		return err
+	}
+	if hostVethIndex < 0 {
+		return fmt.Errorf("failed to find container veth peer %d", hostVethIndex)
+	}
+
+	// Fetch host side
+	hostVeth, err := netlink.LinkByIndex(hostVethIndex)
+	if err != nil {
+		return fmt.Errorf("could not look up host veth peer %d: %v", hostVethIndex, err)
+	}
+
+	result.Interfaces = []*current.Interface{
+		&current.Interface{
+			Name: br.Attrs().Name,
+			Mac:  br.Attrs().HardwareAddr.String(),
+		},
+		&current.Interface{
+			Name: hostVeth.Attrs().Name,
+			Mac:  hostVeth.Attrs().HardwareAddr.String(),
+		},
+		&current.Interface{
+			Name:    args.IfName,
+			Mac:     containerVeth.Attrs().HardwareAddr.String(),
+			Sandbox: args.Netns,
+		},
+	}
+	result.DNS = n.DNS
+
+	return types.PrintResult(result, cniVersion)
 }
