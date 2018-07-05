@@ -138,7 +138,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 			Gateway: v.Gateway})
 	}
 
-	result.Routes = ipamConf.Routes
 	return types.PrintResult(result, confVersion)
 }
 
