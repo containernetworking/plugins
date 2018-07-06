@@ -2,10 +2,9 @@
 
 ## Overview
 
-This plugin changes some interface attributes, like 'ip link' command.
-It does not create any network interfaces and therefore does not bring connectivity by itself.
-This iplink plugin applies changes to interfaces created by previously applied plugins as meta plugin.
-It is only useful when used in addition to other plugins.
+This plugin provides a method to change interface attributes, like 'ip link' command.
+It can be used in a chain to apply several specific changes to interface previously configured
+by other plugin.
 
 ## Example configuration
 

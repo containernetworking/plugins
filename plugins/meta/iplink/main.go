@@ -30,28 +30,8 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-/*
- * Current support ip link command:
- + ip link set promisc <bool>
- + ip link set address <mac addr>
- + ip link set mtu <numeric>
-
---- syntax
-{
-  "name": "myiplink",
-  "type": "iplink",
-  "iplink": {
-          "promisc": "true",
-          "macaddress": "new mac addr",
-          "mtu": "1454",
-  }
-}
-*/
-
-// TuningConf represents the network tuning configuration.
+// IpLinkConf represents the network tuning configuration.
 type IpLinkConf struct {
-	//SysCtl        map[string]string      `json:"sysctl"`
-	//IpLink        map[string]string      `json:"iplink"`
 	Mac     string `json:"mac,omitempty"`
 	Promisc bool   `json:"promisc,omitempty"`
 	Mtu     int    `json:"mtu,omitempty"`
@@ -78,21 +58,21 @@ type MACEnvArgs struct {
 func changeMacAddr(ifName string, newMacAddr string) error {
 	addr, err := net.ParseMAC(newMacAddr)
 	if err != nil {
-		return fmt.Errorf("Invalid args %v for MAC addr: %v", newMacAddr, err)
+		return fmt.Errorf("invalid args %v for MAC addr: %v", newMacAddr, err)
 	}
 
 	link, err := netlink.LinkByName(ifName)
 	if err != nil {
-		return fmt.Errorf("Failed to get %s: %v", ifName, err)
+		return fmt.Errorf("failed to get %q: %v", ifName, err)
 	}
 
 	err = netlink.LinkSetDown(link)
 	if err != nil {
-		return fmt.Errorf("Failed to set %s down: %v", ifName, err)
+		return fmt.Errorf("failed to set %q down: %v", ifName, err)
 	}
 	err = netlink.LinkSetHardwareAddr(link, addr)
 	if err != nil {
-		return fmt.Errorf("Failed to set %s address to %s: %v", ifName, newMacAddr, err)
+		return fmt.Errorf("failed to set %q address to %q: %v", ifName, newMacAddr, err)
 	}
 	return netlink.LinkSetUp(link)
 }
@@ -109,7 +89,7 @@ func updateResultsMacAddr(config PluginConf, ifName string, newMacAddr string) e
 func changePromisc(ifName string, val bool) error {
 	link, err := netlink.LinkByName(ifName)
 	if err != nil {
-		return fmt.Errorf("Failed to get %s: %v", ifName, err)
+		return fmt.Errorf("failed to get %q: %v", ifName, err)
 	}
 
 	if val {
@@ -121,7 +101,7 @@ func changePromisc(ifName string, val bool) error {
 func changeMtu(ifName string, mtu int) error {
 	link, err := netlink.LinkByName(ifName)
 	if err != nil {
-		return fmt.Errorf("Failed to get %s: %v", ifName, err)
+		return fmt.Errorf("failed to get %q: %v", ifName, err)
 	}
 	return netlink.LinkSetMTU(link, mtu)
 }
@@ -175,7 +155,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+	err = ns.WithNetNSPath(args.Netns, func(ns.NetNS) error {
 		var err error
 
 		if conf.Mac != "" {
