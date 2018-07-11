@@ -80,7 +80,7 @@ var _ = Describe("bandwidth test", func() {
 	"ingressRate": 8,
 	"ingressBurst": 8,
 	"egressRate": 16,
-	"egressBurst": 9,
+	"egressBurst": 8,
 	"prevResult": {
 		"interfaces": [
 			{
@@ -135,7 +135,7 @@ var _ = Describe("bandwidth test", func() {
 
 				Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Tbf{}))
 				Expect(qdiscs[0].(*netlink.Tbf).Rate).To(Equal(uint64(2)))
-				Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(9)))
+				Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 
 				hostVethLink, err := netlink.LinkByName(hostIfname)
 				Expect(err).NotTo(HaveOccurred())
@@ -163,7 +163,7 @@ var _ = Describe("bandwidth test", func() {
 
 				Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Tbf{}))
 				Expect(qdiscs[0].(*netlink.Tbf).Rate).To(Equal(uint64(1)))
-				Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(8)))
+				Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 				return nil
 			})).To(Succeed())
 
@@ -176,8 +176,8 @@ var _ = Describe("bandwidth test", func() {
 	"type": "bandwidth",
 	"ingressRate": 0,
 	"ingressBurst": 0,
-	"egressRate": 8,
-	"egressBurst": 1,
+	"egressRate": 8000,
+	"egressBurst": 80,
 	"prevResult": {
 		"interfaces": [
 			{
@@ -245,8 +245,8 @@ var _ = Describe("bandwidth test", func() {
 	"type": "bandwidth",
 	"egressRate": 0,
 	"egressBurst": 0,
-	"ingressRate": 8,
-	"ingressBurst": 1,
+	"ingressRate": 8000,
+	"ingressBurst": 80,
 	"prevResult": {
 		"interfaces": [
 			{
@@ -302,8 +302,8 @@ var _ = Describe("bandwidth test", func() {
 				Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(containerIfLink.Attrs().Index))
 
 				Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Tbf{}))
-				Expect(qdiscs[0].(*netlink.Tbf).Rate).To(Equal(uint64(1)))
-				Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
+				Expect(qdiscs[0].(*netlink.Tbf).Rate).To(Equal(uint64(1000)))
+				Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(35)))
 				return nil
 			})).To(Succeed())
 
@@ -426,7 +426,7 @@ var _ = Describe("bandwidth test", func() {
 
 				Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Tbf{}))
 				Expect(qdiscs[0].(*netlink.Tbf).Rate).To(Equal(uint64(2)))
-				Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(9)))
+				Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 
 				hostVethLink, err := netlink.LinkByName(hostIfname)
 				Expect(err).NotTo(HaveOccurred())
@@ -454,7 +454,7 @@ var _ = Describe("bandwidth test", func() {
 
 				Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Tbf{}))
 				Expect(qdiscs[0].(*netlink.Tbf).Rate).To(Equal(uint64(1)))
-				Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(8)))
+				Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 				return nil
 			})).To(Succeed())
 
