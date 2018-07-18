@@ -7,9 +7,9 @@ Some CNI network plugins, maintained by the containernetworking team. For more i
 ## Plugins supplied:
 ### Main: interface-creating
 * `bridge`: Creates a bridge, adds the host and the container to it.
-* `ipvlan`: Adds an [ipvlan](https://www.kernel.org/doc/Documentation/networking/ipvlan.txt) interface in the container
-* `loopback`: Creates a loopback interface
-* `macvlan`: Creates a new MAC address, forwards all traffic to that to the container
+* `ipvlan`: Adds an [ipvlan](https://www.kernel.org/doc/Documentation/networking/ipvlan.txt) interface in the container.
+* `loopback`: Set the state of loopback interface to up.
+* `macvlan`: Creates a new MAC address, forwards all traffic to that to the container.
 * `ptp`: Creates a veth pair.
 * `vlan`: Allocates a vlan device.
 
