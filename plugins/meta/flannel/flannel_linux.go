@@ -25,6 +25,7 @@ import (
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
+	"net"
 	"os"
 )
 
@@ -55,10 +56,17 @@ func doCmdAdd(args *skel.CmdArgs, n *NetConf, fenv *subnetEnv) error {
 		n.Delegate["cniVersion"] = n.CNIVersion
 	}
 
+	defaultRs := types.Route{
+		Dst: net.IPNet{
+			IP:   net.IPv4(0, 0, 0, 0),
+			Mask: net.IPv4Mask(0, 0, 0, 0),
+		},
+	}
 	n.Delegate["ipam"] = map[string]interface{}{
 		"type":   "host-local",
 		"subnet": fenv.sn.String(),
 		"routes": []types.Route{
+			defaultRs,
 			{
 				Dst: *fenv.nw,
 			},

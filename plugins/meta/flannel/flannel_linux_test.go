@@ -119,6 +119,9 @@ FLANNEL_IPMASQ=true
    "ipam" : {
       "routes" : [
          {
+            "dst" : "0.0.0.0/0"
+         },
+         {
             "dst" : "10.1.0.0/16"
          }
       ],
