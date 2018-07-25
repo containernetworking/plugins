@@ -16,7 +16,9 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
 	"strings"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -83,6 +85,9 @@ const (
     "ipam": {
         "type":    "host-local"`
 
+	ipamDataDirStr = `,
+        "dataDir": "%s"`
+
 	// Single subnet configuration (legacy)
 	subnetConfStr = `,
         "subnet":  "%s"`
@@ -110,10 +115,13 @@ const (
 
 // netConfJSON() generates a JSON network configuration string
 // for a test case.
-func (tc testCase) netConfJSON() string {
+func (tc testCase) netConfJSON(dataDir string) string {
 	conf := fmt.Sprintf(netConfStr, tc.cniVersion, BRNAME)
 	if tc.subnet != "" || tc.ranges != nil {
 		conf += ipamStartStr
+		if dataDir != "" {
+			conf += fmt.Sprintf(ipamDataDirStr, dataDir)
+		}
 		if tc.subnet != "" {
 			conf += tc.subnetConfig()
 		}
@@ -152,8 +160,8 @@ var counter uint
 
 // createCmdArgs generates network configuration and creates command
 // arguments for a test case.
-func (tc testCase) createCmdArgs(targetNS ns.NetNS) *skel.CmdArgs {
-	conf := tc.netConfJSON()
+func (tc testCase) createCmdArgs(targetNS ns.NetNS, dataDir string) *skel.CmdArgs {
+	conf := tc.netConfJSON(dataDir)
 	defer func() { counter += 1 }()
 	return &skel.CmdArgs{
 		ContainerID: fmt.Sprintf("dummy-%d", counter),
@@ -215,7 +223,7 @@ func ipVersion(ip net.IP) string {
 
 type cmdAddDelTester interface {
 	setNS(testNS ns.NetNS, targetNS ns.NetNS)
-	cmdAddTest(tc testCase)
+	cmdAddTest(tc testCase, dataDir string)
 	cmdDelTest(tc testCase)
 }
 
@@ -240,9 +248,9 @@ func (tester *testerV03x) setNS(testNS ns.NetNS, targetNS ns.NetNS) {
 	tester.targetNS = targetNS
 }
 
-func (tester *testerV03x) cmdAddTest(tc testCase) {
+func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) {
 	// Generate network config and command arguments
-	tester.args = tc.createCmdArgs(tester.targetNS)
+	tester.args = tc.createCmdArgs(tester.targetNS, dataDir)
 
 	// Execute cmdADD on the plugin
 	var result *current.Result
@@ -419,9 +427,9 @@ func (tester *testerV01xOr02x) setNS(testNS ns.NetNS, targetNS ns.NetNS) {
 	tester.targetNS = targetNS
 }
 
-func (tester *testerV01xOr02x) cmdAddTest(tc testCase) {
+func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) {
 	// Generate network config and calculate gateway addresses
-	tester.args = tc.createCmdArgs(tester.targetNS)
+	tester.args = tc.createCmdArgs(tester.targetNS, dataDir)
 
 	// Execute cmdADD on the plugin
 	err := tester.testNS.Do(func(ns.NetNS) error {
@@ -537,7 +545,7 @@ func (tester *testerV01xOr02x) cmdDelTest(tc testCase) {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-func cmdAddDelTest(testNS ns.NetNS, tc testCase) {
+func cmdAddDelTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	// Get a Add/Del tester based on test case version
 	tester := testerByVersion(tc.cniVersion)
 
@@ -547,7 +555,7 @@ func cmdAddDelTest(testNS ns.NetNS, tc testCase) {
 	tester.setNS(testNS, targetNS)
 
 	// Test IP allocation
-	tester.cmdAddTest(tc)
+	tester.cmdAddTest(tc, dataDir)
 
 	// Test IP Release
 	tester.cmdDelTest(tc)
@@ -558,15 +566,20 @@ func cmdAddDelTest(testNS ns.NetNS, tc testCase) {
 
 var _ = Describe("bridge Operations", func() {
 	var originalNS ns.NetNS
+	var dataDir string
 
 	BeforeEach(func() {
 		// Create a new NetNS so we don't modify the host
 		var err error
 		originalNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
+
+		dataDir, err = ioutil.TempDir("", "bridge_test")
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
+		Expect(os.RemoveAll(dataDir)).To(Succeed())
 		Expect(originalNS.Close()).To(Succeed())
 	})
 
@@ -661,7 +674,7 @@ var _ = Describe("bridge Operations", func() {
 		}
 		for _, tc := range testCases {
 			tc.cniVersion = "0.3.0"
-			cmdAddDelTest(originalNS, tc)
+			cmdAddDelTest(originalNS, tc, dataDir)
 		}
 	})
 
@@ -691,7 +704,7 @@ var _ = Describe("bridge Operations", func() {
 		}
 		for _, tc := range testCases {
 			tc.cniVersion = "0.3.1"
-			cmdAddDelTest(originalNS, tc)
+			cmdAddDelTest(originalNS, tc, dataDir)
 		}
 	})
 
@@ -707,7 +720,7 @@ var _ = Describe("bridge Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 		defer targetNS.Close()
 		tester.setNS(originalNS, targetNS)
-		tester.args = tc.createCmdArgs(targetNS)
+		tester.args = tc.createCmdArgs(targetNS, dataDir)
 
 		// Execute cmdDEL on the plugin, expect no errors
 		tester.cmdDelTest(tc)
@@ -739,7 +752,7 @@ var _ = Describe("bridge Operations", func() {
 		}
 		for _, tc := range testCases {
 			tc.cniVersion = "0.1.0"
-			cmdAddDelTest(originalNS, tc)
+			cmdAddDelTest(originalNS, tc, dataDir)
 		}
 	})
 
@@ -909,7 +922,7 @@ var _ = Describe("bridge Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 			origMac := link.Attrs().HardwareAddr
 
-			cmdAddDelTest(originalNS, tc)
+			cmdAddDelTest(originalNS, tc, dataDir)
 
 			link, err = netlink.LinkByName(BRNAME)
 			Expect(err).NotTo(HaveOccurred())
