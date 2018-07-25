@@ -26,8 +26,13 @@ are very busy and read the mailing lists.
 ## Getting Started
 
 - Fork the repository on GitHub
-- Read the [README](README.md) for build and test instructions
 - Play with the project, submit bugs, submit pull requests!
+
+
+## Building
+
+Each plugin is compiled simply with `go build`.  A script, `build.sh`,
+is supplied which will build all the plugins in the repo.
 
 ## Contribution workflow
 
