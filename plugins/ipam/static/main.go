@@ -30,12 +30,9 @@ import (
 // The top-level network config - IPAM plugins are passed the full configuration
 // of the calling plugin, not just the IPAM section.
 type Net struct {
-	Name          string      `json:"name"`
-	CNIVersion    string      `json:"cniVersion"`
-	IPAM          *IPAMConfig `json:"ipam"`
-	RuntimeConfig struct {
-		Addresses []Address `json:"addresses,omitempty"`
-	} `json:"runtimeConfig,omitempty"`
+	Name       string      `json:"name"`
+	CNIVersion string      `json:"cniVersion"`
+	IPAM       *IPAMConfig `json:"ipam"`
 }
 
 type IPAMConfig struct {
@@ -85,10 +82,6 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 
 	if n.IPAM == nil {
 		return nil, "", fmt.Errorf("IPAM config missing 'ipam' key")
-	}
-
-	if len(n.RuntimeConfig.Addresses) != 0 {
-		n.IPAM.Addresses = append(n.RuntimeConfig.Addresses, n.IPAM.Addresses...)
 	}
 
 	// Validate all ranges
