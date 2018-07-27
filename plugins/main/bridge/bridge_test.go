@@ -221,6 +221,24 @@ func ipVersion(ip net.IP) string {
 	return "6"
 }
 
+func countIPAMIPs(path string) (int, error) {
+	count := 0
+	files, err := ioutil.ReadDir(path)
+	if err != nil {
+		return -1, err
+	}
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		if net.ParseIP(file.Name()) != nil {
+			count++
+		}
+	}
+	return count, nil
+}
+
 type cmdAddDelTester interface {
 	setNS(testNS ns.NetNS, targetNS ns.NetNS)
 	cmdAddTest(tc testCase, dataDir string)
@@ -576,6 +594,9 @@ var _ = Describe("bridge Operations", func() {
 
 		dataDir, err = ioutil.TempDir("", "bridge_test")
 		Expect(err).NotTo(HaveOccurred())
+
+		// Do not emulate an error, each test will set this if needed
+		debugPostIPAMError = nil
 	})
 
 	AfterEach(func() {
@@ -928,5 +949,38 @@ var _ = Describe("bridge Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(link.Attrs().HardwareAddr).To(Equal(origMac))
 		}
+	})
+
+	It("checks ip release in case of error", func() {
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			tc := testCase{
+				cniVersion: "0.3.1",
+				subnet:     "10.1.2.0/24",
+			}
+
+			_, _, err := setupBridge(tc.netConf())
+			Expect(err).NotTo(HaveOccurred())
+
+			args := tc.createCmdArgs(originalNS, dataDir)
+
+			// get number of allocated IPs before asking for a new one
+			before, err := countIPAMIPs(dataDir)
+			Expect(err).NotTo(HaveOccurred())
+
+			debugPostIPAMError = fmt.Errorf("debugPostIPAMError")
+			_, _, err = testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).To(MatchError("debugPostIPAMError"))
+
+			// get number of allocated IPs after failure
+			after, err := countIPAMIPs(dataDir)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(before).To(Equal(after))
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
 	})
 })

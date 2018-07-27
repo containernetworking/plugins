@@ -37,6 +37,9 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
+// For testcases to force an error after IPAM has been performed
+var debugPostIPAMError error
+
 const defaultBrName = "cni0"
 
 type NetConf struct {
@@ -465,6 +468,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 	brInterface.Mac = br.Attrs().HardwareAddr.String()
 
 	result.DNS = n.DNS
+
+	// Return an error requested by testcases, if any
+	if debugPostIPAMError != nil {
+		return debugPostIPAMError
+	}
 
 	success = true
 
