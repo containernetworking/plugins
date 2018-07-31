@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"runtime"
 	"syscall"
 
@@ -35,6 +36,9 @@ import (
 	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
 )
+
+// For testcases to force an error after IPAM has been performed
+var debugPostIPAMError error
 
 const defaultBrName = "cni0"
 
@@ -323,6 +327,8 @@ func enableIPForward(family int) error {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
+	var success bool = false
+
 	n, cniVersion, err := loadNetConf(args.StdinData)
 	if err != nil {
 		return err
@@ -357,6 +363,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
+
+	// release IP in case of failure
+	defer func() {
+		if !success {
+			os.Setenv("CNI_COMMAND", "DEL")
+			ipam.ExecDel(n.IPAM.Type, args.StdinData)
+			os.Setenv("CNI_COMMAND", "ADD")
+		}
+	}()
 
 	// Convert whatever the IPAM result was into the current Result type
 	result, err := current.NewResultFromResult(r)
@@ -453,6 +468,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 	brInterface.Mac = br.Attrs().HardwareAddr.String()
 
 	result.DNS = n.DNS
+
+	// Return an error requested by testcases, if any
+	if debugPostIPAMError != nil {
+		return debugPostIPAMError
+	}
+
+	success = true
 
 	return types.PrintResult(result, cniVersion)
 }

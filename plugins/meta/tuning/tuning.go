@@ -50,7 +50,7 @@ type MACEnvArgs struct {
 }
 
 func parseConf(data []byte, envArgs string) (*TuningConf, error) {
-	conf := TuningConf{Promisc: false, Mtu: -1}
+	conf := TuningConf{Promisc: false}
 	if err := json.Unmarshal(data, &conf); err != nil {
 		return nil, fmt.Errorf("failed to load netconf: %v", err)
 	}
@@ -110,13 +110,12 @@ func changeMacAddr(ifName string, newMacAddr string) error {
 	return netlink.LinkSetUp(link)
 }
 
-func updateResultsMacAddr(config TuningConf, ifName string, newMacAddr string) error {
+func updateResultsMacAddr(config TuningConf, ifName string, newMacAddr string) {
 	for _, i := range config.PrevResult.Interfaces {
 		if i.Name == ifName {
 			i.Mac = newMacAddr
 		}
 	}
-	return nil
 }
 
 func changePromisc(ifName string, val bool) error {
@@ -169,7 +168,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		if tuningConf.Mac != "" {
 			if err = changeMacAddr(args.IfName, tuningConf.Mac); err == nil {
-				err = updateResultsMacAddr(*tuningConf, args.IfName, tuningConf.Mac)
+				updateResultsMacAddr(*tuningConf, args.IfName, tuningConf.Mac)
 			}
 		}
 
@@ -179,7 +178,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 
-		if tuningConf.Mtu != -1 {
+		if tuningConf.Mtu != 0 {
 			if err = changeMtu(args.IfName, tuningConf.Mtu); err != nil {
 				return err
 			}
