@@ -52,7 +52,7 @@ func newDHCP() *DHCP {
 
 // Allocate acquires an IP from a DHCP server for a specified container.
 // The acquired lease will be maintained until Release() is called.
-func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
+func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) (err error) {
 	conf := types.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("error parsing netconf: %v", err)
@@ -60,9 +60,13 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 
 	clientID := args.ContainerID + "/" + conf.Name
 	hostNetns := d.hostNetnsPrefix + args.Netns
-	l, err := AcquireLease(clientID, hostNetns, args.IfName)
-	if err != nil {
-		return err
+
+	l := d.getLease(args.ContainerID, conf.Name)
+	if l == nil {
+		if l, err = AcquireLease(clientID, hostNetns, args.IfName); err != nil {
+			return err
+		}
+
 	}
 
 	ipn, err := l.IPNet()
