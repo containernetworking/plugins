@@ -164,12 +164,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 
-		var err error
-
 		if tuningConf.Mac != "" {
-			if err = changeMacAddr(args.IfName, tuningConf.Mac); err == nil {
-				updateResultsMacAddr(*tuningConf, args.IfName, tuningConf.Mac)
+			if err = changeMacAddr(args.IfName, tuningConf.Mac); err != nil {
+				return err
 			}
+			updateResultsMacAddr(*tuningConf, args.IfName, tuningConf.Mac)
 		}
 
 		if tuningConf.Promisc != false {
