@@ -15,7 +15,7 @@ rm -Rf ${SRC_DIR}/${RELEASE_DIR}
 mkdir -p ${SRC_DIR}/${RELEASE_DIR}
 mkdir -p ${OUTPUT_DIR}
 
-docker run -ti -v ${SRC_DIR}:/go/src/github.com/containernetworking/plugins --rm golang:1.10-alpine \
+docker run -v ${SRC_DIR}:/go/src/github.com/containernetworking/plugins --rm golang:1.10-alpine \
 /bin/sh -xe -c "\
     apk --no-cache add bash tar;
     cd /go/src/github.com/containernetworking/plugins; umask 0022;
