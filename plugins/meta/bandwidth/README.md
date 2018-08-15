@@ -48,9 +48,9 @@ The following is an example [json configuration list](https://github.com/contain
 The result is an `ifb` device in the host namespace redirecting to the `host-interface`, with `tc tbf` applied on the `ifb` device and the `container-interface`
 
 ## Network configuration reference
-* ingressRate: is the rate in Kbps at which traffic can enter an interface. (See http://man7.org/linux/man-pages/man8/tbf.8.html)
+* ingressRate: is the rate in bps at which traffic can enter an interface. (See http://man7.org/linux/man-pages/man8/tbf.8.html)
 * ingressBurst: is the maximum amount in Kb that tokens can be made available for instantaneously. (See http://man7.org/linux/man-pages/man8/tbf.8.html)
-* egressRate: is the rate in Kbps at which traffic can leave an interface. (See http://man7.org/linux/man-pages/man8/tbf.8.html)
+* egressRate: is the rate in bps at which traffic can leave an interface. (See http://man7.org/linux/man-pages/man8/tbf.8.html)
 * egressBurst: is the maximum amount in Kb that tokens can be made available for instantaneously. (See http://man7.org/linux/man-pages/man8/tbf.8.html)
 
 Both ingressRate and ingressBurst must be set in order to limit ingress bandwidth. If neither one is set, then ingress bandwidth is not limited.
