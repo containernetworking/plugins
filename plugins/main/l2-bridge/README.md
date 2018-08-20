@@ -7,11 +7,13 @@ The containers receive one end of the veth pair with the other end connected to 
 No IP address is assigned to the veth pair.
 
 The network configuration specifies the name of the bridge to be used.
-If the bridge is missing, the plugin will fail.
+If the bridge is missing, the plugin will create one on first use.
+
 
 ## Example configuration
 ```
 {
+    "name": "mynet",
 	"cniVersion": "0.3.0",
 	"type": "l2-bridge",
 	"bridge": "mynet0",
@@ -21,6 +23,7 @@ If the bridge is missing, the plugin will fail.
 
 ## Network configuration reference
 
+* `name` (string, required): the name of the network.
 * `type` (string, required): "l2-bridge".
 * `bridge` (string, optional): name of the bridge to use.
 * `mtu` (integer, optional): explicitly set MTU to the specified value. Defaults to the value chosen by the kernel.
