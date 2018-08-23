@@ -104,7 +104,7 @@ func (t *MemoryPool) GetNextFreeLease() (bool, leasepool.Lease, error) {
 	defer t.poolLock.Unlock()
 
 	//Loop Through the elements backwards.
-	for i := (len(t.pool) - 1); i >= 0; i-- {
+	for i := (len(t.pool) - 1); i > 0; i-- {
 		//If the Lease Is Free
 		if t.pool[i].Status == leasepool.Free {
 			//Take the Element
