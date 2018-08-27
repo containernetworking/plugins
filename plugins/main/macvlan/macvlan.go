@@ -44,6 +44,11 @@ type NetConf struct {
 	MTU    int    `json:"mtu"`
 }
 
+type ConfigureVMArgs struct {
+	types.CommonArgs
+	ConfigureNetworkForVM types.UnmarshallableBool `json:"configurenetworkforvm,omitempty"`
+}
+
 func init() {
 	// this ensures that main runs only on main thread (thread group leader).
 	// since namespace ops (unshare, setns) are done for a single thread, we
@@ -77,7 +82,7 @@ func modeFromString(s string) (netlink.MacvlanMode, error) {
 	}
 }
 
-func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interface, error) {
+func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS, configureNetworkForVM bool) (*current.Interface, error) {
 	macvlan := &current.Interface{}
 
 	mode, err := modeFromString(conf.Mode)
@@ -97,18 +102,38 @@ func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Inter
 		return nil, err
 	}
 
-	mv := &netlink.Macvlan{
-		LinkAttrs: netlink.LinkAttrs{
-			MTU:         conf.MTU,
-			Name:        tmpName,
-			ParentIndex: m.Attrs().Index,
-			Namespace:   netlink.NsFd(int(netns.Fd())),
-		},
-		Mode: mode,
-	}
+	var mv netlink.Link
 
-	if err := netlink.LinkAdd(mv); err != nil {
-		return nil, fmt.Errorf("failed to create macvlan: %v", err)
+	if configureNetworkForVM {
+		mv = &netlink.Macvtap{
+			Macvlan: netlink.Macvlan{
+				LinkAttrs: netlink.LinkAttrs{
+					MTU:         conf.MTU,
+					Name:        tmpName,
+					ParentIndex: m.Attrs().Index,
+					Namespace:   netlink.NsFd(int(netns.Fd())),
+				},
+				Mode: mode,
+			},
+		}
+
+		if err := netlink.LinkAdd(mv); err != nil {
+			return nil, fmt.Errorf("failed to create macvtap: %v", err)
+		}
+	} else {
+		mv = &netlink.Macvlan{
+			LinkAttrs: netlink.LinkAttrs{
+				MTU:         conf.MTU,
+				Name:        tmpName,
+				ParentIndex: m.Attrs().Index,
+				Namespace:   netlink.NsFd(int(netns.Fd())),
+			},
+			Mode: mode,
+		}
+
+		if err := netlink.LinkAdd(mv); err != nil {
+			return nil, fmt.Errorf("failed to create macvlan: %v", err)
+		}
 	}
 
 	err = netns.Do(func(_ ns.NetNS) error {
@@ -156,7 +181,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	macvlanInterface, err := createMacvlan(n, args.IfName, netns)
+	// Parse metadata to check if network needs to be configured for VM based container
+	configureNetworkForVM := false
+	if args.Args != "" {
+		e := ConfigureVMArgs{}
+		err := types.LoadArgs(args.Args, &e)
+		if err != nil {
+			return err
+		}
+
+		configureNetworkForVM = bool(e.ConfigureNetworkForVM)
+	}
+
+	macvlanInterface, err := createMacvlan(n, args.IfName, netns, configureNetworkForVM)
 	if err != nil {
 		return err
 	}
