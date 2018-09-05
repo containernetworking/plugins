@@ -176,7 +176,7 @@ var _ = Describe("static Operations", func() {
 			Netns:       nspath,
 			IfName:      ifname,
 			StdinData:   []byte(conf),
-			Args:        "IP=10.10.0.1;SUBNET=10.10.0.0/24;GATEWAY=10.10.0.254",
+			Args:        "IP=10.10.0.1/24;GATEWAY=10.10.0.254",
 		}
 
 		// Allocate the IP

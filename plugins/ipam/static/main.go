@@ -45,8 +45,7 @@ type IPAMConfig struct {
 
 type IPAMEnvArgs struct {
 	types.CommonArgs
-	IP      net.IP                     `json:"ip,omitempty"`
-	SUBNET  types.UnmarshallableString `json:"subnet,omitempty"`
+	IP      types.UnmarshallableString `json:"ip,omitempty"`
 	GATEWAY net.IP                     `json:"gateway,omitempty"`
 }
 
@@ -116,13 +115,13 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 			return nil, "", err
 		}
 
-		if e.IP != nil && e.SUBNET != "" {
-			_, subnet, err := net.ParseCIDR(string(e.SUBNET))
+		if e.IP != "" {
+			ip, subnet, err := net.ParseCIDR(string(e.IP))
 			if err != nil {
-				return nil, "", fmt.Errorf("invalid CIDR %s: %s", e.SUBNET, err)
+				return nil, "", fmt.Errorf("invalid CIDR %s: %s", e.IP, err)
 			}
 
-			addr := Address{Address: net.IPNet{IP: e.IP, Mask: subnet.Mask}}
+			addr := Address{Address: net.IPNet{IP: ip, Mask: subnet.Mask}}
 			if e.GATEWAY != nil {
 				addr.Gateway = e.GATEWAY
 			}
