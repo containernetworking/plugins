@@ -78,7 +78,7 @@ func (c *chain) teardown(ipt *iptables.IPTables) error {
 
 	for _, entryChain := range c.entryChains {
 		entryChainRules, err := ipt.List(c.table, entryChain)
-		if err != nil {
+		if err != nil || len(entryChainRules) < 1 {
 			// Swallow error here - probably the chain doesn't exist.
 			// If we miss something the deletion will fail
 			continue
