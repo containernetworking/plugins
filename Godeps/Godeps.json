@@ -12,38 +12,38 @@
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/libcni",
-			"Comment": "v0.6.0-rc1",
-			"Rev": "a2da8f8d7fd8e6dc25f336408a8ac86f050fbd88"
+			"Comment": "v0.7.0-alpha1",
+			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/invoke",
-			"Comment": "v0.6.0-rc1",
-			"Rev": "a2da8f8d7fd8e6dc25f336408a8ac86f050fbd88"
+			"Comment": "v0.7.0-alpha1",
+			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/skel",
-			"Comment": "v0.6.0-rc1",
-			"Rev": "a2da8f8d7fd8e6dc25f336408a8ac86f050fbd88"
+			"Comment": "v0.7.0-alpha1",
+			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/types",
-			"Comment": "v0.6.0-rc1",
-			"Rev": "a2da8f8d7fd8e6dc25f336408a8ac86f050fbd88"
+			"Comment": "v0.7.0-alpha1",
+			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/types/020",
-			"Comment": "v0.6.0-rc1",
-			"Rev": "a2da8f8d7fd8e6dc25f336408a8ac86f050fbd88"
+			"Comment": "v0.7.0-alpha1",
+			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/types/current",
-			"Comment": "v0.6.0-rc1",
-			"Rev": "a2da8f8d7fd8e6dc25f336408a8ac86f050fbd88"
+			"Comment": "v0.7.0-alpha1",
+			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/version",
-			"Comment": "v0.6.0-rc1",
-			"Rev": "a2da8f8d7fd8e6dc25f336408a8ac86f050fbd88"
+			"Comment": "v0.7.0-alpha1",
+			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-iptables/iptables",
@@ -52,8 +52,8 @@
 		},
 		{
 			"ImportPath": "github.com/coreos/go-systemd/activation",
-			"Comment": "v2-53-g2688e91",
-			"Rev": "2688e91251d9d8e404e86dd8f096e23b2f086958"
+			"Comment": "v17",
+			"Rev": "39ca1b05acc7ad1220e09f133283b8859a8b71ab"
 		},
 		{
 			"ImportPath": "github.com/d2g/dhcp4",

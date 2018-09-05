@@ -444,7 +444,7 @@ var _ = Describe("host-local Operations", func() {
 				"dataDir": "%s",
 				"ranges": [
 					[{"subnet":"172.16.1.0/24"}, { "subnet": "10.1.2.0/24" }],
-					[{ "subnet": "2001:db8:1::/24" }]
+					[{ "subnet": "2001:db8:1::/48" }]
 				]
 			},
 			"args": {

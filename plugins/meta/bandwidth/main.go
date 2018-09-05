@@ -32,11 +32,11 @@ import (
 // BandwidthEntry corresponds to a single entry in the bandwidth argument,
 // see CONVENTIONS.md
 type BandwidthEntry struct {
-	IngressRate  int `json:"ingressRate"`  //Bandwidth rate in Kbps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
-	IngressBurst int `json:"ingressBurst"` //Bandwidth burst in Kb for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
+	IngressRate  int `json:"ingressRate"`  //Bandwidth rate in bps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
+	IngressBurst int `json:"ingressBurst"` //Bandwidth burst in bits for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
 
-	EgressRate  int `json:"egressRate"`  //Bandwidth rate in Kbps for traffic through container. 0 for no limit. If egressRate is set, egressBurst must also be set
-	EgressBurst int `json:"egressBurst"` //Bandwidth burst in Kb for traffic through container. 0 for no limit. If egressBurst is set, egressRate must also be set
+	EgressRate  int `json:"egressRate"`  //Bandwidth rate in bps for traffic through container. 0 for no limit. If egressRate is set, egressBurst must also be set
+	EgressBurst int `json:"egressBurst"` //Bandwidth burst in bits for traffic through container. 0 for no limit. If egressBurst is set, egressRate must also be set
 }
 
 func (bw *BandwidthEntry) isZero() bool {
@@ -232,5 +232,11 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdDel, version.PluginSupports("0.3.0", "0.3.1", version.Current()))
+	// TODO: implement plugin version
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.PluginSupports("0.3.0", "0.3.1", version.Current()), "TODO")
+}
+
+func cmdGet(args *skel.CmdArgs) error {
+	// TODO: implement
+	return fmt.Errorf("not implemented")
 }
