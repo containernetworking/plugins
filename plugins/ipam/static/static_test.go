@@ -210,6 +210,61 @@ var _ = Describe("static Operations", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	It("allocates and releases multiple addresses with ADD/DEL, with ENV variables", func() {
+		const ifname string = "eth0"
+		const nspath string = "/some/where"
+
+		conf := `{
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "static"
+			}
+		}`
+
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       nspath,
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+			Args:        "IP=10.10.0.1/24,11.11.0.1/24;GATEWAY=10.10.0.254",
+		}
+
+		// Allocate the IP
+		r, raw, err := testutils.CmdAddWithArgs(args, func() error {
+			return cmdAdd(args)
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strings.Index(string(raw), "\"version\":")).Should(BeNumerically(">", 0))
+
+		result, err := current.GetResult(r)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Gomega is cranky about slices with different caps
+		Expect(*result.IPs[0]).To(Equal(
+			current.IPConfig{
+				Version: "4",
+				Address: mustCIDR("10.10.0.1/24"),
+				Gateway: net.ParseIP("10.10.0.254"),
+			}))
+		Expect(*result.IPs[1]).To(Equal(
+			current.IPConfig{
+				Version: "4",
+				Address: mustCIDR("11.11.0.1/24"),
+				Gateway: nil,
+			}))
+
+		Expect(len(result.IPs)).To(Equal(2))
+
+		// Release the IP
+		err = testutils.CmdDelWithArgs(args, func() error {
+			return cmdDel(args)
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
 })
 
 func mustCIDR(s string) net.IPNet {

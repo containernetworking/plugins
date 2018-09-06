@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -46,7 +47,7 @@ type IPAMConfig struct {
 type IPAMEnvArgs struct {
 	types.CommonArgs
 	IP      types.UnmarshallableString `json:"ip,omitempty"`
-	GATEWAY net.IP                     `json:"gateway,omitempty"`
+	GATEWAY types.UnmarshallableString `json:"gateway,omitempty"`
 }
 
 type Address struct {
@@ -124,23 +125,39 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		}
 
 		if e.IP != "" {
-			ip, subnet, err := net.ParseCIDR(string(e.IP))
-			if err != nil {
-				return nil, "", fmt.Errorf("invalid CIDR %s: %s", e.IP, err)
-			}
+			for _, item := range strings.Split(string(e.IP), ",") {
+				ipstr := strings.TrimSpace(item)
 
-			addr := Address{Address: net.IPNet{IP: ip, Mask: subnet.Mask}}
-			if e.GATEWAY != nil {
-				addr.Gateway = e.GATEWAY
+				ip, subnet, err := net.ParseCIDR(ipstr)
+				if err != nil {
+					return nil, "", fmt.Errorf("invalid CIDR %s: %s", e.IP, err)
+				}
+
+				addr := Address{Address: net.IPNet{IP: ip, Mask: subnet.Mask}}
+				if addr.Address.IP.To4() != nil {
+					addr.Version = "4"
+					numV4++
+				} else {
+					addr.Version = "6"
+					numV6++
+				}
+				n.IPAM.Addresses = append(n.IPAM.Addresses, addr)
 			}
-			if addr.Address.IP.To4() != nil {
-				addr.Version = "4"
-				numV4++
-			} else {
-				addr.Version = "6"
-				numV6++
+		}
+
+		if e.GATEWAY != "" {
+			for _, item := range strings.Split(string(e.GATEWAY), ",") {
+				gwip := net.ParseIP(strings.TrimSpace(item))
+				if gwip == nil {
+					return nil, "", fmt.Errorf("invalid gateway address: %s", item)
+				}
+
+				for i := range n.IPAM.Addresses {
+					if n.IPAM.Addresses[i].Address.Contains(gwip) {
+						n.IPAM.Addresses[i].Gateway = gwip
+					}
+				}
 			}
-			n.IPAM.Addresses = append(n.IPAM.Addresses, addr)
 		}
 	}
 

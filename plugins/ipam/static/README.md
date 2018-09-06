@@ -48,7 +48,7 @@ static IPAM is very simple IPAM plugin that assigns IPv4 and IPv6 addresses stat
 
 The following [CNI_ARGS](https://github.com/containernetworking/cni/blob/master/SPEC.md#parameters) are supported:
 
-* `IP`: request a specific CIDR notation IP address
+* `IP`: request a specific CIDR notation IP addresses, comma separated
 * `GATEWAY`: request a specific gateway address
 
     (example: CNI_ARGS="IP=10.10.0.1/24;GATEWAY=10.10.0.254")
