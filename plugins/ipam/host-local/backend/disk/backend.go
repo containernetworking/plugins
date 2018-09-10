@@ -55,7 +55,7 @@ func New(network, dataDir string) (*Store, error) {
 	return &Store{lk, dir}, nil
 }
 
-func (s *Store) Reserve(id string, ip net.IP, rangeID string) (bool, error) {
+func (s *Store) Reserve(id string, ifname string, ip net.IP, rangeID string) (bool, error) {
 	fname := GetEscapedPath(s.dataDir, ip.String())
 
 	f, err := os.OpenFile(fname, os.O_RDWR|os.O_EXCL|os.O_CREATE, 0644)
@@ -65,7 +65,7 @@ func (s *Store) Reserve(id string, ip net.IP, rangeID string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if _, err := f.WriteString(strings.TrimSpace(id)); err != nil {
+	if _, err := f.WriteString(strings.TrimSpace(id) + "\n" + ifname); err != nil {
 		f.Close()
 		os.Remove(f.Name())
 		return false, err
@@ -99,7 +99,7 @@ func (s *Store) Release(ip net.IP) error {
 
 // N.B. This function eats errors to be tolerant and
 // release as much as possible
-func (s *Store) ReleaseByID(id string) error {
+func (s *Store) ReleaseByID(id string, ifname string) error {
 	err := filepath.Walk(s.dataDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
@@ -108,7 +108,7 @@ func (s *Store) ReleaseByID(id string) error {
 		if err != nil {
 			return nil
 		}
-		if strings.TrimSpace(string(data)) == strings.TrimSpace(id) {
+		if strings.TrimSpace(string(data)) == (strings.TrimSpace(id) + "\n" + ifname) {
 			if err := os.Remove(path); err != nil {
 				return nil
 			}

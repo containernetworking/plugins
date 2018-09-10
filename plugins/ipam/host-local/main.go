@@ -85,11 +85,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 
-		ipConf, err := allocator.Get(args.ContainerID, requestedIP)
+		ipConf, err := allocator.Get(args.ContainerID, args.IfName, requestedIP)
 		if err != nil {
 			// Deallocate all already allocated IPs
 			for _, alloc := range allocs {
-				_ = alloc.Release(args.ContainerID)
+				_ = alloc.Release(args.ContainerID, args.IfName)
 			}
 			return fmt.Errorf("failed to allocate for range %d: %v", idx, err)
 		}
@@ -102,7 +102,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// If an IP was requested that wasn't fulfilled, fail
 	if len(requestedIPs) != 0 {
 		for _, alloc := range allocs {
-			_ = alloc.Release(args.ContainerID)
+			_ = alloc.Release(args.ContainerID, args.IfName)
 		}
 		errstr := "failed to allocate all requested IPs:"
 		for _, ip := range requestedIPs {
@@ -133,7 +133,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	for idx, rangeset := range ipamConf.Ranges {
 		ipAllocator := allocator.NewIPAllocator(&rangeset, store, idx)
 
-		err := ipAllocator.Release(args.ContainerID)
+		err := ipAllocator.Release(args.ContainerID, args.IfName)
 		if err != nil {
 			errors = append(errors, err.Error())
 		}
