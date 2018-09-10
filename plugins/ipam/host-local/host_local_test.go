@@ -111,12 +111,12 @@ var _ = Describe("host-local Operations", func() {
 		ipFilePath1 := filepath.Join(tmpDir, "mynet", "10.1.2.2")
 		contents, err := ioutil.ReadFile(ipFilePath1)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(contents)).To(Equal(args.ContainerID))
+		Expect(string(contents)).To(Equal(args.ContainerID + "\n" + ifname))
 
 		ipFilePath2 := filepath.Join(tmpDir, disk.GetEscapedPath("mynet", "2001:db8:1::2"))
 		contents, err = ioutil.ReadFile(ipFilePath2)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(contents)).To(Equal(args.ContainerID))
+		Expect(string(contents)).To(Equal(args.ContainerID + "\n" + ifname))
 
 		lastFilePath1 := filepath.Join(tmpDir, "mynet", "last_reserved_ip.0")
 		contents, err = ioutil.ReadFile(lastFilePath1)
@@ -223,7 +223,7 @@ var _ = Describe("host-local Operations", func() {
 		ipFilePath := filepath.Join(tmpDir, "mynet", "10.1.2.2")
 		contents, err := ioutil.ReadFile(ipFilePath)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(contents)).To(Equal(args.ContainerID))
+		Expect(string(contents)).To(Equal(args.ContainerID + "\n" + ifname))
 
 		lastFilePath := filepath.Join(tmpDir, "mynet", "last_reserved_ip.0")
 		contents, err = ioutil.ReadFile(lastFilePath)
@@ -281,7 +281,7 @@ var _ = Describe("host-local Operations", func() {
 		ipFilePath := filepath.Join(tmpDir, "mynet", result.IPs[0].Address.IP.String())
 		contents, err := ioutil.ReadFile(ipFilePath)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(contents)).To(Equal("dummy"))
+		Expect(string(contents)).To(Equal("dummy" + "\n" + ifname))
 
 		// Release the IP
 		err = testutils.CmdDelWithArgs(args, func() error {
