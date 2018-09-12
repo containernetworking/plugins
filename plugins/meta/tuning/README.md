@@ -2,7 +2,7 @@
 
 ## Overview
 
-This plugin can change some system controls (sysctls) and several netlink attributes (promiscuous mode and mac) in the network namespace.
+This plugin can change some system controls (sysctls) and several interface attributes (promiscuous mode, MTU and MAC address) in the network namespace.
 It does not create any network interfaces and therefore does not bring connectivity by itself.
 It is only useful when used in addition to other plugins.
 
@@ -33,7 +33,7 @@ Some network sysctls are documented in the Linux sources:
 - [Documentation/networking/ip-sysctl.txt](https://www.kernel.org/doc/Documentation/networking/ip-sysctl.txt)
 - [Documentation/networking/](https://www.kernel.org/doc/Documentation/networking/)
 
-## Netlink Operation
+## Interface Attribute Operation
 The parameters, "mac", "mtu" and "promisc", changes the interface attributes as followings:
 
 ```
@@ -46,7 +46,7 @@ The parameters, "mac", "mtu" and "promisc", changes the interface attributes as 
 }
 ```
 
-## Netlink configuration reference
+## Interface attribute configuration reference
 
 * `mac` (string, optional): MAC address (i.e. hardware address) of interface
 * `mtu` (integer, optional): MTU of interface
