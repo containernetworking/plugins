@@ -130,7 +130,7 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 
 				ip, subnet, err := net.ParseCIDR(ipstr)
 				if err != nil {
-					return nil, "", fmt.Errorf("invalid CIDR %s: %s", e.IP, err)
+					return nil, "", fmt.Errorf("invalid CIDR %s: %s", ipstr, err)
 				}
 
 				addr := Address{Address: net.IPNet{IP: ip, Mask: subnet.Mask}}
