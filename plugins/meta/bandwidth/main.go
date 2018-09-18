@@ -172,14 +172,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if bandwidth.IngressRate > 0 && bandwidth.IngressBurst > 0 {
-		err = CreateIngressQdisc(bandwidth.IngressRate, bandwidth.IngressBurst, hostInterface.Name)
+	if bandwidth.EgressRate > 0 && bandwidth.EgressBurst > 0 {
+		err = CreateEgressQdisc(bandwidth.EgressRate, bandwidth.EgressBurst, hostInterface.Name)
 		if err != nil {
 			return err
 		}
 	}
 
-	if bandwidth.EgressRate > 0 && bandwidth.EgressBurst > 0 {
+	if bandwidth.IngressRate > 0 && bandwidth.IngressBurst > 0 {
 		mtu, err := getMTU(hostInterface.Name)
 		if err != nil {
 			return err
@@ -204,7 +204,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			Name: ifbDeviceName,
 			Mac:  ifbDevice.Attrs().HardwareAddr.String(),
 		})
-		err = CreateEgressQdisc(bandwidth.EgressRate, bandwidth.EgressBurst, hostInterface.Name, ifbDeviceName)
+		err = CreateIngressQdisc(bandwidth.IngressRate, bandwidth.IngressBurst, hostInterface.Name, ifbDeviceName)
 		if err != nil {
 			return err
 		}
