@@ -19,12 +19,20 @@ export GO="${GO:-go}"
 
 mkdir -p "${PWD}/bin"
 
-echo "Building plugins"
+echo "Building plugins ${GOOS}"
 PLUGINS="plugins/meta/* plugins/main/* plugins/ipam/* plugins/sample"
 for d in $PLUGINS; do
 	if [ -d "$d" ]; then
 		plugin="$(basename "$d")"
-		echo "  $plugin"
-		$GO build -o "${PWD}/bin/$plugin" "$@" "$REPO_PATH"/$d
+		if [ $plugin == "windows" ]
+		then
+			if [ "$GOARCH" == "amd64" ]
+			then
+				GOOS=windows . $d/build.sh
+			fi
+		else
+			echo "  $plugin"
+		        $GO build -o "${PWD}/bin/$plugin" "$@" "$REPO_PATH"/$d
+		fi
 	fi
 done

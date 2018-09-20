@@ -7,8 +7,77 @@
 	],
 	"Deps": [
 		{
+			"ImportPath": "github.com/Microsoft/go-winio",
+			"Comment": "v0.4.11",
+			"Rev": "97e4973ce50b2ff5f09635a57e2b88a037aae829"
+		},
+		{
+			"ImportPath": "github.com/Microsoft/hcsshim",
+			"Comment": "v0.7.4",
+			"Rev": "e44e499d29527b244d6858772f1b9090eeaddc4e"
+		},
+		{
+			"ImportPath": "github.com/Microsoft/hcsshim/internal/guid",
+			"Comment": "v0.7.4",
+			"Rev": "e44e499d29527b244d6858772f1b9090eeaddc4e"
+		},
+		{
+			"ImportPath": "github.com/Microsoft/hcsshim/internal/hcs",
+			"Comment": "v0.7.4",
+			"Rev": "e44e499d29527b244d6858772f1b9090eeaddc4e"
+		},
+		{
+			"ImportPath": "github.com/Microsoft/hcsshim/internal/hcserror",
+			"Comment": "v0.7.4",
+			"Rev": "e44e499d29527b244d6858772f1b9090eeaddc4e"
+		},
+		{
+			"ImportPath": "github.com/Microsoft/hcsshim/internal/hns",
+			"Comment": "v0.7.4",
+			"Rev": "e44e499d29527b244d6858772f1b9090eeaddc4e"
+		},
+		{
+			"ImportPath": "github.com/Microsoft/hcsshim/internal/interop",
+			"Comment": "v0.7.4",
+			"Rev": "e44e499d29527b244d6858772f1b9090eeaddc4e"
+		},
+		{
+			"ImportPath": "github.com/Microsoft/hcsshim/internal/longpath",
+			"Comment": "v0.7.4",
+			"Rev": "e44e499d29527b244d6858772f1b9090eeaddc4e"
+		},
+		{
+			"ImportPath": "github.com/Microsoft/hcsshim/internal/mergemaps",
+			"Comment": "v0.7.4",
+			"Rev": "e44e499d29527b244d6858772f1b9090eeaddc4e"
+		},
+		{
+			"ImportPath": "github.com/Microsoft/hcsshim/internal/safefile",
+			"Comment": "v0.7.4",
+			"Rev": "e44e499d29527b244d6858772f1b9090eeaddc4e"
+		},
+		{
+			"ImportPath": "github.com/Microsoft/hcsshim/internal/schema1",
+			"Comment": "v0.7.4",
+			"Rev": "e44e499d29527b244d6858772f1b9090eeaddc4e"
+		},
+		{
+			"ImportPath": "github.com/Microsoft/hcsshim/internal/timeout",
+			"Comment": "v0.7.4",
+			"Rev": "e44e499d29527b244d6858772f1b9090eeaddc4e"
+		},
+		{
+			"ImportPath": "github.com/Microsoft/hcsshim/internal/wclayer",
+			"Comment": "v0.7.4",
+			"Rev": "e44e499d29527b244d6858772f1b9090eeaddc4e"
+		},
+		{
 			"ImportPath": "github.com/alexflint/go-filemutex",
 			"Rev": "72bdc8eae2aef913234599b837f5dda445ca9bd9"
+		},
+		{
+			"ImportPath": "github.com/buger/jsonparser",
+			"Rev": "f4dd9f5a6b441265aefc1d44872a6f8c10f42b37"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/libcni",
@@ -68,8 +137,20 @@
 			"Rev": "1b74244053681c90de5cf1af3d6b5c93b74e3abb"
 		},
 		{
+			"ImportPath": "github.com/d2g/dhcp4server/leasepool",
+			"Rev": "1b74244053681c90de5cf1af3d6b5c93b74e3abb"
+		},
+		{
+			"ImportPath": "github.com/d2g/dhcp4server/leasepool/memorypool",
+			"Rev": "1b74244053681c90de5cf1af3d6b5c93b74e3abb"
+		},
+		{
 			"ImportPath": "github.com/j-keck/arping",
 			"Rev": "2cf9dc699c5640a7e2c81403a44127bf28033600"
+		},
+		{
+			"ImportPath": "github.com/juju/errors",
+			"Rev": "22422dad46e14561a0854ad42497a75af9b61909"
 		},
 		{
 			"ImportPath": "github.com/mattn/go-shellwords",
@@ -231,6 +312,11 @@
 			"Rev": "7ff1ba29eca231991280817541cb3903f6be15d1"
 		},
 		{
+			"ImportPath": "github.com/sirupsen/logrus",
+			"Comment": "v1.0.6",
+			"Rev": "3e01752db0189b9157070a0e1668a620f9a85da2"
+		},
+		{
 			"ImportPath": "github.com/vishvananda/netlink",
 			"Rev": "6e453822d85ef5721799774b654d4d02fed62afb"
 		},
@@ -241,6 +327,10 @@
 		{
 			"ImportPath": "github.com/vishvananda/netns",
 			"Rev": "54f0e4339ce73702a0607f49922aaa1e749b418d"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/ssh/terminal",
+			"Rev": "94eea52f7b742c7cbe0b03b22f0c4c8631ece122"
 		},
 		{
 			"ImportPath": "golang.org/x/net/bpf",
@@ -256,7 +346,11 @@
 		},
 		{
 			"ImportPath": "golang.org/x/sys/unix",
-			"Rev": "076b546753157f758b316e59bcb51e6807c04057"
+			"Rev": "d5840adf789d732bc8b00f37b26ca956a7cc8e79"
+		},
+		{
+			"ImportPath": "golang.org/x/sys/windows",
+			"Rev": "d5840adf789d732bc8b00f37b26ca956a7cc8e79"
 		}
 	]
 }

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/d2g/dhcp4"
@@ -37,8 +36,7 @@ type Server struct {
 	leasePool leasepool.LeasePool //Lease Pool Manager
 
 	//Used to Gracefully Close the Server
-	shutdownLock sync.Mutex
-	shutdown     bool
+	shutdown bool
 	//Listeners & Response Connection.
 	connection *ipv4.PacketConn
 }
@@ -154,12 +152,6 @@ func SetRemoteAddr(a net.UDPAddr) func(*Server) error {
 	}
 }
 
-func (s *Server) shouldShutdown() bool {
-	s.shutdownLock.Lock()
-	defer s.shutdownLock.Unlock()
-	return s.shutdown
-}
-
 /*
  * Start The DHCP Server
  */
@@ -186,7 +178,7 @@ func (s *Server) ListenAndServe() error {
 
 	for {
 	ListenForDHCPPackets:
-		if s.shouldShutdown() {
+		if s.shutdown {
 			return nil
 		}
 
@@ -535,8 +527,6 @@ func (s *Server) GetLease(packet dhcp4.Packet) (found bool, lease leasepool.Leas
  * Shutdown The Server Gracefully
  */
 func (s *Server) Shutdown() {
-	s.shutdownLock.Lock()
-	defer s.shutdownLock.Unlock()
 	s.shutdown = true
 }
 
