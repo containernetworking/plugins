@@ -1,4 +1,4 @@
-// Copyright 2015 CNI authors
+// Copyright 2015-2018 CNI authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -157,6 +157,7 @@ var _ = Describe("DHCP Operations", func() {
 					Mask: net.IPv4Mask(0, 0, 0, 0),
 				},
 			})
+			Expect(err).NotTo(HaveOccurred())
 
 			cont, err := netlink.LinkByName(contVethName)
 			Expect(err).NotTo(HaveOccurred())
