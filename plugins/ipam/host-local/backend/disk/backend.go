@@ -100,6 +100,8 @@ func (s *Store) Release(ip net.IP) error {
 // N.B. This function eats errors to be tolerant and
 // release as much as possible
 func (s *Store) ReleaseByID(id string, ifname string) error {
+
+	found := false
 	err := filepath.Walk(s.dataDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
@@ -112,9 +114,32 @@ func (s *Store) ReleaseByID(id string, ifname string) error {
 			if err := os.Remove(path); err != nil {
 				return nil
 			}
+			found = true
 		}
 		return nil
 	})
+
+	if (!found) && (err == nil) {
+		err = filepath.Walk(s.dataDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return nil
+			}
+			data, err := ioutil.ReadFile(path)
+			if err != nil {
+				return nil
+			}
+			isCurrent := strings.Contains(string(data), "\n")
+
+			if !isCurrent {
+				if strings.TrimSpace(string(data)) == (strings.TrimSpace(id)) {
+					if err := os.Remove(path); err != nil {
+						return nil
+					}
+				}
+			}
+			return nil
+		})
+	}
 	return err
 }
 
