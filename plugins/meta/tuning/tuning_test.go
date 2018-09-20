@@ -111,7 +111,7 @@ var _ = Describe("tuning plugin", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("configures and deconfigures promiscas mode with ADD/DEL", func() {
+	It("configures and deconfigures promiscuous mode with ADD/DEL", func() {
 		conf := []byte(`{
 	"name": "test",
 	"type": "iplink",

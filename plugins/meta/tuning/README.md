@@ -50,7 +50,7 @@ The parameters, "mac", "mtu" and "promisc", changes the interface attributes as 
 
 * `mac` (string, optional): MAC address (i.e. hardware address) of interface
 * `mtu` (integer, optional): MTU of interface
-* `promisc` (bool, optional): Change the promiscas mode of interface
+* `promisc` (bool, optional): Change the promiscuous mode of interface
 
 ## Supported arguments
 The following [CNI_ARGS](https://github.com/containernetworking/cni/blob/master/SPEC.md#parameters) are supported:
