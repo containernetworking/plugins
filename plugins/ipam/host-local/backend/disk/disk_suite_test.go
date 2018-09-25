@@ -21,7 +21,7 @@ import (
 	"testing"
 )
 
-func TestLock(t *testing.T) {
+func TestDisk(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "plugins/ipam/host-local/backend/disk")
 }

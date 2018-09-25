@@ -19,6 +19,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/disk"
 
@@ -28,14 +29,61 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 )
 
+// _buildVersion is set by the linker for release builds
+var _buildVersion = "tip"
+
 func main() {
-	// TODO: implement plugin version
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "CNI plugin ptp "+_buildVersion)
 }
 
 func cmdGet(args *skel.CmdArgs) error {
-	// TODO: implement
-	return fmt.Errorf("not implemented")
+	ipamConf, confVersion, err := allocator.LoadIPAMConfig(args.StdinData, args.Args)
+	if err != nil {
+		return err
+	}
+
+	result := &current.Result{}
+
+	if ipamConf.ResolvConf != "" {
+		dns, err := parseResolvConf(ipamConf.ResolvConf)
+		if err != nil {
+			return err
+		}
+		result.DNS = *dns
+	}
+
+	store, err := disk.New(ipamConf.Name, ipamConf.DataDir)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+
+	allocKey := backend.Key{ID: args.ContainerID, IF: args.IfName}
+
+	for idx, rangeset := range ipamConf.Ranges {
+		allocator := allocator.NewIPAllocator(&rangeset, store, idx)
+
+		ipConf, err := allocator.GetByID(allocKey)
+		if err != nil {
+			return err
+		}
+
+		if ipConf != nil {
+			result.IPs = append(result.IPs, ipConf)
+		}
+	}
+
+	// If the IPAM has no records of this container, return error code 3 (container does not exist)
+	if len(result.IPs) == 0 {
+		return &types.Error{
+			Code:    3,
+			Msg:     "unknown container",
+			Details: fmt.Sprintf("host-local ipam has no container %s:%s", args.ContainerID, args.IfName),
+		}
+	}
+
+	result.Routes = ipamConf.Routes
+	return types.PrintResult(result, confVersion)
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
@@ -72,6 +120,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 		requestedIPs[ip.String()] = ip
 	}
 
+	allocKey := backend.Key{ID: args.ContainerID, IF: args.IfName}
+
 	for idx, rangeset := range ipamConf.Ranges {
 		allocator := allocator.NewIPAllocator(&rangeset, store, idx)
 
@@ -85,11 +135,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 
-		ipConf, err := allocator.Get(args.ContainerID, requestedIP)
+		ipConf, err := allocator.Get(allocKey, requestedIP)
 		if err != nil {
 			// Deallocate all already allocated IPs
 			for _, alloc := range allocs {
-				_ = alloc.Release(args.ContainerID)
+				_ = alloc.Release(allocKey)
 			}
 			return fmt.Errorf("failed to allocate for range %d: %v", idx, err)
 		}
@@ -102,7 +152,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// If an IP was requested that wasn't fulfilled, fail
 	if len(requestedIPs) != 0 {
 		for _, alloc := range allocs {
-			_ = alloc.Release(args.ContainerID)
+			_ = alloc.Release(allocKey)
 		}
 		errstr := "failed to allocate all requested IPs:"
 		for _, ip := range requestedIPs {
@@ -128,12 +178,14 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 	defer store.Close()
 
+	allocKey := backend.Key{ID: args.ContainerID, IF: args.IfName}
+
 	// Loop through all ranges, releasing all IPs, even if an error occurs
 	var errors []string
 	for idx, rangeset := range ipamConf.Ranges {
 		ipAllocator := allocator.NewIPAllocator(&rangeset, store, idx)
 
-		err := ipAllocator.Release(args.ContainerID)
+		err := ipAllocator.Release(allocKey)
 		if err != nil {
 			errors = append(errors, err.Error())
 		}
