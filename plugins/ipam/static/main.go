@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -39,8 +40,14 @@ type IPAMConfig struct {
 	Name      string
 	Type      string         `json:"type"`
 	Routes    []*types.Route `json:"routes"`
-	Addresses []Address      `json:"addresses"`
+	Addresses []Address      `json:"addresses,omitempty"`
 	DNS       types.DNS      `json:"dns"`
+}
+
+type IPAMEnvArgs struct {
+	types.CommonArgs
+	IP      types.UnmarshallableString `json:"ip,omitempty"`
+	GATEWAY types.UnmarshallableString `json:"gateway,omitempty"`
 }
 
 type Address struct {
@@ -88,6 +95,7 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	// Validate all ranges
 	numV4 := 0
 	numV6 := 0
+
 	for i := range n.IPAM.Addresses {
 		ip, addr, err := net.ParseCIDR(n.IPAM.Addresses[i].AddressStr)
 		if err != nil {
@@ -106,6 +114,50 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		} else {
 			n.IPAM.Addresses[i].Version = "6"
 			numV6++
+		}
+	}
+
+	if envArgs != "" {
+		e := IPAMEnvArgs{}
+		err := types.LoadArgs(envArgs, &e)
+		if err != nil {
+			return nil, "", err
+		}
+
+		if e.IP != "" {
+			for _, item := range strings.Split(string(e.IP), ",") {
+				ipstr := strings.TrimSpace(item)
+
+				ip, subnet, err := net.ParseCIDR(ipstr)
+				if err != nil {
+					return nil, "", fmt.Errorf("invalid CIDR %s: %s", ipstr, err)
+				}
+
+				addr := Address{Address: net.IPNet{IP: ip, Mask: subnet.Mask}}
+				if addr.Address.IP.To4() != nil {
+					addr.Version = "4"
+					numV4++
+				} else {
+					addr.Version = "6"
+					numV6++
+				}
+				n.IPAM.Addresses = append(n.IPAM.Addresses, addr)
+			}
+		}
+
+		if e.GATEWAY != "" {
+			for _, item := range strings.Split(string(e.GATEWAY), ",") {
+				gwip := net.ParseIP(strings.TrimSpace(item))
+				if gwip == nil {
+					return nil, "", fmt.Errorf("invalid gateway address: %s", item)
+				}
+
+				for i := range n.IPAM.Addresses {
+					if n.IPAM.Addresses[i].Address.Contains(gwip) {
+						n.IPAM.Addresses[i].Gateway = gwip
+					}
+				}
+			}
 		}
 	}
 
