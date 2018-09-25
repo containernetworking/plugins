@@ -1,4 +1,4 @@
-// Copyright 2015 CNI authors
+// Copyright 2015-2018 CNI authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -431,6 +431,7 @@ func (tester *testerV03x) cmdDelTest(tc testCase) {
 		Expect(link).To(BeNil())
 		return nil
 	})
+	Expect(err).NotTo(HaveOccurred())
 }
 
 type testerV01xOr02x struct {
@@ -939,6 +940,7 @@ var _ = Describe("bridge Operations", func() {
 		for _, tc := range testCases {
 			tc.cniVersion = "0.3.1"
 			_, _, err := setupBridge(tc.netConf())
+			Expect(err).NotTo(HaveOccurred())
 			link, err := netlink.LinkByName(BRNAME)
 			Expect(err).NotTo(HaveOccurred())
 			origMac := link.Attrs().HardwareAddr
