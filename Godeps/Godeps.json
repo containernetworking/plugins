@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/containernetworking/plugins",
 	"GoVersion": "go1.7",
-	"GodepVersion": "v79",
+	"GodepVersion": "v80",
 	"Packages": [
 		"./..."
 	],
@@ -232,15 +232,15 @@
 		},
 		{
 			"ImportPath": "github.com/vishvananda/netlink",
-			"Rev": "6e453822d85ef5721799774b654d4d02fed62afb"
+			"Rev": "c2a3de3b38bd00f07290c3c5e12b4dbc04ec8666"
 		},
 		{
 			"ImportPath": "github.com/vishvananda/netlink/nl",
-			"Rev": "6e453822d85ef5721799774b654d4d02fed62afb"
+			"Rev": "c2a3de3b38bd00f07290c3c5e12b4dbc04ec8666"
 		},
 		{
 			"ImportPath": "github.com/vishvananda/netns",
-			"Rev": "54f0e4339ce73702a0607f49922aaa1e749b418d"
+			"Rev": "13995c7128ccc8e51e9a6bd2b551020a27180abd"
 		},
 		{
 			"ImportPath": "golang.org/x/net/bpf",
