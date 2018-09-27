@@ -134,15 +134,15 @@
 		},
 		{
 			"ImportPath": "github.com/d2g/dhcp4server",
-			"Rev": "1b74244053681c90de5cf1af3d6b5c93b74e3abb"
+			"Rev": "477b11cea4dcc56af002849238d4f9c1e093c744"
 		},
 		{
 			"ImportPath": "github.com/d2g/dhcp4server/leasepool",
-			"Rev": "1b74244053681c90de5cf1af3d6b5c93b74e3abb"
+			"Rev": "477b11cea4dcc56af002849238d4f9c1e093c744"
 		},
 		{
 			"ImportPath": "github.com/d2g/dhcp4server/leasepool/memorypool",
-			"Rev": "1b74244053681c90de5cf1af3d6b5c93b74e3abb"
+			"Rev": "477b11cea4dcc56af002849238d4f9c1e093c744"
 		},
 		{
 			"ImportPath": "github.com/j-keck/arping",
