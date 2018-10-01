@@ -26,6 +26,7 @@ Read [CONTRIBUTING](CONTRIBUTING.md) for build and test instructions.
 * `tuning`: Tweaks sysctl parameters of an existing interface
 * `portmap`: An iptables-based portmapping plugin. Maps ports from the host's address space to the container.
 * `bandwidth`: Allows bandwidth-limiting through use of traffic control tbf (ingress/egress).
+* `sbr`: A plugin that configures source based routing for an interface (from which it is chained).
 
 ### Sample
 The sample plugin provides an example for building your own plugin.
