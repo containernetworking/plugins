@@ -19,12 +19,13 @@ Read [CONTRIBUTING](CONTRIBUTING.md) for build and test instructions.
 * `win-overlay`: Creates an overlay interface to the container.
 ### IPAM: IP address allocation
 * `dhcp`: Runs a daemon on the host to make DHCP requests on behalf of the container
-* `host-local`: maintains a local database of allocated IPs
+* `host-local`: Maintains a local database of allocated IPs
 
 ### Meta: other plugins
-* `flannel`: generates an interface corresponding to a flannel config file
+* `flannel`: Generates an interface corresponding to a flannel config file
 * `tuning`: Tweaks sysctl parameters of an existing interface
 * `portmap`: An iptables-based portmapping plugin. Maps ports from the host's address space to the container.
+* `bandwidth`: Allows bandwidth-limiting through use of traffic control tbf (ingress/egress).
 
 ### Sample
 The sample plugin provides an example for building your own plugin.
