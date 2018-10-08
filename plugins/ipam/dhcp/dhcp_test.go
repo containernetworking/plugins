@@ -41,7 +41,7 @@ import (
 )
 
 func getTmpDir() (string, error) {
-	tmpDir, err := ioutil.TempDir("/run/cni", "dhcp")
+	tmpDir, err := ioutil.TempDir(tmpPrefix, "dhcp")
 	if err == nil {
 		tmpDir = filepath.ToSlash(tmpDir)
 	}
@@ -108,6 +108,7 @@ const (
 	hostVethName string = "dhcp0"
 	contVethName string = "eth0"
 	pidfilePath  string = "/var/run/cni/dhcp-client.pid"
+	tmpPrefix           = "/run/cni"
 )
 
 var socketPath string
@@ -117,12 +118,13 @@ var err error
 var _ = BeforeSuite(func() {
 	os.Remove(socketPath)
 	os.Remove(pidfilePath)
+	err := os.MkdirAll(tmpPrefix, 0700)
+	Expect(err).NotTo(HaveOccurred())
 })
 
 var _ = AfterSuite(func() {
 	os.Remove(socketPath)
 	os.Remove(pidfilePath)
-	defer os.RemoveAll(tmpDir)
 })
 
 var _ = Describe("DHCP Operations", func() {
@@ -229,6 +231,7 @@ var _ = Describe("DHCP Operations", func() {
 		Expect(targetNS.Close()).To(Succeed())
 		os.Remove(socketPath)
 		os.Remove(pidfilePath)
+		defer os.RemoveAll(tmpDir)
 	})
 
 	It("configures and deconfigures a link with ADD/DEL", func() {
