@@ -10,7 +10,7 @@ source ./build.sh
 
 echo "Running tests"
 
-GINKGO_FLAGS="-nodes=1 --randomizeAllSpecs --randomizeSuites --failOnPending --progress"
+GINKGO_FLAGS="-p --randomizeAllSpecs --randomizeSuites --failOnPending --progress"
 
 # user has not provided PKG override
 if [ -z "$PKG" ]; then
