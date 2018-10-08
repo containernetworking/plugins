@@ -41,7 +41,7 @@ import (
 )
 
 func getTmpDir() (string, error) {
-	tmpDir, err := ioutil.TempDir(tmpPrefix, "dhcp")
+	tmpDir, err := ioutil.TempDir(cniDirPrefix, "dhcp")
 	if err == nil {
 		tmpDir = filepath.ToSlash(tmpDir)
 	}
@@ -108,7 +108,7 @@ const (
 	hostVethName string = "dhcp0"
 	contVethName string = "eth0"
 	pidfilePath  string = "/var/run/cni/dhcp-client.pid"
-	tmpPrefix           = "/run/cni"
+	cniDirPrefix string = "/var/run/cni"
 )
 
 var socketPath string
@@ -116,15 +116,8 @@ var tmpDir string
 var err error
 
 var _ = BeforeSuite(func() {
-	os.Remove(socketPath)
-	os.Remove(pidfilePath)
-	err := os.MkdirAll(tmpPrefix, 0700)
+	err := os.MkdirAll(cniDirPrefix, 0700)
 	Expect(err).NotTo(HaveOccurred())
-})
-
-var _ = AfterSuite(func() {
-	os.Remove(socketPath)
-	os.Remove(pidfilePath)
 })
 
 var _ = Describe("DHCP Operations", func() {
@@ -206,7 +199,6 @@ var _ = Describe("DHCP Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start the DHCP client daemon
-		os.MkdirAll(pidfilePath, 0755)
 		dhcpPluginPath, err := exec.LookPath("dhcp")
 		Expect(err).NotTo(HaveOccurred())
 		clientCmd = exec.Command(dhcpPluginPath, "daemon", "-socketpath", socketPath)
@@ -229,8 +221,6 @@ var _ = Describe("DHCP Operations", func() {
 
 		Expect(originalNS.Close()).To(Succeed())
 		Expect(targetNS.Close()).To(Succeed())
-		os.Remove(socketPath)
-		os.Remove(pidfilePath)
 		defer os.RemoveAll(tmpDir)
 	})
 
