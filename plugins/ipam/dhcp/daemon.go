@@ -127,7 +127,7 @@ func (d *DHCP) clearLease(contID, netName string) {
 	delete(d.leases, contID+netName)
 }
 
-func getListener() (net.Listener, error) {
+func getListener(socketPath string) (net.Listener, error) {
 	l, err := activation.Listeners()
 	if err != nil {
 		return nil, err
@@ -151,7 +151,7 @@ func getListener() (net.Listener, error) {
 	}
 }
 
-func runDaemon(pidfilePath string, hostPrefix string) error {
+func runDaemon(pidfilePath string, hostPrefix string, socketPath string) error {
 	// since other goroutines (on separate threads) will change namespaces,
 	// ensure the RPC server does not get scheduled onto those
 	runtime.LockOSThread()
@@ -166,7 +166,7 @@ func runDaemon(pidfilePath string, hostPrefix string) error {
 		}
 	}
 
-	l, err := getListener()
+	l, err := getListener(socketPath)
 	if err != nil {
 		return fmt.Errorf("Error getting listener: %v", err)
 	}
