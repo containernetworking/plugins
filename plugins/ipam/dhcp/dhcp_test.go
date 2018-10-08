@@ -16,9 +16,11 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -37,6 +39,15 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+func getTmpDir() (string, error) {
+	tmpDir, err := ioutil.TempDir("/run/cni", "dhcp")
+	if err == nil {
+		tmpDir = filepath.ToSlash(tmpDir)
+	}
+
+	return tmpDir, err
+}
 
 func dhcpServerStart(netns ns.NetNS, leaseIP, serverIP net.IP, stopCh <-chan bool) (*sync.WaitGroup, error) {
 	// Add the expected IP to the pool
@@ -99,6 +110,10 @@ const (
 	pidfilePath  string = "/var/run/cni/dhcp-client.pid"
 )
 
+var socketPath string
+var tmpDir string
+var err error
+
 var _ = BeforeSuite(func() {
 	os.Remove(socketPath)
 	os.Remove(pidfilePath)
@@ -107,6 +122,7 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(func() {
 	os.Remove(socketPath)
 	os.Remove(pidfilePath)
+	defer os.RemoveAll(tmpDir)
 })
 
 var _ = Describe("DHCP Operations", func() {
@@ -117,6 +133,10 @@ var _ = Describe("DHCP Operations", func() {
 
 	BeforeEach(func() {
 		dhcpServerStopCh = make(chan bool)
+
+		tmpDir, err = getTmpDir()
+		Expect(err).NotTo(HaveOccurred())
+		socketPath = filepath.Join(tmpDir, "dhcp.sock")
 
 		// Create a new NetNS so we don't modify the host
 		var err error
@@ -187,7 +207,7 @@ var _ = Describe("DHCP Operations", func() {
 		os.MkdirAll(pidfilePath, 0755)
 		dhcpPluginPath, err := exec.LookPath("dhcp")
 		Expect(err).NotTo(HaveOccurred())
-		clientCmd = exec.Command(dhcpPluginPath, "daemon")
+		clientCmd = exec.Command(dhcpPluginPath, "daemon", "-socketpath", socketPath)
 		err = clientCmd.Start()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(clientCmd.Process).NotTo(BeNil())
@@ -212,14 +232,15 @@ var _ = Describe("DHCP Operations", func() {
 	})
 
 	It("configures and deconfigures a link with ADD/DEL", func() {
-		conf := `{
+		conf := fmt.Sprintf(`{
     "cniVersion": "0.3.1",
     "name": "mynet",
     "type": "ipvlan",
     "ipam": {
-        "type": "dhcp"
+        "type": "dhcp",
+	"daemonSocketPath": "%s"
     }
-}`
+}`, socketPath)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -254,14 +275,15 @@ var _ = Describe("DHCP Operations", func() {
 	})
 
 	It("correctly handles multiple DELs for the same container", func() {
-		conf := `{
+		conf := fmt.Sprintf(`{
     "cniVersion": "0.3.1",
     "name": "mynet",
     "type": "ipvlan",
     "ipam": {
-        "type": "dhcp"
+        "type": "dhcp",
+	"daemonSocketPath": "%s"
     }
-}`
+}`, socketPath)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
