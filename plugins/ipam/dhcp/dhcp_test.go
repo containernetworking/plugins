@@ -107,13 +107,8 @@ func dhcpServerStart(netns ns.NetNS, leaseIP, serverIP net.IP, stopCh <-chan boo
 const (
 	hostVethName string = "dhcp0"
 	contVethName string = "eth0"
-	pidfilePath  string = "/var/run/cni/dhcp-client.pid"
 	cniDirPrefix string = "/var/run/cni"
 )
-
-var socketPath string
-var tmpDir string
-var err error
 
 var _ = BeforeSuite(func() {
 	err := os.MkdirAll(cniDirPrefix, 0700)
@@ -125,6 +120,9 @@ var _ = Describe("DHCP Operations", func() {
 	var dhcpServerStopCh chan bool
 	var dhcpServerDone *sync.WaitGroup
 	var clientCmd *exec.Cmd
+	var socketPath string
+	var tmpDir string
+	var err error
 
 	BeforeEach(func() {
 		dhcpServerStopCh = make(chan bool)
