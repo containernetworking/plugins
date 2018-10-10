@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -33,7 +34,7 @@ var _ = Describe("ptp Operations", func() {
 	var originalNS ns.NetNS
 
 	BeforeEach(func() {
-		// Create a new NetNS so we don't modify the host
+		// Create a new NetNS so we don't modify the host.
 		var err error
 		originalNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
@@ -43,24 +44,22 @@ var _ = Describe("ptp Operations", func() {
 		Expect(originalNS.Close()).To(Succeed())
 	})
 
-	doTest := func(conf string, numIPs int) {
-		const IFNAME = "ptp0"
-
-		targetNs, err := testutils.NewNS()
+	createPTP := func(ifName, containerID, conf string, numIPs int) (ns.NetNS, []*current.IPConfig) {
+		targetNS, err := testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
-		defer targetNs.Close()
 
 		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNs.Path(),
-			IfName:      IFNAME,
+			ContainerID: containerID,
+			Netns:       targetNS.Path(),
+			IfName:      ifName,
 			StdinData:   []byte(conf),
 		}
 
+		var ips []*current.IPConfig
 		var resI types.Result
 		var res *current.Result
 
-		// Execute the plugin with the ADD command, creating the veth endpoints
+		// Execute the plugin with the ADD command, creating the veth endpoints.
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
@@ -75,15 +74,12 @@ var _ = Describe("ptp Operations", func() {
 		res, err = current.NewResultFromResult(resI)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Make sure ptp link exists in the target namespace
-		// Then, ping the gateway
-		seenIPs := 0
-
+		// Make sure ptp link exists in the target namespace.
 		wantMac := ""
-		err = targetNs.Do(func(ns.NetNS) error {
+		err = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			link, err := netlink.LinkByName(IFNAME)
+			link, err := netlink.LinkByName(ifName)
 			Expect(err).NotTo(HaveOccurred())
 			wantMac = link.Attrs().HardwareAddr.String()
 
@@ -91,35 +87,39 @@ var _ = Describe("ptp Operations", func() {
 				if *ipc.Interface != 1 {
 					continue
 				}
-				seenIPs += 1
-				saddr := ipc.Address.IP.String()
-				daddr := ipc.Gateway.String()
-				fmt.Fprintln(GinkgoWriter, "ping", saddr, "->", daddr)
-
-				if err := testutils.Ping(saddr, daddr, (ipc.Version == "6"), 30); err != nil {
-					return fmt.Errorf("ping %s -> %s failed: %s", saddr, daddr, err)
-				}
+				ips = append(ips, ipc)
 			}
 
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(seenIPs).To(Equal(numIPs))
-
-		// make sure the interfaces are correct
+		// Make sure the interfaces are correct.
 		Expect(res.Interfaces).To(HaveLen(2))
 
 		Expect(res.Interfaces[0].Name).To(HavePrefix("veth"))
 		Expect(res.Interfaces[0].Mac).To(HaveLen(17))
 		Expect(res.Interfaces[0].Sandbox).To(BeEmpty())
 
-		Expect(res.Interfaces[1].Name).To(Equal(IFNAME))
+		Expect(res.Interfaces[1].Name).To(Equal(ifName))
 		Expect(res.Interfaces[1].Mac).To(Equal(wantMac))
-		Expect(res.Interfaces[1].Sandbox).To(Equal(targetNs.Path()))
+		Expect(res.Interfaces[1].Sandbox).To(Equal(targetNS.Path()))
 
-		// Call the plugins with the DEL command, deleting the veth endpoints
-		err = originalNS.Do(func(ns.NetNS) error {
+		Expect(len(ips)).To(Equal(numIPs))
+
+		return targetNS, ips
+	}
+
+	deletePTP := func(ifName, containerID, conf string, targetNS ns.NetNS) {
+		args := &skel.CmdArgs{
+			ContainerID: containerID,
+			Netns:       targetNS.Path(),
+			IfName:      ifName,
+			StdinData:   []byte(conf),
+		}
+
+		// Call the plugins with the DEL command, deleting the veth endpoints.
+		err := originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
 			err := testutils.CmdDelWithArgs(args, func() error {
@@ -130,16 +130,78 @@ var _ = Describe("ptp Operations", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		// Make sure ptp link has been deleted
-		err = targetNs.Do(func(ns.NetNS) error {
+		// Make sure ptp link has been deleted.
+		err = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			link, err := netlink.LinkByName(IFNAME)
+			link, err := netlink.LinkByName(ifName)
 			Expect(err).To(HaveOccurred())
 			Expect(link).To(BeNil())
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
+	}
+
+	doTest := func(conf string, numIPs int) {
+		const IFNAME = "ptp0"
+
+		// Execute the plugin with the ADD command, creating the veth endpoints.
+		srcNS, sips := createPTP(IFNAME, "dummy_src", conf, numIPs)
+		defer srcNS.Close()
+
+		dstNS, dips := createPTP(IFNAME, "dummy_dst", conf, numIPs)
+		defer dstNS.Close()
+
+		// Add a fake IPv4 route to gw with respect to loopback dev.
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			lo, err := netlink.LinkByName("lo")
+			if err != nil {
+				return fmt.Errorf("failed to find loopback dev: %v", err)
+			}
+
+			if err := netlink.LinkSetUp(lo); err != nil {
+				return fmt.Errorf("failed to set loopback dev up: %v", err)
+			}
+
+			for _, ipc := range sips {
+				if ipc.Version == "6" {
+					continue
+				}
+				if err = netlink.RouteAdd(&netlink.Route{
+					LinkIndex: lo.Attrs().Index,
+					Scope:     netlink.SCOPE_LINK,
+					Dst: &net.IPNet{
+						IP:   ipc.Gateway,
+						Mask: net.CIDRMask(32, 32),
+					},
+				}); err != nil {
+					return fmt.Errorf("failed to add gw route to loopback dev: %v", err)
+				}
+			}
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		err = srcNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			for i := 0; i < numIPs; i++ {
+				saddr := sips[i].Address.IP.String()
+				daddr := dips[i].Address.IP.String()
+				fmt.Fprintln(GinkgoWriter, "ping", saddr, "->", daddr)
+
+				if err := testutils.Ping(saddr, daddr, (sips[i].Version == "6"), 30); err != nil {
+					return fmt.Errorf("ping %s -> %s failed: %s", saddr, daddr, err)
+				}
+			}
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		deletePTP(IFNAME, "dummy_src", conf, srcNS)
+		deletePTP(IFNAME, "dummy_dst", conf, dstNS)
 	}
 
 	It("configures and deconfigures a ptp link with ADD/DEL", func() {
