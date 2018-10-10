@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/d2g/dhcp4"
@@ -36,7 +37,7 @@ type Server struct {
 	leasePool leasepool.LeasePool //Lease Pool Manager
 
 	//Used to Gracefully Close the Server
-	shutdown bool
+	shutdown uint32
 	//Listeners & Response Connection.
 	connection *ipv4.PacketConn
 }
@@ -178,7 +179,7 @@ func (s *Server) ListenAndServe() error {
 
 	for {
 	ListenForDHCPPackets:
-		if s.shutdown {
+		if s.shouldShutdown() {
 			return nil
 		}
 
@@ -191,6 +192,13 @@ func (s *Server) ListenAndServe() error {
 
 			switch v := err.(type) {
 			case *net.OpError:
+				// If we've been signaled to shut down, ignore
+				// the "use of closed network connection" error
+				// since the connection was closed by the
+				// shutdown request
+				if s.shouldShutdown() {
+					return nil
+				}
 				if v.Timeout() {
 					goto ListenForDHCPPackets
 				}
@@ -204,7 +212,8 @@ func (s *Server) ListenAndServe() error {
 				}
 			}
 
-			log.Println("Debug: Unexpect Error from Connection Read From:" + err.Error())
+			log.Printf("Debug: Unexpect Error from Connection Read From: %v\n", err)
+			log.Printf("Debug: err type %T %#v\n", err, err)
 			return err
 		}
 
@@ -527,7 +536,12 @@ func (s *Server) GetLease(packet dhcp4.Packet) (found bool, lease leasepool.Leas
  * Shutdown The Server Gracefully
  */
 func (s *Server) Shutdown() {
-	s.shutdown = true
+	atomic.StoreUint32(&s.shutdown, 1)
+	s.connection.Close()
+}
+
+func (s *Server) shouldShutdown() bool {
+	return atomic.LoadUint32(&s.shutdown) == 1
 }
 
 /*
