@@ -29,7 +29,7 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 )
 
-const defaultSocketPath = "/run/cni/defaultdhcp.sock"
+const defaultSocketPath = "/run/cni/dhcp.sock"
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "daemon" {
