@@ -51,9 +51,7 @@ func newDHCP() *DHCP {
 }
 
 func generateClientID(containerID string, netName string, ifName string) string {
-	clientID := containerID + "/" + netName + "/" + ifName
-
-	return clientID
+	return containerID + "/" + netName + "/" + ifName
 }
 
 // Allocate acquires an IP from a DHCP server for a specified container.
@@ -118,7 +116,6 @@ func (d *DHCP) getLease(clientID string) *DHCPLease {
 	return l
 }
 
-//func (d *DHCP) setLease(contID, netName string, ifName string, l *DHCPLease) {
 func (d *DHCP) setLease(clientID string, l *DHCPLease) {
 	d.mux.Lock()
 	defer d.mux.Unlock()

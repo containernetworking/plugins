@@ -23,6 +23,7 @@ func TestMarshaling(test *testing.T) {
 	if err != nil {
 		test.Error("Error Parsing Mac Address:" + err.Error())
 	}
+	startLease.ClientID = []byte("adsfasdfasf")
 
 	byteStartLease, err := json.Marshal(startLease)
 	if err != nil {

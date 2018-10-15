@@ -3,6 +3,7 @@ package dhcp4server_test
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"log"
 	"net"
 	"sync"
@@ -405,6 +406,69 @@ func BenchmarkServeDHCP(test *testing.B) {
 				test.Error("Acknowledge Error:" + err.Error())
 			}
 
+		}
+	}
+}
+
+/*
+ *
+ */
+func TestLeaseByClientID(test *testing.T) {
+	//Setup the Server
+	myServer, err := dhcp4server.New(
+		net.IPv4(127, 0, 0, 1),
+		getTestLeasePool(),
+	)
+	if err != nil {
+		test.Error("Error: Can't Configure Server " + err.Error())
+	}
+
+	// Setup A Client
+	// Although We Won't send the packets over the network we'll use the client to create the requests.
+	c, err := dhcp4client.NewInetSock(dhcp4client.SetLocalAddr(net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1068}), dhcp4client.SetRemoteAddr(net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1067}))
+	if err != nil {
+		test.Error("Client Conection Generation:" + err.Error())
+	}
+
+	client, err := dhcp4client.New(dhcp4client.Connection(c))
+	if err != nil {
+		test.Error("Error: Can't Configure Client " + err.Error())
+	}
+	defer client.Close()
+	
+	//Generate Hardware Address; used by both clients
+	HardwareMACAddress, err := hardwareaddr.GenerateEUI48()
+	if err != nil {
+		test.Error("Error: Can't Generate Valid MACAddress" + err.Error())
+	}
+
+	for i := 0; i < 2; i++ {
+		client.SetOption(dhcp4client.HardwareAddr(HardwareMACAddress))
+		test.Log("MAC:" + HardwareMACAddress.String())
+
+		clientID := []byte(fmt.Sprintf("clientid-%d", i))
+		test.Log("ClientID:" + string(clientID))
+
+		discovery := client.DiscoverPacket()
+		discovery.AddOption(dhcp4.OptionClientIdentifier, clientID)
+
+		//Run the Discovery On the Server
+		offer, err := myServer.ServeDHCP(discovery)
+		_, err = myServer.ServeDHCP(discovery)
+		if err != nil {
+			test.Error("Discovery Error:" + err.Error())
+		}
+
+		request := client.RequestPacket(&offer)
+		request.AddOption(dhcp4.OptionClientIdentifier, clientID)
+		acknowledgement, err := myServer.ServeDHCP(request)
+		if err != nil {
+			test.Error("Acknowledge Error:" + err.Error())
+		}
+
+		test.Logf("Received Lease:%v\n", acknowledgement.YIAddr().String())
+		if !dhcp4.IPAdd(net.IPv4(192, 168, 1, 1), i).Equal(acknowledgement.YIAddr()) {
+			test.Error("Expected IP:" + dhcp4.IPAdd(net.IPv4(192, 168, 1, 1), i).String() + " Received:" + acknowledgement.YIAddr().String())
 		}
 	}
 }

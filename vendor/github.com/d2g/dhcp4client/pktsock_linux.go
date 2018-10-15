@@ -1,8 +1,8 @@
 package dhcp4client
 
 import (
-	"crypto/rand"
 	"encoding/binary"
+	"math/rand"
 	"net"
 	"time"
 
