@@ -20,19 +20,28 @@ export GO="${GO:-go}"
 mkdir -p "${PWD}/bin"
 
 echo "Building plugins ${GOOS}"
-PLUGINS="plugins/meta/* plugins/main/* plugins/ipam/* plugins/sample"
-for d in $PLUGINS; do
-	if [ -d "$d" ]; then
-		plugin="$(basename "$d")"
-		if [ $plugin == "windows" ]
-		then
-			if [ "$GOARCH" == "amd64" ]
-			then
-				GOOS=windows . $d/build.sh
-			fi
-		else
-			echo "  $plugin"
-		        $GO build -o "${PWD}/bin/$plugin" "$@" "$REPO_PATH"/$d
-		fi
-	fi
-done
+if [[ $GOOS == "windows" ]]; then
+  PLUGINS=$(cat plugins/windows_only.txt)
+  if [ "$GOARCH" == "amd64" ]; then
+    for d in $PLUGINS; do
+      if [ -d "$d" ]; then
+        plugin="$(basename "$d").exe"
+	echo "  $plugin"
+	$GO build -o "${PWD}/bin/$plugin" "$@" "$REPO_PATH"/$d
+      fi
+    done
+  else
+    echo "Could not build windows plugins when GOARCH != amd64"
+  fi
+else
+  PLUGINS="plugins/meta/* plugins/main/* plugins/ipam/* plugins/sample"
+  for d in $PLUGINS; do
+	  if [ -d "$d" ]; then
+		  plugin="$(basename "$d")"
+		  if [ $plugin != "windows" ]; then
+			  echo "  $plugin"
+		          $GO build -o "${PWD}/bin/$plugin" "$@" "$REPO_PATH"/$d
+		  fi
+	  fi
+  done
+fi
