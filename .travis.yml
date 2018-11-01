@@ -29,7 +29,7 @@ script:
    if [ "${TARGET}" == "amd64" ]; then
      GOARCH="${TARGET}" ./test.sh
    else
-     GOARCH="${TARGET}" ./build.sh
+     GOARCH="${TARGET}" ./build_linux.sh
    fi
 
 notifications:

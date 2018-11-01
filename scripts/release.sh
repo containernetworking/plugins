@@ -19,15 +19,26 @@ docker run -v ${SRC_DIR}:/go/src/github.com/containernetworking/plugins --rm gol
 /bin/sh -xe -c "\
     apk --no-cache add bash tar;
     cd /go/src/github.com/containernetworking/plugins; umask 0022;
+
     for arch in amd64 arm arm64 ppc64le s390x; do \
         rm -f ${OUTPUT_DIR}/*; \
-        CGO_ENABLED=0 GOARCH=\$arch ./build.sh ${BUILDFLAGS}; \
+        CGO_ENABLED=0 GOARCH=\$arch ./build_linux.sh ${BUILDFLAGS}; \
         for format in tgz; do \
-            FILENAME=cni-plugins-\$arch-${TAG}.\$format; \
+            FILENAME=cni-plugins-linux-\$arch-${TAG}.\$format; \
             FILEPATH=${RELEASE_DIR}/\$FILENAME; \
             tar -C ${OUTPUT_DIR} --owner=0 --group=0 -caf \$FILEPATH .; \
         done; \
     done;
+
+    rm -rf ${OUTPUT_DIR}/*; \
+    CGO_ENABLED=0 GOARCH=amd64 ./build_windows.sh ${BUILDFLAGS}; \
+    for format in tgz; do \
+        FILENAME=cni-plugins-windows-amd64-${TAG}.\$format; \
+        FILEPATH=${RELEASE_DIR}/\$FILENAME; \
+        tar -C ${OUTPUT_DIR} --owner=0 --group=0 -caf \$FILEPATH .; \
+    done;
+
+
     cd ${RELEASE_DIR};
       for f in *.tgz; do sha1sum \$f > \$f.sha1; done;
       for f in *.tgz; do sha256sum \$f > \$f.sha256; done;
