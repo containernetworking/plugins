@@ -65,6 +65,9 @@ type NetConf struct {
 	Capabilities map[string]bool `json:"capabilities,omitempty"`
 	IPAM         IPAM            `json:"ipam,omitempty"`
 	DNS          DNS             `json:"dns"`
+
+	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
+	PrevResult    Result                 `json:"-"`
 }
 
 type IPAM struct {
@@ -75,8 +78,9 @@ type IPAM struct {
 type NetConfList struct {
 	CNIVersion string `json:"cniVersion,omitempty"`
 
-	Name    string     `json:"name,omitempty"`
-	Plugins []*NetConf `json:"plugins,omitempty"`
+	Name         string     `json:"name,omitempty"`
+	DisableCheck bool       `json:"disableCheck,omitempty"`
+	Plugins      []*NetConf `json:"plugins,omitempty"`
 }
 
 type ResultFactoryFunc func([]byte) (Result, error)

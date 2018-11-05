@@ -16,6 +16,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math/rand"
 	"net"
@@ -121,7 +122,7 @@ var _ = Describe("portmap integration tests", func() {
 				return nil
 			}
 			netDeleted = true
-			return cniConf.DelNetworkList(configList, &runtimeConfig)
+			return cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig)
 		}
 
 		// we'll also manually check the iptables chains
@@ -130,7 +131,7 @@ var _ = Describe("portmap integration tests", func() {
 		dnatChainName := genDnatChain("cni-portmap-unit-test", runtimeConfig.ContainerID).name
 
 		// Create the network
-		resI, err := cniConf.AddNetworkList(configList, &runtimeConfig)
+		resI, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig)
 		Expect(err).NotTo(HaveOccurred())
 		defer deleteNetwork()
 
