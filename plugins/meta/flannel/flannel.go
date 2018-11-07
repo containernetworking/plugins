@@ -20,6 +20,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -160,7 +161,7 @@ func delegateAdd(cid, dataDir string, netconf map[string]interface{}) error {
 		return err
 	}
 
-	result, err := invoke.DelegateAdd(netconf["type"].(string), netconfBytes, nil)
+	result, err := invoke.DelegateAdd(context.TODO(), netconf["type"].(string), netconfBytes, nil)
 	if err != nil {
 		return err
 	}

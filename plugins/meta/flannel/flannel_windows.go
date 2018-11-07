@@ -19,6 +19,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/containernetworking/cni/pkg/invoke"
@@ -69,5 +70,5 @@ func doCmdDel(args *skel.CmdArgs, n *NetConf) error {
 		return fmt.Errorf("failed to parse netconf: %v", err)
 	}
 
-	return invoke.DelegateDel(nc.Type, netconfBytes, nil)
+	return invoke.DelegateDel(context.TODO(), nc.Type, netconfBytes, nil)
 }
