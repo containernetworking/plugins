@@ -10,7 +10,7 @@ Vagrant.configure(2) do |config|
     set -e -x -u
     apt-get update -y || (sleep 40 && apt-get update -y)
     apt-get install -y git gcc-multilib gcc-mingw-w64
-    wget -qO- https://storage.googleapis.com/golang/go1.10.linux-amd64.tar.gz | tar -C /usr/local -xz
+    wget -qO- https://storage.googleapis.com/golang/go1.11.1.linux-amd64.tar.gz | tar -C /usr/local -xz
     echo 'export GOPATH=/go' >> /root/.bashrc
     echo 'export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin' >> /root/.bashrc
     cd /go/src/github.com/containernetworking/plugins
