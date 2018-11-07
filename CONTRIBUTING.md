@@ -31,8 +31,8 @@ are very busy and read the mailing lists.
 
 ## Building
 
-Each plugin is compiled simply with `go build`.  A script, `build.sh`,
-is supplied which will build all the plugins in the repo.
+Each plugin is compiled simply with `go build`.  Two scripts, `build_linux.sh` and `build_windows.sh`,
+are supplied which will build all the plugins for their respective OS.
 
 ## Contribution workflow
 

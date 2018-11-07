@@ -24,15 +24,9 @@ PLUGINS="plugins/meta/* plugins/main/* plugins/ipam/* plugins/sample"
 for d in $PLUGINS; do
 	if [ -d "$d" ]; then
 		plugin="$(basename "$d")"
-		if [ $plugin == "windows" ]
-		then
-			if [ "$GOARCH" == "amd64" ]
-			then
-				GOOS=windows . $d/build.sh
-			fi
-		else
+		if [ $plugin != "windows" ]; then
 			echo "  $plugin"
-		        $GO build -o "${PWD}/bin/$plugin" "$@" "$REPO_PATH"/$d
+			$GO build -o "${PWD}/bin/$plugin" "$@" "$REPO_PATH"/$d
 		fi
 	fi
 done
