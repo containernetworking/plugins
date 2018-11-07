@@ -14,12 +14,14 @@ Read [CONTRIBUTING](CONTRIBUTING.md) for build and test instructions.
 * `macvlan`: Creates a new MAC address, forwards all traffic to that to the container.
 * `ptp`: Creates a veth pair.
 * `vlan`: Allocates a vlan device.
+* `host-device`: Move an already-existing device into a container.
 #### Windows: windows specific
 * `win-bridge`: Creates a bridge, adds the host and the container to it.
 * `win-overlay`: Creates an overlay interface to the container.
 ### IPAM: IP address allocation
 * `dhcp`: Runs a daemon on the host to make DHCP requests on behalf of the container
 * `host-local`: Maintains a local database of allocated IPs
+* `static`:  Allocate a static IPv4/IPv6 addresses to container and it's userful in debugging purpose.
 
 ### Meta: other plugins
 * `flannel`: Generates an interface corresponding to a flannel config file
