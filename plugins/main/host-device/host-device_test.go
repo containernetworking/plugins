@@ -44,7 +44,7 @@ var _ = Describe("base functionality", func() {
 		originalNS.Close()
 	})
 
-	It("Works with a valid config", func() {
+	It("Works with a valid config without IPAM", func() {
 		var origLink netlink.Link
 
 		// prepare ifname in original namespace
@@ -68,7 +68,7 @@ var _ = Describe("base functionality", func() {
 		targetNS, err := testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
-		CNI_IFNAME := "eth0"
+		cniName := "eth0"
 		conf := fmt.Sprintf(`{
 			"cniVersion": "0.3.0",
 			"name": "cni-plugin-host-device-test",
@@ -78,7 +78,7 @@ var _ = Describe("base functionality", func() {
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
 			Netns:       targetNS.Path(),
-			IfName:      CNI_IFNAME,
+			IfName:      cniName,
 			StdinData:   []byte(conf),
 		}
 		var resI types.Result
@@ -95,7 +95,7 @@ var _ = Describe("base functionality", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Interfaces).To(Equal([]*current.Interface{
 			{
-				Name:    CNI_IFNAME,
+				Name:    cniName,
 				Mac:     origLink.Attrs().HardwareAddr.String(),
 				Sandbox: targetNS.Path(),
 			},
@@ -104,9 +104,117 @@ var _ = Describe("base functionality", func() {
 		// assert that dummy0 is now in the target namespace
 		err = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
-			link, err := netlink.LinkByName(CNI_IFNAME)
+			link, err := netlink.LinkByName(cniName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// assert that dummy0 is now NOT in the original namespace anymore
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			_, err := netlink.LinkByName(ifname)
+			Expect(err).To(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Check that deleting the device moves it back and restores the name
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			err = testutils.CmdDelWithArgs(args, func() error {
+				return cmdDel(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err := netlink.LinkByName(ifname)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+	})
+
+	It("Works with a valid config with IPAM", func() {
+		var origLink netlink.Link
+
+		// prepare ifname in original namespace
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			err := netlink.LinkAdd(&netlink.Dummy{
+				LinkAttrs: netlink.LinkAttrs{
+					Name: ifname,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			origLink, err = netlink.LinkByName(ifname)
+			Expect(err).NotTo(HaveOccurred())
+			err = netlink.LinkSetUp(origLink)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// call CmdAdd
+		targetNS, err := testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+		targetIP := "10.10.0.1/24"
+		cniName := "eth0"
+		conf := fmt.Sprintf(`{
+			"cniVersion": "0.3.0",
+			"name": "cni-plugin-host-device-test",
+			"type": "host-device",
+			"ipam": {
+				"type": "static",
+				"addresses": [
+					{
+					"address":"`+targetIP+`",
+					"gateway": "10.10.0.254"
+				}]
+			},
+			"device": %q
+		}`, ifname)
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNS.Path(),
+			IfName:      cniName,
+			StdinData:   []byte(conf),
+		}
+		var resI types.Result
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			var err error
+			resI, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+			return err
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// check that the result was sane
+		res, err := current.NewResultFromResult(resI)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Interfaces).To(Equal([]*current.Interface{
+			{
+				Name:    cniName,
+				Mac:     origLink.Attrs().HardwareAddr.String(),
+				Sandbox: targetNS.Path(),
+			},
+		}))
+
+		// assert that dummy0 is now in the target namespace
+		err = targetNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			link, err := netlink.LinkByName(cniName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
+
+			//get the IP address of the interface in the target namespace
+			addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+			Expect(err).NotTo(HaveOccurred())
+			addr := addrs[0].IPNet.String()
+			//assert that IP address is what we set
+			Expect(addr).To(Equal(targetIP))
+
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
