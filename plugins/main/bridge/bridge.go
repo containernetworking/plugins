@@ -52,6 +52,7 @@ type NetConf struct {
 	MTU          int    `json:"mtu"`
 	HairpinMode  bool   `json:"hairpinMode"`
 	PromiscMode  bool   `json:"promiscMode"`
+	Vlan         int    `json:"vlan"`
 }
 
 type gwInfo struct {
@@ -144,7 +145,7 @@ func calcGateways(result *current.Result, n *NetConf) (*gwInfo, *gwInfo, error) 
 	return gwsV4, gwsV6, nil
 }
 
-func ensureBridgeAddr(br *netlink.Bridge, family int, ipn *net.IPNet, forceAddress bool) error {
+func ensureAddr(br netlink.Link, family int, ipn *net.IPNet, forceAddress bool) error {
 	addrs, err := netlink.AddrList(br, family)
 	if err != nil && err != syscall.ENOENT {
 		return fmt.Errorf("could not get list of IP addresses: %v", err)
@@ -164,34 +165,34 @@ func ensureBridgeAddr(br *netlink.Bridge, family int, ipn *net.IPNet, forceAddre
 		// forceAddress is true, otherwise throw an error.
 		if family == netlink.FAMILY_V4 || a.IPNet.Contains(ipn.IP) || ipn.Contains(a.IPNet.IP) {
 			if forceAddress {
-				if err = deleteBridgeAddr(br, a.IPNet); err != nil {
+				if err = deleteAddr(br, a.IPNet); err != nil {
 					return err
 				}
 			} else {
-				return fmt.Errorf("%q already has an IP address different from %v", br.Name, ipnStr)
+				return fmt.Errorf("%q already has an IP address different from %v", br.Attrs().Name, ipnStr)
 			}
 		}
 	}
 
 	addr := &netlink.Addr{IPNet: ipn, Label: ""}
 	if err := netlink.AddrAdd(br, addr); err != nil {
-		return fmt.Errorf("could not add IP address to %q: %v", br.Name, err)
+		return fmt.Errorf("could not add IP address to %q: %v", br.Attrs().Name, err)
 	}
 
 	// Set the bridge's MAC to itself. Otherwise, the bridge will take the
 	// lowest-numbered mac on the bridge, and will change as ifs churn
-	if err := netlink.LinkSetHardwareAddr(br, br.HardwareAddr); err != nil {
+	if err := netlink.LinkSetHardwareAddr(br, br.Attrs().HardwareAddr); err != nil {
 		return fmt.Errorf("could not set bridge's mac: %v", err)
 	}
 
 	return nil
 }
 
-func deleteBridgeAddr(br *netlink.Bridge, ipn *net.IPNet) error {
+func deleteAddr(br netlink.Link, ipn *net.IPNet) error {
 	addr := &netlink.Addr{IPNet: ipn, Label: ""}
 
 	if err := netlink.AddrDel(br, addr); err != nil {
-		return fmt.Errorf("could not remove IP address from %q: %v", br.Name, err)
+		return fmt.Errorf("could not remove IP address from %q: %v", br.Attrs().Name, err)
 	}
 
 	return nil
@@ -209,7 +210,7 @@ func bridgeByName(name string) (*netlink.Bridge, error) {
 	return br, nil
 }
 
-func ensureBridge(brName string, mtu int, promiscMode bool) (*netlink.Bridge, error) {
+func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*netlink.Bridge, error) {
 	br := &netlink.Bridge{
 		LinkAttrs: netlink.LinkAttrs{
 			Name: brName,
@@ -220,6 +221,7 @@ func ensureBridge(brName string, mtu int, promiscMode bool) (*netlink.Bridge, er
 			// default packet limit
 			TxQLen: -1,
 		},
+		VlanFiltering: &vlanFiltering,
 	}
 
 	err := netlink.LinkAdd(br)
@@ -247,7 +249,35 @@ func ensureBridge(brName string, mtu int, promiscMode bool) (*netlink.Bridge, er
 	return br, nil
 }
 
-func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairpinMode bool) (*current.Interface, *current.Interface, error) {
+func ensureVlanInterface(br *netlink.Bridge, vlanId int) (netlink.Link, error) {
+	name := fmt.Sprintf("%s.%d", br.Name, vlanId)
+
+	brGatewayVeth, err := netlink.LinkByName(name)
+	if err != nil {
+		if err.Error() != "Link not found" {
+			return nil, fmt.Errorf("failed to find interface %q: %v", name, err)
+		}
+
+		hostNS, err := ns.GetCurrentNS()
+		if err != nil {
+			return nil, fmt.Errorf("faild to find host namespace: %v", err)
+		}
+
+		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanId)
+		if err != nil {
+			return nil, fmt.Errorf("faild to create vlan gateway %q: %v", name, err)
+		}
+
+		brGatewayVeth, err = netlink.LinkByName(brGatewayIface.Name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to lookup %q: %v", brGatewayIface.Name, err)
+		}
+	}
+
+	return brGatewayVeth, nil
+}
+
+func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairpinMode bool, vlanID int) (*current.Interface, *current.Interface, error) {
 	contIface := &current.Interface{}
 	hostIface := &current.Interface{}
 
@@ -284,6 +314,13 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 		return nil, nil, fmt.Errorf("failed to setup hairpin mode for %v: %v", hostVeth.Attrs().Name, err)
 	}
 
+	if vlanID != 0 {
+		err = netlink.BridgeVlanAdd(hostVeth, uint16(vlanID), true, true, false, true)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to setup vlan tag on interface %q: %v", hostIface.Name, err)
+		}
+	}
+
 	return hostIface, contIface, nil
 }
 
@@ -293,8 +330,12 @@ func calcGatewayIP(ipn *net.IPNet) net.IP {
 }
 
 func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
+	vlanFiltering := false
+	if n.Vlan != 0 {
+		vlanFiltering = true
+	}
 	// create bridge if necessary
-	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode)
+	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, vlanFiltering)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create bridge %q: %v", n.BrName, err)
 	}
@@ -355,7 +396,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode)
+	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan)
 	if err != nil {
 		return err
 	}
@@ -435,16 +476,34 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		if n.IsGW {
 			var firstV4Addr net.IP
+			var vlanInterface *current.Interface
 			// Set the IP address(es) on the bridge and enable forwarding
 			for _, gws := range []*gwInfo{gwsV4, gwsV6} {
 				for _, gw := range gws.gws {
 					if gw.IP.To4() != nil && firstV4Addr == nil {
 						firstV4Addr = gw.IP
 					}
+					if n.Vlan != 0 {
+						vlanIface, err := ensureVlanInterface(br, n.Vlan)
+						if err != nil {
+							return fmt.Errorf("failed to create vlan interface: %v", err)
+						}
 
-					err = ensureBridgeAddr(br, gws.family, &gw, n.ForceAddress)
-					if err != nil {
-						return fmt.Errorf("failed to set bridge addr: %v", err)
+						if vlanInterface == nil {
+							vlanInterface = &current.Interface{Name: vlanIface.Attrs().Name,
+								Mac: vlanIface.Attrs().HardwareAddr.String()}
+							result.Interfaces = append(result.Interfaces, vlanInterface)
+						}
+
+						err = ensureAddr(vlanIface, gws.family, &gw, n.ForceAddress)
+						if err != nil {
+							return fmt.Errorf("failed to set vlan interface for bridge with addr: %v", err)
+						}
+					} else {
+						err = ensureAddr(br, gws.family, &gw, n.ForceAddress)
+						if err != nil {
+							return fmt.Errorf("failed to set bridge addr: %v", err)
+						}
 					}
 				}
 

@@ -52,3 +52,8 @@ If the bridge is missing, the plugin will create one on first use and, if gatewa
 * `hairpinMode` (boolean, optional): set hairpin mode for interfaces on the bridge. Defaults to false.
 * `ipam` (dictionary, required): IPAM configuration to be used for this network. For L2-only network, create empty dictionary.
 * `promiscMode` (boolean, optional): set promiscuous mode on the bridge. Defaults to false.
+* `vlan` (int, optional): assign VLAN tag. Defaults to none.
+
+*Note:* The VLAN parameter configures the VLAN tag on the host end of the veth and also enables the vlan_filtering feature on the bridge interface.
+
+*Note:* To configure uplink for L2 network you need to allow the vlan on the uplink interface by using the following command ``` bridge vlan add vid VLAN_ID dev DEV```.
