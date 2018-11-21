@@ -25,8 +25,8 @@ type LeasePool interface {
 	 */
 	GetLease(net.IP) (bool, Lease, error)
 
-	//Get the lease already in use by that hardware address.
-	GetLeaseForHardwareAddress(net.HardwareAddr) (bool, Lease, error)
+	//Get the lease already in use by that hardware address and/or client identifier.
+	GetLeaseForClient(net.HardwareAddr, []byte) (bool, Lease, error)
 
 	/*
 	 * -Lease Available

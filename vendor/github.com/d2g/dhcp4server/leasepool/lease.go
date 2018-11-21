@@ -1,7 +1,10 @@
 package leasepool
 
 import (
+	"bytes"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net"
 	"time"
 )
@@ -18,37 +21,35 @@ type Lease struct {
 	IP         net.IP           //The IP of the Lease
 	Status     LeaseStatus      //Are Reserved, Active or Free
 	MACAddress net.HardwareAddr //Mac Address of the Device
+	ClientID   []byte           //ClientID of the request
 	Hostname   string           //Hostname From option 12
 	Expiry     time.Time        //Expiry Time
 }
 
-func (this Lease) MarshalJSON() ([]byte, error) {
-	stringMarshal := struct {
-		IP         string
-		Status     int
-		MACAddress string
-		Hostname   string
-		Expiry     time.Time
-	}{
-		(this.IP.String()),
-		int(this.Status),
-		(this.MACAddress.String()),
-		this.Hostname,
-		this.Expiry,
-	}
+//leaseMarshal is a mirror of Lease used for marshalling, since
+//net.HardwareAddr has no native marshalling capability.
+type leaseMarshal struct {
+	IP         string
+	Status     int
+	MACAddress string
+	ClientID   string
+	Hostname   string
+	Expiry     time.Time
+}
 
-	return json.Marshal(stringMarshal)
+func (this Lease) MarshalJSON() ([]byte, error) {
+	return json.Marshal(leaseMarshal{
+		IP:         this.IP.String(),
+		Status:     int(this.Status),
+		MACAddress: this.MACAddress.String(),
+		ClientID:   hex.EncodeToString(this.ClientID),
+		Hostname:   this.Hostname,
+		Expiry:     this.Expiry,
+	})
 }
 
 func (this *Lease) UnmarshalJSON(data []byte) error {
-	stringUnMarshal := struct {
-		IP         string
-		Status     int
-		MACAddress string
-		Hostname   string
-		Expiry     time.Time
-	}{}
-
+	stringUnMarshal := leaseMarshal{}
 	err := json.Unmarshal(data, &stringUnMarshal)
 	if err != nil {
 		return err
@@ -58,12 +59,14 @@ func (this *Lease) UnmarshalJSON(data []byte) error {
 	this.Status = LeaseStatus(stringUnMarshal.Status)
 	if stringUnMarshal.MACAddress != "" {
 		this.MACAddress, err = net.ParseMAC(stringUnMarshal.MACAddress)
+		if err != nil {
+			return fmt.Errorf("error parsing MAC address: %v", err)
+		}
 	}
-
+	this.ClientID, err = hex.DecodeString(stringUnMarshal.ClientID)
 	if err != nil {
-		return err
+		return fmt.Errorf("error decoding clientID: %v", err)
 	}
-
 	this.Hostname = stringUnMarshal.Hostname
 	this.Expiry = stringUnMarshal.Expiry
 
@@ -80,6 +83,10 @@ func (this Lease) Equal(other Lease) bool {
 	}
 
 	if this.MACAddress.String() != other.MACAddress.String() {
+		return false
+	}
+
+	if !bytes.Equal(this.ClientID, other.ClientID) {
 		return false
 	}
 
