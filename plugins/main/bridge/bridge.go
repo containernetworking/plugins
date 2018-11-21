@@ -334,6 +334,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	isLayer3 := n.IPAM.Type != ""
+
 	if n.IsDefaultGW {
 		n.IsGW = true
 	}
@@ -358,103 +360,109 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	// run the IPAM plugin and get back the config to apply
-	r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
-	if err != nil {
-		return err
-	}
+	// Assume L2 interface only
+	result := &current.Result{CNIVersion: cniVersion, Interfaces: []*current.Interface{brInterface, hostInterface, containerInterface}}
 
-	// release IP in case of failure
-	defer func() {
-		if !success {
-			os.Setenv("CNI_COMMAND", "DEL")
-			ipam.ExecDel(n.IPAM.Type, args.StdinData)
-			os.Setenv("CNI_COMMAND", "ADD")
-		}
-	}()
-
-	// Convert whatever the IPAM result was into the current Result type
-	result, err := current.NewResultFromResult(r)
-	if err != nil {
-		return err
-	}
-
-	if len(result.IPs) == 0 {
-		return errors.New("IPAM plugin returned missing IP config")
-	}
-
-	result.Interfaces = []*current.Interface{brInterface, hostInterface, containerInterface}
-
-	// Gather gateway information for each IP family
-	gwsV4, gwsV6, err := calcGateways(result, n)
-	if err != nil {
-		return err
-	}
-
-	// Configure the container hardware address and IP address(es)
-	if err := netns.Do(func(_ ns.NetNS) error {
-		contVeth, err := net.InterfaceByName(args.IfName)
+	if isLayer3 {
+		// run the IPAM plugin and get back the config to apply
+		r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
 		if err != nil {
 			return err
 		}
 
-		// Disable IPv6 DAD just in case hairpin mode is enabled on the
-		// bridge. Hairpin mode causes echos of neighbor solicitation
-		// packets, which causes DAD failures.
-		for _, ipc := range result.IPs {
-			if ipc.Version == "6" && (n.HairpinMode || n.PromiscMode) {
-				if err := disableIPV6DAD(args.IfName); err != nil {
-					return err
-				}
-				break
+		// release IP in case of failure
+		defer func() {
+			if !success {
+				os.Setenv("CNI_COMMAND", "DEL")
+				ipam.ExecDel(n.IPAM.Type, args.StdinData)
+				os.Setenv("CNI_COMMAND", "ADD")
 			}
-		}
+		}()
 
-		// Add the IP to the interface
-		if err := ipam.ConfigureIface(args.IfName, result); err != nil {
+		// Convert whatever the IPAM result was into the current Result type
+		ipamResult, err := current.NewResultFromResult(r)
+		if err != nil {
 			return err
 		}
 
-		// Send a gratuitous arp
-		for _, ipc := range result.IPs {
-			if ipc.Version == "4" {
-				_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
-			}
+		result.IPs = ipamResult.IPs
+		result.Routes = ipamResult.Routes
+
+		if len(result.IPs) == 0 {
+			return errors.New("IPAM plugin returned missing IP config")
 		}
-		return nil
-	}); err != nil {
-		return err
-	}
 
-	if n.IsGW {
-		var firstV4Addr net.IP
-		// Set the IP address(es) on the bridge and enable forwarding
-		for _, gws := range []*gwInfo{gwsV4, gwsV6} {
-			for _, gw := range gws.gws {
-				if gw.IP.To4() != nil && firstV4Addr == nil {
-					firstV4Addr = gw.IP
-				}
-
-				err = ensureBridgeAddr(br, gws.family, &gw, n.ForceAddress)
-				if err != nil {
-					return fmt.Errorf("failed to set bridge addr: %v", err)
-				}
-			}
-
-			if gws.gws != nil {
-				if err = enableIPForward(gws.family); err != nil {
-					return fmt.Errorf("failed to enable forwarding: %v", err)
-				}
-			}
+		// Gather gateway information for each IP family
+		gwsV4, gwsV6, err := calcGateways(result, n)
+		if err != nil {
+			return err
 		}
-	}
 
-	if n.IPMasq {
-		chain := utils.FormatChainName(n.Name, args.ContainerID)
-		comment := utils.FormatComment(n.Name, args.ContainerID)
-		for _, ipc := range result.IPs {
-			if err = ip.SetupIPMasq(ip.Network(&ipc.Address), chain, comment); err != nil {
+		// Configure the container hardware address and IP address(es)
+		if err := netns.Do(func(_ ns.NetNS) error {
+			contVeth, err := net.InterfaceByName(args.IfName)
+			if err != nil {
 				return err
+			}
+
+			// Disable IPv6 DAD just in case hairpin mode is enabled on the
+			// bridge. Hairpin mode causes echos of neighbor solicitation
+			// packets, which causes DAD failures.
+			for _, ipc := range result.IPs {
+				if ipc.Version == "6" && (n.HairpinMode || n.PromiscMode) {
+					if err := disableIPV6DAD(args.IfName); err != nil {
+						return err
+					}
+					break
+				}
+			}
+
+			// Add the IP to the interface
+			if err := ipam.ConfigureIface(args.IfName, result); err != nil {
+				return err
+			}
+
+			// Send a gratuitous arp
+			for _, ipc := range result.IPs {
+				if ipc.Version == "4" {
+					_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+
+		if n.IsGW {
+			var firstV4Addr net.IP
+			// Set the IP address(es) on the bridge and enable forwarding
+			for _, gws := range []*gwInfo{gwsV4, gwsV6} {
+				for _, gw := range gws.gws {
+					if gw.IP.To4() != nil && firstV4Addr == nil {
+						firstV4Addr = gw.IP
+					}
+
+					err = ensureBridgeAddr(br, gws.family, &gw, n.ForceAddress)
+					if err != nil {
+						return fmt.Errorf("failed to set bridge addr: %v", err)
+					}
+				}
+
+				if gws.gws != nil {
+					if err = enableIPForward(gws.family); err != nil {
+						return fmt.Errorf("failed to enable forwarding: %v", err)
+					}
+				}
+			}
+		}
+
+		if n.IPMasq {
+			chain := utils.FormatChainName(n.Name, args.ContainerID)
+			comment := utils.FormatComment(n.Name, args.ContainerID)
+			for _, ipc := range result.IPs {
+				if err = ip.SetupIPMasq(ip.Network(&ipc.Address), chain, comment); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -485,8 +493,12 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if err := ipam.ExecDel(n.IPAM.Type, args.StdinData); err != nil {
-		return err
+	isLayer3 := n.IPAM.Type != ""
+
+	if isLayer3 {
+		if err := ipam.ExecDel(n.IPAM.Type, args.StdinData); err != nil {
+			return err
+		}
 	}
 
 	if args.Netns == "" {
@@ -510,7 +522,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if n.IPMasq {
+	if isLayer3 && n.IPMasq {
 		chain := utils.FormatChainName(n.Name, args.ContainerID)
 		comment := utils.FormatComment(n.Name, args.ContainerID)
 		for _, ipn := range ipnets {

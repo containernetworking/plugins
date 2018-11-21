@@ -47,6 +47,7 @@ type testCase struct {
 	gateway    string      // Single subnet config: Gateway
 	ranges     []rangeInfo // Ranges list (multiple subnets config)
 	isGW       bool
+	isLayer2   bool
 	expGWCIDRs []string // Expected gateway addresses in CIDR form
 }
 
@@ -77,7 +78,9 @@ const (
 	"cniVersion": "%s",
 	"name": "testConfig",
 	"type": "bridge",
-	"bridge": "%s",
+	"bridge": "%s",`
+
+	netDefault = `
 	"isDefaultGateway": true,
 	"ipMasq": false`
 
@@ -117,18 +120,24 @@ const (
 // for a test case.
 func (tc testCase) netConfJSON(dataDir string) string {
 	conf := fmt.Sprintf(netConfStr, tc.cniVersion, BRNAME)
-	if tc.subnet != "" || tc.ranges != nil {
-		conf += ipamStartStr
-		if dataDir != "" {
-			conf += fmt.Sprintf(ipamDataDirStr, dataDir)
+	if !tc.isLayer2 {
+		conf += netDefault
+		if tc.subnet != "" || tc.ranges != nil {
+			conf += ipamStartStr
+			if dataDir != "" {
+				conf += fmt.Sprintf(ipamDataDirStr, dataDir)
+			}
+			if tc.subnet != "" {
+				conf += tc.subnetConfig()
+			}
+			if tc.ranges != nil {
+				conf += tc.rangesConfig()
+			}
+			conf += ipamEndStr
 		}
-		if tc.subnet != "" {
-			conf += tc.subnetConfig()
-		}
-		if tc.ranges != nil {
-			conf += tc.rangesConfig()
-		}
-		conf += ipamEndStr
+	} else {
+		conf += `
+	"ipam": {}`
 	}
 	return "{" + conf + "\n}"
 }
@@ -336,7 +345,10 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) {
 		// Check that the bridge has a different mac from the veth
 		// If not, it means the bridge has an unstable mac and will change
 		// as ifs are added and removed
-		Expect(link.Attrs().HardwareAddr.String()).NotTo(Equal(bridgeMAC))
+		// this check is not relevant for a layer 2 bridge
+		if !tc.isLayer2 {
+			Expect(link.Attrs().HardwareAddr.String()).NotTo(Equal(bridgeMAC))
+		}
 
 		return nil
 	})
@@ -698,6 +710,16 @@ var _ = Describe("bridge Operations", func() {
 			tc.cniVersion = "0.3.0"
 			cmdAddDelTest(originalNS, tc, dataDir)
 		}
+	})
+
+	It("configures and deconfigures a l2 bridge and veth with ADD/DEL for 0.3.1 config", func() {
+		tc := testCase{cniVersion: "0.3.0", isLayer2: true}
+		cmdAddDelTest(originalNS, tc, dataDir)
+	})
+
+	It("configures and deconfigures a l2 bridge and veth with ADD/DEL for 0.3.1 config", func() {
+		tc := testCase{cniVersion: "0.3.1", isLayer2: true}
+		cmdAddDelTest(originalNS, tc, dataDir)
 	})
 
 	It("configures and deconfigures a bridge and veth with default route with ADD/DEL for 0.3.1 config", func() {
