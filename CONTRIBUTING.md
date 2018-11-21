@@ -66,10 +66,12 @@ git clone https://github.com/containernetworking/plugins
 Next, boot the virtual machine and SSH in to run the tests:
 
 ```bash
+cd ~/workspace/plugins
 vagrant up
 vagrant ssh
 # you're now in a shell in a virtual machine
 sudo su
+go get github.com/onsi/ginkgo/ginkgo
 cd /go/src/github.com/containernetworking/plugins
 
 # to run the full test suite
