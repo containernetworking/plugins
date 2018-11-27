@@ -52,12 +52,18 @@ type NetConf struct {
 	MTU          int    `json:"mtu"`
 	HairpinMode  bool   `json:"hairpinMode"`
 	PromiscMode  bool   `json:"promiscMode"`
+	mac          string
 }
 
 type gwInfo struct {
 	gws               []net.IPNet
 	family            int
 	defaultRouteFound bool
+}
+
+type MACEnvArgs struct {
+	types.CommonArgs
+	MAC types.UnmarshallableString `json:"macRequest,omitempty"`
 }
 
 func init() {
@@ -67,13 +73,27 @@ func init() {
 	runtime.LockOSThread()
 }
 
-func loadNetConf(bytes []byte) (*NetConf, string, error) {
+func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 	n := &NetConf{
 		BrName: defaultBrName,
 	}
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
 	}
+
+	// Parse custom MAC from both env args
+	if envArgs != "" {
+		e := MACEnvArgs{}
+		err := types.LoadArgs(envArgs, &e)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to load netconf: %v", err)
+		}
+
+		if e.MAC != "" {
+			n.mac = string(e.MAC)
+		}
+	}
+
 	return n, n.CNIVersion, nil
 }
 
@@ -247,7 +267,7 @@ func ensureBridge(brName string, mtu int, promiscMode bool) (*netlink.Bridge, er
 	return br, nil
 }
 
-func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairpinMode bool) (*current.Interface, *current.Interface, error) {
+func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairpinMode bool, macAddr string) (*current.Interface, *current.Interface, error) {
 	contIface := &current.Interface{}
 	hostIface := &current.Interface{}
 
@@ -257,8 +277,18 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 		if err != nil {
 			return err
 		}
+
 		contIface.Name = containerVeth.Name
-		contIface.Mac = containerVeth.HardwareAddr.String()
+		if macAddr == "" {
+			contIface.Mac = containerVeth.HardwareAddr.String()
+		} else {
+			err = changeMacAddr(containerVeth.Name, macAddr)
+			if err != nil {
+				return err
+			}
+			contIface.Mac = macAddr
+		}
+
 		contIface.Sandbox = netns.Path()
 		hostIface.Name = hostVeth.Name
 		return nil
@@ -326,10 +356,32 @@ func enableIPForward(family int) error {
 	return ip.EnableIP6Forward()
 }
 
+func changeMacAddr(ifName string, newMacAddr string) error {
+	addr, err := net.ParseMAC(newMacAddr)
+	if err != nil {
+		return fmt.Errorf("invalid args %v for MAC addr: %v", newMacAddr, err)
+	}
+
+	link, err := netlink.LinkByName(ifName)
+	if err != nil {
+		return fmt.Errorf("failed to get %q: %v", ifName, err)
+	}
+
+	err = netlink.LinkSetDown(link)
+	if err != nil {
+		return fmt.Errorf("failed to set %q down: %v", ifName, err)
+	}
+	err = netlink.LinkSetHardwareAddr(link, addr)
+	if err != nil {
+		return fmt.Errorf("failed to set %q address to %q: %v", ifName, newMacAddr, err)
+	}
+	return netlink.LinkSetUp(link)
+}
+
 func cmdAdd(args *skel.CmdArgs) error {
 	var success bool = false
 
-	n, cniVersion, err := loadNetConf(args.StdinData)
+	n, cniVersion, err := loadNetConf(args.StdinData, args.Args)
 	if err != nil {
 		return err
 	}
@@ -355,7 +407,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode)
+	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.mac)
 	if err != nil {
 		return err
 	}
@@ -488,7 +540,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
-	n, _, err := loadNetConf(args.StdinData)
+	n, _, err := loadNetConf(args.StdinData, args.Args)
 	if err != nil {
 		return err
 	}

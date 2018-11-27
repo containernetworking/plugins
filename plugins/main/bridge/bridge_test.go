@@ -49,6 +49,7 @@ type testCase struct {
 	isGW       bool
 	isLayer2   bool
 	expGWCIDRs []string // Expected gateway addresses in CIDR form
+	macRequest string
 }
 
 // Range definition for each entry in the ranges list
@@ -279,6 +280,10 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) {
 	// Generate network config and command arguments
 	tester.args = tc.createCmdArgs(tester.targetNS, dataDir)
 
+	if tc.macRequest != "" {
+		tester.args.Args = fmt.Sprintf("IgnoreUnknown=true;MAC=%s", tc.macRequest)
+	}
+
 	// Execute cmdADD on the plugin
 	var result *current.Result
 	err := tester.testNS.Do(func(ns.NetNS) error {
@@ -301,8 +306,14 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) {
 		Expect(result.Interfaces[1].Mac).To(HaveLen(17))
 
 		Expect(result.Interfaces[2].Name).To(Equal(IFNAME))
-		Expect(result.Interfaces[2].Mac).To(HaveLen(17)) //mac is random
+		Expect(result.Interfaces[2].Mac).To(HaveLen(17)) //mac is random if no specific mac requested
 		Expect(result.Interfaces[2].Sandbox).To(Equal(tester.targetNS.Path()))
+
+		//if a specific mac requested on the pod network annotation
+		//the mac on the pod interface need to be equal to the requested one
+		if tc.macRequest != "" {
+			Expect(result.Interfaces[2].Mac).To(Equal(tc.macRequest))
+		}
 
 		// Make sure bridge link exists
 		link, err := netlink.LinkByName(result.Interfaces[0].Name)
@@ -677,6 +688,12 @@ var _ = Describe("bridge Operations", func() {
 				expGWCIDRs: []string{"10.1.2.1/24"},
 			},
 			{
+				// IPv4 with a requested mac
+				subnet:     "10.1.2.0/24",
+				expGWCIDRs: []string{"10.1.2.1/24"},
+				macRequest: "c2:11:22:33:44:66",
+			},
+			{
 				// IPv6 only
 				subnet:     "2001:db8::0/64",
 				expGWCIDRs: []string{"2001:db8::1/64"},
@@ -730,6 +747,12 @@ var _ = Describe("bridge Operations", func() {
 				expGWCIDRs: []string{"10.1.2.1/24"},
 			},
 			{
+				// IPv4 with a requested mac
+				subnet:     "10.1.2.0/24",
+				expGWCIDRs: []string{"10.1.2.1/24"},
+				macRequest: "c2:11:22:33:44:66",
+			},
+			{
 				// IPv6 only
 				subnet:     "2001:db8::0/64",
 				expGWCIDRs: []string{"2001:db8::1/64"},
@@ -776,6 +799,12 @@ var _ = Describe("bridge Operations", func() {
 				// IPv4 only
 				subnet:     "10.1.2.0/24",
 				expGWCIDRs: []string{"10.1.2.1/24"},
+			},
+			{
+				// IPv4 with a requested mac
+				subnet:     "10.1.2.0/24",
+				expGWCIDRs: []string{"10.1.2.1/24"},
+				macRequest: "c2:11:22:33:44:66",
 			},
 			{
 				// IPv6 only
