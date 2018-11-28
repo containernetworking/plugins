@@ -37,11 +37,18 @@ import (
 type TuningConf struct {
 	types.NetConf
 	SysCtl        map[string]string      `json:"sysctl"`
+	EthtoolConf   *EthtoolConf           `json:"ethtoolConf"`
 	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
 	PrevResult    *current.Result        `json:"-"`
 	Mac           string                 `json:"mac,omitempty"`
 	Promisc       bool                   `json:"promisc,omitempty"`
 	Mtu           int                    `json:"mtu,omitempty"`
+}
+
+// EthtoolConf represents the ethtool configuration.
+type EthtoolConf struct {
+	IfName   string          `json:"ifName"`
+	Offloads map[string]bool `json:"offloads"`
 }
 
 type MACEnvArgs struct {
@@ -181,6 +188,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if err = changeMtu(args.IfName, tuningConf.Mtu); err != nil {
 				return err
 			}
+		}
+		if tuningConf.EthtoolConf != nil {
+			return changeEthtool(tuningConf.EthtoolConf)
 		}
 		return nil
 	})

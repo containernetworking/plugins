@@ -52,6 +52,28 @@ The parameters, "mac", "mtu" and "promisc", changes the interface attributes as 
 * `mtu` (integer, optional): MTU of interface
 * `promisc` (bool, optional): Change the promiscuous mode of interface
 
+## Ethtool options control
+
+The following network configuration file
+
+```
+{
+	"name": "mytuning",
+	"type": "tuning",
+	"ethtoolConf": {
+		"ifName": "dummy0",
+		"offloads": {
+			"tx": false,
+			"tso": false,
+			"gso": false
+		}
+	}
+}
+```
+will set `tx-checksumming`,`tso`,`gso` value of interface `dummy0` to off.
+
+Current, only `tx-checksumming`,`tso`,`gso` options are supported.
+
 ## Supported arguments
 The following [CNI_ARGS](https://github.com/containernetworking/cni/blob/master/SPEC.md#parameters) are supported:
 
