@@ -29,6 +29,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
@@ -81,6 +82,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to move link %v", err)
 	}
 
+	var result *current.Result
 	// run the IPAM plugin and get back the config to apply
 	if cfg.IPAM.Type != "" {
 		r, err := ipam.ExecAdd(cfg.IPAM.Type, args.StdinData)
@@ -96,7 +98,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}()
 
 		// Convert whatever the IPAM result was into the current Result type
-		result, err := current.NewResultFromResult(r)
+		result, err = current.NewResultFromResult(r)
 		if err != nil {
 			return err
 		}
@@ -124,6 +126,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if err != nil {
 			return err
 		}
+
+		result.DNS = cfg.DNS
+
+		return types.PrintResult(result, cfg.CNIVersion)
 	}
 
 	return printLink(contDev, cfg.CNIVersion, containerNs)
@@ -276,10 +282,109 @@ func getLink(devname, hwaddr, kernelpath string) (netlink.Link, error) {
 
 func main() {
 	// TODO: implement plugin version
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, "TODO")
 }
 
-func cmdGet(args *skel.CmdArgs) error {
-	// TODO: implement
-	return fmt.Errorf("not implemented")
+func cmdCheck(args *skel.CmdArgs) error {
+
+	cfg, err := loadConf(args.StdinData)
+	if err != nil {
+		return err
+	}
+	netns, err := ns.GetNS(args.Netns)
+	if err != nil {
+		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+	}
+	defer netns.Close()
+
+	// run the IPAM plugin and get back the config to apply
+	if cfg.IPAM.Type != "" {
+		err = ipam.ExecCheck(cfg.IPAM.Type, args.StdinData)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Parse previous result.
+	if cfg.NetConf.RawPrevResult == nil {
+		return fmt.Errorf("Required prevResult missing")
+	}
+
+	if err := version.ParsePrevResult(&cfg.NetConf); err != nil {
+		return err
+	}
+
+	result, err := current.NewResultFromResult(cfg.PrevResult)
+	if err != nil {
+		return err
+	}
+
+	var contMap current.Interface
+	// Find interfaces for name we know, that of host-device inside container
+	for _, intf := range result.Interfaces {
+		if args.IfName == intf.Name {
+			if args.Netns == intf.Sandbox {
+				contMap = *intf
+				continue
+			}
+		}
+	}
+
+	// The namespace must be the same as what was configured
+	if args.Netns != contMap.Sandbox {
+		return fmt.Errorf("Sandbox in prevResult %s doesn't match configured netns: %s",
+			contMap.Sandbox, args.Netns)
+	}
+
+	//
+	// Check prevResults for ips, routes and dns against values found in the container
+	if err := netns.Do(func(_ ns.NetNS) error {
+
+		// Check interface against values found in the container
+		err := validateCniContainerInterface(contMap)
+		if err != nil {
+			return err
+		}
+
+		err = ip.ValidateExpectedInterfaceIPs(args.IfName, result.IPs)
+		if err != nil {
+			return err
+		}
+
+		err = ip.ValidateExpectedRoute(result.Routes)
+		if err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	//
+	return nil
+}
+
+func validateCniContainerInterface(intf current.Interface) error {
+
+	var link netlink.Link
+	var err error
+
+	if intf.Name == "" {
+		return fmt.Errorf("Container interface name missing in prevResult: %v", intf.Name)
+	}
+	link, err = netlink.LinkByName(intf.Name)
+	if err != nil {
+		return fmt.Errorf("Container Interface name in prevResult: %s not found", intf.Name)
+	}
+	if intf.Sandbox == "" {
+		return fmt.Errorf("Error: Container interface %s should not be in host namespace", link.Attrs().Name)
+	}
+
+	if intf.Mac != "" {
+		if intf.Mac != link.Attrs().HardwareAddr.String() {
+			return fmt.Errorf("Interface %s Mac %s doesn't match container Mac: %s", intf.Name, intf.Mac, link.Attrs().HardwareAddr)
+		}
+	}
+
+	return nil
 }

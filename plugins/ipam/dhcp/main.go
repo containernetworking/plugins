@@ -52,7 +52,7 @@ func main() {
 		}
 	} else {
 		// TODO: implement plugin version
-		skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+		skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, "TODO")
 	}
 }
 
@@ -80,9 +80,23 @@ func cmdDel(args *skel.CmdArgs) error {
 	return nil
 }
 
-func cmdGet(args *skel.CmdArgs) error {
+func cmdCheck(args *skel.CmdArgs) error {
 	// TODO: implement
-	return fmt.Errorf("not implemented")
+	//return fmt.Errorf("not implemented")
+	// Plugin must return result in same version as specified in netconf
+	versionDecoder := &version.ConfigDecoder{}
+	//confVersion, err := versionDecoder.Decode(args.StdinData)
+	_, err := versionDecoder.Decode(args.StdinData)
+	if err != nil {
+		return err
+	}
+
+	result := &current.Result{}
+	if err := rpcCall("DHCP.Allocate", args, result); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type SocketPathConf struct {

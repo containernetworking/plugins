@@ -55,8 +55,6 @@ type PortMapConf struct {
 	RuntimeConfig        struct {
 		PortMaps []PortMapEntry `json:"portMappings,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
-	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
-	PrevResult    *current.Result        `json:"-"`
 
 	// These are fields parsed out of the config or the environment;
 	// included here for convenience
@@ -70,7 +68,7 @@ type PortMapConf struct {
 const DefaultMarkBit = 13
 
 func cmdAdd(args *skel.CmdArgs) error {
-	netConf, err := parseConfig(args.StdinData, args.IfName)
+	netConf, _, err := parseConfig(args.StdinData, args.IfName)
 	if err != nil {
 		return fmt.Errorf("failed to parse config: %v", err)
 	}
@@ -102,7 +100,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
-	netConf, err := parseConfig(args.StdinData, args.IfName)
+	netConf, _, err := parseConfig(args.StdinData, args.IfName)
 	if err != nil {
 		return fmt.Errorf("failed to parse config: %v", err)
 	}
@@ -119,36 +117,60 @@ func cmdDel(args *skel.CmdArgs) error {
 
 func main() {
 	// TODO: implement plugin version
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, "TODO")
 }
 
-func cmdGet(args *skel.CmdArgs) error {
-	// TODO: implement
-	return fmt.Errorf("not implemented")
+func cmdCheck(args *skel.CmdArgs) error {
+	conf, result, err := parseConfig(args.StdinData, args.IfName)
+	if err != nil {
+		return err
+	}
+
+	// Ensure we have previous result.
+	if result == nil {
+		return fmt.Errorf("Required prevResult missing")
+	}
+
+	if len(conf.RuntimeConfig.PortMaps) == 0 {
+		return nil
+	}
+
+	conf.ContainerID = args.ContainerID
+
+	if conf.ContIPv4 != nil {
+		if err := checkPorts(conf, conf.ContIPv4); err != nil {
+			return err
+		}
+	}
+
+	if conf.ContIPv6 != nil {
+		if err := checkPorts(conf, conf.ContIPv6); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // parseConfig parses the supplied configuration (and prevResult) from stdin.
-func parseConfig(stdin []byte, ifName string) (*PortMapConf, error) {
+func parseConfig(stdin []byte, ifName string) (*PortMapConf, *current.Result, error) {
 	conf := PortMapConf{}
 
 	if err := json.Unmarshal(stdin, &conf); err != nil {
-		return nil, fmt.Errorf("failed to parse network configuration: %v", err)
+		return nil, nil, fmt.Errorf("failed to parse network configuration: %v", err)
 	}
 
 	// Parse previous result.
+	var result *current.Result
 	if conf.RawPrevResult != nil {
-		resultBytes, err := json.Marshal(conf.RawPrevResult)
-		if err != nil {
-			return nil, fmt.Errorf("could not serialize prevResult: %v", err)
+		var err error
+		if err = version.ParsePrevResult(&conf.NetConf); err != nil {
+			return nil, nil, fmt.Errorf("could not parse prevResult: %v", err)
 		}
-		res, err := version.NewResult(conf.CNIVersion, resultBytes)
+
+		result, err = current.NewResultFromResult(conf.PrevResult)
 		if err != nil {
-			return nil, fmt.Errorf("could not parse prevResult: %v", err)
-		}
-		conf.RawPrevResult = nil
-		conf.PrevResult, err = current.NewResultFromResult(res)
-		if err != nil {
-			return nil, fmt.Errorf("could not convert result to current version: %v", err)
+			return nil, nil, fmt.Errorf("could not convert result to current version: %v", err)
 		}
 	}
 
@@ -158,7 +180,7 @@ func parseConfig(stdin []byte, ifName string) (*PortMapConf, error) {
 	}
 
 	if conf.MarkMasqBit != nil && conf.ExternalSetMarkChain != nil {
-		return nil, fmt.Errorf("Cannot specify externalSetMarkChain and markMasqBit")
+		return nil, nil, fmt.Errorf("Cannot specify externalSetMarkChain and markMasqBit")
 	}
 
 	if conf.MarkMasqBit == nil {
@@ -167,21 +189,21 @@ func parseConfig(stdin []byte, ifName string) (*PortMapConf, error) {
 	}
 
 	if *conf.MarkMasqBit < 0 || *conf.MarkMasqBit > 31 {
-		return nil, fmt.Errorf("MasqMarkBit must be between 0 and 31")
+		return nil, nil, fmt.Errorf("MasqMarkBit must be between 0 and 31")
 	}
 
 	// Reject invalid port numbers
 	for _, pm := range conf.RuntimeConfig.PortMaps {
 		if pm.ContainerPort <= 0 {
-			return nil, fmt.Errorf("Invalid container port number: %d", pm.ContainerPort)
+			return nil, nil, fmt.Errorf("Invalid container port number: %d", pm.ContainerPort)
 		}
 		if pm.HostPort <= 0 {
-			return nil, fmt.Errorf("Invalid host port number: %d", pm.HostPort)
+			return nil, nil, fmt.Errorf("Invalid host port number: %d", pm.HostPort)
 		}
 	}
 
 	if conf.PrevResult != nil {
-		for _, ip := range conf.PrevResult.IPs {
+		for _, ip := range result.IPs {
 			if ip.Version == "6" && conf.ContIPv6 != nil {
 				continue
 			} else if ip.Version == "4" && conf.ContIPv4 != nil {
@@ -192,9 +214,9 @@ func parseConfig(stdin []byte, ifName string) (*PortMapConf, error) {
 			if ip.Interface != nil {
 				intIdx := *ip.Interface
 				if intIdx >= 0 &&
-					intIdx < len(conf.PrevResult.Interfaces) &&
-					(conf.PrevResult.Interfaces[intIdx].Name != ifName ||
-						conf.PrevResult.Interfaces[intIdx].Sandbox == "") {
+					intIdx < len(result.Interfaces) &&
+					(result.Interfaces[intIdx].Name != ifName ||
+						result.Interfaces[intIdx].Sandbox == "") {
 					continue
 				}
 			}
@@ -207,5 +229,5 @@ func parseConfig(stdin []byte, ifName string) (*PortMapConf, error) {
 		}
 	}
 
-	return &conf, nil
+	return &conf, result, nil
 }

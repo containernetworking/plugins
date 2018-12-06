@@ -15,8 +15,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
@@ -74,10 +72,10 @@ func cmdDel(args *skel.CmdArgs) error {
 
 func main() {
 	// TODO: implement plugin version
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, "TODO")
 }
 
-func cmdGet(args *skel.CmdArgs) error {
+func cmdCheck(args *skel.CmdArgs) error {
 	// TODO: implement
-	return fmt.Errorf("not implemented")
+	return nil
 }

@@ -15,6 +15,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -30,12 +31,38 @@ import (
 
 func main() {
 	// TODO: implement plugin version
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, "TODO")
 }
 
-func cmdGet(args *skel.CmdArgs) error {
-	// TODO: implement
-	return fmt.Errorf("not implemented")
+func loadNetConf(bytes []byte) (*types.NetConf, string, error) {
+	n := &types.NetConf{}
+	if err := json.Unmarshal(bytes, n); err != nil {
+		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
+	}
+	return n, n.CNIVersion, nil
+}
+
+func cmdCheck(args *skel.CmdArgs) error {
+
+	ipamConf, _, err := allocator.LoadIPAMConfig(args.StdinData, args.Args)
+	if err != nil {
+		return err
+	}
+
+	// Look to see if there is at least one IP address allocated to the container
+	// in the data dir, irrespective of what that address actually is
+	store, err := disk.New(ipamConf.Name, ipamConf.DataDir)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+
+	containerIpFound := store.FindByID(args.ContainerID, args.IfName)
+	if containerIpFound == false {
+		return fmt.Errorf("host-local: Failed to find address added by container %v", args.ContainerID)
+	}
+
+	return nil
 }
 
 func cmdAdd(args *skel.CmdArgs) error {

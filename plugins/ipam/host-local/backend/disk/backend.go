@@ -98,6 +98,43 @@ func (s *Store) Release(ip net.IP) error {
 	return os.Remove(GetEscapedPath(s.dataDir, ip.String()))
 }
 
+func (s *Store) FindByKey(id string, ifname string, match string) (bool, error) {
+	found := false
+
+	err := filepath.Walk(s.dataDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		data, err := ioutil.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		if strings.TrimSpace(string(data)) == match {
+			found = true
+		}
+		return nil
+	})
+	return found, err
+
+}
+
+func (s *Store) FindByID(id string, ifname string) bool {
+	s.Lock()
+	defer s.Unlock()
+
+	found := false
+	match := strings.TrimSpace(id) + LineBreak + ifname
+	found, err := s.FindByKey(id, ifname, match)
+
+	// Match anything created by this id
+	if !found && err == nil {
+		match := strings.TrimSpace(id)
+		found, err = s.FindByKey(id, ifname, match)
+	}
+
+	return found
+}
+
 func (s *Store) ReleaseByKey(id string, ifname string, match string) (bool, error) {
 	found := false
 	err := filepath.Walk(s.dataDir, func(path string, info os.FileInfo, err error) error {

@@ -59,12 +59,59 @@ type Address struct {
 
 func main() {
 	// TODO: implement plugin version
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, "TODO")
 }
 
-func cmdGet(args *skel.CmdArgs) error {
-	// TODO: implement
-	return fmt.Errorf("not implemented")
+func loadNetConf(bytes []byte) (*types.NetConf, string, error) {
+	n := &types.NetConf{}
+	if err := json.Unmarshal(bytes, n); err != nil {
+		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
+	}
+	return n, n.CNIVersion, nil
+}
+
+func cmdCheck(args *skel.CmdArgs) error {
+	ipamConf, _, err := LoadIPAMConfig(args.StdinData, args.Args)
+	if err != nil {
+		return err
+	}
+
+	// Get PrevResult from stdin... store in RawPrevResult
+	n, _, err := loadNetConf(args.StdinData)
+	if err != nil {
+		return err
+	}
+
+	// Parse previous result.
+	if n.RawPrevResult == nil {
+		return fmt.Errorf("Required prevResult missing")
+	}
+
+	if err := version.ParsePrevResult(n); err != nil {
+		return err
+	}
+
+	result, err := current.NewResultFromResult(n.PrevResult)
+	if err != nil {
+		return err
+	}
+
+	// Each configured IP should be found in result.IPs
+	for _, rangeset := range ipamConf.Addresses {
+		for _, ips := range result.IPs {
+			// Ensure values are what we expect
+			if rangeset.Address.IP.Equal(ips.Address.IP) {
+				if rangeset.Gateway == nil {
+					break
+				} else if rangeset.Gateway.Equal(ips.Gateway) {
+					break
+				}
+				return fmt.Errorf("static: Failed to match addr %v on interface %v", ips.Address.IP, args.IfName)
+			}
+		}
+	}
+
+	return nil
 }
 
 // canonicalizeIP makes sure a provided ip is in standard form

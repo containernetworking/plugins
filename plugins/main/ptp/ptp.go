@@ -286,10 +286,108 @@ func cmdDel(args *skel.CmdArgs) error {
 
 func main() {
 	// TODO: implement plugin version
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, "TODO")
 }
 
-func cmdGet(args *skel.CmdArgs) error {
-	// TODO: implement
-	return fmt.Errorf("not implemented")
+func cmdCheck(args *skel.CmdArgs) error {
+	conf := NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("failed to load netconf: %v", err)
+	}
+
+	netns, err := ns.GetNS(args.Netns)
+	if err != nil {
+		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+	}
+	defer netns.Close()
+
+	// run the IPAM plugin and get back the config to apply
+	err = ipam.ExecCheck(conf.IPAM.Type, args.StdinData)
+	if err != nil {
+		return err
+	}
+	if conf.NetConf.RawPrevResult == nil {
+		return fmt.Errorf("ptp: Required prevResult missing")
+	}
+	if err := version.ParsePrevResult(&conf.NetConf); err != nil {
+		return err
+	}
+	// Convert whatever the IPAM result was into the current Result type
+	result, err := current.NewResultFromResult(conf.PrevResult)
+	if err != nil {
+		return err
+	}
+
+	var contMap current.Interface
+	// Find interfaces for name whe know, that of host-device inside container
+	for _, intf := range result.Interfaces {
+		if args.IfName == intf.Name {
+			if args.Netns == intf.Sandbox {
+				contMap = *intf
+				continue
+			}
+		}
+	}
+
+	// The namespace must be the same as what was configured
+	if args.Netns != contMap.Sandbox {
+		return fmt.Errorf("Sandbox in prevResult %s doesn't match configured netns: %s",
+			contMap.Sandbox, args.Netns)
+	}
+
+	//
+	// Check prevResults for ips, routes and dns against values found in the container
+	if err := netns.Do(func(_ ns.NetNS) error {
+
+		// Check interface against values found in the container
+		err := validateCniContainerInterface(contMap)
+		if err != nil {
+			return err
+		}
+
+		err = ip.ValidateExpectedInterfaceIPs(args.IfName, result.IPs)
+		if err != nil {
+			return err
+		}
+
+		err = ip.ValidateExpectedRoute(result.Routes)
+		if err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateCniContainerInterface(intf current.Interface) error {
+
+	var link netlink.Link
+	var err error
+
+	if intf.Name == "" {
+		return fmt.Errorf("Container interface name missing in prevResult: %v", intf.Name)
+	}
+	link, err = netlink.LinkByName(intf.Name)
+	if err != nil {
+		return fmt.Errorf("ptp: Container Interface name in prevResult: %s not found", intf.Name)
+	}
+	if intf.Sandbox == "" {
+		return fmt.Errorf("ptp: Error: Container interface %s should not be in host namespace", link.Attrs().Name)
+	}
+
+	_, isVeth := link.(*netlink.Veth)
+	if !isVeth {
+		return fmt.Errorf("Error: Container interface %s not of type veth/p2p", link.Attrs().Name)
+	}
+
+	if intf.Mac != "" {
+		if intf.Mac != link.Attrs().HardwareAddr.String() {
+			return fmt.Errorf("ptp: Interface %s Mac %s doesn't match container Mac: %s", intf.Name, intf.Mac, link.Attrs().HardwareAddr)
+		}
+	}
+
+	return nil
 }
