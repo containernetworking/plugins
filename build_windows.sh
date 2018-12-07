@@ -5,12 +5,11 @@ cd $(dirname "$0")
 ORG_PATH="github.com/containernetworking"
 export REPO_PATH="${ORG_PATH}/plugins"
 
-if [ ! -h gopath/src/${REPO_PATH} ]; then
-	mkdir -p gopath/src/${ORG_PATH}
-	ln -s ../../../.. gopath/src/${REPO_PATH} || exit 255
-fi
+export GOPATH=$(mktemp -d)
+mkdir -p ${GOPATH}/src/${ORG_PATH}
+trap "{ rm -rf $GOPATH; }" EXIT
+ln -s ${PWD} ${GOPATH}/src/${REPO_PATH} || exit 255
 
-export GOPATH=${PWD}/gopath
 export GO="${GO:-go}"
 export GOOS=windows
 
