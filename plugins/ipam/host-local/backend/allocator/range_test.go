@@ -121,12 +121,6 @@ var _ = Describe("IP ranges", func() {
 		Expect(err).Should(MatchError("RangeStart 192.0.2.50 not in network 192.0.2.0/24"))
 	})
 
-	It("should reject invalid gateways", func() {
-		r := Range{Subnet: mustSubnet("192.0.2.0/24"), Gateway: net.ParseIP("192.0.3.0")}
-		err := r.Canonicalize()
-		Expect(err).Should(MatchError("gateway 192.0.3.0 not in network 192.0.2.0/24"))
-	})
-
 	It("should parse all fields correctly", func() {
 		snstr := "192.0.2.0/24"
 		r := Range{
