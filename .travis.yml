@@ -18,16 +18,22 @@ env:
 
 matrix:
   fast_finish: true
+  include:
+    - os: windows
+      env: TARGET=amd64
+      go: 1.10.x
+    - os: windows
+      env: TARGET=amd64
+      go: 1.11.x
 
 install:
-  - sudo apt-get install gcc-multilib gcc-mingw-w64 -y
   - go get github.com/onsi/ginkgo/ginkgo
   - go get github.com/containernetworking/cni/cnitool
 
 script:
  - |
    if [ "${TARGET}" == "amd64" ]; then
-     GOARCH="${TARGET}" ./test.sh
+     GOARCH="${TARGET}" ./test_${TRAVIS_OS_NAME}.sh
    else
      GOARCH="${TARGET}" ./build_linux.sh
    fi
