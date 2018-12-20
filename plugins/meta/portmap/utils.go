@@ -21,7 +21,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/vishvananda/netlink"
+	"github.com/cloudtoad/netlink"
 )
 
 const maxChainNameLength = 28

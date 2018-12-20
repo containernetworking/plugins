@@ -31,7 +31,7 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/vishvananda/netlink"
+	"github.com/cloudtoad/netlink"
 )
 
 //NetConf for host-device config, look the README to learn how to use those parameters

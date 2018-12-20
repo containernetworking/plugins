@@ -33,7 +33,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
-	"github.com/vishvananda/netlink"
+	"github.com/cloudtoad/netlink"
 )
 
 const TIMEOUT = 90

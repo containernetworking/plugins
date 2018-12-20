@@ -26,7 +26,7 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
 
-	"github.com/vishvananda/netlink"
+	"github.com/cloudtoad/netlink"
 )
 
 // BandwidthEntry corresponds to a single entry in the bandwidth argument,

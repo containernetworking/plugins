@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vishvananda/netlink"
+	"github.com/cloudtoad/netlink"
 )
 
 const SETTLE_INTERVAL = 50 * time.Millisecond

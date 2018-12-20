@@ -17,7 +17,7 @@ package ip
 import (
 	"net"
 
-	"github.com/vishvananda/netlink"
+	"github.com/cloudtoad/netlink"
 )
 
 // AddRoute adds a universally-scoped route to a device.

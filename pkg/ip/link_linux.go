@@ -24,7 +24,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/utils/hwaddr"
 	"github.com/safchain/ethtool"
-	"github.com/vishvananda/netlink"
+	"github.com/cloudtoad/netlink"
 )
 
 var (
@@ -246,7 +246,7 @@ func GetVethPeerIfindex(ifName string) (netlink.Link, int, error) {
 		return nil, -1, fmt.Errorf("interface %q was not a veth interface", ifName)
 	}
 
-	// veth supports IFLA_LINK (what vishvananda/netlink calls ParentIndex)
+	// veth supports IFLA_LINK (what cloudtoad/netlink calls ParentIndex)
 	// on 4.1 and higher kernels
 	peerIndex := link.Attrs().ParentIndex
 	if peerIndex <= 0 {

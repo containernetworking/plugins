@@ -5,7 +5,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/vishvananda/netlink/nl"
+	"github.com/cloudtoad/netlink/nl"
 )
 
 const (

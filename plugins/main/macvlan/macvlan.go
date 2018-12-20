@@ -30,7 +30,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 	"github.com/j-keck/arping"
-	"github.com/vishvananda/netlink"
+	"github.com/cloudtoad/netlink"
 )
 
 const (

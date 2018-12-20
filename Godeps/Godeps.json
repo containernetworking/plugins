@@ -317,11 +317,11 @@
 			"Rev": "3e01752db0189b9157070a0e1668a620f9a85da2"
 		},
 		{
-			"ImportPath": "github.com/vishvananda/netlink",
+			"ImportPath": "github.com/cloudtoad/netlink",
 			"Rev": "6e453822d85ef5721799774b654d4d02fed62afb"
 		},
 		{
-			"ImportPath": "github.com/vishvananda/netlink/nl",
+			"ImportPath": "github.com/cloudtoad/netlink/nl",
 			"Rev": "6e453822d85ef5721799774b654d4d02fed62afb"
 		},
 		{

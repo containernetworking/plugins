@@ -25,7 +25,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
-	"github.com/vishvananda/netlink"
+	"github.com/cloudtoad/netlink"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

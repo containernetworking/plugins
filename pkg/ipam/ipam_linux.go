@@ -23,7 +23,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 
-	"github.com/vishvananda/netlink"
+	"github.com/cloudtoad/netlink"
 )
 
 const (

@@ -27,7 +27,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/vishvananda/netlink"
+	"github.com/cloudtoad/netlink"
 )
 
 type NetConf struct {

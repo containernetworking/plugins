@@ -25,7 +25,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/testutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/vishvananda/netlink"
+	"github.com/cloudtoad/netlink"
 )
 
 var _ = Describe("base functionality", func() {

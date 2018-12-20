@@ -7,7 +7,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/vishvananda/netlink/nl"
+	"github.com/cloudtoad/netlink/nl"
 	"github.com/vishvananda/netns"
 )
 

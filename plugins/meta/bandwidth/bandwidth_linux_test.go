@@ -21,7 +21,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/vishvananda/netlink"
+	"github.com/cloudtoad/netlink"
 
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
