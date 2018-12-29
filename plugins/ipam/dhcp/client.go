@@ -78,7 +78,7 @@ func DhcpRequest(c *dhcp4client.Client, options dhcp4.Options) (bool, dhcp4.Pack
 }
 
 //Renew a lease backed on the Acknowledgement Packet.
-//Returns Sucessfull, The AcknoledgementPacket, Any Errors
+//Returns Successful, The AcknoledgementPacket, Any Errors
 func DhcpRenew(c *dhcp4client.Client, acknowledgement dhcp4.Packet, options dhcp4.Options) (bool, dhcp4.Packet, error) {
 	renewRequest := c.RenewalRequestPacket(&acknowledgement)
 
