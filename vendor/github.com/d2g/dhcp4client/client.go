@@ -383,7 +383,7 @@ func (c *Client) Request() (bool, dhcp4.Packet, error) {
 }
 
 //Renew a lease backed on the Acknowledgement Packet.
-//Returns Successful, The AcknoledgementPacket, Any Errors
+//Returns Sucessfull, The AcknoledgementPacket, Any Errors
 func (c *Client) Renew(acknowledgement dhcp4.Packet) (bool, dhcp4.Packet, error) {
 	renewRequest := c.RenewalRequestPacket(&acknowledgement)
 	renewRequest.PadToMinSize()
