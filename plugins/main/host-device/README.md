@@ -16,6 +16,7 @@ A sample configuration might look like:
 ```json
 {
 	"cniVersion": "0.3.1",
+	"type": "host-device",
 	"device": "enp0s1"
 }
 ```
