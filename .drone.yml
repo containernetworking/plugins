@@ -1,0 +1,51 @@
+kind: pipeline
+name: amd64
+
+platform:
+  os: linux
+  arch: amd64
+
+steps:
+  - name: build-amd64
+    image: golang:1.11
+    volumes:
+      - name: docker
+        path: /var/run/docker.sock
+    commands:
+      - ./build.sh
+      - cp bin/portmap bin/portmap-amd64
+  - name: github_binary_release
+    image: plugins/github-release:linux-amd64
+    settings:
+      api_key:
+        from_secret: github_token
+      files:
+        - bin/portmap-amd64
+    when:
+      event: tag
+---
+kind: pipeline
+name: arm64
+
+platform:
+  os: linux
+  arch: arm64
+
+steps:
+  - name: build-arm64
+    image: golang:1.11
+    volumes:
+      - name: docker
+        path: /var/run/docker.sock
+    commands:
+      - ./build.sh
+      - cp bin/portmap bin/portmap-arm64
+  - name: github_binary_release
+    image: plugins/github-release:linux-arm64
+    settings:
+      api_key:
+        from_secret: github_token
+      files:
+        - bin/portmap-arm64
+    when:
+      event: tag
