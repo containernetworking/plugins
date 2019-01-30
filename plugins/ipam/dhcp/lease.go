@@ -130,6 +130,7 @@ func (l *DHCPLease) acquire() error {
 
 	opts := make(dhcp4.Options)
 	opts[dhcp4.OptionClientIdentifier] = []byte(l.clientID)
+	opts[dhcp4.OptionParameterRequestList] = []byte{byte(dhcp4.OptionRouter)}
 
 	pkt, err := backoffRetry(func() (*dhcp4.Packet, error) {
 		ok, ack, err := DhcpRequest(c, opts)
