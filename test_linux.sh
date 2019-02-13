@@ -10,7 +10,7 @@ source ./build_linux.sh
 
 echo "Running tests"
 
-GINKGO_FLAGS="-p --randomizeAllSpecs --randomizeSuites --failOnPending --progress"
+GINKGO_FLAGS="-p --randomizeAllSpecs --randomizeSuites --failOnPending --progress  --skipPackage=pkg/hns"
 
 # user has not provided PKG override
 if [ -z "$PKG" ]; then
