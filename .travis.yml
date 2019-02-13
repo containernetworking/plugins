@@ -8,7 +8,7 @@ go:
 
 env:
   global:
-  - PATH=$GOROOT/bin:$GOPATH/bin:$PATH
+  - PATH="$GOROOT/bin:$GOPATH/bin:$PATH"
   matrix:
   - TARGET=amd64
   - TARGET=arm
