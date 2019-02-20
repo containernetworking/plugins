@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	"github.com/coreos/go-iptables/iptables"
-	shellwords "github.com/mattn/go-shellwords"
+	"github.com/mattn/go-shellwords"
 )
 
 type chain struct {
