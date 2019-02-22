@@ -38,7 +38,7 @@ func main() {
 		var socketPath string
 		daemonFlags := flag.NewFlagSet("daemon", flag.ExitOnError)
 		daemonFlags.StringVar(&pidfilePath, "pidfile", "", "optional path to write daemon PID to")
-		daemonFlags.StringVar(&hostPrefix, "hostprefix", "", "optional prefix to netns")
+		daemonFlags.StringVar(&hostPrefix, "hostprefix", "", "optional prefix to host root")
 		daemonFlags.StringVar(&socketPath, "socketpath", "", "optional dhcp server socketpath")
 		daemonFlags.Parse(os.Args[2:])
 
