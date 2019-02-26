@@ -323,6 +323,7 @@ var _ = Describe("portmapping configuration", func() {
 						"--mark", "0x20/0x20",
 						"-j", "MASQUERADE",
 					}},
+					prependEntry: true,
 				}))
 			})
 		})
