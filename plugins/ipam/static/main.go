@@ -25,7 +25,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 
-	types020 "github.com/containernetworking/cni/pkg/types/020"
+	"github.com/containernetworking/cni/pkg/types/020"
 )
 
 // The top-level network config - IPAM plugins are passed the full configuration
