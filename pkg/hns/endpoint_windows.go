@@ -23,12 +23,40 @@ import (
 	"github.com/Microsoft/hcsshim/hcn"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/juju/errors"
 )
 
 const (
 	pauseContainerNetNS = "none"
 )
+
+type K8sCniEnvArgs struct {
+	types.CommonArgs
+	K8S_POD_NAMESPACE          types.UnmarshallableString `json:"K8S_POD_NAMESPACE,omitempty"`
+	K8S_POD_NAME               types.UnmarshallableString `json:"K8S_POD_NAME,omitempty"`
+	K8S_POD_INFRA_CONTAINER_ID types.UnmarshallableString `json:"K8S_POD_INFRA_CONTAINER_ID,omitempty"`
+}
+
+func parseCniArgs(args string) (*K8sCniEnvArgs, error) {
+	podConfig := K8sCniEnvArgs{}
+	err := types.LoadArgs(args, &podConfig)
+	if err != nil {
+		return nil, err
+	}
+	return &podConfig, nil
+}
+
+func ModifyDnsForK8s(dnsInfo *types.DNS, args *skel.CmdArgs) {
+	cniArgs, err := parseCniArgs(args.Args)
+	if err != nil {
+		errors.Annotatef(err, "k8s Namespace not found")
+	} else {
+		if len(dnsInfo.Search) > 0 {
+			dnsInfo.Search[0] = string(cniArgs.K8S_POD_NAMESPACE) + "." + dnsInfo.Search[0]
+		}
+	}
+}
 
 type EndpointInfo struct {
 	EndpointName string

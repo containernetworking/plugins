@@ -83,9 +83,11 @@ func ProcessEndpointArgs(args *skel.CmdArgs, n *NetConf) (*hns.EndpointInfo, err
 	if len(n.IPMasqNetwork) != 0 {
 		n.ApplyOutboundNatPolicy(n.IPMasqNetwork)
 	}
-
-	epInfo.DnsSearch = n.DNS.Search	
-	epInfo.Nameservers = n.DNS.Nameservers
+	
+	dnsInfo := n.DNS
+	hns.ModifyDnsForK8s(&dnsInfo, args)
+	epInfo.DnsSearch = dnsInfo.Search	
+	epInfo.Nameservers = dnsInfo.Nameservers
 
 	return epInfo, nil
 }

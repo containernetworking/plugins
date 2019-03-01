@@ -114,13 +114,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 			n.ApplyOutboundNatPolicy(hnsNetwork.Subnets[0].AddressPrefix)
 		}
 
-		result.DNS = n.DNS
-
+		dnsInfo := n.DNS
+		hns.ModifyDnsForK8s(&dnsInfo, args)
 		hnsEndpoint := &hcsshim.HNSEndpoint{
 			Name:           epName,
 			VirtualNetwork: hnsNetwork.Id,
-			DNSServerList:  strings.Join(result.DNS.Nameservers, ","),
-			DNSSuffix:      strings.Join(result.DNS.Search, ","),
+			DNSServerList:  strings.Join(dnsInfo.Nameservers, ","),
+			DNSSuffix:      strings.Join(dnsInfo.Search, ","),
 			GatewayAddress: gw,
 			IPAddress:      ipAddr,
 			MacAddress:     macAddr,
