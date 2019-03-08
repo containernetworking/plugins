@@ -20,4 +20,4 @@ FROM busybox
 COPY --from=build /go/src/app/bin /opt/cni/bin
 VOLUME /host/opt/cni/bin
 ADD docker-installer/install_cni_plugins.sh /script/install_cni_plugins.sh
-CMD ['/script/install_cni_plugins.sh','/opt/cni/bin','/host/opt/cni/bin']
+CMD ["/script/install_cni_plugins.sh","/opt/cni/bin","/host/opt/cni/bin"]
