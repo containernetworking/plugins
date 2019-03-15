@@ -116,8 +116,8 @@ var _ = Describe("chain tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(haveRules).To(Equal([]string{
 			"-N " + tlChainName,
-			"-A " + tlChainName + " -d 203.0.113.1/32 -j " + testChain.name,
 			"-A " + tlChainName + ` -m comment --comment "canary value" -j ACCEPT`,
+			"-A " + tlChainName + " -d 203.0.113.1/32 -j " + testChain.name,
 		}))
 
 		// Check that the chain and rule was created
