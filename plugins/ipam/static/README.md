@@ -56,3 +56,7 @@ The following [CNI_ARGS](https://github.com/containernetworking/cni/blob/master/
 The plugin also support following [capability argument](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md).
 
 * `ips`: Pass IP addresses for CNI interface
+
+The following [args conventions](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md#args-in-network-config) are supported:
+
+* `ips` (array of strings): A list of custom IPs to attempt to allocate, with prefix (e.g. '10.10.0.1/24')

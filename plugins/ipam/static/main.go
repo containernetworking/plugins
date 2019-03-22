@@ -38,6 +38,9 @@ type Net struct {
 	RuntimeConfig struct {
 		IPs []string `json:"ips,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
+	Args *struct {
+		A *IPAMArgs `json:"cni"`
+	} `json:"args"`
 }
 
 type IPAMConfig struct {
@@ -52,6 +55,10 @@ type IPAMEnvArgs struct {
 	types.CommonArgs
 	IP      types.UnmarshallableString `json:"ip,omitempty"`
 	GATEWAY types.UnmarshallableString `json:"gateway,omitempty"`
+}
+
+type IPAMArgs struct {
+	IPs []string `json:"ips"`
 }
 
 type Address struct {
@@ -142,6 +149,15 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		// args IP overwrites IP, so clear IPAM Config
 		n.IPAM.Addresses = make([]Address, 0, len(n.RuntimeConfig.IPs))
 		for _, addr := range n.RuntimeConfig.IPs {
+			n.IPAM.Addresses = append(n.IPAM.Addresses, Address{AddressStr: addr})
+		}
+	}
+
+	// import address from args
+	if n.Args != nil && n.Args.A != nil && len(n.Args.A.IPs) != 0 {
+		// args IP overwrites IP, so clear IPAM Config
+		n.IPAM.Addresses = make([]Address, 0, len(n.Args.A.IPs))
+		for _, addr := range n.Args.A.IPs {
 			n.IPAM.Addresses = append(n.IPAM.Addresses, Address{AddressStr: addr})
 		}
 	}

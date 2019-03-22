@@ -47,6 +47,16 @@ type TuningConf struct {
 	RuntimeConfig struct {
 		Mac string `json:"mac,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
+	Args *struct {
+		A *IPAMArgs `json:"cni"`
+	} `json:"args"`
+}
+
+type IPAMArgs struct {
+	SysCtl  *map[string]string `json:"sysctl"`
+	Mac     *string            `json:"mac,omitempty"`
+	Promisc *bool              `json:"promisc,omitempty"`
+	Mtu     *int               `json:"mtu,omitempty"`
 }
 
 // MacEnvArgs represents CNI_ARG
@@ -77,6 +87,28 @@ func parseConf(data []byte, envArgs string) (*TuningConf, error) {
 	// Parse custom Mac from RuntimeConfig
 	if conf.RuntimeConfig.Mac != "" {
 		conf.Mac = conf.RuntimeConfig.Mac
+	}
+
+	// Get args
+	if conf.Args != nil && conf.Args.A != nil {
+		if conf.Args.A.SysCtl != nil {
+			for k, v := range *conf.Args.A.SysCtl {
+				conf.SysCtl[k] = v
+			}
+		}
+
+		if conf.Args.A.Mac != nil {
+			conf.Mac = *conf.Args.A.Mac
+		}
+
+		if conf.Args.A.Promisc != nil {
+			conf.Promisc = *conf.Args.A.Promisc
+		}
+
+		if conf.Args.A.Mtu != nil {
+			conf.Mtu = *conf.Args.A.Mtu
+		}
+
 	}
 
 	return &conf, nil
