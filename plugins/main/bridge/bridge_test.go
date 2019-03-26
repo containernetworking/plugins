@@ -35,20 +35,23 @@ import (
 )
 
 const (
-	BRNAME = "bridge0"
-	IFNAME = "eth0"
+	BRNAME             = "bridge0"
+	IFNAME             = "eth0"
+	DEFAULTHOSTIFCOUNT = 3
 )
 
 // testCase defines the CNI network configuration and the expected
 // bridge addresses for a test case.
 type testCase struct {
-	cniVersion string      // CNI Version
-	subnet     string      // Single subnet config: Subnet CIDR
-	gateway    string      // Single subnet config: Gateway
-	ranges     []rangeInfo // Ranges list (multiple subnets config)
-	isGW       bool
-	isLayer2   bool
-	expGWCIDRs []string // Expected gateway addresses in CIDR form
+	cniVersion          string      // CNI Version
+	subnet              string      // Single subnet config: Subnet CIDR
+	gateway             string      // Single subnet config: Gateway
+	ranges              []rangeInfo // Ranges list (multiple subnets config)
+	isGW                bool
+	isLayer2            bool
+	expGWCIDRs          []string // Expected gateway addresses in CIDR form
+	cleanupEmptyBridge  bool     // Cleanup bridge after last veth deleted
+	expectedHostIfCount *int     // Used to specify the number of expected interfaces in hostNS, tester defaults to DEFAULTHOSTIFCOUNT
 }
 
 // Range definition for each entry in the ranges list
@@ -79,6 +82,9 @@ const (
 	"name": "testConfig",
 	"type": "bridge",
 	"bridge": "%s",`
+
+	netCleanupBridge = `
+	"cleanupBridge": true,`
 
 	netDefault = `
 	"isDefaultGateway": true,
@@ -120,6 +126,9 @@ const (
 // for a test case.
 func (tc testCase) netConfJSON(dataDir string) string {
 	conf := fmt.Sprintf(netConfStr, tc.cniVersion, BRNAME)
+	if tc.cleanupEmptyBridge {
+		conf += netCleanupBridge
+	}
 	if !tc.isLayer2 {
 		conf += netDefault
 		if tc.subnet != "" || tc.ranges != nil {
@@ -332,10 +341,16 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) {
 			Expect(found).To(Equal(true))
 		}
 
+		// expectedHostIfCount defaults to DEFAULTHOSTIFCOUNT (Bridge, veth, and loopback)
+		expectedHostIfCount := DEFAULTHOSTIFCOUNT
+		// tc.expectedHostIfCount should be set during multiple interface creation tests
+		if tc.expectedHostIfCount != nil {
+			expectedHostIfCount = *tc.expectedHostIfCount
+		}
 		// Check for the veth link in the main namespace
 		links, err := netlink.LinkList()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(len(links)).To(Equal(3)) // Bridge, veth, and loopback
+		Expect(len(links)).To(Equal(expectedHostIfCount)) // number of links to expect in testNS
 
 		link, err = netlink.LinkByName(result.Interfaces[1].Name)
 		Expect(err).NotTo(HaveOccurred())
@@ -502,12 +517,18 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) {
 			Expect(found).To(Equal(true))
 		}
 
+		// expectedHostIfCount defaults to DEFAULTHOSTIFCOUNT (Bridge, veth, and loopback)
+		expectedHostIfCount := DEFAULTHOSTIFCOUNT
+		// tc.expectedHostIfCount should be set during multiple interface creation tests
+		if tc.expectedHostIfCount != nil {
+			expectedHostIfCount = *tc.expectedHostIfCount
+		}
 		// Check for the veth link in the main namespace; can't
 		// check the for the specific link since version 0.1.0
 		// doesn't report interfaces
 		links, err := netlink.LinkList()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(len(links)).To(Equal(3)) // Bridge, veth, and loopback
+		Expect(len(links)).To(Equal(expectedHostIfCount)) // number of links to expect in testNS
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
@@ -590,6 +611,92 @@ func cmdAddDelTest(testNS ns.NetNS, tc testCase, dataDir string) {
 
 	// Test IP Release
 	tester.cmdDelTest(tc)
+
+	// Clean up bridge addresses for next test case
+	delBridgeAddrs(testNS)
+}
+
+func cmdMultipleAddDelTest(testNS ns.NetNS, tc testCase, dataDir string) {
+	// Get a Add/Del tester based on test case version
+	tester1 := testerByVersion(tc.cniVersion)
+	targetNS1, err := testutils.NewNS()
+	Expect(err).NotTo(HaveOccurred())
+	defer targetNS1.Close()
+	tester1.setNS(testNS, targetNS1)
+
+	// Execute cmdADD on the 1st tester, expect no errors
+	tester1.cmdAddTest(tc, dataDir)
+
+	var ifIndex int
+	var hwAddr net.HardwareAddr
+	err = testNS.Do(func(ns.NetNS) error {
+		defer GinkgoRecover()
+
+		// Check the ifindex of bridge
+		link, err := netlink.LinkByName(BRNAME)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link.Attrs().Name).To(Equal(BRNAME))
+		ifIndex = link.Attrs().Index
+		hwAddr = link.Attrs().HardwareAddr
+		return nil
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	// copy the test case and set the expected Host interface count
+	tc2 := tc
+	expectedHostIfCount := 4
+	tc2.expectedHostIfCount = &expectedHostIfCount
+	tester2 := testerByVersion(tc2.cniVersion)
+	targetNS2, err := testutils.NewNS()
+	Expect(err).NotTo(HaveOccurred())
+	defer targetNS2.Close()
+	tester2.setNS(testNS, targetNS2)
+
+	// Execute cmdADD on the 2nd tester, expect error due to extra ifindex
+	err = testNS.Do(func(ns.NetNS) error {
+		defer GinkgoRecover()
+
+		tester2.cmdAddTest(tc2, dataDir)
+
+		return nil
+	})
+	Expect(err).ToNot(HaveOccurred())
+
+	// Execute cmdDEL on the 2nd tester, expect no errors
+	tester2.cmdDelTest(tc2)
+
+	// Verify that bridge was not deleted while 1st veth is still attached
+	err = testNS.Do(func(ns.NetNS) error {
+		defer GinkgoRecover()
+
+		// Check the ifindex of bridge
+		link, err := netlink.LinkByName(BRNAME)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link.Attrs().Name).To(Equal(BRNAME))
+		Expect(link.Attrs().Index).To(Equal(ifIndex))
+		Expect(link.Attrs().HardwareAddr).To(Equal(hwAddr))
+		return nil
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	// Execute cmdDEL on the 1st tester, expect no errors
+	tester1.cmdDelTest(tc)
+
+	if tc.cleanupEmptyBridge {
+		// Make sure the bridge has been deleted if last link
+		err := testNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			link, err := netlink.LinkByName(BRNAME)
+			Expect(err).To(HaveOccurred())
+			Expect(link).To(BeNil())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// skip the bridge address cleanup since plugin bridge delete already handled it
+		return
+	}
 
 	// Clean up bridge addresses for next test case
 	delBridgeAddrs(testNS)
@@ -712,14 +819,24 @@ var _ = Describe("bridge Operations", func() {
 		}
 	})
 
-	It("configures and deconfigures a l2 bridge and veth with ADD/DEL for 0.3.1 config", func() {
+	It("configures and deconfigures a l2 bridge and veth with ADD/DEL for 0.3.0 config", func() {
 		tc := testCase{cniVersion: "0.3.0", isLayer2: true}
 		cmdAddDelTest(originalNS, tc, dataDir)
+	})
+
+	It("handles an existing bridge / veth and a veth ADD/DEL for 0.3.0 config with bridge cleanup enabled", func() {
+		tc := testCase{cniVersion: "0.3.0", isLayer2: true, cleanupEmptyBridge: true}
+		cmdMultipleAddDelTest(originalNS, tc, dataDir)
 	})
 
 	It("configures and deconfigures a l2 bridge and veth with ADD/DEL for 0.3.1 config", func() {
 		tc := testCase{cniVersion: "0.3.1", isLayer2: true}
 		cmdAddDelTest(originalNS, tc, dataDir)
+	})
+
+	It("handles an existing bridge / veth and a veth ADD/DEL for 0.3.1 config with bridge cleanup enabled", func() {
+		tc := testCase{cniVersion: "0.3.1", isLayer2: true, cleanupEmptyBridge: true}
+		cmdMultipleAddDelTest(originalNS, tc, dataDir)
 	})
 
 	It("configures and deconfigures a bridge and veth with default route with ADD/DEL for 0.3.1 config", func() {
