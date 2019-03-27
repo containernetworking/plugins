@@ -84,8 +84,7 @@ func ProcessEndpointArgs(args *skel.CmdArgs, n *NetConf) (*hns.EndpointInfo, err
 		n.ApplyOutboundNatPolicy(n.IPMasqNetwork)
 	}
 
-	epInfo.DnsSearch = n.DNS.Search	
-	epInfo.Nameservers = n.DNS.Nameservers
+	epInfo.DNS = n.GetDNS()
 
 	return epInfo, nil
 }
@@ -195,8 +194,10 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if err := ipam.ExecDel(n.IPAM.Type, args.StdinData); err != nil {
-		return err
+	if n.IPAM.Type != "" {
+		if err := ipam.ExecDel(n.IPAM.Type, args.StdinData); err != nil {
+			return err
+		}
 	}
 	epName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
 	
@@ -213,5 +214,5 @@ func cmdGet(_ *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.PluginSupports("0.1.0", "0.2.0", "0.3.0"), "TODO")
 }

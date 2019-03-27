@@ -32,12 +32,11 @@ const (
 
 type EndpointInfo struct {
 	EndpointName string
-	DnsSearch    []string
+	DNS          types.DNS
 	NetworkName  string
 	NetworkId    string
 	Gateway      net.IP
 	IpAddress    net.IP
-	Nameservers  []string
 }
 
 // GetSandboxContainerID returns the sandbox ID of this pod
@@ -82,8 +81,8 @@ func GenerateHnsEndpoint(epInfo *EndpointInfo, n *NetConf) (*hcsshim.HNSEndpoint
 		hnsEndpoint = &hcsshim.HNSEndpoint{
 			Name:           epInfo.EndpointName,
 			VirtualNetwork: epInfo.NetworkId,
-			DNSServerList:  strings.Join(epInfo.Nameservers, ","),
-			DNSSuffix:      strings.Join(epInfo.DnsSearch, ","),
+			DNSServerList:  strings.Join(epInfo.DNS.Nameservers, ","),
+			DNSSuffix:      strings.Join(epInfo.DNS.Search, ","),
 			GatewayAddress: GetIpString(&epInfo.Gateway),
 			IPAddress:      epInfo.IpAddress,
 			Policies:       n.MarshalPolicies(),
@@ -130,8 +129,8 @@ func GenerateHcnEndpoint(epInfo *EndpointInfo, n *NetConf) (*hcn.HostComputeEndp
 		}
 
 		hcnDns := hcn.Dns{
-			Search:     epInfo.DnsSearch,
-			ServerList: epInfo.Nameservers,
+			Search:     epInfo.DNS.Search,
+			ServerList: epInfo.DNS.Nameservers,
 		}
 
 		hcnIpConfig := hcn.IpConfig{

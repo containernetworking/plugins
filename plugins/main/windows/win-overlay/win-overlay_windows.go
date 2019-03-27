@@ -114,7 +114,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			n.ApplyOutboundNatPolicy(hnsNetwork.Subnets[0].AddressPrefix)
 		}
 
-		result.DNS = n.DNS
+		result.DNS = n.GetDNS()
 
 		hnsEndpoint := &hcsshim.HNSEndpoint{
 			Name:           epName,
@@ -162,5 +162,5 @@ func cmdGet(_ *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.PluginSupports("0.1.0", "0.2.0", "0.3.0"), "TODO")
 }

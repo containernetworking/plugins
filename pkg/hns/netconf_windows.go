@@ -28,11 +28,33 @@ type NetConf struct {
 	types.NetConf
 	HcnPolicyArgs []hcn.EndpointPolicy `json:"HcnPolicyArgs,omitempty"`
 	Policies      []policy             `json:"policies,omitempty"`
+	RuntimeConfig RuntimeConfig        `json:"runtimeConfig"`
+}
+
+type RuntimeDNS struct {
+	Nameservers []string `json:"servers,omitempty"`
+	Search      []string `json:"searches,omitempty"`
+}
+
+type RuntimeConfig struct {
+	DNS RuntimeDNS `json:"dns"`
 }
 
 type policy struct {
 	Name  string          `json:"name"`
 	Value json.RawMessage `json:"value"`
+}
+
+// If runtime dns values are there use that else use cni conf supplied dns
+func (n *NetConf) GetDNS() types.DNS {
+	dnsResult := n.DNS
+	if len(n.RuntimeConfig.DNS.Nameservers) > 0 {
+		dnsResult.Nameservers = n.RuntimeConfig.DNS.Nameservers
+	}
+	if len(n.RuntimeConfig.DNS.Search) > 0 {
+		dnsResult.Search = n.RuntimeConfig.DNS.Search
+	}
+	return dnsResult
 }
 
 // MarshalPolicies converts the Endpoint policies in Policies
