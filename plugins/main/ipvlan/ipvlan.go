@@ -28,11 +28,13 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
+	"net"
+
 )
 
 type NetConf struct {
 	types.NetConf
-
+	
 	// support chaining for master interface and IP decisions
 	// occurring prior to running ipvlan plugin
 	RawPrevResult *map[string]interface{} `json:"prevResult"`
@@ -41,6 +43,7 @@ type NetConf struct {
 	Master string `json:"master"`
 	Mode   string `json:"mode"`
 	MTU    int    `json:"mtu"`
+	IsDefaultGW bool   `json:"isDefaultGateway"`
 }
 
 func init() {
@@ -200,6 +203,17 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	result.Interfaces = []*current.Interface{ipvlanInterface}
 
+	if n.IsDefaultGW{
+		dst, err := mustCIDR("0.0.0.0/0")
+		if err != nil {
+			return err
+		}
+		result.Routes = append(
+			result.Routes,
+			&types.Route{Dst: *dst, GW: result.IPs[0].Address.IP},
+		)
+	}
+
 	err = netns.Do(func(_ ns.NetNS) error {
 		return ipam.ConfigureIface(args.IfName, result)
 	})
@@ -210,6 +224,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 	result.DNS = n.DNS
 
 	return types.PrintResult(result, cniVersion)
+}
+
+func mustCIDR(s string) (*net.IPNet, error) {
+	ip, n, err := net.ParseCIDR(s)
+	n.IP = ip
+	if err != nil {
+		return nil, err
+	}
+
+	return n, nil
 }
 
 func cmdDel(args *skel.CmdArgs) error {

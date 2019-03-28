@@ -63,7 +63,8 @@ To use `ipvlan` instead of `bridge`, the following configuration can be specifie
 	"type": "flannel",
 	"delegate": {
 		"type": "ipvlan",
-		"master": "eth0"
+		"master": "eth0",
+		"isDefaultGateway": true
 	}
 }
 ```
