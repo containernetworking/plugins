@@ -18,8 +18,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"runtime"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -42,6 +44,11 @@ type NetConf struct {
 	Master string `json:"master"`
 	Mode   string `json:"mode"`
 	MTU    int    `json:"mtu"`
+}
+
+type ConfigureVMArgs struct {
+	types.CommonArgs
+	ConfigureNetworkForVM types.UnmarshallableBool `json:"configurenetworkforvm,omitempty"`
 }
 
 func init() {
@@ -77,7 +84,7 @@ func modeFromString(s string) (netlink.MacvlanMode, error) {
 	}
 }
 
-func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interface, error) {
+func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS, configureNetworkForVM bool) (*current.Interface, error) {
 	macvlan := &current.Interface{}
 
 	mode, err := modeFromString(conf.Mode)
@@ -97,18 +104,64 @@ func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Inter
 		return nil, err
 	}
 
-	mv := &netlink.Macvlan{
-		LinkAttrs: netlink.LinkAttrs{
-			MTU:         conf.MTU,
-			Name:        tmpName,
-			ParentIndex: m.Attrs().Index,
-			Namespace:   netlink.NsFd(int(netns.Fd())),
-		},
-		Mode: mode,
-	}
+	var mv netlink.Link
 
-	if err := netlink.LinkAdd(mv); err != nil {
-		return nil, fmt.Errorf("failed to create macvlan: %v", err)
+	if configureNetworkForVM {
+		const hostLinkOffset = 8192
+		const linkRetries = 128
+		const linkRange = 0xFFFF
+
+		// There is a limitation in the linux kernel that prevents a macvtap/macvlan link
+		// from getting the correct link index when created in a network namespace
+		//
+		// Till that bug is fixed we need to pick a random non conflicting index and try to
+		// create a link. If that fails, we need to try with another.
+		// All the kernel does not check if the link id conflicts with a link id on the host
+		// hence we need to offset the link id to prevent any overlaps with the host index
+		//
+		// Here the kernel will ensure that there is no race condition
+
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+		for i := 0; i < linkRetries; i++ {
+			index := hostLinkOffset + (r.Int() & linkRange)
+			mv = &netlink.Macvtap{
+				Macvlan: netlink.Macvlan{
+					LinkAttrs: netlink.LinkAttrs{
+						Index:       index,
+						MTU:         conf.MTU,
+						Name:        tmpName,
+						ParentIndex: m.Attrs().Index,
+						Namespace:   netlink.NsFd(int(netns.Fd())),
+						TxQLen:      500,
+					},
+					Mode: netlink.MACVLAN_MODE_BRIDGE,
+				},
+			}
+
+			err = netlink.LinkAdd(mv)
+			if err == nil {
+				break
+			}
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to create macvtap: %v", err)
+		}
+	} else {
+		mv = &netlink.Macvlan{
+			LinkAttrs: netlink.LinkAttrs{
+				MTU:         conf.MTU,
+				Name:        tmpName,
+				ParentIndex: m.Attrs().Index,
+				Namespace:   netlink.NsFd(int(netns.Fd())),
+			},
+			Mode: mode,
+		}
+
+		if err := netlink.LinkAdd(mv); err != nil {
+			return nil, fmt.Errorf("failed to create macvlan: %v", err)
+		}
 	}
 
 	err = netns.Do(func(_ ns.NetNS) error {
@@ -156,7 +209,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	macvlanInterface, err := createMacvlan(n, args.IfName, netns)
+	// Parse metadata to check if network needs to be configured for VM based container
+	configureNetworkForVM := false
+	if args.Args != "" {
+		e := ConfigureVMArgs{}
+		err := types.LoadArgs(args.Args, &e)
+		if err != nil {
+			return err
+		}
+
+		configureNetworkForVM = bool(e.ConfigureNetworkForVM)
+	}
+
+	macvlanInterface, err := createMacvlan(n, args.IfName, netns, configureNetworkForVM)
 	if err != nil {
 		return err
 	}
