@@ -203,7 +203,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	result.Interfaces = []*current.Interface{ipvlanInterface}
 
-	if n.IsDefaultGW{
+	if n.IsDefaultGW {
 		dst, err := mustCIDR("0.0.0.0/0")
 		if err != nil {
 			return err
