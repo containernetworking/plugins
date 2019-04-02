@@ -29,20 +29,19 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
 	"net"
-
 )
 
 type NetConf struct {
 	types.NetConf
-	
+
 	// support chaining for master interface and IP decisions
 	// occurring prior to running ipvlan plugin
 	RawPrevResult *map[string]interface{} `json:"prevResult"`
 	PrevResult    *current.Result         `json:"-"`
 
-	Master string `json:"master"`
-	Mode   string `json:"mode"`
-	MTU    int    `json:"mtu"`
+	Master      string `json:"master"`
+	Mode        string `json:"mode"`
+	MTU         int    `json:"mtu"`
 	IsDefaultGW bool   `json:"isDefaultGateway"`
 }
 
