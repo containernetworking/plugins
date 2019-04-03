@@ -537,10 +537,269 @@ func cmdDel(args *skel.CmdArgs) error {
 
 func main() {
 	// TODO: implement plugin version
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, "TODO")
 }
 
-func cmdGet(args *skel.CmdArgs) error {
-	// TODO: implement
-	return fmt.Errorf("not implemented")
+type cniBridgeIf struct {
+	Name        string
+	ifIndex     int
+	peerIndex   int
+	masterIndex int
+	found       bool
+}
+
+func validateInterface(intf current.Interface, expectInSb bool) (cniBridgeIf, netlink.Link, error) {
+
+	ifFound := cniBridgeIf{found: false}
+	if intf.Name == "" {
+		return ifFound, nil, fmt.Errorf("Interface name missing ")
+	}
+
+	link, err := netlink.LinkByName(intf.Name)
+	if err != nil {
+		return ifFound, nil, fmt.Errorf("Interface name %s not found", intf.Name)
+	}
+
+	if expectInSb {
+		if intf.Sandbox == "" {
+			return ifFound, nil, fmt.Errorf("Interface %s is expected to be in a sandbox", intf.Name)
+		}
+	} else {
+		if intf.Sandbox != "" {
+			return ifFound, nil, fmt.Errorf("Interface %s should not be in sandbox", intf.Name)
+		}
+	}
+
+	return ifFound, link, err
+}
+
+func validateCniBrInterface(intf current.Interface, n *NetConf) (cniBridgeIf, error) {
+
+	brFound, link, err := validateInterface(intf, false)
+	if err != nil {
+		return brFound, err
+	}
+
+	_, isBridge := link.(*netlink.Bridge)
+	if !isBridge {
+		return brFound, fmt.Errorf("Interface %s does not have link type of bridge", intf.Name)
+	}
+
+	if intf.Mac != "" {
+		if intf.Mac != link.Attrs().HardwareAddr.String() {
+			return brFound, fmt.Errorf("Bridge interface %s Mac doesn't match: %s", intf.Name, intf.Mac)
+		}
+	}
+
+	linkPromisc := link.Attrs().Promisc != 0
+	if linkPromisc != n.PromiscMode {
+		return brFound, fmt.Errorf("Bridge interface %s configured Promisc Mode %v doesn't match current state: %v ",
+			intf.Name, n.PromiscMode, linkPromisc)
+	}
+
+	brFound.found = true
+	brFound.Name = link.Attrs().Name
+	brFound.ifIndex = link.Attrs().Index
+	brFound.masterIndex = link.Attrs().MasterIndex
+
+	return brFound, nil
+}
+
+func validateCniVethInterface(intf *current.Interface, brIf cniBridgeIf, contIf cniBridgeIf) (cniBridgeIf, error) {
+
+	vethFound, link, err := validateInterface(*intf, false)
+	if err != nil {
+		return vethFound, err
+	}
+
+	_, isVeth := link.(*netlink.Veth)
+	if !isVeth {
+		// just skip it, it's not what CNI created
+		return vethFound, nil
+	}
+
+	_, vethFound.peerIndex, err = ip.GetVethPeerIfindex(link.Attrs().Name)
+	if err != nil {
+		return vethFound, fmt.Errorf("Unable to obtain veth peer index for veth %s", link.Attrs().Name)
+	}
+	vethFound.ifIndex = link.Attrs().Index
+	vethFound.masterIndex = link.Attrs().MasterIndex
+
+	if vethFound.ifIndex != contIf.peerIndex {
+		return vethFound, nil
+	}
+
+	if contIf.ifIndex != vethFound.peerIndex {
+		return vethFound, nil
+	}
+
+	if vethFound.masterIndex != brIf.ifIndex {
+		return vethFound, nil
+	}
+
+	if intf.Mac != "" {
+		if intf.Mac != link.Attrs().HardwareAddr.String() {
+			return vethFound, fmt.Errorf("Interface %s Mac doesn't match: %s not found", intf.Name, intf.Mac)
+		}
+	}
+
+	vethFound.found = true
+	vethFound.Name = link.Attrs().Name
+
+	return vethFound, nil
+}
+
+func validateCniContainerInterface(intf current.Interface) (cniBridgeIf, error) {
+
+	vethFound, link, err := validateInterface(intf, true)
+	if err != nil {
+		return vethFound, err
+	}
+
+	_, isVeth := link.(*netlink.Veth)
+	if !isVeth {
+		return vethFound, fmt.Errorf("Error: Container interface %s not of type veth", link.Attrs().Name)
+	}
+	_, vethFound.peerIndex, err = ip.GetVethPeerIfindex(link.Attrs().Name)
+	if err != nil {
+		return vethFound, fmt.Errorf("Unable to obtain veth peer index for veth %s", link.Attrs().Name)
+	}
+	vethFound.ifIndex = link.Attrs().Index
+
+	if intf.Mac != "" {
+		if intf.Mac != link.Attrs().HardwareAddr.String() {
+			return vethFound, fmt.Errorf("Interface %s Mac %s doesn't match container Mac: %s", intf.Name, intf.Mac, link.Attrs().HardwareAddr)
+		}
+	}
+
+	vethFound.found = true
+	vethFound.Name = link.Attrs().Name
+
+	return vethFound, nil
+}
+
+func cmdCheck(args *skel.CmdArgs) error {
+
+	n, _, err := loadNetConf(args.StdinData)
+	if err != nil {
+		return err
+	}
+	netns, err := ns.GetNS(args.Netns)
+	if err != nil {
+		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+	}
+	defer netns.Close()
+
+	// run the IPAM plugin and get back the config to apply
+	err = ipam.ExecCheck(n.IPAM.Type, args.StdinData)
+	if err != nil {
+		return err
+	}
+
+	// Parse previous result.
+	if n.NetConf.RawPrevResult == nil {
+		return fmt.Errorf("Required prevResult missing")
+	}
+
+	if err := version.ParsePrevResult(&n.NetConf); err != nil {
+		return err
+	}
+
+	result, err := current.NewResultFromResult(n.PrevResult)
+	if err != nil {
+		return err
+	}
+
+	var errLink error
+	var contCNI, vethCNI cniBridgeIf
+	var brMap, contMap current.Interface
+
+	// Find interfaces for names whe know, CNI Bridge and container
+	for _, intf := range result.Interfaces {
+		if n.BrName == intf.Name {
+			brMap = *intf
+			continue
+		} else if args.IfName == intf.Name {
+			if args.Netns == intf.Sandbox {
+				contMap = *intf
+				continue
+			}
+		}
+	}
+
+	brCNI, err := validateCniBrInterface(brMap, n)
+	if err != nil {
+		return err
+	}
+
+	// The namespace must be the same as what was configured
+	if args.Netns != contMap.Sandbox {
+		return fmt.Errorf("Sandbox in prevResult %s doesn't match configured netns: %s",
+			contMap.Sandbox, args.Netns)
+	}
+
+	// Check interface against values found in the container
+	if err := netns.Do(func(_ ns.NetNS) error {
+		contCNI, errLink = validateCniContainerInterface(contMap)
+		if errLink != nil {
+			return errLink
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	// Now look for veth that is peer with container interface.
+	// Anything else wasn't created by CNI, skip it
+	for _, intf := range result.Interfaces {
+		// Skip this result if name is the same as cni bridge
+		// It's either the cni bridge we dealt with above, or something with the
+		// same name in a different namespace.  We just skip since it's not ours
+		if brMap.Name == intf.Name {
+			continue
+		}
+
+		// same here for container name
+		if contMap.Name == intf.Name {
+			continue
+		}
+
+		vethCNI, errLink = validateCniVethInterface(intf, brCNI, contCNI)
+		if errLink != nil {
+			return errLink
+		}
+
+		if vethCNI.found {
+			// veth with container interface as peer and bridge as master found
+			break
+		}
+	}
+
+	if !brCNI.found {
+		return fmt.Errorf("CNI created bridge %s in host namespace was not found", n.BrName)
+	}
+	if !contCNI.found {
+		return fmt.Errorf("CNI created interface in container %s not found", args.IfName)
+	}
+	if !vethCNI.found {
+		return fmt.Errorf("CNI veth created for bridge %s was not found", n.BrName)
+	}
+
+	// Check prevResults for ips, routes and dns against values found in the container
+	if err := netns.Do(func(_ ns.NetNS) error {
+		err = ip.ValidateExpectedInterfaceIPs(args.IfName, result.IPs)
+		if err != nil {
+			return err
+		}
+
+		err = ip.ValidateExpectedRoute(result.Routes)
+		if err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }

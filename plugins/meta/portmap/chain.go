@@ -138,3 +138,44 @@ func chainExists(ipt *iptables.IPTables, tableName, chainName string) (bool, err
 	}
 	return false, nil
 }
+
+// check the chain.
+func (c *chain) check(ipt *iptables.IPTables) error {
+
+	exists, err := chainExists(ipt, c.table, c.name)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("chain %s not found in iptables table %s", c.name, c.table)
+	}
+
+	for i := len(c.rules) - 1; i >= 0; i-- {
+		match := checkRule(ipt, c.table, c.name, c.rules[i])
+		if !match {
+			return fmt.Errorf("rule %s in chain %s not found in table %s", c.rules, c.name, c.table)
+		}
+	}
+
+	for _, entryChain := range c.entryChains {
+		for i := len(c.entryRules) - 1; i >= 0; i-- {
+			r := []string{}
+			r = append(r, c.entryRules[i]...)
+			r = append(r, "-j", c.name)
+			matchEntryChain := checkRule(ipt, c.table, entryChain, r)
+			if !matchEntryChain {
+				return fmt.Errorf("rule %s in chain %s not found in table %s", c.entryRules, entryChain, c.table)
+			}
+		}
+	}
+
+	return nil
+}
+
+func checkRule(ipt *iptables.IPTables, table, chain string, rule []string) bool {
+	exists, err := ipt.Exists(table, chain, rule...)
+	if err != nil {
+		return false
+	}
+	return exists
+}
