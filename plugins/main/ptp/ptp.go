@@ -30,14 +30,15 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/utils"
+	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
 )
 
 func init() {
-	// this ensures that main runs only on main thread (thread group leader).
-	// since namespace ops (unshare, setns) are done for a single thread, we
-	// must ensure that the goroutine does not jump from OS thread to thread
+	// This ensures that main runs only on main thread (thread group leader).
+	// Since namespace ops (unshare, setns) are done for a single thread, we
+	// must ensure that the goroutine does not jump from OS thread to thread.
 	runtime.LockOSThread()
 }
 
@@ -74,7 +75,7 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 		containerInterface.Sandbox = netns.Path()
 
 		for _, ipc := range pr.IPs {
-			// All addresses apply to the container veth interface
+			// All addresses apply to the container veth interface.
 			ipc.Interface = current.Int(1)
 		}
 
@@ -90,7 +91,7 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 		}
 
 		for _, ipc := range pr.IPs {
-			// Delete the route that was automatically added
+			// Delete the route that was automatically added.
 			route := netlink.Route{
 				LinkIndex: contVeth.Index,
 				Dst: &net.IPNet{
@@ -136,7 +137,7 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 			}
 		}
 
-		// Send a gratuitous arp for all v4 addresses
+		// Send a gratuitous arp for all v4 addresses.
 		for _, ipc := range pr.IPs {
 			if ipc.Version == "4" {
 				_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
@@ -160,25 +161,52 @@ func setupHostVeth(vethName string, result *current.Result) error {
 
 	for _, ipc := range result.IPs {
 		maskLen := 128
-		if ipc.Address.IP.To4() != nil {
+		if ipc.Version == "4" {
 			maskLen = 32
 		}
 
-		ipn := &net.IPNet{
-			IP:   ipc.Gateway,
-			Mask: net.CIDRMask(maskLen, maskLen),
-		}
-		addr := &netlink.Addr{IPNet: ipn, Label: ""}
-		if err = netlink.AddrAdd(veth, addr); err != nil {
-			return fmt.Errorf("failed to add IP addr (%#v) to veth: %v", ipn, err)
+		switch ipc.Version {
+		case "4":
+			// Enable IPv4 ARP proxy for hostVeth.
+			if _, err = sysctl.Sysctl(fmt.Sprintf("net.ipv4.conf.%s.proxy_arp", vethName), "1"); err != nil {
+				return fmt.Errorf("failed to set proxy_arp on interface %q: %v", vethName, err)
+			}
+			// Set proxy ARP response delay to be zero for hostVeth.
+			if _, err = sysctl.Sysctl(fmt.Sprintf("net.ipv4.neigh.%s.proxy_delay", vethName), "0"); err != nil {
+				return fmt.Errorf("failed to set proxy_delay=0 on interface %q: %v", vethName, err)
+			}
+		case "6":
+			// Enable IPv6 NDP proxy for hostVeth.
+			if _, err = sysctl.Sysctl(fmt.Sprintf("net.ipv6.conf.%s.proxy_ndp", vethName), "1"); err != nil {
+				return fmt.Errorf("failed to set proxy_ndp on interface %q: %v", vethName, err)
+			}
+			// Set proxy NDP response delay to be zero for hostVeth.
+			if _, err = sysctl.Sysctl(fmt.Sprintf("net.ipv6.neigh.%s.proxy_delay", vethName), "0"); err != nil {
+				return fmt.Errorf("failed to set proxy_delay=0 on interface %q: %v", vethName, err)
+			}
+			// Make veth responses NDP requests from container namespace on behalf of the gateway.
+			if err = netlink.NeighAdd(&netlink.Neigh{
+				LinkIndex: veth.Attrs().Index,
+				Flags:     netlink.NTF_PROXY,
+				IP:        ipc.Gateway,
+			}); err != nil {
+				return fmt.Errorf("failed to set proxy arp entry on interface %q: %v", vethName, err)
+			}
+		default:
+			return fmt.Errorf("unknown IP protocol version: %q", ipc.Version)
 		}
 
-		ipn = &net.IPNet{
+		ipn := &net.IPNet{
 			IP:   ipc.Address.IP,
 			Mask: net.CIDRMask(maskLen, maskLen),
 		}
-		// dst happens to be the same as IP/net of host veth
-		if err = ip.AddHostRoute(ipn, nil, veth); err != nil && !os.IsExist(err) {
+		// dst happens to be the same as IP/net of host veth.
+		if err = netlink.RouteAdd(&netlink.Route{
+			LinkIndex: veth.Attrs().Index,
+			Scope:     netlink.SCOPE_LINK,
+			Dst:       ipn,
+			Gw:        nil,
+		}); err != nil && !os.IsExist(err) {
 			return fmt.Errorf("failed to add route on host: %v", err)
 		}
 	}
@@ -192,12 +220,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	// run the IPAM plugin and get back the config to apply
+	// Run the IPAM plugin and get back the config to apply.
 	r, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
 	if err != nil {
 		return err
 	}
-	// Convert whatever the IPAM result was into the current Result type
+	// Convert whatever the IPAM result was into the current Result type.
 	result, err := current.NewResultFromResult(r)
 	if err != nil {
 		return err
@@ -208,7 +236,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	if err := ip.EnableForward(result.IPs); err != nil {
-		return fmt.Errorf("Could not enable IP forwarding: %v", err)
+		return fmt.Errorf("could not enable IP forwarding: %v", err)
 	}
 
 	netns, err := ns.GetNS(args.Netns)
