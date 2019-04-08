@@ -81,6 +81,16 @@ func (f *fakeFirewalld) RemoveSource(zone, source string) (string, *dbus.Error) 
 	return "", nil
 }
 
+func (f *fakeFirewalld) QuerySource(zone, source string) (bool, *dbus.Error) {
+	if f.zone != zone {
+		return false, nil
+	}
+	if f.source != source {
+		return false, nil
+	}
+	return true, nil
+}
+
 func spawnSessionDbus(wg *sync.WaitGroup) (string, *exec.Cmd) {
 	// Start a private D-Bus session bus
 	path, err := invoke.FindInPath("dbus-daemon", []string{
@@ -150,6 +160,7 @@ var _ = Describe("firewalld test", func() {
 		// Go public methods to the D-Bus name
 		methods := map[string]string{
 			"AddSource":    firewalldAddSourceMethod,
+			"QuerySource":  firewalldQuerySourceMethod,
 			"RemoveSource": firewalldRemoveSourceMethod,
 		}
 		conn.ExportWithMap(fwd, methods, firewalldPath, firewalldZoneInterface)
@@ -178,7 +189,7 @@ var _ = Describe("firewalld test", func() {
 			IfName:      ifname,
 			StdinData:   []byte(conf),
 		}
-		_, _, err := testutils.CmdAddWithResult(targetNs.Path(), ifname, []byte(conf), func() error {
+		_, _, err := testutils.CmdAdd(targetNs.Path(), args.ContainerID, ifname, []byte(conf), func() error {
 			return cmdAdd(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -186,7 +197,7 @@ var _ = Describe("firewalld test", func() {
 		Expect(fwd.source).To(Equal("10.0.0.2/32"))
 		fwd.clear()
 
-		err = testutils.CmdDelWithResult(targetNs.Path(), ifname, func() error {
+		err = testutils.CmdDel(targetNs.Path(), args.ContainerID, ifname, func() error {
 			return cmdDel(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -224,7 +235,7 @@ var _ = Describe("firewalld test", func() {
 			IfName:      ifname,
 			StdinData:   []byte(conf),
 		}
-		_, _, err := testutils.CmdAddWithResult(targetNs.Path(), ifname, []byte(conf), func() error {
+		_, _, err := testutils.CmdAdd(targetNs.Path(), args.ContainerID, ifname, []byte(conf), func() error {
 			return cmdAdd(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -262,7 +273,7 @@ var _ = Describe("firewalld test", func() {
 			IfName:      ifname,
 			StdinData:   []byte(conf),
 		}
-		r, _, err := testutils.CmdAddWithResult(targetNs.Path(), ifname, []byte(conf), func() error {
+		r, _, err := testutils.CmdAdd(targetNs.Path(), args.ContainerID, ifname, []byte(conf), func() error {
 			return cmdAdd(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -274,5 +285,59 @@ var _ = Describe("firewalld test", func() {
 		Expect(result.Interfaces[0].Name).To(Equal("eth0"))
 		Expect(len(result.IPs)).To(Equal(1))
 		Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+	})
+
+	It("works with a 0.4.0 config, including Check", func() {
+		Expect(isFirewalldRunning()).To(BeTrue())
+
+		conf := `{
+			  "cniVersion": "0.4.0",
+			  "name": "firewalld-test",
+			  "type": "firewall",
+			  "backend": "firewalld",
+			  "zone": "trusted",
+			  "prevResult": {
+			    "cniVersion": "0.4.0",
+			    "interfaces": [
+			      {"name": "eth0", "sandbox": "/foobar"}
+			    ],
+			    "ips": [
+			      {
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			      }
+			    ]
+			  }
+			}`
+
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNs.Path(),
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+		r, _, err := testutils.CmdAddWithArgs(args, func() error {
+			return cmdAdd(args)
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fwd.zone).To(Equal("trusted"))
+		Expect(fwd.source).To(Equal("10.0.0.2/32"))
+
+		_, err = current.GetResult(r)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = testutils.CmdCheckWithArgs(args, func() error {
+			return cmdCheck(args)
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		err = testutils.CmdDelWithArgs(args, func() error {
+			return cmdDel(args)
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fwd.zone).To(Equal("trusted"))
+		Expect(fwd.source).To(Equal("10.0.0.2/32"))
 	})
 })

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/godbus/dbus"
 )
 
@@ -31,6 +32,7 @@ const (
 	firewalldZoneInterface      = "org.fedoraproject.FirewallD1.zone"
 	firewalldAddSourceMethod    = "addSource"
 	firewalldRemoveSourceMethod = "removeSource"
+	firewalldQuerySourceMethod  = "querySource"
 
 	errZoneAlreadySet = "ZONE_ALREADY_SET"
 )
@@ -80,8 +82,8 @@ func newFirewalldBackend(conf *FirewallNetConf) (FirewallBackend, error) {
 	return backend, nil
 }
 
-func (fb *fwdBackend) Add(conf *FirewallNetConf) error {
-	for _, ip := range conf.PrevResult.IPs {
+func (fb *fwdBackend) Add(conf *FirewallNetConf, result *current.Result) error {
+	for _, ip := range result.IPs {
 		ipStr := ipString(ip.Address)
 		// Add a firewalld rule which assigns the given source IP to the given zone
 		firewalldObj := fb.conn.Object(firewalldName, firewalldPath)
@@ -95,13 +97,26 @@ func (fb *fwdBackend) Add(conf *FirewallNetConf) error {
 	return nil
 }
 
-func (fb *fwdBackend) Del(conf *FirewallNetConf) error {
-	for _, ip := range conf.PrevResult.IPs {
+func (fb *fwdBackend) Del(conf *FirewallNetConf, result *current.Result) error {
+	for _, ip := range result.IPs {
 		ipStr := ipString(ip.Address)
 		// Remove firewalld rules which assigned the given source IP to the given zone
 		firewalldObj := fb.conn.Object(firewalldName, firewalldPath)
 		var res string
 		firewalldObj.Call(firewalldZoneInterface+"."+firewalldRemoveSourceMethod, 0, conf.FirewalldZone, ipStr).Store(&res)
+	}
+	return nil
+}
+
+func (fb *fwdBackend) Check(conf *FirewallNetConf, result *current.Result) error {
+	for _, ip := range result.IPs {
+		ipStr := ipString(ip.Address)
+		// Check for a firewalld rule for the given source IP to the given zone
+		firewalldObj := fb.conn.Object(firewalldName, firewalldPath)
+		var res bool
+		if err := firewalldObj.Call(firewalldZoneInterface+"."+firewalldQuerySourceMethod, 0, conf.FirewalldZone, ipStr).Store(&res); err != nil {
+			return fmt.Errorf("failed to find the address %v in %v zone", ipStr, conf.FirewalldZone)
+		}
 	}
 	return nil
 }

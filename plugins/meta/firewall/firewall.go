@@ -45,14 +45,12 @@ type FirewallNetConf struct {
 	// the firewalld backend is used but the zone is not given, it defaults
 	// to 'trusted'
 	FirewalldZone string `json:"firewalldZone,omitempty"`
-
-	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
-	PrevResult    *current.Result        `json:"-"`
 }
 
 type FirewallBackend interface {
-	Add(*FirewallNetConf) error
-	Del(*FirewallNetConf) error
+	Add(*FirewallNetConf, *current.Result) error
+	Del(*FirewallNetConf, *current.Result) error
+	Check(*FirewallNetConf, *current.Result) error
 }
 
 func ipString(ip net.IPNet) string {
@@ -62,10 +60,27 @@ func ipString(ip net.IPNet) string {
 	return ip.IP.String() + "/32"
 }
 
-func parseConf(data []byte) (*FirewallNetConf, error) {
+func parseConf(data []byte) (*FirewallNetConf, *current.Result, error) {
 	conf := FirewallNetConf{}
 	if err := json.Unmarshal(data, &conf); err != nil {
-		return nil, fmt.Errorf("failed to load netconf: %v", err)
+		return nil, nil, fmt.Errorf("failed to load netconf: %v", err)
+	}
+
+	// Parse previous result.
+	if conf.RawPrevResult == nil {
+		return nil, nil, fmt.Errorf("missing prevResult from earlier plugin")
+	}
+
+	// Parse previous result.
+	var result *current.Result
+	var err error
+	if err = version.ParsePrevResult(&conf.NetConf); err != nil {
+		return nil, nil, fmt.Errorf("could not parse prevResult: %v", err)
+	}
+
+	result, err = current.NewResultFromResult(conf.PrevResult)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not convert result to current version: %v", err)
 	}
 
 	// Default the firewalld zone to trusted
@@ -73,26 +88,7 @@ func parseConf(data []byte) (*FirewallNetConf, error) {
 		conf.FirewalldZone = "trusted"
 	}
 
-	// Parse previous result.
-	if conf.RawPrevResult == nil {
-		return nil, fmt.Errorf("missing prevResult from earlier plugin")
-	}
-
-	resultBytes, err := json.Marshal(conf.RawPrevResult)
-	if err != nil {
-		return nil, fmt.Errorf("could not serialize prevResult: %v", err)
-	}
-	res, err := version.NewResult(conf.CNIVersion, resultBytes)
-	if err != nil {
-		return nil, fmt.Errorf("could not parse prevResult: %v", err)
-	}
-	conf.RawPrevResult = nil
-	conf.PrevResult, err = current.NewResultFromResult(res)
-	if err != nil {
-		return nil, fmt.Errorf("could not convert result to current version: %v", err)
-	}
-
-	return &conf, nil
+	return &conf, result, nil
 }
 
 func getBackend(conf *FirewallNetConf) (FirewallBackend, error) {
@@ -113,7 +109,7 @@ func getBackend(conf *FirewallNetConf) (FirewallBackend, error) {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
-	conf, err := parseConf(args.StdinData)
+	conf, result, err := parseConf(args.StdinData)
 	if err != nil {
 		return err
 	}
@@ -123,11 +119,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if err := backend.Add(conf); err != nil {
+	if err := backend.Add(conf, result); err != nil {
 		return err
 	}
 
-	result := conf.PrevResult
 	if result == nil {
 		result = &current.Result{}
 	}
@@ -135,7 +130,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
-	conf, err := parseConf(args.StdinData)
+	conf, result, err := parseConf(args.StdinData)
 	if err != nil {
 		return err
 	}
@@ -152,7 +147,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	// Runtime errors are ignored
-	if err := backend.Del(conf); err != nil {
+	if err := backend.Del(conf, result); err != nil {
 		return err
 	}
 
@@ -160,5 +155,28 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdDel, version.All)
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.PluginSupports("0.4.0"), "TODO")
+}
+
+func cmdCheck(args *skel.CmdArgs) error {
+	conf, result, err := parseConf(args.StdinData)
+	if err != nil {
+		return err
+	}
+
+	// Ensure we have previous result.
+	if result == nil {
+		return fmt.Errorf("Required prevResult missing")
+	}
+
+	backend, err := getBackend(conf)
+	if err != nil {
+		return err
+	}
+
+	if err := backend.Check(conf, result); err != nil {
+		return err
+	}
+
+	return nil
 }

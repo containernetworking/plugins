@@ -235,7 +235,7 @@ var _ = Describe("firewall plugin iptables backend", func() {
 		err := originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			r, _, err := testutils.CmdAddWithResult(targetNS.Path(), IFNAME, fullConf, func() error {
+			r, _, err := testutils.CmdAdd(targetNS.Path(), args.ContainerID, IFNAME, fullConf, func() error {
 				return cmdAdd(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -264,7 +264,7 @@ var _ = Describe("firewall plugin iptables backend", func() {
 		err := originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			_, _, err := testutils.CmdAddWithResult(targetNS.Path(), IFNAME, fullConf, func() error {
+			_, _, err := testutils.CmdAdd(targetNS.Path(), args.ContainerID, IFNAME, fullConf, func() error {
 				return cmdAdd(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -312,7 +312,7 @@ var _ = Describe("firewall plugin iptables backend", func() {
 		err := originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			_, _, err := testutils.CmdAddWithResult(targetNS.Path(), IFNAME, conf, func() error {
+			_, _, err := testutils.CmdAdd(targetNS.Path(), args.ContainerID, IFNAME, conf, func() error {
 				return cmdAdd(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -350,13 +350,157 @@ var _ = Describe("firewall plugin iptables backend", func() {
 		err := originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			_, _, err := testutils.CmdAddWithResult(targetNS.Path(), IFNAME, fullConf, func() error {
+			_, _, err := testutils.CmdAdd(targetNS.Path(), args.ContainerID, IFNAME, fullConf, func() error {
 				return cmdAdd(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
 			validateFullRuleset(fullConf)
 
-			err = testutils.CmdDelWithResult(targetNS.Path(), IFNAME, func() error {
+			err = testutils.CmdDel(targetNS.Path(), args.ContainerID, IFNAME, func() error {
+				return cmdDel(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			validateCleanedUp(fullConf)
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("installs the right iptables rules on the host v4.0.x and check is successful", func() {
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNS.Path(),
+			IfName:      IFNAME,
+			StdinData:   fullConf,
+		}
+
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			_, _, err := testutils.CmdAdd(targetNS.Path(), args.ContainerID, IFNAME, fullConf, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			validateFullRuleset(fullConf)
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("cleans up on delete v4.0.x", func() {
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNS.Path(),
+			IfName:      IFNAME,
+			StdinData:   fullConf,
+		}
+
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			_, _, err := testutils.CmdAdd(targetNS.Path(), args.ContainerID, IFNAME, fullConf, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			validateFullRuleset(fullConf)
+
+			err = testutils.CmdDel(targetNS.Path(), args.ContainerID, IFNAME, func() error {
+				return cmdDel(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			validateCleanedUp(fullConf)
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+})
+
+var _ = Describe("firewall plugin iptables backend v0.4.x", func() {
+	var originalNS, targetNS ns.NetNS
+	const IFNAME string = "dummy0"
+
+	fullConf := []byte(`{
+		"name": "test",
+		"type": "firewall",
+		"backend": "iptables",
+		"ifName": "dummy0",
+		"cniVersion": "0.4.0",
+		"prevResult": {
+			"interfaces": [
+				{"name": "dummy0"}
+			],
+			"ips": [
+				{
+					"version": "4",
+					"address": "10.0.0.2/24",
+					"interface": 0
+				},
+				{
+					"version": "6",
+					"address": "2001:db8:1:2::1/64",
+					"interface": 0
+				}
+			]
+		}
+	}`)
+
+	BeforeEach(func() {
+		// Create a new NetNS so we don't modify the host
+		var err error
+		originalNS, err = testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			err = netlink.LinkAdd(&netlink.Dummy{
+				LinkAttrs: netlink.LinkAttrs{
+					Name: IFNAME,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		targetNS, err = testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		Expect(originalNS.Close()).To(Succeed())
+		Expect(targetNS.Close()).To(Succeed())
+	})
+
+	It("installs iptables rules, Check rules then cleans up on delete using v4.0.x", func() {
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNS.Path(),
+			IfName:      IFNAME,
+			StdinData:   fullConf,
+		}
+
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			r, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = current.GetResult(r)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = testutils.CmdCheckWithArgs(args, func() error {
+				return cmdCheck(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			validateFullRuleset(fullConf)
+
+			err = testutils.CmdDelWithArgs(args, func() error {
 				return cmdDel(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
