@@ -172,7 +172,7 @@ func runDaemon(pidfilePath string, hostPrefix string, socketPath string) error {
 		}
 	}
 
-	l, err := getListener(socketPath)
+	l, err := getListener(hostPrefix + socketPath)
 	if err != nil {
 		return fmt.Errorf("Error getting listener: %v", err)
 	}
