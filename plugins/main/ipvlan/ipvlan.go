@@ -106,7 +106,7 @@ func modeToString(mode netlink.IPVlanMode) (string, error) {
 	}
 }
 
-func createIpvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interface, error) {
+func createIpvlan2(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interface, error) {
 	ipvlan := &current.Interface{}
 
 	mode, err := modeFromString(conf.Mode)
@@ -176,7 +176,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	ipvlanInterface, err := createIpvlan(n, args.IfName, netns)
+	ipvlanInterface, err := createIpvlan2(n, args.IfName, netns)
 	if err != nil {
 		return err
 	}
