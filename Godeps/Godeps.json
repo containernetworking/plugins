@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/containernetworking/plugins",
 	"GoVersion": "go1.7",
-	"GodepVersion": "v79",
+	"GodepVersion": "v80",
 	"Packages": [
 		"./..."
 	],
@@ -14,7 +14,7 @@
 		{
 			"ImportPath": "github.com/Microsoft/hcsshim",
 			"Comment": "v0.7.6",
-			"Rev": "6efef912cc0ecd8778bab95d105662d4f73f8ccd"
+			"Rev": "e44e499d29527b244d6858772f1b9090eeaddc4e"
 		},
 		{
 			"ImportPath": "github.com/Microsoft/hcsshim/internal/guid",
@@ -81,38 +81,38 @@
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/libcni",
-			"Comment": "v0.7.0-alpha1",
-			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
+			"Comment": "v0.7.0-rc2",
+			"Rev": "fbb95fff8a5239a4295c991efa8a397d43118f7e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/invoke",
-			"Comment": "v0.7.0-alpha1",
-			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
+			"Comment": "v0.7.0-rc2",
+			"Rev": "fbb95fff8a5239a4295c991efa8a397d43118f7e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/skel",
-			"Comment": "v0.7.0-alpha1",
-			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
+			"Comment": "v0.7.0-rc2",
+			"Rev": "fbb95fff8a5239a4295c991efa8a397d43118f7e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/types",
-			"Comment": "v0.7.0-alpha1",
-			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
+			"Comment": "v0.7.0-rc2",
+			"Rev": "fbb95fff8a5239a4295c991efa8a397d43118f7e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/types/020",
-			"Comment": "v0.7.0-alpha1",
-			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
+			"Comment": "v0.7.0-rc2",
+			"Rev": "fbb95fff8a5239a4295c991efa8a397d43118f7e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/types/current",
-			"Comment": "v0.7.0-alpha1",
-			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
+			"Comment": "v0.7.0-rc2",
+			"Rev": "fbb95fff8a5239a4295c991efa8a397d43118f7e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/version",
-			"Comment": "v0.7.0-alpha1",
-			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
+			"Comment": "v0.7.0-rc2",
+			"Rev": "fbb95fff8a5239a4295c991efa8a397d43118f7e"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-iptables/iptables",
