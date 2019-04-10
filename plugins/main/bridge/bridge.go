@@ -15,6 +15,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -44,14 +45,15 @@ const defaultBrName = "cni0"
 
 type NetConf struct {
 	types.NetConf
-	BrName       string `json:"bridge"`
-	IsGW         bool   `json:"isGateway"`
-	IsDefaultGW  bool   `json:"isDefaultGateway"`
-	ForceAddress bool   `json:"forceAddress"`
-	IPMasq       bool   `json:"ipMasq"`
-	MTU          int    `json:"mtu"`
-	HairpinMode  bool   `json:"hairpinMode"`
-	PromiscMode  bool   `json:"promiscMode"`
+	BrName        string `json:"bridge"`
+	IsGW          bool   `json:"isGateway"`
+	IsDefaultGW   bool   `json:"isDefaultGateway"`
+	ForceAddress  bool   `json:"forceAddress"`
+	IPMasq        bool   `json:"ipMasq"`
+	MTU           int    `json:"mtu"`
+	HairpinMode   bool   `json:"hairpinMode"`
+	PromiscMode   bool   `json:"promiscMode"`
+	CleanupBridge bool   `json:"cleanupBridge"`
 }
 
 type gwInfo struct {
@@ -529,6 +531,21 @@ func cmdDel(args *skel.CmdArgs) error {
 			if err := ip.TeardownIPMasq(ipn, chain, comment); err != nil {
 				return err
 			}
+		}
+	}
+
+	if n.CleanupBridge {
+		br, err := bridgeByName(n.BrName)
+		if err != nil {
+			return err
+		}
+		la := br.Attrs()
+		if !bytes.Equal(la.HardwareAddr, nil) {
+			return nil
+		}
+		err = netlink.LinkDel(br)
+		if err != nil {
+			return err
 		}
 	}
 
