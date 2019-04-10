@@ -9,6 +9,7 @@ go:
 env:
   global:
   - PATH=$GOROOT/bin:$GOPATH/bin:$PATH
+  - CGO_ENABLED=0
   matrix:
   - TARGET=amd64
   - TARGET=arm
