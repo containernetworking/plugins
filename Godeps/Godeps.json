@@ -318,39 +318,45 @@
 		},
 		{
 			"ImportPath": "github.com/vishvananda/netlink",
-			"Rev": "6e453822d85ef5721799774b654d4d02fed62afb"
+			"Comment": "v1.0.0-40-g023a6da",
+			"Rev": "023a6dafdcdfa7068ac83b260ab7f03cd4131aca"
 		},
 		{
 			"ImportPath": "github.com/vishvananda/netlink/nl",
-			"Rev": "6e453822d85ef5721799774b654d4d02fed62afb"
+			"Comment": "v1.0.0-40-g023a6da",
+			"Rev": "023a6dafdcdfa7068ac83b260ab7f03cd4131aca"
 		},
 		{
 			"ImportPath": "github.com/vishvananda/netns",
-			"Rev": "54f0e4339ce73702a0607f49922aaa1e749b418d"
+			"Rev": "13995c7128ccc8e51e9a6bd2b551020a27180abd"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/ssh/terminal",
-			"Rev": "94eea52f7b742c7cbe0b03b22f0c4c8631ece122"
+			"Rev": "7c1a557ab941a71c619514f229f0b27ccb0c27cf"
 		},
 		{
 			"ImportPath": "golang.org/x/net/bpf",
-			"Rev": "e90d6d0afc4c315a0d87a568ae68577cc15149a0"
+			"Rev": "49bb7cea24b1df9410e1712aa6433dae904ff66a"
 		},
 		{
 			"ImportPath": "golang.org/x/net/internal/iana",
-			"Rev": "e90d6d0afc4c315a0d87a568ae68577cc15149a0"
+			"Rev": "49bb7cea24b1df9410e1712aa6433dae904ff66a"
 		},
 		{
 			"ImportPath": "golang.org/x/net/ipv4",
-			"Rev": "e90d6d0afc4c315a0d87a568ae68577cc15149a0"
+			"Rev": "49bb7cea24b1df9410e1712aa6433dae904ff66a"
 		},
 		{
 			"ImportPath": "golang.org/x/sys/unix",
-			"Rev": "d5840adf789d732bc8b00f37b26ca956a7cc8e79"
+			"Rev": "66b7b1311ac80bbafcd2daeef9a5e6e2cd1e2399"
 		},
 		{
 			"ImportPath": "golang.org/x/sys/windows",
-			"Rev": "d5840adf789d732bc8b00f37b26ca956a7cc8e79"
+			"Rev": "66b7b1311ac80bbafcd2daeef9a5e6e2cd1e2399"
+		},
+		{
+			"ImportPath": "golang.org/x/net/internal/socket",
+			"Rev": "49bb7cea24b1df9410e1712aa6433dae904ff66a"
 		}
 	]
 }

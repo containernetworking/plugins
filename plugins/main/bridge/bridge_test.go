@@ -17,6 +17,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/vishvananda/netlink/nl"
 	"io/ioutil"
 	"net"
 	"os"
@@ -37,8 +38,9 @@ import (
 )
 
 const (
-	BRNAME = "bridge0"
-	IFNAME = "eth0"
+	BRNAME     = "bridge0"
+	BRNAMEVLAN = "bridge0.100"
+	IFNAME     = "eth0"
 )
 
 type Net struct {
@@ -67,6 +69,7 @@ type testCase struct {
 	isGW       bool
 	isLayer2   bool
 	expGWCIDRs []string // Expected gateway addresses in CIDR form
+	vlan       int
 }
 
 // Range definition for each entry in the ranges list
@@ -96,9 +99,12 @@ const (
 	"cniVersion": "%s",
 	"name": "testConfig",
 	"type": "bridge",
-	"bridge": "%s",`
+	"bridge": "%s"`
 
-	netDefault = `
+	vlan = `,
+	"vlan": %d`
+
+	netDefault = `,
 	"isDefaultGateway": true,
 	"ipMasq": false`
 
@@ -138,6 +144,10 @@ const (
 // for a test case.
 func (tc testCase) netConfJSON(dataDir string) string {
 	conf := fmt.Sprintf(netConfStr, tc.cniVersion, BRNAME)
+	if tc.vlan != 0 {
+		conf += fmt.Sprintf(vlan, tc.vlan)
+	}
+
 	if !tc.isLayer2 {
 		conf += netDefault
 		if tc.subnet != "" || tc.ranges != nil {
@@ -154,7 +164,7 @@ func (tc testCase) netConfJSON(dataDir string) string {
 			conf += ipamEndStr
 		}
 	} else {
-		conf += `
+		conf += `,
 	"ipam": {}`
 	}
 	return "{" + conf + "\n}"
@@ -253,6 +263,38 @@ func delBridgeAddrs(testNS ns.NetNS) {
 			}
 		}
 
+		br, err = netlink.LinkByName(BRNAMEVLAN)
+		if err == nil {
+			addrs, err = netlink.AddrList(br, netlink.FAMILY_ALL)
+			Expect(err).NotTo(HaveOccurred())
+			for _, addr := range addrs {
+				if !addr.IP.IsLinkLocalUnicast() {
+					err = netlink.AddrDel(br, &addr)
+					Expect(err).NotTo(HaveOccurred())
+				}
+			}
+		}
+
+		return nil
+	})
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func delVlanAddrs(testNS ns.NetNS, vlan int) {
+	err := testNS.Do(func(ns.NetNS) error {
+		defer GinkgoRecover()
+
+		vlanLink, err := netlink.LinkByName(fmt.Sprintf("%s.%d", BRNAME, vlan))
+		Expect(err).NotTo(HaveOccurred())
+		addrs, err := netlink.AddrList(vlanLink, netlink.FAMILY_ALL)
+		Expect(err).NotTo(HaveOccurred())
+		for _, addr := range addrs {
+			if !addr.IP.IsLinkLocalUnicast() {
+				err = netlink.AddrDel(vlanLink, &addr)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		}
+
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
@@ -281,6 +323,16 @@ func countIPAMIPs(path string) (int, error) {
 		}
 	}
 	return count, nil
+}
+
+func checkVlan(vlanId int, bridgeVlanInfo []*nl.BridgeVlanInfo) bool {
+	for _, vlan := range bridgeVlanInfo {
+		if vlan.Vid == uint16(vlanId) {
+			return true
+		}
+	}
+
+	return false
 }
 
 type cmdAddDelTester interface {
@@ -588,7 +640,12 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (*current.Resu
 		result, err = current.GetResult(r)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(len(result.Interfaces)).To(Equal(3))
+		if !tc.isLayer2 && tc.vlan != 0 {
+			Expect(len(result.Interfaces)).To(Equal(4))
+		} else {
+			Expect(len(result.Interfaces)).To(Equal(3))
+		}
+
 		Expect(result.Interfaces[0].Name).To(Equal(BRNAME))
 		Expect(result.Interfaces[0].Mac).To(HaveLen(17))
 
@@ -607,8 +664,38 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (*current.Resu
 		Expect(link.Attrs().HardwareAddr.String()).To(Equal(result.Interfaces[0].Mac))
 		bridgeMAC := link.Attrs().HardwareAddr.String()
 
+		var vlanLink netlink.Link
+		if !tc.isLayer2 && tc.vlan != 0 {
+			// Make sure vlan link exists
+			vlanLink, err = netlink.LinkByName(fmt.Sprintf("%s.%d", BRNAME, tc.vlan))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(vlanLink.Attrs().Name).To(Equal(fmt.Sprintf("%s.%d", BRNAME, tc.vlan)))
+			Expect(vlanLink).To(BeAssignableToTypeOf(&netlink.Veth{}))
+
+			// Check the bridge dot vlan interface have the vlan tag
+			peerLink, err := netlink.LinkByIndex(vlanLink.Attrs().Index - 1)
+			Expect(err).NotTo(HaveOccurred())
+			interfaceMap, err := netlink.BridgeVlanList()
+			Expect(err).NotTo(HaveOccurred())
+			vlans, isExist := interfaceMap[int32(peerLink.Attrs().Index)]
+			Expect(isExist).To(BeTrue())
+			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+		}
+
+		// Check the bridge vlan filtering equals true
+		if tc.vlan != 0 {
+			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(true))
+		} else {
+			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(false))
+		}
+
 		// Ensure bridge has expected gateway address(es)
-		addrs, err := netlink.AddrList(link, netlink.FAMILY_ALL)
+		var addrs []netlink.Addr
+		if tc.vlan == 0 {
+			addrs, err = netlink.AddrList(link, netlink.FAMILY_ALL)
+		} else {
+			addrs, err = netlink.AddrList(vlanLink, netlink.FAMILY_ALL)
+		}
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(addrs)).To(BeNumerically(">", 0))
 		for _, cidr := range tc.expGWCIDRs {
@@ -630,18 +717,31 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (*current.Resu
 		// Check for the veth link in the main namespace
 		links, err := netlink.LinkList()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(len(links)).To(Equal(3)) // Bridge, veth, and loopback
+		if !tc.isLayer2 && tc.vlan != 0 {
+			Expect(len(links)).To(Equal(5)) // Bridge, Bridge vlan veth, veth, and loopback
+		} else {
+			Expect(len(links)).To(Equal(3)) // Bridge, veth, and loopback
+		}
 
 		link, err = netlink.LinkByName(result.Interfaces[1].Name)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(link).To(BeAssignableToTypeOf(&netlink.Veth{}))
 		tester.vethName = result.Interfaces[1].Name
 
+		// check vlan exist on the veth interface
+		if tc.vlan != 0 {
+			interfaceMap, err := netlink.BridgeVlanList()
+			Expect(err).NotTo(HaveOccurred())
+			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
+			Expect(isExist).To(BeTrue())
+			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+		}
+
 		// Check that the bridge has a different mac from the veth
 		// If not, it means the bridge has an unstable mac and will change
 		// as ifs are added and removed
 		// this check is not relevant for a layer 2 bridge
-		if !tc.isLayer2 {
+		if !tc.isLayer2 && tc.vlan == 0 {
 			Expect(link.Attrs().HardwareAddr.String()).NotTo(Equal(bridgeMAC))
 		}
 
@@ -986,6 +1086,10 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 
 	// Clean up bridge addresses for next test case
 	delBridgeAddrs(testNS)
+
+	if tc.vlan != 0 && !tc.isLayer2 {
+		delVlanAddrs(testNS, tc.vlan)
+	}
 }
 
 var _ = Describe("bridge Operations", func() {
@@ -1113,6 +1217,63 @@ var _ = Describe("bridge Operations", func() {
 	It("configures and deconfigures a l2 bridge and veth with ADD/DEL for 0.3.1 config", func() {
 		tc := testCase{cniVersion: "0.3.1", isLayer2: true}
 		cmdAddDelTest(originalNS, tc, dataDir)
+	})
+
+	It("configures and deconfigures a l2 bridge with vlan id 100 using ADD/DEL for 0.3.1 config", func() {
+		tc := testCase{cniVersion: "0.3.0", isLayer2: true, vlan: 100}
+		cmdAddDelTest(originalNS, tc, dataDir)
+	})
+
+	It("configures and deconfigures a l2 bridge with vlan id 100 using ADD/DEL for 0.3.1 config", func() {
+		tc := testCase{cniVersion: "0.3.1", isLayer2: true, vlan: 100}
+		cmdAddDelTest(originalNS, tc, dataDir)
+	})
+
+	It("configures and deconfigures a bridge, veth with default route and vlanID 100 with ADD/DEL for 0.3.0 config", func() {
+		testCases := []testCase{
+			{
+				// IPv4 only
+				subnet:     "10.1.2.0/24",
+				expGWCIDRs: []string{"10.1.2.1/24"},
+				vlan:       100,
+			},
+			{
+				// IPv6 only
+				subnet:     "2001:db8::0/64",
+				expGWCIDRs: []string{"2001:db8::1/64"},
+				vlan:       100,
+			},
+			{
+				// Dual-Stack
+				ranges: []rangeInfo{
+					{subnet: "192.168.0.0/24"},
+					{subnet: "fd00::0/64"},
+				},
+				expGWCIDRs: []string{
+					"192.168.0.1/24",
+					"fd00::1/64",
+				},
+				vlan: 100,
+			},
+			{
+				// 3 Subnets (1 IPv4 and 2 IPv6 subnets)
+				ranges: []rangeInfo{
+					{subnet: "192.168.0.0/24"},
+					{subnet: "fd00::0/64"},
+					{subnet: "2001:db8::0/64"},
+				},
+				expGWCIDRs: []string{
+					"192.168.0.1/24",
+					"fd00::1/64",
+					"2001:db8::1/64",
+				},
+				vlan: 100,
+			},
+		}
+		for _, tc := range testCases {
+			tc.cniVersion = "0.3.0"
+			cmdAddDelTest(originalNS, tc, dataDir)
+		}
 	})
 
 	It("configures and deconfigures a bridge and veth with default route with ADD/DEL for 0.3.1 config", func() {
@@ -1263,13 +1424,13 @@ var _ = Describe("bridge Operations", func() {
 				Expect(conf.ForceAddress).To(Equal(false))
 
 				// Set first address on bridge
-				err = ensureBridgeAddr(bridge, family, &gwnFirst, conf.ForceAddress)
+				err = ensureAddr(bridge, family, &gwnFirst, conf.ForceAddress)
 				Expect(err).NotTo(HaveOccurred())
 				checkBridgeIPs(tc.gwCIDRFirst, "")
 
 				// Attempt to set the second address on the bridge
 				// with ForceAddress set to false.
-				err = ensureBridgeAddr(bridge, family, &gwnSecond, false)
+				err = ensureAddr(bridge, family, &gwnSecond, false)
 				if family == netlink.FAMILY_V4 || subnetsOverlap {
 					// IPv4 or overlapping IPv6 subnets:
 					// Expect an error, and address should remain the same
@@ -1285,7 +1446,7 @@ var _ = Describe("bridge Operations", func() {
 
 				// Set the second address on the bridge
 				// with ForceAddress set to true.
-				err = ensureBridgeAddr(bridge, family, &gwnSecond, true)
+				err = ensureAddr(bridge, family, &gwnSecond, true)
 				Expect(err).NotTo(HaveOccurred())
 				if family == netlink.FAMILY_V4 || subnetsOverlap {
 					// IPv4 or overlapping IPv6 subnets:
