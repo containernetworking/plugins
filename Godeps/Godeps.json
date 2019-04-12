@@ -145,6 +145,11 @@
 			"Rev": "477b11cea4dcc56af002849238d4f9c1e093c744"
 		},
 		{
+			"ImportPath": "github.com/godbus/dbus",
+			"Comment": "v4.1.0-6-g885f9cc",
+			"Rev": "885f9cc04c9c1a6a61a2008e211d36c5737be3f5"
+		},
+		{
 			"ImportPath": "github.com/j-keck/arping",
 			"Rev": "2cf9dc699c5640a7e2c81403a44127bf28033600"
 		},
