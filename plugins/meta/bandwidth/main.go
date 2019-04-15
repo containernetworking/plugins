@@ -20,13 +20,15 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/vishvananda/netlink"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
-	"github.com/containernetworking/plugins/pkg/ip"
 
-	"github.com/vishvananda/netlink"
+	"github.com/containernetworking/plugins/pkg/ip"
+	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
 // BandwidthEntry corresponds to a single entry in the bandwidth argument,
@@ -229,8 +231,7 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	// TODO: implement plugin version
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.PluginSupports("0.3.0", "0.3.1", version.Current()), "TODO")
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.PluginSupports("0.3.0", "0.3.1", version.Current()), bv.BuildString("bandwidth"))
 }
 
 func SafeQdiscList(link netlink.Link) ([]netlink.Qdisc, error) {

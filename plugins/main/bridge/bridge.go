@@ -18,12 +18,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"runtime"
 	"syscall"
 
-	"io/ioutil"
+	"github.com/j-keck/arping"
+	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -33,8 +35,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/utils"
-	"github.com/j-keck/arping"
-	"github.com/vishvananda/netlink"
+	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
 // For testcases to force an error after IPAM has been performed
@@ -595,8 +596,7 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	// TODO: implement plugin version
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("bridge"))
 }
 
 type cniBridgeIf struct {

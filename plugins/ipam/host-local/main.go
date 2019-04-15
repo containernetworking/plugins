@@ -20,6 +20,7 @@ import (
 	"net"
 	"strings"
 
+	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/disk"
 
@@ -30,8 +31,7 @@ import (
 )
 
 func main() {
-	// TODO: implement plugin version
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("host-local"))
 }
 
 func loadNetConf(bytes []byte) (*types.NetConf, string, error) {

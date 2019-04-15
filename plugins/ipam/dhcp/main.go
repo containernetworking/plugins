@@ -27,6 +27,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
+	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
 const defaultSocketPath = "/run/cni/dhcp.sock"
@@ -51,8 +52,7 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
-		// TODO: implement plugin version
-		skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, "TODO")
+		skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("dhcp"))
 	}
 }
 
