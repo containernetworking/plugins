@@ -30,6 +30,9 @@ matrix:
 install:
   - go get github.com/onsi/ginkgo/ginkgo
   - go get github.com/containernetworking/cni/cnitool
+  - go get golang.org/x/tools/cmd/cover
+  - go get github.com/modocache/gover
+  - go get github.com/mattn/goveralls
 
 script:
  - |
