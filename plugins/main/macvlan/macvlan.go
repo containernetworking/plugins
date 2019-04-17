@@ -51,20 +51,23 @@ func init() {
 	runtime.LockOSThread()
 }
 
-func getDefaultRouteInterfaceName() string {
+func getDefaultRouteInterfaceName() (string, error) {
 	routeToDstIP, err := netlink.RouteList(nil, netlink.FAMILY_ALL)
 	if err != nil {
-		return ""
+		return "", err
 	}
 
 	for _, v := range routeToDstIP {
-		l, _ := netlink.LinkByIndex(v.LinkIndex)
 		if v.Dst == nil {
-			return l.Attrs().Name
+			l, err := netlink.LinkByIndex(v.LinkIndex)
+			if err != nil {
+				return "", err
+			}
+			return l.Attrs().Name, nil
 		}
 	}
 
-	return ""
+	return "", fmt.Errorf("no default route interface found")
 }
 
 func loadConf(bytes []byte) (*NetConf, string, error) {
@@ -73,9 +76,9 @@ func loadConf(bytes []byte) (*NetConf, string, error) {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
 	}
 	if n.Master == "" {
-		defaultRouteInterface := getDefaultRouteInterfaceName()
-		if defaultRouteInterface == "" {
-			return nil, "", fmt.Errorf(`cannot get default route interface for master`)
+		defaultRouteInterface, err := getDefaultRouteInterfaceName()
+		if err != nil {
+			return nil, "", err
 		}
 		n.Master = defaultRouteInterface
 	}
