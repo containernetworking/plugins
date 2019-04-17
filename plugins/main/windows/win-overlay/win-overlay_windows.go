@@ -20,15 +20,17 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/Microsoft/hcsshim"
 	"github.com/juju/errors"
 
-	"github.com/Microsoft/hcsshim"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
+
 	"github.com/containernetworking/plugins/pkg/hns"
 	"github.com/containernetworking/plugins/pkg/ipam"
+	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
 type NetConf struct {
@@ -162,5 +164,5 @@ func cmdGet(_ *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.PluginSupports("0.1.0", "0.2.0", "0.3.0"), "TODO")
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.PluginSupports("0.1.0", "0.2.0", "0.3.0"), bv.BuildString("win-overlay"))
 }

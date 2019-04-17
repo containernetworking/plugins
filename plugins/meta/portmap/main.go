@@ -34,6 +34,8 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
+
+	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
 // PortMapEntry corresponds to a single entry in the port_mappings argument,
@@ -116,8 +118,7 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	// TODO: implement plugin version
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("portmap"))
 }
 
 func cmdCheck(args *skel.CmdArgs) error {

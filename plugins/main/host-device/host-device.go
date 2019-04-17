@@ -25,14 +25,17 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/vishvananda/netlink"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
+
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/vishvananda/netlink"
+	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
 //NetConf for host-device config, look the README to learn how to use those parameters
@@ -281,8 +284,7 @@ func getLink(devname, hwaddr, kernelpath string) (netlink.Link, error) {
 }
 
 func main() {
-	// TODO: implement plugin version
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("host-device"))
 }
 
 func cmdCheck(args *skel.CmdArgs) error {

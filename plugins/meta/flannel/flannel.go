@@ -34,6 +34,8 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/version"
+
+	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
 const (
@@ -217,7 +219,7 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, bv.BuildString("flannel"))
 }
 
 func cmdGet(args *skel.CmdArgs) error {

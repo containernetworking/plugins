@@ -22,10 +22,10 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
+	types020 "github.com/containernetworking/cni/pkg/types/020"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
-
-	"github.com/containernetworking/cni/pkg/types/020"
+	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
 // The top-level network config - IPAM plugins are passed the full configuration
@@ -58,8 +58,7 @@ type Address struct {
 }
 
 func main() {
-	// TODO: implement plugin version
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("static"))
 }
 
 func loadNetConf(bytes []byte) (*types.NetConf, string, error) {
