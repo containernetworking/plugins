@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"os"
 
 	"github.com/juju/errors"
 
@@ -54,6 +55,7 @@ func loadNetConf(bytes []byte) (*NetConf, string, error) {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
+	success := false
 	n, cniVersion, err := loadNetConf(args.StdinData)
 	if err != nil {
 		return errors.Annotate(err, "error while loadNetConf")
@@ -129,6 +131,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		return hnsEndpoint, nil
 	})
+	defer func() {
+		if !success {
+			os.Setenv("CNI_COMMAND", "DEL")
+			ipam.ExecDel(n.IPAM.Type, args.StdinData)
+			os.Setenv("CNI_COMMAND", "ADD")
+		}
+	}()
 	if err != nil {
 		return errors.Annotatef(err, "error while ProvisionEndpoint(%v,%v,%v)", epName, hnsNetwork.Id, args.ContainerID)
 	}
@@ -138,6 +147,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return errors.Annotatef(err, "error while constructResult")
 	}
 
+	success = true
 	return types.PrintResult(result, cniVersion)
 }
 
@@ -158,7 +168,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 func cmdGet(_ *skel.CmdArgs) error {
 	// TODO: implement
-	return fmt.Errorf("not implemented")
+	return nil
 }
 
 func main() {

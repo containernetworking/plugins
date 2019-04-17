@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"os"
 
 	"github.com/juju/errors"
 	"github.com/Microsoft/hcsshim"
@@ -89,20 +90,19 @@ func ProcessEndpointArgs(args *skel.CmdArgs, n *NetConf) (*hns.EndpointInfo, err
 	return epInfo, nil
 }
 
-func cmdHnsAdd(args *skel.CmdArgs, n *NetConf, cniVersion *string) error {
-
+func cmdHnsAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 	networkName := n.Name
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(networkName)
 	if err != nil {
-		return errors.Annotatef(err, "error while GETHNSNewtorkByName(%s)", networkName)
+		return nil, errors.Annotatef(err, "error while GETHNSNewtorkByName(%s)", networkName)
 	}
 
 	if hnsNetwork == nil {
-		return fmt.Errorf("network %v not found", networkName)
+		return nil, fmt.Errorf("network %v not found", networkName)
 	}
 
 	if !strings.EqualFold(hnsNetwork.Type, "L2Bridge") {
-		return fmt.Errorf("network %v is of an unexpected type: %v", networkName, hnsNetwork.Type)
+		return nil, fmt.Errorf("network %v is of an unexpected type: %v", networkName, hnsNetwork.Type)
 	}
 
 	epName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
@@ -120,31 +120,31 @@ func cmdHnsAdd(args *skel.CmdArgs, n *NetConf, cniVersion *string) error {
 		return hnsEndpoint, nil
 	})
 	if err != nil {
-		return errors.Annotatef(err, "error while ProvisionEndpoint(%v,%v,%v)", epName, hnsNetwork.Id, args.ContainerID)
+		return nil, errors.Annotatef(err, "error while ProvisionEndpoint(%v,%v,%v)", epName, hnsNetwork.Id, args.ContainerID)
 	}
 
 	result, err := hns.ConstructResult(hnsNetwork, hnsEndpoint)
 	if err != nil {
-		return errors.Annotatef(err, "error while constructResult")
+		return nil, errors.Annotatef(err, "error while constructResult")
 	}
 
-	return types.PrintResult(result, *cniVersion)
+	return result, nil
 
 }
 
-func cmdHcnAdd(args *skel.CmdArgs, n *NetConf, cniVersion *string) error {
+func cmdHcnAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 	networkName := n.Name
 	hcnNetwork, err := hcn.GetNetworkByName(networkName)
 	if err != nil {
-		return errors.Annotatef(err, "error while GetNetworkByName(%s)", networkName)
+		return nil, errors.Annotatef(err, "error while GetNetworkByName(%s)", networkName)
 	}
 
 	if hcnNetwork == nil {
-		return fmt.Errorf("network %v not found", networkName)
+		return nil, fmt.Errorf("network %v not found", networkName)
 	}
 
 	if  hcnNetwork.Type != hcn.L2Bridge {
-		return fmt.Errorf("network %v is of unexpected type: %v", networkName, hcnNetwork.Type)
+		return nil, fmt.Errorf("network %v is of unexpected type: %v", networkName, hcnNetwork.Type)
 	}
 
 	epName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
@@ -163,15 +163,15 @@ func cmdHcnAdd(args *skel.CmdArgs, n *NetConf, cniVersion *string) error {
 		return hcnEndpoint, nil
 	})
 	if err != nil {
-		return errors.Annotatef(err, "error while AddHcnEndpoint(%v,%v,%v)", epName, hcnNetwork.Id, args.Netns)
+		return nil, errors.Annotatef(err, "error while AddHcnEndpoint(%v,%v,%v)", epName, hcnNetwork.Id, args.Netns)
 	}
 
 	result, err := hns.ConstructHcnResult(hcnNetwork, hcnEndpoint)
 	if err != nil {
-		return errors.Annotatef(err, "error while ConstructHcnResult")
+		return nil, errors.Annotatef(err, "error while ConstructHcnResult")
 	}
 
-	return types.PrintResult(result, *cniVersion)
+	return result, nil
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
@@ -180,12 +180,24 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return errors.Annotate(err, "error while loadNetConf")
 	}
 
+	var result *current.Result
 	if n.ApiVersion == 2 {
-		err = cmdHcnAdd(args, n, &cniVersion)
+		result, err = cmdHcnAdd(args, n)
 	} else {
-		err = cmdHnsAdd(args, n, &cniVersion)
+		result, err = cmdHnsAdd(args, n)
 	}
-	return err
+
+	if err != nil {
+		os.Setenv("CNI_COMMAND", "DEL")
+		ipam.ExecDel(n.IPAM.Type, args.StdinData)
+		os.Setenv("CNI_COMMAND", "ADD")
+		return errors.Annotate(err, "error while executing ADD command")
+	}
+
+	if (result == nil) {
+		return errors.New("result for ADD not populated correctly")
+	}
+	return types.PrintResult(result, cniVersion)
 }
 
 func cmdDel(args *skel.CmdArgs) error {
@@ -210,7 +222,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 func cmdGet(_ *skel.CmdArgs) error {
 	// TODO: implement
-	return fmt.Errorf("not implemented")
+	return nil
 }
 
 func main() {
