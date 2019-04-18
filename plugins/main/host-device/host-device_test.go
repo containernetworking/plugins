@@ -40,6 +40,7 @@ type Net struct {
 	Device        string                 `json:"device"`     // Device-Name, something like eth0 or can0 etc.
 	HWAddr        string                 `json:"hwaddr"`     // MAC Address of target network interface
 	KernelPath    string                 `json:"kernelpath"` // Kernelpath of the device
+	PCIAddr       string                 `json:"pciBusID"`   // PCI Address of target network device
 	IPAM          *IPAMConfig            `json:"ipam,omitempty"`
 	DNS           types.DNS              `json:"dns"`
 	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
@@ -449,7 +450,7 @@ var _ = Describe("base functionality", func() {
 			StdinData:   []byte(conf),
 		}
 		_, _, err := testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
-		Expect(err).To(MatchError(`specify either "device", "hwaddr" or "kernelpath"`))
+		Expect(err).To(MatchError(`specify either "device", "hwaddr", "kernelpath" or "pciBusID"`))
 
 	})
 

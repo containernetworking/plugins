@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -38,12 +39,17 @@ import (
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
+const (
+	sysBusPCI = "/sys/bus/pci/devices"
+)
+
 //NetConf for host-device config, look the README to learn how to use those parameters
 type NetConf struct {
 	types.NetConf
 	Device     string `json:"device"`     // Device-Name, something like eth0 or can0 etc.
 	HWAddr     string `json:"hwaddr"`     // MAC Address of target network interface
 	KernelPath string `json:"kernelpath"` // Kernelpath of the device
+	PCIAddr    string `json:"pciBusID"`   // PCI Address of target network device
 }
 
 func init() {
@@ -58,8 +64,8 @@ func loadConf(bytes []byte) (*NetConf, error) {
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, fmt.Errorf("failed to load netconf: %v", err)
 	}
-	if n.Device == "" && n.HWAddr == "" && n.KernelPath == "" {
-		return nil, fmt.Errorf(`specify either "device", "hwaddr" or "kernelpath"`)
+	if n.Device == "" && n.HWAddr == "" && n.KernelPath == "" && n.PCIAddr == "" {
+		return nil, fmt.Errorf(`specify either "device", "hwaddr", "kernelpath" or "pciBusID"`)
 	}
 	return n, nil
 }
@@ -75,7 +81,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer containerNs.Close()
 
-	hostDev, err := getLink(cfg.Device, cfg.HWAddr, cfg.KernelPath)
+	hostDev, err := getLink(cfg.Device, cfg.HWAddr, cfg.KernelPath, cfg.PCIAddr)
 	if err != nil {
 		return fmt.Errorf("failed to find host device: %v", err)
 	}
@@ -240,7 +246,7 @@ func printLink(dev netlink.Link, cniVersion string, containerNs ns.NetNS) error 
 	return types.PrintResult(&result, cniVersion)
 }
 
-func getLink(devname, hwaddr, kernelpath string) (netlink.Link, error) {
+func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) {
 	links, err := netlink.LinkList()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list node links: %v", err)
@@ -278,6 +284,19 @@ func getLink(devname, hwaddr, kernelpath string) (netlink.Link, error) {
 				}
 			}
 		}
+	} else if len(pciaddr) > 0 {
+		netDir := filepath.Join(sysBusPCI, pciaddr, "net")
+		if _, err := os.Lstat(netDir); err != nil {
+			return nil, fmt.Errorf("no net directory under pci device %s: %q", pciaddr, err)
+		}
+		fInfo, err := ioutil.ReadDir(netDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read net directory %s: %q", netDir, err)
+		}
+		if len(fInfo) > 0 {
+			return netlink.LinkByName(fInfo[0].Name())
+		}
+		return nil, fmt.Errorf("failed to find device name for pci address %s", pciaddr)
 	}
 
 	return nil, fmt.Errorf("failed to find physical interface")
