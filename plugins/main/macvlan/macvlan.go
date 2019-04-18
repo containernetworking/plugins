@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"runtime"
 
 	"github.com/j-keck/arping"
@@ -197,7 +198,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// Invoke ipam del if err to avoid ip leak
 	defer func() {
 		if err != nil {
+			os.Setenv("CNI_COMMAND", "DEL")
 			ipam.ExecDel(n.IPAM.Type, args.StdinData)
+			os.Setenv("CNI_COMMAND", "ADD")
 		}
 	}()
 
