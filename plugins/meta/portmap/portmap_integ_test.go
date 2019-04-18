@@ -165,6 +165,12 @@ var _ = Describe("portmap integration tests", func() {
 		fmt.Fprintf(GinkgoWriter, "hostIP: %s:%d, contIP: %s:%d\n",
 			hostIP, hostPort, contIP, containerPort)
 
+		// dump iptables-save output for debugging
+		cmd = exec.Command("iptables-save")
+		cmd.Stderr = GinkgoWriter
+		cmd.Stdout = GinkgoWriter
+		Expect(cmd.Run()).To(Succeed())
+
 		// Sanity check: verify that the container is reachable directly
 		contOK := testEchoServer(contIP.String(), containerPort, "")
 

@@ -25,23 +25,24 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/vishvananda/netlink"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
+
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/vishvananda/netlink"
+	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
 // TuningConf represents the network tuning configuration.
 type TuningConf struct {
 	types.NetConf
-	SysCtl        map[string]string      `json:"sysctl"`
-	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
-	PrevResult    *current.Result        `json:"-"`
-	Mac           string                 `json:"mac,omitempty"`
-	Promisc       bool                   `json:"promisc,omitempty"`
-	Mtu           int                    `json:"mtu,omitempty"`
+	SysCtl  map[string]string `json:"sysctl"`
+	Mac     string            `json:"mac,omitempty"`
+	Promisc bool              `json:"promisc,omitempty"`
+	Mtu     int               `json:"mtu,omitempty"`
 }
 
 type MACEnvArgs struct {
@@ -65,23 +66,6 @@ func parseConf(data []byte, envArgs string) (*TuningConf, error) {
 
 		if e.MAC != "" {
 			conf.Mac = string(e.MAC)
-		}
-	}
-
-	// Parse previous result.
-	if conf.RawPrevResult != nil {
-		resultBytes, err := json.Marshal(conf.RawPrevResult)
-		if err != nil {
-			return nil, fmt.Errorf("could not serialize prevResult: %v", err)
-		}
-		res, err := version.NewResult(conf.CNIVersion, resultBytes)
-		if err != nil {
-			return nil, fmt.Errorf("could not parse prevResult: %v", err)
-		}
-		conf.RawPrevResult = nil
-		conf.PrevResult, err = current.NewResultFromResult(res)
-		if err != nil {
-			return nil, fmt.Errorf("could not convert result to current version: %v", err)
 		}
 	}
 
@@ -111,7 +95,15 @@ func changeMacAddr(ifName string, newMacAddr string) error {
 }
 
 func updateResultsMacAddr(config TuningConf, ifName string, newMacAddr string) {
-	for _, i := range config.PrevResult.Interfaces {
+	// Parse previous result.
+	if config.PrevResult == nil {
+		return
+	}
+
+	version.ParsePrevResult(&config.NetConf)
+	result, _ := current.NewResultFromResult(config.PrevResult)
+
+	for _, i := range result.Interfaces {
 		if i.Name == ifName {
 			i.Mac = newMacAddr
 		}
@@ -140,6 +132,20 @@ func changeMtu(ifName string, mtu int) error {
 
 func cmdAdd(args *skel.CmdArgs) error {
 	tuningConf, err := parseConf(args.StdinData, args.Args)
+	if err != nil {
+		return err
+	}
+
+	// Parse previous result.
+	if tuningConf.RawPrevResult == nil {
+		return fmt.Errorf("Required prevResult missing")
+	}
+
+	if err := version.ParsePrevResult(&tuningConf.NetConf); err != nil {
+		return err
+	}
+
+	_, err = current.NewResultFromResult(tuningConf.PrevResult)
 	if err != nil {
 		return err
 	}
@@ -199,11 +205,80 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	// TODO: implement plugin version
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("tuning"))
 }
 
-func cmdGet(args *skel.CmdArgs) error {
-	// TODO: implement
-	return fmt.Errorf("not implemented")
+func cmdCheck(args *skel.CmdArgs) error {
+	tuningConf, err := parseConf(args.StdinData, args.Args)
+	if err != nil {
+		return err
+	}
+
+	// Parse previous result.
+	if tuningConf.RawPrevResult == nil {
+		return fmt.Errorf("Required prevResult missing")
+	}
+
+	if err := version.ParsePrevResult(&tuningConf.NetConf); err != nil {
+		return err
+	}
+
+	_, err = current.NewResultFromResult(tuningConf.PrevResult)
+	if err != nil {
+		return err
+	}
+
+	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+		// Check each configured value vs what's currently in the container
+		for key, conf_value := range tuningConf.SysCtl {
+			fileName := filepath.Join("/proc/sys", strings.Replace(key, ".", "/", -1))
+			fileName = filepath.Clean(fileName)
+
+			contents, err := ioutil.ReadFile(fileName)
+			if err != nil {
+				return err
+			}
+			cur_value := strings.TrimSuffix(string(contents), "\n")
+			if conf_value != cur_value {
+				return fmt.Errorf("Error: Tuning configured value of %s is %s, current value is %s", fileName, conf_value, cur_value)
+			}
+		}
+
+		link, err := netlink.LinkByName(args.IfName)
+		if err != nil {
+			return fmt.Errorf("Cannot find container link %v", args.IfName)
+		}
+
+		if tuningConf.Mac != "" {
+			if tuningConf.Mac != link.Attrs().HardwareAddr.String() {
+				return fmt.Errorf("Error: Tuning configured Ethernet of %s is %s, current value is %s",
+					args.IfName, tuningConf.Mac, link.Attrs().HardwareAddr)
+			}
+		}
+
+		if tuningConf.Promisc {
+			if link.Attrs().Promisc == 0 {
+				return fmt.Errorf("Error: Tuning link %s configured promisc is %v, current value is %d",
+					args.IfName, tuningConf.Promisc, link.Attrs().Promisc)
+			}
+		} else {
+			if link.Attrs().Promisc != 0 {
+				return fmt.Errorf("Error: Tuning link %s configured promisc is %v, current value is %d",
+					args.IfName, tuningConf.Promisc, link.Attrs().Promisc)
+			}
+		}
+
+		if tuningConf.Mtu != 0 {
+			if tuningConf.Mtu != link.Attrs().MTU {
+				return fmt.Errorf("Error: Tuning configured MTU of %s is %d, current value is %d",
+					args.IfName, tuningConf.Mtu, link.Attrs().MTU)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/containernetworking/plugins",
 	"GoVersion": "go1.7",
-	"GodepVersion": "v79",
+	"GodepVersion": "v80",
 	"Packages": [
 		"./..."
 	],
@@ -14,7 +14,7 @@
 		{
 			"ImportPath": "github.com/Microsoft/hcsshim",
 			"Comment": "v0.7.6",
-			"Rev": "6efef912cc0ecd8778bab95d105662d4f73f8ccd"
+			"Rev": "e44e499d29527b244d6858772f1b9090eeaddc4e"
 		},
 		{
 			"ImportPath": "github.com/Microsoft/hcsshim/internal/guid",
@@ -81,38 +81,38 @@
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/libcni",
-			"Comment": "v0.7.0-alpha1",
-			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
+			"Comment": "v0.7.0-rc2",
+			"Rev": "fbb95fff8a5239a4295c991efa8a397d43118f7e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/invoke",
-			"Comment": "v0.7.0-alpha1",
-			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
+			"Comment": "v0.7.0-rc2",
+			"Rev": "fbb95fff8a5239a4295c991efa8a397d43118f7e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/skel",
-			"Comment": "v0.7.0-alpha1",
-			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
+			"Comment": "v0.7.0-rc2",
+			"Rev": "fbb95fff8a5239a4295c991efa8a397d43118f7e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/types",
-			"Comment": "v0.7.0-alpha1",
-			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
+			"Comment": "v0.7.0-rc2",
+			"Rev": "fbb95fff8a5239a4295c991efa8a397d43118f7e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/types/020",
-			"Comment": "v0.7.0-alpha1",
-			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
+			"Comment": "v0.7.0-rc2",
+			"Rev": "fbb95fff8a5239a4295c991efa8a397d43118f7e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/types/current",
-			"Comment": "v0.7.0-alpha1",
-			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
+			"Comment": "v0.7.0-rc2",
+			"Rev": "fbb95fff8a5239a4295c991efa8a397d43118f7e"
 		},
 		{
 			"ImportPath": "github.com/containernetworking/cni/pkg/version",
-			"Comment": "v0.7.0-alpha1",
-			"Rev": "07c1a6da47b7fbf8b357f4949ecce2113e598491"
+			"Comment": "v0.7.0-rc2",
+			"Rev": "fbb95fff8a5239a4295c991efa8a397d43118f7e"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-iptables/iptables",
@@ -143,6 +143,11 @@
 		{
 			"ImportPath": "github.com/d2g/dhcp4server/leasepool/memorypool",
 			"Rev": "477b11cea4dcc56af002849238d4f9c1e093c744"
+		},
+		{
+			"ImportPath": "github.com/godbus/dbus",
+			"Comment": "v4.1.0-6-g885f9cc",
+			"Rev": "885f9cc04c9c1a6a61a2008e211d36c5737be3f5"
 		},
 		{
 			"ImportPath": "github.com/j-keck/arping",
@@ -318,39 +323,45 @@
 		},
 		{
 			"ImportPath": "github.com/vishvananda/netlink",
-			"Rev": "6e453822d85ef5721799774b654d4d02fed62afb"
+			"Comment": "v1.0.0-40-g023a6da",
+			"Rev": "023a6dafdcdfa7068ac83b260ab7f03cd4131aca"
 		},
 		{
 			"ImportPath": "github.com/vishvananda/netlink/nl",
-			"Rev": "6e453822d85ef5721799774b654d4d02fed62afb"
+			"Comment": "v1.0.0-40-g023a6da",
+			"Rev": "023a6dafdcdfa7068ac83b260ab7f03cd4131aca"
 		},
 		{
 			"ImportPath": "github.com/vishvananda/netns",
-			"Rev": "54f0e4339ce73702a0607f49922aaa1e749b418d"
+			"Rev": "13995c7128ccc8e51e9a6bd2b551020a27180abd"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/ssh/terminal",
-			"Rev": "94eea52f7b742c7cbe0b03b22f0c4c8631ece122"
+			"Rev": "7c1a557ab941a71c619514f229f0b27ccb0c27cf"
 		},
 		{
 			"ImportPath": "golang.org/x/net/bpf",
-			"Rev": "e90d6d0afc4c315a0d87a568ae68577cc15149a0"
+			"Rev": "49bb7cea24b1df9410e1712aa6433dae904ff66a"
 		},
 		{
 			"ImportPath": "golang.org/x/net/internal/iana",
-			"Rev": "e90d6d0afc4c315a0d87a568ae68577cc15149a0"
+			"Rev": "49bb7cea24b1df9410e1712aa6433dae904ff66a"
 		},
 		{
 			"ImportPath": "golang.org/x/net/ipv4",
-			"Rev": "e90d6d0afc4c315a0d87a568ae68577cc15149a0"
+			"Rev": "49bb7cea24b1df9410e1712aa6433dae904ff66a"
 		},
 		{
 			"ImportPath": "golang.org/x/sys/unix",
-			"Rev": "d5840adf789d732bc8b00f37b26ca956a7cc8e79"
+			"Rev": "66b7b1311ac80bbafcd2daeef9a5e6e2cd1e2399"
 		},
 		{
 			"ImportPath": "golang.org/x/sys/windows",
-			"Rev": "d5840adf789d732bc8b00f37b26ca956a7cc8e79"
+			"Rev": "66b7b1311ac80bbafcd2daeef9a5e6e2cd1e2399"
+		},
+		{
+			"ImportPath": "golang.org/x/net/internal/socket",
+			"Rev": "49bb7cea24b1df9410e1712aa6433dae904ff66a"
 		}
 	]
 }

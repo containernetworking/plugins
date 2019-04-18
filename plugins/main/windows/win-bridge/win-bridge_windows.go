@@ -21,22 +21,25 @@ import (
 	"strings"
 	"os"
 
-	"github.com/juju/errors"
 	"github.com/Microsoft/hcsshim"
 	"github.com/Microsoft/hcsshim/hcn"
+	"github.com/juju/errors"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
+
 	"github.com/containernetworking/plugins/pkg/hns"
 	"github.com/containernetworking/plugins/pkg/ipam"
+	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
 type NetConf struct {
 	hns.NetConf
 
-	IPMasqNetwork   string    `json:"ipMasqNetwork,omitempty"`
-	ApiVersion      int       `json:"ApiVersion"`
+	IPMasqNetwork string `json:"ipMasqNetwork,omitempty"`
+	ApiVersion    int    `json:"ApiVersion"`
 }
 
 func init() {
@@ -64,18 +67,18 @@ func ProcessEndpointArgs(args *skel.CmdArgs, n *NetConf) (*hns.EndpointInfo, err
 		if err != nil {
 			return nil, errors.Annotatef(err, "error while ipam.ExecAdd")
 		}
-		
+
 		// Convert whatever the IPAM result was into the current Result type
 		result, err := current.NewResultFromResult(r)
 		if err != nil {
 			return nil, errors.Annotatef(err, "error while NewResultFromResult")
-		} else {		
+		} else {
 			if len(result.IPs) == 0 {
 				return nil, errors.New("IPAM plugin return is missing IP config")
 			}
 			epInfo.IpAddress = result.IPs[0].Address.IP
 			epInfo.Gateway = result.IPs[0].Address.IP.Mask(result.IPs[0].Address.Mask)
-			
+
 			// Calculate gateway for bridge network (needs to be x.2)
 			epInfo.Gateway[len(epInfo.Gateway)-1] += 2
 		}
@@ -149,7 +152,7 @@ func cmdHcnAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 
 	epName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
 
-	hcnEndpoint, err := hns.AddHcnEndpoint(epName, hcnNetwork.Id, args.Netns, func () (*hcn.HostComputeEndpoint, error) {
+	hcnEndpoint, err := hns.AddHcnEndpoint(epName, hcnNetwork.Id, args.Netns, func() (*hcn.HostComputeEndpoint, error) {
 		epInfo, err := ProcessEndpointArgs(args, n)
 		if err != nil {
 			return nil, errors.Annotatef(err, "error while ProcessEndpointArgs")
@@ -212,7 +215,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		}
 	}
 	epName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
-	
+
 	if n.ApiVersion == 2 {
 		return hns.RemoveHcnEndpoint(epName)
 	} else {
@@ -226,5 +229,5 @@ func cmdGet(_ *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.PluginSupports("0.1.0", "0.2.0", "0.3.0"), "TODO")
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.PluginSupports("0.1.0", "0.2.0", "0.3.0"), bv.BuildString("win-bridge"))
 }

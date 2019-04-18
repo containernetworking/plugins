@@ -22,13 +22,15 @@ import (
 	"net"
 
 	"github.com/alexflint/go-filemutex"
+	"github.com/vishvananda/netlink"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
-	"github.com/containernetworking/plugins/pkg/ns"
 
-	"github.com/vishvananda/netlink"
+	"github.com/containernetworking/plugins/pkg/ns"
+	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
 const firstTableID = 100
@@ -370,7 +372,7 @@ RULE_LOOP:
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, "TODO")
+	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.All, bv.BuildString("sbr"))
 }
 
 func cmdGet(args *skel.CmdArgs) error {

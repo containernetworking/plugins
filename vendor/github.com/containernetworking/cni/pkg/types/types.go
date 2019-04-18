@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 )
@@ -87,7 +88,7 @@ type ResultFactoryFunc func([]byte) (Result, error)
 
 // Result is an interface that provides the result of plugin execution
 type Result interface {
-	// The highest CNI specification result verison the result supports
+	// The highest CNI specification result version the result supports
 	// without having to convert
 	Version() string
 
@@ -97,6 +98,9 @@ type Result interface {
 
 	// Prints the result in JSON format to stdout
 	Print() error
+
+	// Prints the result in JSON format to provided writer
+	PrintTo(writer io.Writer) error
 
 	// Returns a JSON string representation of the result
 	String() string
