@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -96,7 +97,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// Invoke ipam del if err to avoid ip leak
 		defer func() {
 			if err != nil {
+				os.Setenv("CNI_COMMAND", "DEL")
 				ipam.ExecDel(cfg.IPAM.Type, args.StdinData)
+				os.Setenv("CNI_COMMAND", "ADD")
 			}
 		}()
 
