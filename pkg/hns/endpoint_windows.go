@@ -94,7 +94,7 @@ func GenerateHnsEndpoint(epInfo *EndpointInfo, n *NetConf) (*hcsshim.HNSEndpoint
 func GenerateHcnEndpoint(epInfo *EndpointInfo, n *NetConf) (*hcn.HostComputeEndpoint, error) {
 	// run the IPAM plugin and get back the config to apply
 	hcnEndpoint, err := hcn.GetEndpointByName(epInfo.EndpointName)
-	if err != nil && (err != hcn.EndpointNotFoundError{EndpointName: epInfo.EndpointName}) {
+	if err != nil && !hcn.IsNotFoundError(err) {
 		return nil, errors.Annotatef(err, "Attempt to get endpoint \"%v\" failed", epInfo.EndpointName)
 	}
 
@@ -172,7 +172,10 @@ func DeprovisionEndpoint(epName string, netns string, containerID string) error 
 	}
 
 	hnsEndpoint, err := hcsshim.GetHNSEndpointByName(epName)
-	if err != nil {
+
+	if hcsshim.IsNotExist(err) {
+		return nil
+	} else if err != nil {
 		return errors.Annotatef(err, "failed to find HNSEndpoint %s", epName)
 	}
 
@@ -314,7 +317,9 @@ func ConstructResult(hnsNetwork *hcsshim.HNSNetwork, hnsEndpoint *hcsshim.HNSEnd
 // This version follows the v2 workflow of removing the endpoint from the namespace and deleting it
 func RemoveHcnEndpoint(epName string) error {
 	hcnEndpoint, err := hcn.GetEndpointByName(epName)
-	if err != nil {
+	if hcn.IsNotFoundError(err) {
+		return nil
+	} else if err != nil {
 		_ = fmt.Errorf("[win-cni] Failed to find endpoint %v, err:%v", epName, err)
 		return err
 	}
