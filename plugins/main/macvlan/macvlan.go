@@ -55,13 +55,36 @@ func init() {
 	runtime.LockOSThread()
 }
 
+func getDefaultRouteInterfaceName() (string, error) {
+	routeToDstIP, err := netlink.RouteList(nil, netlink.FAMILY_ALL)
+	if err != nil {
+		return "", err
+	}
+
+	for _, v := range routeToDstIP {
+		if v.Dst == nil {
+			l, err := netlink.LinkByIndex(v.LinkIndex)
+			if err != nil {
+				return "", err
+			}
+			return l.Attrs().Name, nil
+		}
+	}
+
+	return "", fmt.Errorf("no default route interface found")
+}
+
 func loadConf(bytes []byte) (*NetConf, string, error) {
 	n := &NetConf{}
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
 	}
 	if n.Master == "" {
-		return nil, "", fmt.Errorf(`"master" field is required. It specifies the host interface name to virtualize`)
+		defaultRouteInterface, err := getDefaultRouteInterfaceName()
+		if err != nil {
+			return nil, "", err
+		}
+		n.Master = defaultRouteInterface
 	}
 	return n, n.CNIVersion, nil
 }

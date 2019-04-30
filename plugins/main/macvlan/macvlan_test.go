@@ -399,4 +399,115 @@ var _ = Describe("macvlan Operations", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	It("configures and deconfigures a macvlan link with ADD/DEL, without master config", func() {
+		const IFNAME = "macvl0"
+
+		conf := `{
+    "cniVersion": "0.3.1",
+    "name": "mynet",
+    "type": "macvlan",
+    "ipam": {
+        "type": "host-local",
+        "subnet": "10.1.2.0/24"
+    }
+}`
+
+		targetNs, err := testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+		defer targetNs.Close()
+
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNs.Path(),
+			IfName:      IFNAME,
+			StdinData:   []byte(conf),
+		}
+
+		// Make MASTER_NAME as default route interface
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			link, err := netlink.LinkByName(MASTER_NAME)
+			Expect(err).NotTo(HaveOccurred())
+			err = netlink.LinkSetUp(link)
+			Expect(err).NotTo(HaveOccurred())
+
+			var address = &net.IPNet{IP: net.IPv4(192, 0, 0, 1), Mask: net.CIDRMask(24, 32)}
+			var addr = &netlink.Addr{IPNet: address}
+			err = netlink.AddrAdd(link, addr)
+			Expect(err).NotTo(HaveOccurred())
+
+			// add default gateway into MASTER
+			dst := &net.IPNet{
+				IP:   net.IPv4(0, 0, 0, 0),
+				Mask: net.CIDRMask(0, 0),
+			}
+			ip := net.IPv4(192, 0, 0, 254)
+			route := netlink.Route{LinkIndex: link.Attrs().Index, Dst: dst, Gw: ip}
+			err = netlink.RouteAdd(&route)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		var result *current.Result
+		err = originalNS.Do(func(ns.NetNS) error {
+			r, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err = current.GetResult(r)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(result.Interfaces)).To(Equal(1))
+			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+			Expect(len(result.IPs)).To(Equal(1))
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Make sure macvlan link exists in the target namespace
+		err = targetNs.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			link, err := netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().Name).To(Equal(IFNAME))
+
+			hwaddr, err := net.ParseMAC(result.Interfaces[0].Mac)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
+
+			addrs, err := netlink.AddrList(link, syscall.AF_INET)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(addrs)).To(Equal(1))
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			err := testutils.CmdDelWithArgs(args, func() error {
+				return cmdDel(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Make sure macvlan link has been deleted
+		err = targetNs.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			link, err := netlink.LinkByName(IFNAME)
+			Expect(err).To(HaveOccurred())
+			Expect(link).To(BeNil())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 })
