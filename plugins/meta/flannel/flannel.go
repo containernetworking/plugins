@@ -46,9 +46,10 @@ const (
 type NetConf struct {
 	types.NetConf
 
-	SubnetFile string                 `json:"subnetFile"`
-	DataDir    string                 `json:"dataDir"`
-	Delegate   map[string]interface{} `json:"delegate"`
+	SubnetFile    string                 `json:"subnetFile"`
+	DataDir       string                 `json:"dataDir"`
+	Delegate      map[string]interface{} `json:"delegate"`
+	RuntimeConfig map[string]interface{} `json:"runtimeConfig,omitempty"`
 }
 
 type subnetEnv struct {
@@ -84,6 +85,7 @@ func loadFlannelNetConf(bytes []byte) (*NetConf, error) {
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, fmt.Errorf("failed to load netconf: %v", err)
 	}
+
 	return n, nil
 }
 
@@ -206,6 +208,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	}
 
+	if n.RuntimeConfig != nil {
+		n.Delegate["runtimeConfig"] = n.RuntimeConfig
+	}
+
 	return doCmdAdd(args, n, fenv)
 }
 
@@ -213,6 +219,13 @@ func cmdDel(args *skel.CmdArgs) error {
 	nc, err := loadFlannelNetConf(args.StdinData)
 	if err != nil {
 		return err
+	}
+
+	if nc.RuntimeConfig != nil {
+		if nc.Delegate == nil {
+			nc.Delegate = make(map[string]interface{})
+		}
+		nc.Delegate["runtimeConfig"] = nc.RuntimeConfig
 	}
 
 	return doCmdDel(args, nc)
