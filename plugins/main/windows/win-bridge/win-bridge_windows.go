@@ -223,11 +223,11 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 }
 
-func cmdGet(_ *skel.CmdArgs) error {
+func cmdCheck(_ *skel.CmdArgs) error {
 	// TODO: implement
 	return nil
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdGet, cmdDel, version.PluginSupports("0.1.0", "0.2.0", "0.3.0"), bv.BuildString("win-bridge"))
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.PluginSupports("0.1.0", "0.2.0", "0.3.0"), bv.BuildString("win-bridge"))
 }
