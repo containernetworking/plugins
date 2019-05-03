@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"os"
 	"runtime"
 	"syscall"
 
@@ -415,9 +414,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// release IP in case of failure
 		defer func() {
 			if !success {
-				os.Setenv("CNI_COMMAND", "DEL")
 				ipam.ExecDel(n.IPAM.Type, args.StdinData)
-				os.Setenv("CNI_COMMAND", "ADD")
 			}
 		}()
 
