@@ -102,7 +102,7 @@ func GenerateHcnEndpoint(epInfo *EndpointInfo, n *NetConf) (*hcn.HostComputeEndp
 		// If the endpont already exists, then we should return error unless
 		// the endpoint is based on a different network then delete
 		// should that fail return error
-		if hcnEndpoint.HostComputeNetwork != epInfo.NetworkId {
+		if !strings.EqualFold(hcnEndpoint.HostComputeNetwork, epInfo.NetworkId) {
 			err = hcnEndpoint.Delete()
 			if err != nil {
 				return nil, errors.Annotatef(err, "Failed to delete endpoint %v", epInfo.EndpointName)
@@ -212,7 +212,7 @@ func ProvisionEndpoint(epName string, expectedNetworkId string, containerID stri
 	// check if endpoint already exists
 	createEndpoint := true
 	hnsEndpoint, err := hcsshim.GetHNSEndpointByName(epName)
-	if hnsEndpoint != nil && hnsEndpoint.VirtualNetwork == expectedNetworkId {
+	if hnsEndpoint != nil && strings.EqualFold(hnsEndpoint.VirtualNetwork, expectedNetworkId) {
 		createEndpoint = false
 	}
 
