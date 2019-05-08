@@ -192,6 +192,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	isLayer3 := n.IPAM.Type != ""
+
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
 		return fmt.Errorf("failed to open netns %q: %v", netns, err)
@@ -212,56 +214,80 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	}()
 
-	// run the IPAM plugin and get back the config to apply
-	r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
-	if err != nil {
-		return err
-	}
+	// Assume L2 interface only
+	result := &current.Result{CNIVersion: cniVersion, Interfaces: []*current.Interface{macvlanInterface}}
 
-	// Invoke ipam del if err to avoid ip leak
-	defer func() {
+	if isLayer3 {
+		// run the IPAM plugin and get back the config to apply
+		r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
 		if err != nil {
-			os.Setenv("CNI_COMMAND", "DEL")
-			ipam.ExecDel(n.IPAM.Type, args.StdinData)
-			os.Setenv("CNI_COMMAND", "ADD")
-		}
-	}()
-
-	// Convert whatever the IPAM result was into the current Result type
-	result, err := current.NewResultFromResult(r)
-	if err != nil {
-		return err
-	}
-
-	if len(result.IPs) == 0 {
-		return errors.New("IPAM plugin returned missing IP config")
-	}
-	result.Interfaces = []*current.Interface{macvlanInterface}
-
-	for _, ipc := range result.IPs {
-		// All addresses apply to the container macvlan interface
-		ipc.Interface = current.Int(0)
-	}
-
-	err = netns.Do(func(_ ns.NetNS) error {
-		if err := ipam.ConfigureIface(args.IfName, result); err != nil {
 			return err
 		}
 
-		contVeth, err := net.InterfaceByName(args.IfName)
+		// Invoke ipam del if err to avoid ip leak
+		defer func() {
+			if err != nil {
+				os.Setenv("CNI_COMMAND", "DEL")
+				ipam.ExecDel(n.IPAM.Type, args.StdinData)
+				os.Setenv("CNI_COMMAND", "ADD")
+			}
+		}()
+
+		// Convert whatever the IPAM result was into the current Result type
+		ipamResult, err := current.NewResultFromResult(r)
 		if err != nil {
-			return fmt.Errorf("failed to look up %q: %v", args.IfName, err)
+			return err
 		}
 
-		for _, ipc := range result.IPs {
-			if ipc.Version == "4" {
-				_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
-			}
+		if len(ipamResult.IPs) == 0 {
+			return errors.New("IPAM plugin returned missing IP config")
 		}
-		return nil
-	})
-	if err != nil {
-		return err
+
+		result.IPs = ipamResult.IPs
+		result.Routes = ipamResult.Routes
+
+		for _, ipc := range result.IPs {
+			// All addresses apply to the container macvlan interface
+			ipc.Interface = current.Int(0)
+		}
+
+		err = netns.Do(func(_ ns.NetNS) error {
+			if err := ipam.ConfigureIface(args.IfName, result); err != nil {
+				return err
+			}
+
+			contVeth, err := net.InterfaceByName(args.IfName)
+			if err != nil {
+				return fmt.Errorf("failed to look up %q: %v", args.IfName, err)
+			}
+
+			for _, ipc := range result.IPs {
+				if ipc.Version == "4" {
+					_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	} else {
+		// For L2 just change interface status to up
+		err = netns.Do(func(_ ns.NetNS) error {
+			macvlanInterfaceLink, err := netlink.LinkByName(args.IfName)
+			if err != nil {
+				return fmt.Errorf("failed to find interface name %q: %v", macvlanInterface.Name, err)
+			}
+
+			if err := netlink.LinkSetUp(macvlanInterfaceLink); err != nil {
+				return fmt.Errorf("failed to set %q UP: %v", args.IfName, err)
+			}
+
+			return nil
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	result.DNS = n.DNS
@@ -275,9 +301,13 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	err = ipam.ExecDel(n.IPAM.Type, args.StdinData)
-	if err != nil {
-		return err
+	isLayer3 := n.IPAM.Type != ""
+
+	if isLayer3 {
+		err = ipam.ExecDel(n.IPAM.Type, args.StdinData)
+		if err != nil {
+			return err
+		}
 	}
 
 	if args.Netns == "" {
@@ -308,16 +338,20 @@ func cmdCheck(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
+	isLayer3 := n.IPAM.Type != ""
+
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
 	}
 	defer netns.Close()
 
-	// run the IPAM plugin and get back the config to apply
-	err = ipam.ExecCheck(n.IPAM.Type, args.StdinData)
-	if err != nil {
-		return err
+	if isLayer3 {
+		// run the IPAM plugin and get back the config to apply
+		err = ipam.ExecCheck(n.IPAM.Type, args.StdinData)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Parse previous result.
