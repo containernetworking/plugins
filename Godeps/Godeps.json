@@ -116,8 +116,8 @@
 		},
 		{
 			"ImportPath": "github.com/coreos/go-iptables/iptables",
-			"Comment": "v0.3.0",
-			"Rev": "b5b1876b170881a8259f036445ee89c8669db386"
+			"Comment": "v0.4.1",
+			"Rev": "78b5fff24e6df8886ef8eca9411f683a884349a5"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-systemd/activation",
