@@ -105,7 +105,8 @@ func (s *Store) FindByKey(id string, ifname string, match string) (bool, error) 
 		if err != nil || info.IsDir() {
 			return nil
 		}
-		data, err := ioutil.ReadFile(path)
+		var data []byte
+		data, err = ioutil.ReadFile(path)
 		if err != nil {
 			return nil
 		}
@@ -141,12 +142,13 @@ func (s *Store) ReleaseByKey(id string, ifname string, match string) (bool, erro
 		if err != nil || info.IsDir() {
 			return nil
 		}
-		data, err := ioutil.ReadFile(path)
+		var data []byte
+		data, err = ioutil.ReadFile(path)
 		if err != nil {
 			return nil
 		}
 		if strings.TrimSpace(string(data)) == match {
-			if err := os.Remove(path); err != nil {
+			if err = os.Remove(path); err != nil {
 				return nil
 			}
 			found = true
