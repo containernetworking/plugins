@@ -37,6 +37,7 @@ type EndpointInfo struct {
 	NetworkId    string
 	Gateway      net.IP
 	IpAddress    net.IP
+	MacAddress   string
 }
 
 // GetSandboxContainerID returns the sandbox ID of this pod
@@ -86,6 +87,7 @@ func GenerateHnsEndpoint(epInfo *EndpointInfo, n *NetConf) (*hcsshim.HNSEndpoint
 			GatewayAddress: GetIpString(&epInfo.Gateway),
 			IPAddress:      epInfo.IpAddress,
 			Policies:       n.MarshalPolicies(),
+			MacAddress :    epInfo.MacAddress,
 		}
 	}
 	return hnsEndpoint, nil
