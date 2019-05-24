@@ -314,7 +314,7 @@
 		},
 		{
 			"ImportPath": "github.com/safchain/ethtool",
-			"Rev": "7ff1ba29eca231991280817541cb3903f6be15d1"
+			"Rev": "42ed695e3de80b9d695f280295fd7994639f209d"
 		},
 		{
 			"ImportPath": "github.com/sirupsen/logrus",

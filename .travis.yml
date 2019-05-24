@@ -11,6 +11,7 @@ env:
   - PATH=$GOROOT/bin:$GOPATH/bin:$PATH
   - CGO_ENABLED=0
   matrix:
+  - TARGET=386
   - TARGET=amd64
   - TARGET=arm
   - TARGET=arm64
