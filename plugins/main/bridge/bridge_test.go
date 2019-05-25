@@ -17,11 +17,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/vishvananda/netlink/nl"
 	"io/ioutil"
 	"net"
 	"os"
 	"strings"
+
+	"github.com/coreos/go-iptables/iptables"
+	"github.com/vishvananda/netlink/nl"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -70,6 +72,7 @@ type testCase struct {
 	isLayer2   bool
 	expGWCIDRs []string // Expected gateway addresses in CIDR form
 	vlan       int
+	ipMasq     bool
 }
 
 // Range definition for each entry in the ranges list
@@ -105,8 +108,7 @@ const (
 	"vlan": %d`
 
 	netDefault = `,
-	"isDefaultGateway": true,
-	"ipMasq": false`
+	"isDefaultGateway": true`
 
 	ipamStartStr = `,
     "ipam": {
@@ -114,6 +116,9 @@ const (
 
 	ipamDataDirStr = `,
         "dataDir": "%s"`
+
+	ipMasqConfStr = `,
+	"ipMasq": %t`
 
 	// Single subnet configuration (legacy)
 	subnetConfStr = `,
@@ -147,6 +152,9 @@ func (tc testCase) netConfJSON(dataDir string) string {
 	if tc.vlan != 0 {
 		conf += fmt.Sprintf(vlan, tc.vlan)
 	}
+	if tc.ipMasq {
+		conf += tc.ipMasqConfig()
+	}
 
 	if !tc.isLayer2 {
 		conf += netDefault
@@ -175,6 +183,11 @@ func (tc testCase) subnetConfig() string {
 	if tc.gateway != "" {
 		conf += fmt.Sprintf(gatewayConfStr, tc.gateway)
 	}
+	return conf
+}
+
+func (tc testCase) ipMasqConfig() string {
+	conf := fmt.Sprintf(ipMasqConfStr, tc.ipMasq)
 	return conf
 }
 
@@ -1594,5 +1607,41 @@ var _ = Describe("bridge Operations", func() {
 			tc.cniVersion = "0.4.0"
 			cmdAddDelCheckTest(originalNS, tc, dataDir)
 		}
+	})
+
+	FIt("configures a bridge and ipMasq rules for 0.4.0 config", func() {
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			tc := testCase{
+				ranges: []rangeInfo{{
+					subnet: "10.1.2.0/24",
+				}},
+				ipMasq:     true,
+				cniVersion: "0.4.0",
+			}
+
+			args := tc.createCmdArgs(originalNS, dataDir)
+			r, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			result, err := current.GetResult(r)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IPs).Should(HaveLen(1))
+
+			ipt, err := iptables.NewWithProtocol(iptables.ProtocolIPv4)
+			Expect(err).NotTo(HaveOccurred())
+
+			rules, err := ipt.List("nat", "POSTROUTING")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(rules).Should(ContainElement(ContainSubstring(result.IPs[0].Address.IP.String())))
+
+			err = testutils.CmdDelWithArgs(args, func() error {
+				return cmdDel(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
 	})
 })
