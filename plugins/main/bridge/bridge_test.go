@@ -1609,7 +1609,7 @@ var _ = Describe("bridge Operations", func() {
 		}
 	})
 
-	FIt("configures a bridge and ipMasq rules for 0.4.0 config", func() {
+	It("configures a bridge and ipMasq rules for 0.4.0 config", func() {
 		err := originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			tc := testCase{
