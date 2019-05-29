@@ -3,8 +3,8 @@ sudo: required
 dist: trusty
 
 go:
-  - 1.10.x
   - 1.11.x
+  - 1.12.x
 
 env:
   global:
@@ -23,10 +23,10 @@ matrix:
   include:
     - os: windows
       env: TARGET=amd64
-      go: 1.10.x
+      go: 1.11.x
     - os: windows
       env: TARGET=amd64
-      go: 1.11.x
+      go: 1.12.x
 
 install:
   - go get github.com/onsi/ginkgo/ginkgo
