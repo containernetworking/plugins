@@ -199,3 +199,61 @@ func createVeth(hostNamespace string, hostVethIfName string, containerNamespace 
 
 	Expect(err).NotTo(HaveOccurred())
 }
+
+func createVethInOneNs(namespace, vethName, peerName string) {
+	vethDeviceRequest := &netlink.Veth{
+		LinkAttrs: netlink.LinkAttrs{
+			Name:  vethName,
+			Flags: net.FlagUp,
+		},
+		PeerName: peerName,
+	}
+
+	netNS, err := ns.GetNS(namespace)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = netNS.Do(func(_ ns.NetNS) error {
+		if err := netlink.LinkAdd(vethDeviceRequest); err != nil {
+			return fmt.Errorf("failed to create veth pair: %v", err)
+		}
+
+		_, err := netlink.LinkByName(peerName)
+		if err != nil {
+			return fmt.Errorf("failed to find newly-created veth device %q: %v", peerName, err)
+		}
+		return nil
+	})
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func createMacvlan(namespace, master, macvlanName string) {
+	netNS, err := ns.GetNS(namespace)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = netNS.Do(func(_ ns.NetNS) error {
+		m, err := netlink.LinkByName(master)
+		if err != nil {
+			return fmt.Errorf("failed to lookup master %q: %v", master, err)
+		}
+
+		macvlanDeviceRequest := &netlink.Macvlan{
+			LinkAttrs: netlink.LinkAttrs{
+				MTU:         m.Attrs().MTU,
+				Name:        macvlanName,
+				ParentIndex: m.Attrs().Index,
+			},
+			Mode: netlink.MACVLAN_MODE_BRIDGE,
+		}
+
+		if err = netlink.LinkAdd(macvlanDeviceRequest); err != nil {
+			return fmt.Errorf("failed to create macvlan device: %s", err)
+		}
+
+		_, err = netlink.LinkByName(macvlanName)
+		if err != nil {
+			return fmt.Errorf("failed to find newly-created macvlan device %q: %v", macvlanName, err)
+		}
+		return nil
+	})
+	Expect(err).NotTo(HaveOccurred())
+}

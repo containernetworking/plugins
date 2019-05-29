@@ -621,6 +621,257 @@ var _ = Describe("bandwidth test", func() {
 		})
 	})
 
+	Describe("Getting the host interface which plugin should work on from veth peer of container interface", func() {
+		It("Should work with multiple host veth interfaces", func() {
+			conf := `{
+	"cniVersion": "0.4.0",
+	"name": "cni-plugin-bandwidth-test",
+	"type": "bandwidth",
+	"ingressRate": 8,
+	"ingressBurst": 8,
+	"egressRate": 16,
+	"egressBurst": 8,
+	"prevResult": {
+		"interfaces": [
+			{
+				"name": "%s",
+				"sandbox": ""
+			},
+			{
+				"name": "%s",
+				"sandbox": ""
+			},
+			{
+				"name": "%s",
+				"sandbox": ""
+			},
+			{
+				"name": "%s",
+				"sandbox": "%s"
+			}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "%s/24",
+				"gateway": "10.0.0.1",
+				"interface": 1
+			}
+		],
+		"routes": []
+	}
+}`
+
+			// create veth peer in host ns
+			vethName, peerName := "host-veth-peer1", "host-veth-peer2"
+			createVethInOneNs(hostNs.Path(), vethName, peerName)
+
+			conf = fmt.Sprintf(conf, vethName, peerName, hostIfname, containerIfname, containerNs.Path(), containerIP.String())
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       containerNs.Path(),
+				IfName:      containerIfname,
+				StdinData:   []byte(conf),
+			}
+
+			Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				defer GinkgoRecover()
+				r, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
+				Expect(err).NotTo(HaveOccurred(), string(out))
+				result, err := current.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(result.Interfaces).To(HaveLen(5))
+				Expect(result.Interfaces[4].Name).To(Equal(ifbDeviceName))
+				Expect(result.Interfaces[4].Sandbox).To(Equal(""))
+
+				ifbLink, err := netlink.LinkByName(ifbDeviceName)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ifbLink.Attrs().MTU).To(Equal(hostIfaceMTU))
+
+				qdiscs, err := netlink.QdiscList(ifbLink)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(qdiscs).To(HaveLen(1))
+				Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(ifbLink.Attrs().Index))
+
+				Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Tbf{}))
+				Expect(qdiscs[0].(*netlink.Tbf).Rate).To(Equal(uint64(2)))
+				Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
+
+				hostVethLink, err := netlink.LinkByName(hostIfname)
+				Expect(err).NotTo(HaveOccurred())
+
+				qdiscFilters, err := netlink.FilterList(hostVethLink, netlink.MakeHandle(0xffff, 0))
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(qdiscFilters).To(HaveLen(1))
+				Expect(qdiscFilters[0].(*netlink.U32).Actions[0].(*netlink.MirredAction).Ifindex).To(Equal(ifbLink.Attrs().Index))
+
+				return nil
+			})).To(Succeed())
+
+			Expect(hostNs.Do(func(n ns.NetNS) error {
+				defer GinkgoRecover()
+
+				ifbLink, err := netlink.LinkByName(hostIfname)
+				Expect(err).NotTo(HaveOccurred())
+
+				qdiscs, err := netlink.QdiscList(ifbLink)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(qdiscs).To(HaveLen(2))
+				Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(ifbLink.Attrs().Index))
+
+				Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Tbf{}))
+				Expect(qdiscs[0].(*netlink.Tbf).Rate).To(Equal(uint64(1)))
+				Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
+				return nil
+			})).To(Succeed())
+
+		})
+
+		It("Should fail when container interface has no veth peer", func() {
+			conf := `{
+	"cniVersion": "0.4.0",
+	"name": "cni-plugin-bandwidth-test",
+	"type": "bandwidth",
+	"ingressRate": 8,
+	"ingressBurst": 8,
+	"egressRate": 16,
+	"egressBurst": 8,
+	"prevResult": {
+		"interfaces": [
+			{
+				"name": "%s",
+				"sandbox": ""
+			},
+			{
+				"name": "%s",
+				"sandbox": "%s"
+			}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "%s/24",
+				"gateway": "10.0.0.1",
+				"interface": 1
+			}
+		],
+		"routes": []
+	}
+}`
+
+			// create a macvlan device to be container interface
+			macvlanContainerIfname := "container-macv"
+			createMacvlan(containerNs.Path(), containerIfname, macvlanContainerIfname)
+
+			conf = fmt.Sprintf(conf, hostIfname, macvlanContainerIfname, containerNs.Path(), containerIP.String())
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       containerNs.Path(),
+				IfName:      macvlanContainerIfname,
+				StdinData:   []byte(conf),
+			}
+
+			Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				defer GinkgoRecover()
+
+				_, _, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
+				Expect(err).To(HaveOccurred())
+
+				return nil
+			})).To(Succeed())
+		})
+
+		It("Should fail when preResult has no interfaces", func() {
+			conf := `{
+	"cniVersion": "0.4.0",
+	"name": "cni-plugin-bandwidth-test",
+	"type": "bandwidth",
+	"ingressRate": 8,
+	"ingressBurst": 8,
+	"egressRate": 16,
+	"egressBurst": 8,
+	"prevResult": {
+		"interfaces": [],
+		"ips": [],
+		"routes": []
+	}
+}`
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       containerNs.Path(),
+				IfName:      "eth0",
+				StdinData:   []byte(conf),
+			}
+
+			Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				defer GinkgoRecover()
+
+				_, _, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
+				Expect(err).To(HaveOccurred())
+
+				return nil
+			})).To(Succeed())
+		})
+
+		It("Should fail when veth peer of container interface does not match any of host interfaces in preResult", func() {
+			conf := `{
+	"cniVersion": "0.4.0",
+	"name": "cni-plugin-bandwidth-test",
+	"type": "bandwidth",
+	"ingressRate": 8,
+	"ingressBurst": 8,
+	"egressRate": 16,
+	"egressBurst": 8,
+	"prevResult": {
+		"interfaces": [
+			{
+				"name": "%s",
+				"sandbox": ""
+			},
+			{
+				"name": "%s",
+				"sandbox": "%s"
+			}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "%s/24",
+				"gateway": "10.0.0.1",
+				"interface": 1
+			}
+		],
+		"routes": []
+	}
+}`
+
+			// fake a non-exist host interface name
+			fakeHostIfname := fmt.Sprintf("%s-fake", hostIfname)
+
+			conf = fmt.Sprintf(conf, fakeHostIfname, containerIfname, containerNs.Path(), containerIP.String())
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       containerNs.Path(),
+				IfName:      containerIfname,
+				StdinData:   []byte(conf),
+			}
+
+			Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				defer GinkgoRecover()
+
+				_, _, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
+				Expect(err).To(HaveOccurred())
+
+				return nil
+			})).To(Succeed())
+		})
+	})
+
 	Context("when chaining bandwidth plugin with PTP using 0.3.0 config", func() {
 		var ptpConf string
 		var rateInBits int
