@@ -16,7 +16,7 @@ rm -Rf ${SRC_DIR}/${RELEASE_DIR}
 mkdir -p ${SRC_DIR}/${RELEASE_DIR}
 mkdir -p ${OUTPUT_DIR}
 
-$DOCKER run -v ${SRC_DIR}:/go/src/github.com/containernetworking/plugins --rm golang:1.10-alpine \
+$DOCKER run -ti -v ${SRC_DIR}:/go/src/github.com/containernetworking/plugins --rm golang:1.12-alpine \
 /bin/sh -xe -c "\
     apk --no-cache add bash tar;
     cd /go/src/github.com/containernetworking/plugins; umask 0022;
