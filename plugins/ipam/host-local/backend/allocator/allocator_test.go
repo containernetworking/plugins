@@ -221,14 +221,14 @@ var _ = Describe("host-local ip allocator", func() {
 		It("should not allocate the broadcast address", func() {
 			alloc := mkalloc()
 			for i := 2; i < 7; i++ {
-				res, err := alloc.Get("ID", "eth0", nil)
+				res, err := alloc.Get(fmt.Sprintf("ID%d", i), "eth0", nil)
 				Expect(err).ToNot(HaveOccurred())
 				s := fmt.Sprintf("192.168.1.%d/29", i)
 				Expect(s).To(Equal(res.Address.String()))
 				fmt.Fprintln(GinkgoWriter, "got ip", res.Address.String())
 			}
 
-			x, err := alloc.Get("ID", "eth0", nil)
+			x, err := alloc.Get("ID8", "eth0", nil)
 			fmt.Fprintln(GinkgoWriter, "got ip", x)
 			Expect(err).To(HaveOccurred())
 		})
