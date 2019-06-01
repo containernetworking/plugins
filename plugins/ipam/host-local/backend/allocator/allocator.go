@@ -40,7 +40,7 @@ func NewIPAllocator(s *RangeSet, store backend.Store, id int) *IPAllocator {
 	}
 }
 
-// Get alocates an IP
+// Get allocates an IP
 func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*current.IPConfig, error) {
 	a.store.Lock()
 	defer a.store.Unlock()
@@ -73,24 +73,39 @@ func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*curren
 		gw = r.Gateway
 
 	} else {
-		iter, err := a.GetIter()
-		if err != nil {
-			return nil, err
-		}
-		for {
-			reservedIP, gw = iter.Next()
-			if reservedIP == nil {
+		// try to get existing IPs which have been allocated to this id
+		existIPs := a.store.GetByID(id, ifname)
+		for _, existIP := range existIPs {
+			// check whether the existing IP belong to this range set
+			if r, err := a.rangeset.RangeFor(existIP); err == nil {
+				reservedIP = &net.IPNet{IP: existIP, Mask: r.Subnet.Mask}
+				gw = r.Gateway
 				break
 			}
+		}
 
-			reserved, err := a.store.Reserve(id, ifname, reservedIP.IP, a.rangeID)
+		// if no existing IP was found, try to reserve a new one
+		if reservedIP == nil {
+			iter, err := a.GetIter()
 			if err != nil {
 				return nil, err
 			}
+			for {
+				reservedIP, gw = iter.Next()
+				if reservedIP == nil {
+					break
+				}
 
-			if reserved {
-				break
+				reserved, err := a.store.Reserve(id, ifname, reservedIP.IP, a.rangeID)
+				if err != nil {
+					return nil, err
+				}
+
+				if reserved {
+					break
+				}
 			}
+
 		}
 	}
 
