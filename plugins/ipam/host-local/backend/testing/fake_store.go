@@ -81,6 +81,16 @@ func (s *FakeStore) ReleaseByID(id string, ifname string) error {
 	return nil
 }
 
+func (s *FakeStore) GetByID(id string, ifname string) []net.IP {
+	var ips []net.IP
+	for k, v := range s.ipMap {
+		if v == id {
+			ips = append(ips, net.ParseIP(k))
+		}
+	}
+	return ips
+}
+
 func (s *FakeStore) SetIPMap(m map[string]string) {
 	s.ipMap = m
 }
