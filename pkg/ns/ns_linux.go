@@ -46,7 +46,12 @@ func (ns *netNS) Close() error {
 	}
 	ns.closed = true
 
-	return nil
+	if err := unix.Unmount(ns.Path(), 0); err != nil {
+		return err
+	}
+	err := os.RemoveAll(ns.Path())
+	
+	return err
 }
 
 func (ns *netNS) Set() error {
