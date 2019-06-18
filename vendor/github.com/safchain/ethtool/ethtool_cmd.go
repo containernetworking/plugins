@@ -26,7 +26,6 @@
 package ethtool
 
 import (
-	"math"
 	"reflect"
 	"syscall"
 	"unsafe"
@@ -129,9 +128,6 @@ func (e *Ethtool) CmdGet(ecmd *EthtoolCmd, intf string) (uint32, error) {
 
 	var speedval uint32 = (uint32(ecmd.Speed_hi) << 16) |
 		(uint32(ecmd.Speed) & 0xffff)
-	if speedval == math.MaxUint16 {
-		speedval = math.MaxUint32
-	}
 
 	return speedval, nil
 }
@@ -157,9 +153,6 @@ func (e *Ethtool) CmdSet(ecmd *EthtoolCmd, intf string) (uint32, error) {
 
 	var speedval uint32 = (uint32(ecmd.Speed_hi) << 16) |
 		(uint32(ecmd.Speed) & 0xffff)
-	if speedval == math.MaxUint16 {
-		speedval = math.MaxUint32
-	}
 
 	return speedval, nil
 }

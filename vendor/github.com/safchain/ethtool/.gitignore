@@ -22,6 +22,3 @@ _testmain.go
 *.exe
 *.test
 *.prof
-
-# Skip compiled example binary file
-/example/example

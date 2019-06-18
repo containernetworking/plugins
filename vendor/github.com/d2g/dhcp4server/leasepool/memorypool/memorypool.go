@@ -81,23 +81,13 @@ func (t *MemoryPool) GetLease(leaseIP net.IP) (bool, leasepool.Lease, error) {
 	return false, leasepool.Lease{}, nil
 }
 
-func makeKey(macAddress net.HardwareAddr, clientID []byte) []byte {
-	key := []byte(macAddress)
-	if len(clientID) > 0 {
-		key = append(key, clientID...)
-	}
-	return key
-}
-
-//Get the lease already in use by that hardware address and/or client identifier.
-func (t *MemoryPool) GetLeaseForClient(macAddress net.HardwareAddr, clientID []byte) (bool, leasepool.Lease, error) {
+//Get the lease already in use by that hardware address.
+func (t *MemoryPool) GetLeaseForHardwareAddress(macAddress net.HardwareAddr) (bool, leasepool.Lease, error) {
 	t.poolLock.Lock()
 	defer t.poolLock.Unlock()
 
-	needleKey := makeKey(macAddress, clientID)
 	for i := range t.pool {
-		haystackKey := makeKey(t.pool[i].MACAddress, t.pool[i].ClientID)
-		if bytes.Equal(needleKey, haystackKey) {
+		if bytes.Equal(t.pool[i].MACAddress, macAddress) {
 			return true, t.pool[i], nil
 		}
 	}
@@ -149,7 +139,6 @@ func (t *MemoryPool) UpdateLease(lease leasepool.Lease) (bool, error) {
 		if t.pool[i].IP.Equal(lease.IP) {
 
 			t.pool[i].MACAddress = lease.MACAddress
-			t.pool[i].ClientID = lease.ClientID
 			t.pool[i].Hostname = lease.Hostname
 			t.pool[i].Expiry = lease.Expiry
 			t.pool[i].Status = lease.Status

@@ -22,7 +22,7 @@
 // These calls return err == nil to indicate success; otherwise
 // err represents an operating system error describing the failure and
 // holds a value of type syscall.Errno.
-package unix
+package unix // import "golang.org/x/sys/unix"
 
 import "strings"
 
@@ -50,5 +50,4 @@ func BytePtrFromString(s string) (*byte, error) {
 }
 
 // Single-word zero for use when we need a valid pointer to 0 bytes.
-// See mkunix.pl.
 var _zero uintptr
