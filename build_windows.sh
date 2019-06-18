@@ -12,6 +12,8 @@ ln -s ${PWD} ${GOPATH}/src/${REPO_PATH} || exit 255
 
 export GO="${GO:-go}"
 export GOOS=windows
+export GOFLAGS="${GOFLAGS} -mod=vendor"
+echo $GOFLAGS
 
 PLUGINS=$(cat plugins/windows_only.txt)
 for d in $PLUGINS; do
