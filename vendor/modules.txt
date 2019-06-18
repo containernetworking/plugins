@@ -84,7 +84,7 @@ github.com/onsi/gomega/matchers/support/goraph/bipartitegraph
 github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
-# github.com/safchain/ethtool v0.0.0-20170622225139-7ff1ba29eca2
+# github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
 github.com/safchain/ethtool
 # github.com/sirupsen/logrus v1.0.6
 github.com/sirupsen/logrus
