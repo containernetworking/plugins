@@ -52,3 +52,7 @@ The following [CNI_ARGS](https://github.com/containernetworking/cni/blob/master/
 * `GATEWAY`: request a specific gateway address
 
     (example: CNI_ARGS="IP=10.10.0.1/24;GATEWAY=10.10.0.254")
+
+The plugin also support following [capability argument](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md).
+
+* `ips`: Pass IP addresses for CNI interface

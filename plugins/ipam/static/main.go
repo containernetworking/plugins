@@ -34,6 +34,10 @@ type Net struct {
 	Name       string      `json:"name"`
 	CNIVersion string      `json:"cniVersion"`
 	IPAM       *IPAMConfig `json:"ipam"`
+
+	RuntimeConfig struct {
+		IPs []string `json:"ips,omitempty"`
+	} `json:"runtimeConfig,omitempty"`
 }
 
 type IPAMConfig struct {
@@ -132,6 +136,14 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	n := Net{}
 	if err := json.Unmarshal(bytes, &n); err != nil {
 		return nil, "", err
+	}
+
+	if len(n.RuntimeConfig.IPs) != 0 {
+		// args IP overwrites IP, so clear IPAM Config
+		n.IPAM.Addresses = make([]Address, 0, len(n.RuntimeConfig.IPs))
+		for _, addr := range n.RuntimeConfig.IPs {
+			n.IPAM.Addresses = append(n.IPAM.Addresses, Address{AddressStr: addr})
+		}
 	}
 
 	if n.IPAM == nil {
