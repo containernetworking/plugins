@@ -77,7 +77,7 @@ func makeVeth(name, vethPeerName string, mtu int) (peerName string, veth netlink
 			return
 
 		case os.IsExist(err):
-			if peerExists(peerName) {
+			if peerExists(peerName) && vethPeerName == "" {
 				continue
 			}
 			err = fmt.Errorf("container veth name provided (%v) already exists", name)
