@@ -1,0 +1,106 @@
+# github.com/Microsoft/go-winio v0.4.11
+github.com/Microsoft/go-winio
+# github.com/Microsoft/hcsshim v0.8.6
+github.com/Microsoft/hcsshim
+github.com/Microsoft/hcsshim/hcn
+github.com/Microsoft/hcsshim/internal/guid
+github.com/Microsoft/hcsshim/internal/hcs
+github.com/Microsoft/hcsshim/internal/hcserror
+github.com/Microsoft/hcsshim/internal/hns
+github.com/Microsoft/hcsshim/internal/mergemaps
+github.com/Microsoft/hcsshim/internal/schema1
+github.com/Microsoft/hcsshim/internal/wclayer
+github.com/Microsoft/hcsshim/internal/cni
+github.com/Microsoft/hcsshim/internal/interop
+github.com/Microsoft/hcsshim/internal/regstate
+github.com/Microsoft/hcsshim/internal/runhcs
+github.com/Microsoft/hcsshim/internal/guestrequest
+github.com/Microsoft/hcsshim/internal/logfields
+github.com/Microsoft/hcsshim/internal/timeout
+github.com/Microsoft/hcsshim/internal/schema2
+github.com/Microsoft/hcsshim/internal/longpath
+github.com/Microsoft/hcsshim/internal/safefile
+# github.com/alexflint/go-filemutex v0.0.0-20171022225611-72bdc8eae2ae
+github.com/alexflint/go-filemutex
+# github.com/buger/jsonparser v0.0.0-20180808090653-f4dd9f5a6b44
+github.com/buger/jsonparser
+# github.com/containernetworking/cni v0.7.0
+github.com/containernetworking/cni/pkg/types
+github.com/containernetworking/cni/pkg/types/current
+github.com/containernetworking/cni/pkg/invoke
+github.com/containernetworking/cni/pkg/skel
+github.com/containernetworking/cni/pkg/version
+github.com/containernetworking/cni/pkg/types/020
+github.com/containernetworking/cni/libcni
+# github.com/coreos/go-iptables v0.4.1
+github.com/coreos/go-iptables/iptables
+# github.com/coreos/go-systemd v0.0.0-20180511133405-39ca1b05acc7
+github.com/coreos/go-systemd/activation
+# github.com/d2g/dhcp4 v0.0.0-20170904100407-a1d1b6c41b1c
+github.com/d2g/dhcp4
+# github.com/d2g/dhcp4client v1.0.0
+github.com/d2g/dhcp4client
+# github.com/d2g/dhcp4server v0.0.0-20181031114812-7d4a0a7f59a5
+github.com/d2g/dhcp4server
+github.com/d2g/dhcp4server/leasepool
+github.com/d2g/dhcp4server/leasepool/memorypool
+# github.com/godbus/dbus v0.0.0-20180201030542-885f9cc04c9c
+github.com/godbus/dbus
+# github.com/j-keck/arping v0.0.0-20160618110441-2cf9dc699c56
+github.com/j-keck/arping
+# github.com/juju/errors v0.0.0-20180806074554-22422dad46e1
+github.com/juju/errors
+# github.com/mattn/go-shellwords v1.0.3
+github.com/mattn/go-shellwords
+# github.com/onsi/ginkgo v0.0.0-20151202141238-7f8ab55aaf3b
+github.com/onsi/ginkgo
+github.com/onsi/ginkgo/config
+github.com/onsi/ginkgo/extensions/table
+github.com/onsi/ginkgo/internal/codelocation
+github.com/onsi/ginkgo/internal/failer
+github.com/onsi/ginkgo/internal/remote
+github.com/onsi/ginkgo/internal/suite
+github.com/onsi/ginkgo/internal/testingtproxy
+github.com/onsi/ginkgo/internal/writer
+github.com/onsi/ginkgo/reporters
+github.com/onsi/ginkgo/reporters/stenographer
+github.com/onsi/ginkgo/types
+github.com/onsi/ginkgo/internal/containernode
+github.com/onsi/ginkgo/internal/leafnodes
+github.com/onsi/ginkgo/internal/spec
+github.com/onsi/ginkgo/internal/specrunner
+# github.com/onsi/gomega v0.0.0-20151007035656-2152b45fa28a
+github.com/onsi/gomega
+github.com/onsi/gomega/gbytes
+github.com/onsi/gomega/gexec
+github.com/onsi/gomega/internal/assertion
+github.com/onsi/gomega/internal/asyncassertion
+github.com/onsi/gomega/internal/testingtsupport
+github.com/onsi/gomega/matchers
+github.com/onsi/gomega/types
+github.com/onsi/gomega/format
+github.com/onsi/gomega/internal/oraclematcher
+github.com/onsi/gomega/matchers/support/goraph/bipartitegraph
+github.com/onsi/gomega/matchers/support/goraph/edge
+github.com/onsi/gomega/matchers/support/goraph/node
+github.com/onsi/gomega/matchers/support/goraph/util
+# github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
+github.com/safchain/ethtool
+# github.com/sirupsen/logrus v1.0.6
+github.com/sirupsen/logrus
+# github.com/vishvananda/netlink v0.0.0-20181108222139-023a6dafdcdf
+github.com/vishvananda/netlink
+github.com/vishvananda/netlink/nl
+# github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc
+github.com/vishvananda/netns
+# golang.org/x/crypto v0.0.0-20181009213950-7c1a557ab941
+golang.org/x/crypto/ssh/terminal
+# golang.org/x/net v0.0.0-20181011144130-49bb7cea24b1
+golang.org/x/net/ipv4
+golang.org/x/net/bpf
+golang.org/x/net/internal/iana
+golang.org/x/net/internal/socket
+# golang.org/x/sys v0.0.0-20190616124812-15dcb6c0061f
+golang.org/x/sys/unix
+golang.org/x/sys/windows
+golang.org/x/sys/windows/registry
