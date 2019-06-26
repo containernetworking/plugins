@@ -172,9 +172,6 @@ func (s *Server) ListenAndServe() error {
 	//	return err
 	//}
 
-	//Make Our Buffer (Max Buffer is 574) "I believe this 576 size comes from RFC 791" - Random Mailing list quote of the day.
-	buffer := make([]byte, 576)
-
 	log.Println("Trace: DHCP Server Listening.")
 
 	for {
@@ -182,6 +179,9 @@ func (s *Server) ListenAndServe() error {
 		if s.shouldShutdown() {
 			return nil
 		}
+
+		//Make Our Buffer (Max Buffer is 574) "I believe this 576 size comes from RFC 791" - Random Mailing list quote of the day.
+		buffer := make([]byte, 576)
 
 		//Set Read Deadline
 		s.connection.SetReadDeadline(time.Now().Add(time.Second))
@@ -213,7 +213,6 @@ func (s *Server) ListenAndServe() error {
 			}
 
 			log.Printf("Debug: Unexpect Error from Connection Read From: %v\n", err)
-			log.Printf("Debug: err type %T %#v\n", err, err)
 			return err
 		}
 
@@ -281,6 +280,13 @@ func (s *Server) ListenAndServe() error {
 	}
 }
 
+func getClientID(packetOptions dhcp4.Options) []byte {
+	if clientID, ok := packetOptions[dhcp4.OptionClientIdentifier]; ok {
+		return clientID
+	}
+	return nil
+}
+
 func (s *Server) ServeDHCP(packet dhcp4.Packet) (dhcp4.Packet, error) {
 	packetOptions := packet.ParseOptions()
 
@@ -307,6 +313,7 @@ func (s *Server) ServeDHCP(packet dhcp4.Packet) (dhcp4.Packet, error) {
 
 		lease.Status = leasepool.Reserved
 		lease.MACAddress = packet.CHAddr()
+		lease.ClientID = getClientID(packetOptions)
 
 		//If the lease expires within the next 5 Mins increase the lease expiary (Giving the Client 5 mins to complete)
 		if lease.Expiry.Before(time.Now().Add(time.Minute * 5)) {
@@ -351,6 +358,7 @@ func (s *Server) ServeDHCP(packet dhcp4.Packet) (dhcp4.Packet, error) {
 		} else {
 			lease.Status = leasepool.Active
 			lease.MACAddress = packet.CHAddr()
+			lease.ClientID = getClientID(packetOptions)
 
 			lease.Expiry = time.Now().Add(s.leaseDuration)
 
@@ -498,6 +506,8 @@ func (s *Server) DeclinePacket(requestPacket dhcp4.Packet) dhcp4.Packet {
 func (s *Server) GetLease(packet dhcp4.Packet) (found bool, lease leasepool.Lease, err error) {
 	packetOptions := packet.ParseOptions()
 
+	clientID := getClientID(packetOptions)
+
 	//Requested an IP
 	if (len(packetOptions) > 0) &&
 		packetOptions[dhcp4.OptionRequestedIPAddress] != nil &&
@@ -510,11 +520,15 @@ func (s *Server) GetLease(packet dhcp4.Packet) (found bool, lease leasepool.Leas
 		}
 
 		if found {
+			//If lease is free, return it to client. If it is not
+			//free match against the MAC address and client
+			//identifier.
 			if lease.Status == leasepool.Free {
 				//Lease Is Free you Can Have it.
 				return
 			}
-			if lease.Status != leasepool.Free && bytes.Equal(lease.MACAddress, packet.CHAddr()) {
+			if bytes.Equal(lease.MACAddress, packet.CHAddr()) &&
+				bytes.Equal(lease.ClientID, clientID) {
 				//Lease isn't free but it's yours
 				return
 			}
@@ -522,7 +536,7 @@ func (s *Server) GetLease(packet dhcp4.Packet) (found bool, lease leasepool.Leas
 	}
 
 	//Ok Even if you requested an IP you can't have it.
-	found, lease, err = s.leasePool.GetLeaseForHardwareAddress(packet.CHAddr())
+	found, lease, err = s.leasePool.GetLeaseForClient(packet.CHAddr(), clientID)
 	if found || err != nil {
 		return
 	}

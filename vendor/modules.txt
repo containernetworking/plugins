@@ -36,11 +36,11 @@ github.com/containernetworking/cni/libcni
 github.com/coreos/go-iptables/iptables
 # github.com/coreos/go-systemd v0.0.0-20180511133405-39ca1b05acc7
 github.com/coreos/go-systemd/activation
-# github.com/d2g/dhcp4 v0.0.0-20150413103026-f0e4d29ff023
+# github.com/d2g/dhcp4 v0.0.0-20170904100407-a1d1b6c41b1c
 github.com/d2g/dhcp4
 # github.com/d2g/dhcp4client v1.0.0
 github.com/d2g/dhcp4client
-# github.com/d2g/dhcp4server v0.0.0-20180209090800-477b11cea4dc
+# github.com/d2g/dhcp4server v0.0.0-20181031114812-7d4a0a7f59a5
 github.com/d2g/dhcp4server
 github.com/d2g/dhcp4server/leasepool
 github.com/d2g/dhcp4server/leasepool/memorypool
