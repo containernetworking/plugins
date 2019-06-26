@@ -283,7 +283,7 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 
 	err := netns.Do(func(hostNS ns.NetNS) error {
 		// create the veth pair in the container and move host end into host netns
-		hostVeth, containerVeth, err := ip.SetupVeth(ifName, "", mtu, hostNS)
+		hostVeth, containerVeth, err := ip.SetupVeth(ifName, mtu, hostNS)
 		if err != nil {
 			return err
 		}
