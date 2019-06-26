@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/containernetworking/cni/libcni"
 	"github.com/containernetworking/cni/pkg/types/current"
@@ -36,7 +37,10 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-const TIMEOUT = 90
+const (
+	TIMEOUT    = 90
+	cniTimeout = 30 * time.Second
+)
 
 var _ = Describe("portmap integration tests", func() {
 	var (
@@ -122,7 +126,11 @@ var _ = Describe("portmap integration tests", func() {
 				return nil
 			}
 			netDeleted = true
-			return cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig)
+
+			ctx, cancel := context.WithTimeout(context.Background(), cniTimeout)
+			defer cancel()
+
+			return cniConf.DelNetworkList(ctx, configList, &runtimeConfig)
 		}
 
 		// we'll also manually check the iptables chains
@@ -131,7 +139,10 @@ var _ = Describe("portmap integration tests", func() {
 		dnatChainName := genDnatChain("cni-portmap-unit-test", runtimeConfig.ContainerID).name
 
 		// Create the network
-		resI, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig)
+		ctx, cancel := context.WithTimeout(context.Background(), cniTimeout)
+		defer cancel()
+
+		resI, err := cniConf.AddNetworkList(ctx, configList, &runtimeConfig)
 		Expect(err).NotTo(HaveOccurred())
 		defer deleteNetwork()
 

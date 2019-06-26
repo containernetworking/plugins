@@ -35,6 +35,10 @@ import (
 	"github.com/onsi/gomega/gexec"
 )
 
+const (
+	delegateTimeout = 30 * time.Second
+)
+
 func buildOneConfig(name, cniVersion string, orig *PluginConf, prevResult types.Result) (*PluginConf, []byte, error) {
 	var err error
 
@@ -920,7 +924,10 @@ var _ = Describe("bandwidth test", func() {
 				defer GinkgoRecover()
 
 				containerWithTbfRes, _, err = testutils.CmdAdd(containerWithTbfNS.Path(), "dummy", containerWithTbfIFName, []byte(ptpConf), func() error {
-					r, err := invoke.DelegateAdd(context.TODO(), "ptp", []byte(ptpConf), nil)
+					ctx, cancel := context.WithTimeout(context.Background(), delegateTimeout)
+					defer cancel()
+
+					r, err := invoke.DelegateAdd(ctx, "ptp", []byte(ptpConf), nil)
 					Expect(r.Print()).To(Succeed())
 
 					return err
@@ -928,7 +935,10 @@ var _ = Describe("bandwidth test", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				containerWithoutTbfRes, _, err = testutils.CmdAdd(containerWithoutTbfNS.Path(), "dummy2", containerWithoutTbfIFName, []byte(ptpConf), func() error {
-					r, err := invoke.DelegateAdd(context.TODO(), "ptp", []byte(ptpConf), nil)
+					ctx, cancel := context.WithTimeout(context.Background(), delegateTimeout)
+					defer cancel()
+
+					r, err := invoke.DelegateAdd(ctx, "ptp", []byte(ptpConf), nil)
 					Expect(r.Print()).To(Succeed())
 
 					return err
@@ -1065,7 +1075,10 @@ var _ = Describe("bandwidth test", func() {
 				defer GinkgoRecover()
 
 				containerWithTbfRes, _, err = testutils.CmdAdd(containerWithTbfNS.Path(), "dummy", containerWithTbfIFName, []byte(ptpConf), func() error {
-					r, err := invoke.DelegateAdd(context.TODO(), "ptp", []byte(ptpConf), nil)
+					ctx, cancel := context.WithTimeout(context.Background(), delegateTimeout)
+					defer cancel()
+
+					r, err := invoke.DelegateAdd(ctx, "ptp", []byte(ptpConf), nil)
 					Expect(r.Print()).To(Succeed())
 
 					return err
@@ -1073,7 +1086,10 @@ var _ = Describe("bandwidth test", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				containerWithoutTbfRes, _, err = testutils.CmdAdd(containerWithoutTbfNS.Path(), "dummy2", containerWithoutTbfIFName, []byte(ptpConf), func() error {
-					r, err := invoke.DelegateAdd(context.TODO(), "ptp", []byte(ptpConf), nil)
+					ctx, cancel := context.WithTimeout(context.Background(), delegateTimeout)
+					defer cancel()
+
+					r, err := invoke.DelegateAdd(ctx, "ptp", []byte(ptpConf), nil)
 					Expect(r.Print()).To(Succeed())
 
 					return err
