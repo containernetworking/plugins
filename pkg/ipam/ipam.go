@@ -16,18 +16,51 @@ package ipam
 
 import (
 	"context"
+	"time"
+
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/types"
 )
 
+const (
+	delegateTimeout = 30 * time.Second
+)
+
+// ExecAdd delegates ADD action of CNI plugin
 func ExecAdd(plugin string, netconf []byte) (types.Result, error) {
-	return invoke.DelegateAdd(context.TODO(), plugin, netconf, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), delegateTimeout)
+	defer cancel()
+
+	return ExecAddWithContext(ctx, plugin, netconf)
 }
 
+// ExecCheck delegates CHECK action of CNI plugin
 func ExecCheck(plugin string, netconf []byte) error {
-	return invoke.DelegateCheck(context.TODO(), plugin, netconf, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), delegateTimeout)
+	defer cancel()
+
+	return ExecCheckWithContext(ctx, plugin, netconf)
 }
 
+// ExecDel delegates DEL action of CNI plugin
 func ExecDel(plugin string, netconf []byte) error {
-	return invoke.DelegateDel(context.TODO(), plugin, netconf, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), delegateTimeout)
+	defer cancel()
+
+	return ExecDelWithContext(ctx, plugin, netconf)
+}
+
+// ExecAddWithContext delegates ADD action of CNI plugin with context
+func ExecAddWithContext(ctx context.Context, plugin string, netconf []byte) (types.Result, error) {
+	return invoke.DelegateAdd(ctx, plugin, netconf, nil)
+}
+
+// ExecCheckWithContext delegates CHECK action of CNI plugin with context
+func ExecCheckWithContext(ctx context.Context, plugin string, netconf []byte) error {
+	return invoke.DelegateCheck(ctx, plugin, netconf, nil)
+}
+
+// ExecDelWithContext delegates DEL action of CNI plugin with context
+func ExecDelWithContext(ctx context.Context, plugin string, netconf []byte) error {
+	return invoke.DelegateDel(ctx, plugin, netconf, nil)
 }

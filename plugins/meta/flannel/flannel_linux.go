@@ -83,5 +83,8 @@ func doCmdDel(args *skel.CmdArgs, n *NetConf) error {
 		return fmt.Errorf("failed to parse netconf: %v", err)
 	}
 
-	return invoke.DelegateDel(context.TODO(), nc.Type, netconfBytes, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultDelegateTimeout)
+	defer cancel()
+
+	return invoke.DelegateDel(ctx, nc.Type, netconfBytes, nil)
 }

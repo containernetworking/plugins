@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
@@ -41,6 +42,8 @@ import (
 const (
 	defaultSubnetFile = "/run/flannel/subnet.env"
 	defaultDataDir    = "/var/lib/cni/flannel"
+
+	defaultDelegateTimeout = 30 * time.Second
 )
 
 type NetConf struct {
@@ -165,7 +168,10 @@ func delegateAdd(cid, dataDir string, netconf map[string]interface{}) error {
 		return err
 	}
 
-	result, err := invoke.DelegateAdd(context.TODO(), netconf["type"].(string), netconfBytes, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultDelegateTimeout)
+	defer cancel()
+
+	result, err := invoke.DelegateAdd(ctx, netconf["type"].(string), netconfBytes, nil)
 	if err != nil {
 		return err
 	}
