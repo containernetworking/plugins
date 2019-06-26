@@ -8,7 +8,7 @@ require (
 	github.com/alexflint/go-filemutex v0.0.0-20171022225611-72bdc8eae2ae
 	github.com/buger/jsonparser v0.0.0-20180808090653-f4dd9f5a6b44
 	github.com/containernetworking/cni v0.7.0
-	github.com/coreos/go-iptables v0.3.0
+	github.com/coreos/go-iptables v0.4.1
 	github.com/coreos/go-systemd v0.0.0-20180511133405-39ca1b05acc7
 	github.com/d2g/dhcp4 v0.0.0-20170904100407-a1d1b6c41b1c
 	github.com/d2g/dhcp4client v1.0.0
