@@ -265,6 +265,75 @@ var _ = Describe("static Operations", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	It("allocates and releases multiple addresses with ADD/DEL, from RuntimeConfig", func() {
+		const ifname string = "eth0"
+		const nspath string = "/some/where"
+
+		conf := `{
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"capabilities": {"ips": true},
+			"ipam": {
+				"type": "static",
+				"routes": [
+				{ "dst": "0.0.0.0/0", "gw": "10.10.0.254" },
+				{ "dst": "3ffe:ffff:0:01ff::1/64",
+                                  "gw": "3ffe:ffff:0::1" } ],
+				  "dns": {
+					"nameservers" : ["8.8.8.8"],
+					"domain": "example.com",
+					"search": [ "example.com" ]
+			        }
+			},
+			"RuntimeConfig": {
+				"ips" : ["10.10.0.1/24", "3ffe:ffff:0:01ff::1/64"]
+			}
+		}`
+
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       nspath,
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+
+		// Allocate the IP
+		r, raw, err := testutils.CmdAddWithArgs(args, func() error {
+			return cmdAdd(args)
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strings.Index(string(raw), "\"version\":")).Should(BeNumerically(">", 0))
+
+		result, err := current.GetResult(r)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Gomega is cranky about slices with different caps
+		Expect(*result.IPs[0]).To(Equal(
+			current.IPConfig{
+				Version: "4",
+				Address: mustCIDR("10.10.0.1/24"),
+			}))
+		Expect(*result.IPs[1]).To(Equal(
+			current.IPConfig{
+				Version: "6",
+				Address: mustCIDR("3ffe:ffff:0:01ff::1/64"),
+			},
+		))
+		Expect(len(result.IPs)).To(Equal(2))
+		Expect(result.Routes).To(Equal([]*types.Route{
+			{Dst: mustCIDR("0.0.0.0/0"), GW: net.ParseIP("10.10.0.254")},
+			{Dst: mustCIDR("3ffe:ffff:0:01ff::1/64"), GW: net.ParseIP("3ffe:ffff:0::1")},
+		}))
+
+		// Release the IP
+		err = testutils.CmdDelWithArgs(args, func() error {
+			return cmdDel(args)
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
 })
 
 func mustCIDR(s string) net.IPNet {

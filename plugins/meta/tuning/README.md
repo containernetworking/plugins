@@ -61,3 +61,6 @@ The following [CNI_ARGS](https://github.com/containernetworking/cni/blob/master/
 
 Note: You may add `IgnoreUnknown=true` to allow loose CNI argument verification (see CNI's issue[#560](https://github.com/containernetworking/cni/issues/560)).
 
+The plugin also support following [capability argument](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md).
+
+* `mac`: Pass MAC addresses for CNI interface
