@@ -189,9 +189,8 @@ var _ = Describe("Link", func() {
 		It("returns useful error", func() {
 			_ = containerNetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-
 				_, _, err := ip.SetupVeth(containerVethName, mtu, hostNetNS)
-				Expect(err.Error()).To(Equal("failed to move veth to host netns: file exists"))
+				Expect(err.Error()).To(HavePrefix("failed to move veth to host netns: "))
 
 				return nil
 			})
