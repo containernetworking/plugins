@@ -1,6 +1,6 @@
 language: go
 sudo: required
-dist: trusty
+dist: bionic
 
 go:
   - 1.11.x
