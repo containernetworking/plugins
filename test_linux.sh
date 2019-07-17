@@ -57,3 +57,10 @@ if [ -n "${vetRes}" ]; then
 	echo -e "govet checking failed:\n${vetRes}"
 	exit 255
 fi
+
+echo "Checking go mod verify..."
+modRes=$(go mod verify)
+if [ -n "${modRes}" ]; then
+	echo -e "go mod verify failed:\n${modRes}"
+	exit 255
+fi
