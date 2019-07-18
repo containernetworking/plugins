@@ -105,7 +105,7 @@ var _ = Describe("bandwidth test", func() {
 		hostIP = net.IP{169, 254, 0, 1}
 		containerIP = net.IP{10, 254, 0, 1}
 		hostIfaceMTU = 1024
-		ifbDeviceName = "5b6c"
+		ifbDeviceName = "bwpa8eda89404b7"
 
 		createVeth(hostNs.Path(), hostIfname, containerNs.Path(), containerIfname, hostIP, containerIP, hostIfaceMTU)
 	})
