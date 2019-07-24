@@ -32,7 +32,8 @@ With win-bridge plugin, all containers (on the same host) are plugged into an L2
                 "NeedEncap": true
             }
         }
-    ].          
+    ],
+    "loopbackDSR": true,
     "capabilities": {
         "dns": true
     }
@@ -51,5 +52,6 @@ With win-bridge plugin, all containers (on the same host) are plugged into an L2
 * `ipam` (dictionary, optional): IPAM configuration to be used for this network.
 * `Policies` (list, optional): List of hns policies to be used (only used when ApiVersion is < 2).
 * `HcnPolicyArgs` (list, optional): List of hcn policies to be used (only used when ApiVersion is 2).
-* `capabilities` (dictionary, optional): runtime capabilities to enable.
- * `dns` (boolean, optional): if true will take the dns config supplied by the runtime and override other settings.
+* `loopbackDSR` (bool, optional): If true, will add a policy to allow the interface to support loopback direct server return.
+* `capabilities` (dictionary, optional): Runtime capabilities to enable.
+ * `dns` (boolean, optional): If true, will take the dns config supplied by the runtime and override other settings.
