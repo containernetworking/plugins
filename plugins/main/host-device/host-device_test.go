@@ -240,7 +240,7 @@ var _ = Describe("base functionality", func() {
 		var origLink netlink.Link
 
 		// prepare ifname in original namespace
-		err := originalNS.Do(func(ns.NetNS) error {
+		_ = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			err := netlink.LinkAdd(&netlink.Dummy{
 				LinkAttrs: netlink.LinkAttrs{
@@ -254,7 +254,6 @@ var _ = Describe("base functionality", func() {
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
 
 		// call CmdAdd
 		targetNS, err := testutils.NewNS()
@@ -294,26 +293,24 @@ var _ = Describe("base functionality", func() {
 		}))
 
 		// assert that dummy0 is now in the target namespace
-		err = targetNS.Do(func(ns.NetNS) error {
+		_ = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			link, err := netlink.LinkByName(cniName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
 
 		// assert that dummy0 is now NOT in the original namespace anymore
-		err = originalNS.Do(func(ns.NetNS) error {
+		_ = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			_, err := netlink.LinkByName(ifname)
 			Expect(err).To(HaveOccurred())
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
 
 		// Check that deleting the device moves it back and restores the name
-		err = originalNS.Do(func(ns.NetNS) error {
+		_ = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			err = testutils.CmdDelWithArgs(args, func() error {
 				return cmdDel(args)
@@ -324,8 +321,6 @@ var _ = Describe("base functionality", func() {
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
-
 	})
 
 	It("Test idempotence of CmdDel", func() {
@@ -470,7 +465,7 @@ var _ = Describe("base functionality", func() {
 		var origLink netlink.Link
 
 		// prepare ifname in original namespace
-		err := originalNS.Do(func(ns.NetNS) error {
+		_ = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			err := netlink.LinkAdd(&netlink.Dummy{
 				LinkAttrs: netlink.LinkAttrs{
@@ -484,7 +479,6 @@ var _ = Describe("base functionality", func() {
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
 
 		// call CmdAdd
 		targetNS, err := testutils.NewNS()
@@ -532,7 +526,7 @@ var _ = Describe("base functionality", func() {
 		}))
 
 		// assert that dummy0 is now in the target namespace
-		err = targetNS.Do(func(ns.NetNS) error {
+		_ = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			link, err := netlink.LinkByName(cniName)
 			Expect(err).NotTo(HaveOccurred())
@@ -547,19 +541,17 @@ var _ = Describe("base functionality", func() {
 
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
 
 		// assert that dummy0 is now NOT in the original namespace anymore
-		err = originalNS.Do(func(ns.NetNS) error {
+		_ = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			_, err := netlink.LinkByName(ifname)
 			Expect(err).To(HaveOccurred())
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
 
 		// Check that deleting the device moves it back and restores the name
-		err = originalNS.Do(func(ns.NetNS) error {
+		_ = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			err = testutils.CmdDelWithArgs(args, func() error {
 				return cmdDel(args)
@@ -570,8 +562,6 @@ var _ = Describe("base functionality", func() {
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
-
 	})
 
 	It("fails an invalid config", func() {
@@ -596,7 +586,7 @@ var _ = Describe("base functionality", func() {
 		var origLink netlink.Link
 
 		// prepare ifname in original namespace
-		err := originalNS.Do(func(ns.NetNS) error {
+		_ = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			err := netlink.LinkAdd(&netlink.Dummy{
 				LinkAttrs: netlink.LinkAttrs{
@@ -610,7 +600,6 @@ var _ = Describe("base functionality", func() {
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
 
 		// call CmdAdd
 		targetNS, err := testutils.NewNS()
@@ -650,23 +639,21 @@ var _ = Describe("base functionality", func() {
 		}))
 
 		// assert that dummy0 is now in the target namespace
-		err = targetNS.Do(func(ns.NetNS) error {
+		_ = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			link, err := netlink.LinkByName(cniName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
 
 		// assert that dummy0 is now NOT in the original namespace anymore
-		err = originalNS.Do(func(ns.NetNS) error {
+		_ = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			_, err := netlink.LinkByName(ifname)
 			Expect(err).To(HaveOccurred())
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
 
 		// call CmdCheck
 		n := &Net{}
@@ -693,7 +680,7 @@ var _ = Describe("base functionality", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Check that deleting the device moves it back and restores the name
-		err = originalNS.Do(func(ns.NetNS) error {
+		_ = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			err = testutils.CmdDelWithArgs(args, func() error {
 				return cmdDel(args)
@@ -704,15 +691,13 @@ var _ = Describe("base functionality", func() {
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
-
 	})
 
 	It("Works with a valid 0.4.0 config with IPAM", func() {
 		var origLink netlink.Link
 
 		// prepare ifname in original namespace
-		err := originalNS.Do(func(ns.NetNS) error {
+		_ = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			err := netlink.LinkAdd(&netlink.Dummy{
 				LinkAttrs: netlink.LinkAttrs{
@@ -726,7 +711,6 @@ var _ = Describe("base functionality", func() {
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
 
 		// call CmdAdd
 		targetNS, err := testutils.NewNS()
@@ -774,7 +758,7 @@ var _ = Describe("base functionality", func() {
 		}))
 
 		// assert that dummy0 is now in the target namespace
-		err = targetNS.Do(func(ns.NetNS) error {
+		_ = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			link, err := netlink.LinkByName(cniName)
 			Expect(err).NotTo(HaveOccurred())
@@ -789,16 +773,14 @@ var _ = Describe("base functionality", func() {
 
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
 
 		// assert that dummy0 is now NOT in the original namespace anymore
-		err = originalNS.Do(func(ns.NetNS) error {
+		_ = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			_, err := netlink.LinkByName(ifname)
 			Expect(err).To(HaveOccurred())
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
 
 		// call CmdCheck
 		n := &Net{}
@@ -828,7 +810,7 @@ var _ = Describe("base functionality", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Check that deleting the device moves it back and restores the name
-		err = originalNS.Do(func(ns.NetNS) error {
+		_ = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			err = testutils.CmdDelWithArgs(args, func() error {
 				return cmdDel(args)
@@ -839,8 +821,6 @@ var _ = Describe("base functionality", func() {
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
-
 	})
 
 	It("Test idempotence of CmdDel with 0.4.0 config", func() {
