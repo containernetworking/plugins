@@ -328,6 +328,144 @@ var _ = Describe("base functionality", func() {
 
 	})
 
+	It("Test idempotence of CmdDel", func() {
+		var (
+			origLink     netlink.Link
+			conflictLink netlink.Link
+		)
+
+		// prepare host device in original namespace
+		_ = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			err := netlink.LinkAdd(&netlink.Dummy{
+				LinkAttrs: netlink.LinkAttrs{
+					Name: ifname,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			origLink, err = netlink.LinkByName(ifname)
+			Expect(err).NotTo(HaveOccurred())
+			err = netlink.LinkSetUp(origLink)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+
+		// call CmdAdd
+		targetNS, err := testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+
+		cniName := "eth0"
+		conf := fmt.Sprintf(`{
+			"cniVersion": "0.3.0",
+			"name": "cni-plugin-host-device-test",
+			"type": "host-device",
+			"device": %q
+		}`, ifname)
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNS.Path(),
+			IfName:      cniName,
+			StdinData:   []byte(conf),
+		}
+		var resI types.Result
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			var err error
+			resI, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+			return err
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// check that the result is sane
+		res, err := current.NewResultFromResult(resI)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Interfaces).To(Equal([]*current.Interface{
+			{
+				Name:    cniName,
+				Mac:     origLink.Attrs().HardwareAddr.String(),
+				Sandbox: targetNS.Path(),
+			},
+		}))
+
+		// assert that dummy0 is now in the target namespace
+		_ = targetNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			link, err := netlink.LinkByName(cniName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
+			return nil
+		})
+
+		// assert that dummy0 is now NOT in the original namespace anymore
+		_ = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			_, err := netlink.LinkByName(ifname)
+			Expect(err).To(HaveOccurred())
+			return nil
+		})
+
+		// create another conflict host device with same name "dummy0"
+		_ = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			err := netlink.LinkAdd(&netlink.Dummy{
+				LinkAttrs: netlink.LinkAttrs{
+					Name: ifname,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			conflictLink, err = netlink.LinkByName(ifname)
+			Expect(err).NotTo(HaveOccurred())
+			err = netlink.LinkSetUp(conflictLink)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+
+		// try to call CmdDel and fails
+		_ = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			err = testutils.CmdDelWithArgs(args, func() error {
+				return cmdDel(args)
+			})
+			Expect(err).To(HaveOccurred())
+			return nil
+		})
+
+		// assert container interface "eth0" still exists in target namespace
+		_ = targetNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			link, err := netlink.LinkByName(cniName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
+			return nil
+		})
+
+		// remove the conflict host device
+		_ = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			err = netlink.LinkDel(conflictLink)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+
+		// try to call CmdDel and succeed
+		_ = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			err = testutils.CmdDelWithArgs(args, func() error {
+				return cmdDel(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+
+		// assert that dummy0 is now back in the original namespace
+		_ = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			_, err := netlink.LinkByName(ifname)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+	})
+
 	It("Works with a valid config with IPAM", func() {
 		var origLink netlink.Link
 
@@ -705,4 +843,142 @@ var _ = Describe("base functionality", func() {
 
 	})
 
+	It("Test idempotence of CmdDel with 0.4.0 config", func() {
+		var (
+			origLink     netlink.Link
+			conflictLink netlink.Link
+		)
+
+		// prepare host device in original namespace
+		_ = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			err := netlink.LinkAdd(&netlink.Dummy{
+				LinkAttrs: netlink.LinkAttrs{
+					Name: ifname,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			origLink, err = netlink.LinkByName(ifname)
+			Expect(err).NotTo(HaveOccurred())
+			err = netlink.LinkSetUp(origLink)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+
+		// call CmdAdd
+		targetNS, err := testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+
+		cniName := "eth0"
+		conf := fmt.Sprintf(`{
+			"cniVersion": "0.4.0",
+			"name": "cni-plugin-host-device-test",
+			"type": "host-device",
+			"device": %q
+		}`, ifname)
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNS.Path(),
+			IfName:      cniName,
+			StdinData:   []byte(conf),
+		}
+		var resI types.Result
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			var err error
+			resI, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+			return err
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// check that the result is sane
+		res, err := current.NewResultFromResult(resI)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Interfaces).To(Equal([]*current.Interface{
+			{
+				Name:    cniName,
+				Mac:     origLink.Attrs().HardwareAddr.String(),
+				Sandbox: targetNS.Path(),
+			},
+		}))
+
+		// assert that dummy0 is now in the target namespace
+		_ = targetNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			link, err := netlink.LinkByName(cniName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
+			return nil
+		})
+
+		// assert that dummy0 is now NOT in the original namespace anymore
+		_ = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			_, err := netlink.LinkByName(ifname)
+			Expect(err).To(HaveOccurred())
+			return nil
+		})
+
+		// create another conflict host device with same name "dummy0"
+		_ = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			err := netlink.LinkAdd(&netlink.Dummy{
+				LinkAttrs: netlink.LinkAttrs{
+					Name: ifname,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			conflictLink, err = netlink.LinkByName(ifname)
+			Expect(err).NotTo(HaveOccurred())
+			err = netlink.LinkSetUp(conflictLink)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+
+		// try to call CmdDel and fails
+		_ = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			err = testutils.CmdDelWithArgs(args, func() error {
+				return cmdDel(args)
+			})
+			Expect(err).To(HaveOccurred())
+			return nil
+		})
+
+		// assert container interface "eth0" still exists in target namespace
+		err = targetNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			link, err := netlink.LinkByName(cniName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// remove the conflict host device
+		_ = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			err = netlink.LinkDel(conflictLink)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+
+		// try to call CmdDel and succeed
+		_ = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			err = testutils.CmdDelWithArgs(args, func() error {
+				return cmdDel(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+
+		// assert that dummy0 is now back in the original namespace
+		_ = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			_, err := netlink.LinkByName(ifname)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+	})
 })
