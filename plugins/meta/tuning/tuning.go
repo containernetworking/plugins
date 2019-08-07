@@ -93,15 +93,7 @@ func changeMacAddr(ifName string, newMacAddr string) error {
 		return fmt.Errorf("failed to get %q: %v", ifName, err)
 	}
 
-	err = netlink.LinkSetDown(link)
-	if err != nil {
-		return fmt.Errorf("failed to set %q down: %v", ifName, err)
-	}
-	err = netlink.LinkSetHardwareAddr(link, addr)
-	if err != nil {
-		return fmt.Errorf("failed to set %q address to %q: %v", ifName, newMacAddr, err)
-	}
-	return netlink.LinkSetUp(link)
+	return netlink.LinkSetHardwareAddr(link, addr)
 }
 
 func updateResultsMacAddr(config TuningConf, ifName string, newMacAddr string) {
