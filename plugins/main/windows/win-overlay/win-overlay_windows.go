@@ -17,6 +17,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 
@@ -118,7 +119,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		result.DNS = n.GetDNS()
-
+		if n.LoopbackDSR {
+			n.ApplyLoopbackDSR(&ipAddr)
+		}
 		hnsEndpoint := &hcsshim.HNSEndpoint{
 			Name:           epName,
 			VirtualNetwork: hnsNetwork.Id,

@@ -17,6 +17,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 
@@ -38,7 +39,6 @@ type NetConf struct {
 	hns.NetConf
 
 	IPMasqNetwork string `json:"ipMasqNetwork,omitempty"`
-	ApiVersion    int    `json:"ApiVersion"`
 }
 
 func init() {
@@ -103,7 +103,7 @@ func cmdHnsAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 		return nil, fmt.Errorf("network %v not found", networkName)
 	}
 
-	if !strings.EqualFold(hnsNetwork.Type, "L2Bridge") {
+	if !strings.EqualFold(hnsNetwork.Type, "L2Bridge") && !strings.EqualFold(hnsNetwork.Type, "L2Tunnel") {
 		return nil, fmt.Errorf("network %v is of an unexpected type: %v", networkName, hnsNetwork.Type)
 	}
 
@@ -145,7 +145,7 @@ func cmdHcnAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 		return nil, fmt.Errorf("network %v not found", networkName)
 	}
 
-	if hcnNetwork.Type != hcn.L2Bridge {
+	if hcnNetwork.Type != hcn.L2Bridge && hcnNetwork.Type != hcn.L2Tunnel {
 		return nil, fmt.Errorf("network %v is of unexpected type: %v", networkName, hcnNetwork.Type)
 	}
 

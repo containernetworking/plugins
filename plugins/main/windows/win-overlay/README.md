@@ -14,11 +14,11 @@ With win-overlay plugin, all containers (on the same host) are plugged into an O
 	"ipam": {
 		"type": "host-local",
 		"subnet": "10.10.0.0/16"
-	}
+	},
+    "loopbackDSR": true,
     "capabilites": {
         "dns": true
     }
-
 }
 ```
 
@@ -33,5 +33,6 @@ With win-overlay plugin, all containers (on the same host) are plugged into an O
 * `endpointMacPrefix` (string, optional): set to the MAC prefix configured for Flannel.
 * `Policies` (list, optional): List of hns policies to be used.
 * `ipam` (dictionary, required): IPAM configuration to be used for this network.
+* `loopbackDSR` (bool, optional): If true, will add a policy to allow the interface to support loopback direct server return.
 * `capabilities` (dictionary, optional): runtime capabilities to be parsed and injected by runtime.
- * `dns` (boolean, optional): if true will take the dns config supplied by the runtime and override other settings.
+ * `dns` (boolean, optional): If true, will take the dns config supplied by the runtime and override other settings.
