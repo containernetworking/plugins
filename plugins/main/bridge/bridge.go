@@ -170,7 +170,7 @@ func ensureBridgeAddr(br *netlink.Bridge, family int, ipn *net.IPNet, forceAddre
 	}
 
 	addr := &netlink.Addr{IPNet: ipn, Label: ""}
-	if err := netlink.AddrAdd(br, addr); err != nil {
+	if err := netlink.AddrAdd(br, addr); err != nil && err != syscall.EEXIST {
 		return fmt.Errorf("could not add IP address to %q: %v", br.Name, err)
 	}
 
