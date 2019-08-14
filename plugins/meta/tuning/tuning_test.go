@@ -215,6 +215,67 @@ var _ = Describe("tuning plugin", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
+	It("configures and deconfigures promiscuous mode from args with ADD/DEL", func() {
+		conf := []byte(`{
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.3.1",
+        "args": {
+            "cni": {
+	        "promisc": true
+            }
+        },
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
+
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       originalNS.Path(),
+			IfName:      IFNAME,
+			StdinData:   conf,
+		}
+
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			r, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := current.GetResult(r)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(result.Interfaces)).To(Equal(1))
+			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+			Expect(len(result.IPs)).To(Equal(1))
+			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+			link, err := netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().Promisc).To(Equal(1))
+
+			err = testutils.CmdDel(originalNS.Path(),
+				args.ContainerID, "", func() error { return cmdDel(args) })
+			Expect(err).NotTo(HaveOccurred())
+
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	It("configures and deconfigures mtu with ADD/DEL", func() {
 		conf := []byte(`{
 	"name": "test",
@@ -272,12 +333,136 @@ var _ = Describe("tuning plugin", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
+	It("configures and deconfigures mtu from args with ADD/DEL", func() {
+		conf := []byte(`{
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.3.1",
+        "args": {
+            "cni": {
+                "mtu": 1454
+            }
+        },
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
+
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       originalNS.Path(),
+			IfName:      IFNAME,
+			StdinData:   conf,
+		}
+
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			r, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := current.GetResult(r)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(result.Interfaces)).To(Equal(1))
+			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+			Expect(len(result.IPs)).To(Equal(1))
+			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+			link, err := netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().MTU).To(Equal(1454))
+
+			err = testutils.CmdDel(originalNS.Path(),
+				args.ContainerID, "", func() error { return cmdDel(args) })
+			Expect(err).NotTo(HaveOccurred())
+
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	It("configures and deconfigures mac address (from conf file) with ADD/DEL", func() {
 		conf := []byte(`{
 	"name": "test",
 	"type": "iplink",
 	"cniVersion": "0.3.1",
 	"mac": "c2:11:22:33:44:55",
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
+
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       originalNS.Path(),
+			IfName:      IFNAME,
+			StdinData:   conf,
+		}
+
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			r, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := current.GetResult(r)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(result.Interfaces)).To(Equal(1))
+			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+			Expect(len(result.IPs)).To(Equal(1))
+			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+			link, err := netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			hw, err := net.ParseMAC("c2:11:22:33:44:55")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr).To(Equal(hw))
+
+			err = testutils.CmdDel(originalNS.Path(),
+				args.ContainerID, "", func() error { return cmdDel(args) })
+			Expect(err).NotTo(HaveOccurred())
+
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("configures and deconfigures mac address (from args) with ADD/DEL", func() {
+		conf := []byte(`{
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.3.1",
+        "args": {
+            "cni": {
+                "mac": "c2:11:22:33:44:55"
+            }
+        },
 	"prevResult": {
 		"interfaces": [
 			{"name": "dummy0", "sandbox":"netns"}
