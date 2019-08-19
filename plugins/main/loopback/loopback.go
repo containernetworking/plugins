@@ -15,6 +15,9 @@
 package main
 
 import (
+	"errors"
+	"net"
+
 	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -78,6 +81,18 @@ func main() {
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
-	// TODO: implement
-	return nil
+	args.IfName = "lo" // ignore config, this only works for loopback
+
+	return ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+		link, err := netlink.LinkByName(args.IfName)
+		if err != nil {
+			return err
+		}
+
+		if link.Attrs().Flags&net.FlagUp != net.FlagUp {
+			return errors.New("loopback interface is down")
+		}
+
+		return nil
+	})
 }
