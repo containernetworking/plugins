@@ -27,7 +27,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/020"
+	types020 "github.com/containernetworking/cni/pkg/types/020"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
@@ -1125,6 +1125,7 @@ var _ = Describe("bridge Operations", func() {
 	AfterEach(func() {
 		Expect(os.RemoveAll(dataDir)).To(Succeed())
 		Expect(originalNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
 	})
 
 	It("creates a bridge", func() {

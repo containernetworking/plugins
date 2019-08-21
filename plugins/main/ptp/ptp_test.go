@@ -98,6 +98,7 @@ var _ = Describe("ptp Operations", func() {
 
 	AfterEach(func() {
 		Expect(originalNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
 	})
 
 	doTest := func(conf string, numIPs int) {
