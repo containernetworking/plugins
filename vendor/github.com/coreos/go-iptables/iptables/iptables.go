@@ -348,6 +348,18 @@ func (ipt *IPTables) executeList(args []string) ([]string, error) {
 		rules = rules[:len(rules)-1]
 	}
 
+	// nftables mode doesn't return an error code when listing a non-existent
+	// chain. Patch that up.
+	if len(rules) == 0 && ipt.mode == "nf_tables" {
+		v := 1
+		return nil, &Error{
+			cmd:        exec.Cmd{Args: args},
+			msg:        fmt.Sprintf("%s: No chain/target/match by that name.\n", getIptablesCommand(ipt.proto)),
+			proto:      ipt.proto,
+			exitStatus: &v,
+		}
+	}
+
 	for i, rule := range rules {
 		rules[i] = filterRuleOutput(rule)
 	}
@@ -425,7 +437,6 @@ func (ipt *IPTables) runWithOutput(args []string, stdout io.Writer) error {
 		}
 		ul, err := fmu.tryLock()
 		if err != nil {
-			syscall.Close(fmu.fd)
 			return err
 		}
 		defer ul.Unlock()
