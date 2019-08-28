@@ -15,9 +15,15 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net"
+
 	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 
@@ -25,9 +31,32 @@ import (
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
+func parseNetConf(bytes []byte) (*types.NetConf, error) {
+	conf := &types.NetConf{}
+	if err := json.Unmarshal(bytes, conf); err != nil {
+		return nil, fmt.Errorf("failed to parse network config: %v", err)
+	}
+
+	if conf.RawPrevResult != nil {
+		if err := version.ParsePrevResult(conf); err != nil {
+			return nil, fmt.Errorf("failed to parse prevResult: %v", err)
+		}
+		if _, err := current.NewResultFromResult(conf.PrevResult); err != nil {
+			return nil, fmt.Errorf("failed to convert result to current version: %v", err)
+		}
+	}
+
+	return conf, nil
+}
+
 func cmdAdd(args *skel.CmdArgs) error {
+	conf, err := parseNetConf(args.StdinData)
+	if err != nil {
+		return err
+	}
+
 	args.IfName = "lo" // ignore config, this only works for loopback
-	err := ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		link, err := netlink.LinkByName(args.IfName)
 		if err != nil {
 			return err // not tested
@@ -44,8 +73,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err // not tested
 	}
 
-	result := current.Result{}
-	return result.Print()
+	var result types.Result
+	if conf.PrevResult != nil {
+		// If loopback has previous result which passes from previous CNI plugin,
+		// loopback should pass it transparently
+		result = conf.PrevResult
+	} else {
+		result = &current.Result{}
+	}
+
+	return types.PrintResult(result, conf.CNIVersion)
 }
 
 func cmdDel(args *skel.CmdArgs) error {
@@ -78,6 +115,18 @@ func main() {
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
-	// TODO: implement
-	return nil
+	args.IfName = "lo" // ignore config, this only works for loopback
+
+	return ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+		link, err := netlink.LinkByName(args.IfName)
+		if err != nil {
+			return err
+		}
+
+		if link.Attrs().Flags&net.FlagUp != net.FlagUp {
+			return errors.New("loopback interface is down")
+		}
+
+		return nil
+	})
 }
