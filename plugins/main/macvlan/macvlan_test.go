@@ -123,6 +123,7 @@ var _ = Describe("macvlan Operations", func() {
 
 	AfterEach(func() {
 		Expect(originalNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
 	})
 
 	It("creates an macvlan link in a non-default namespace", func() {

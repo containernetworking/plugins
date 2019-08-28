@@ -54,6 +54,7 @@ var _ = Describe("Loopback", func() {
 
 	AfterEach(func() {
 		Expect(networkNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(networkNS)).To(Succeed())
 	})
 
 	Context("when given a network namespace", func() {

@@ -233,7 +233,8 @@ var _ = Describe("base functionality", func() {
 	})
 
 	AfterEach(func() {
-		originalNS.Close()
+		Expect(originalNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
 	})
 
 	It("Works with a valid config without IPAM", func() {

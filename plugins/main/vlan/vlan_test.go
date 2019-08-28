@@ -121,6 +121,7 @@ var _ = Describe("vlan Operations", func() {
 
 	AfterEach(func() {
 		Expect(originalNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
 	})
 
 	It("creates an vlan link in a non-default namespace with given MTU", func() {

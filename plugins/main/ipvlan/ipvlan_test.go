@@ -297,6 +297,7 @@ var _ = Describe("ipvlan Operations", func() {
 
 	AfterEach(func() {
 		Expect(originalNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
 	})
 
 	It("creates an ipvlan link in a non-default namespace", func() {
