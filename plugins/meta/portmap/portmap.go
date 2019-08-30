@@ -224,6 +224,16 @@ func fillDnatRules(c *chain, config *PortMapConf, containerIP net.IP) {
 	// the ordering is important here; the mark rules must be first.
 	c.rules = make([][]string, 0, 3*len(entries))
 	for _, entry := range entries {
+		// If a HostIP is given, only process the entry if host and container address families match
+		if entry.HostIP != "" {
+			hostIP := net.ParseIP(entry.HostIP)
+			isHostV6 := (hostIP.To4() == nil)
+
+			if isV6 != isHostV6 {
+				continue
+			}
+		}
+
 		ruleBase := []string{
 			"-p", entry.Protocol,
 			"--dport", strconv.Itoa(entry.HostPort)}
