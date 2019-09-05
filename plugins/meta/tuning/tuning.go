@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -179,7 +180,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	_, err = current.NewResultFromResult(tuningConf.PrevResult)
+	result, err := current.NewResultFromResult(tuningConf.PrevResult)
 	if err != nil {
 		return err
 	}
@@ -208,6 +209,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if err = changeMacAddr(args.IfName, tuningConf.Mac); err != nil {
 				return err
 			}
+
+			for _, ipc := range result.IPs {
+				if ipc.Version == "4" {
+					_ = arping.GratuitousArpOverIfaceByName(ipc.Address.IP, args.IfName)
+				}
+			}
+
 			updateResultsMacAddr(*tuningConf, args.IfName, tuningConf.Mac)
 		}
 
