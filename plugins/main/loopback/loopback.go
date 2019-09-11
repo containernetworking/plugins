@@ -55,6 +55,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	var v4Addr, v6Addr *net.IPNet
+
 	args.IfName = "lo" // ignore config, this only works for loopback
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		link, err := netlink.LinkByName(args.IfName)
@@ -65,6 +67,33 @@ func cmdAdd(args *skel.CmdArgs) error {
 		err = netlink.LinkSetUp(link)
 		if err != nil {
 			return err // not tested
+		}
+		v4Addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+		if err != nil {
+			return err // not tested
+		}
+		if len(v4Addrs) != 0 {
+			v4Addr = v4Addrs[0].IPNet
+			// sanity check that this is a loopback address
+			for _, addr := range v4Addrs {
+				if !addr.IP.IsLoopback() {
+					return fmt.Errorf("loopback interface found with non-loopback address %q", addr.IP)
+				}
+			}
+		}
+
+		v6Addrs, err := netlink.AddrList(link, netlink.FAMILY_V6)
+		if err != nil {
+			return err // not tested
+		}
+		if len(v6Addrs) != 0 {
+			v6Addr = v6Addrs[0].IPNet
+			// sanity check that this is a loopback address
+			for _, addr := range v4Addrs {
+				if !addr.IP.IsLoopback() {
+					return fmt.Errorf("loopback interface found with non-loopback address %q", addr.IP)
+				}
+			}
 		}
 
 		return nil
@@ -79,7 +108,26 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// loopback should pass it transparently
 		result = conf.PrevResult
 	} else {
-		result = &current.Result{}
+		loopbackInterface := &current.Interface{Name: args.IfName, Mac: "00:00:00:00:00:00", Sandbox: args.Netns}
+		r := &current.Result{CNIVersion: conf.CNIVersion, Interfaces: []*current.Interface{loopbackInterface}}
+
+		if v4Addr != nil {
+			r.IPs = append(r.IPs, &current.IPConfig{
+				Version:   "4",
+				Interface: current.Int(0),
+				Address:   *v4Addr,
+			})
+		}
+
+		if v6Addr != nil {
+			r.IPs = append(r.IPs, &current.IPConfig{
+				Version:   "6",
+				Interface: current.Int(0),
+				Address:   *v6Addr,
+			})
+		}
+
+		result = r
 	}
 
 	return types.PrintResult(result, conf.CNIVersion)
