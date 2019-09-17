@@ -17,6 +17,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -101,7 +102,7 @@ var _ = Describe("ptp Operations", func() {
 		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
 	})
 
-	doTest := func(conf string, numIPs int) {
+	doTest := func(conf string, numIPs int, expectedDNSConf types.DNS) {
 		const IFNAME = "ptp0"
 
 		targetNs, err := testutils.NewNS()
@@ -175,6 +176,9 @@ var _ = Describe("ptp Operations", func() {
 		Expect(res.Interfaces[1].Name).To(Equal(IFNAME))
 		Expect(res.Interfaces[1].Mac).To(Equal(wantMac))
 		Expect(res.Interfaces[1].Sandbox).To(Equal(targetNs.Path()))
+
+		// make sure DNS is correct
+		Expect(res.DNS).To(Equal(expectedDNSConf))
 
 		// Call the plugins with the DEL command, deleting the veth endpoints
 		err = originalNS.Do(func(ns.NetNS) error {
@@ -328,7 +332,16 @@ var _ = Describe("ptp Operations", func() {
 	}
 
 	It("configures and deconfigures a ptp link with ADD/DEL", func() {
-		conf := `{
+		dnsConf := types.DNS{
+			Nameservers: []string{"10.1.2.123"},
+			Domain:      "some.domain.test",
+			Search:      []string{"search.test"},
+			Options:     []string{"option1:foo"},
+		}
+		dnsConfBytes, err := json.Marshal(dnsConf)
+		Expect(err).NotTo(HaveOccurred())
+
+		conf := fmt.Sprintf(`{
     "cniVersion": "0.3.1",
     "name": "mynet",
     "type": "ptp",
@@ -337,10 +350,11 @@ var _ = Describe("ptp Operations", func() {
     "ipam": {
         "type": "host-local",
         "subnet": "10.1.2.0/24"
-    }
-}`
+    },
+    "dns": %s
+}`, string(dnsConfBytes))
 
-		doTest(conf, 1)
+		doTest(conf, 1, dnsConf)
 	})
 
 	It("configures and deconfigures a dual-stack ptp link with ADD/DEL", func() {
@@ -359,7 +373,112 @@ var _ = Describe("ptp Operations", func() {
     }
 }`
 
-		doTest(conf, 2)
+		doTest(conf, 2, types.DNS{})
+	})
+
+	It("does not override IPAM DNS settings if no DNS settings provided", func() {
+		ipamDNSConf := types.DNS{
+			Nameservers: []string{"10.1.2.123"},
+			Domain:      "some.domain.test",
+			Search:      []string{"search.test"},
+			Options:     []string{"option1:foo"},
+		}
+		resolvConfPath, err := testutils.TmpResolvConf(ipamDNSConf)
+		Expect(err).NotTo(HaveOccurred())
+		defer os.RemoveAll(resolvConfPath)
+
+		conf := fmt.Sprintf(`{
+    "cniVersion": "0.3.1",
+    "name": "mynet",
+    "type": "ptp",
+    "ipMasq": true,
+    "mtu": 5000,
+    "ipam": {
+        "type": "host-local",
+        "subnet": "10.1.2.0/24",
+        "resolvConf": "%s"
+    }
+}`, resolvConfPath)
+
+		doTest(conf, 1, ipamDNSConf)
+	})
+
+	It("overrides IPAM DNS settings if any DNS settings provided", func() {
+		ipamDNSConf := types.DNS{
+			Nameservers: []string{"10.1.2.123"},
+			Domain:      "some.domain.test",
+			Search:      []string{"search.test"},
+			Options:     []string{"option1:foo"},
+		}
+		resolvConfPath, err := testutils.TmpResolvConf(ipamDNSConf)
+		Expect(err).NotTo(HaveOccurred())
+		defer os.RemoveAll(resolvConfPath)
+
+		for _, ptpDNSConf := range []types.DNS{
+			{
+				Nameservers: []string{"10.1.2.234"},
+			},
+			{
+				Domain: "someother.domain.test",
+			},
+			{
+				Search: []string{"search.elsewhere.test"},
+			},
+			{
+				Options: []string{"option2:bar"},
+			},
+		} {
+			dnsConfBytes, err := json.Marshal(ptpDNSConf)
+			Expect(err).NotTo(HaveOccurred())
+
+			conf := fmt.Sprintf(`{
+    "cniVersion": "0.3.1",
+    "name": "mynet",
+    "type": "ptp",
+    "ipMasq": true,
+    "mtu": 5000,
+    "ipam": {
+        "type": "host-local",
+        "subnet": "10.1.2.0/24",
+        "resolvConf": "%s"
+    },
+    "dns": %s
+}`, resolvConfPath, string(dnsConfBytes))
+
+			doTest(conf, 1, ptpDNSConf)
+		}
+	})
+
+	It("overrides IPAM DNS settings if any empty list DNS settings provided", func() {
+		ipamDNSConf := types.DNS{
+			Nameservers: []string{"10.1.2.123"},
+			Domain:      "some.domain.test",
+			Search:      []string{"search.test"},
+			Options:     []string{"option1:foo"},
+		}
+		resolvConfPath, err := testutils.TmpResolvConf(ipamDNSConf)
+		Expect(err).NotTo(HaveOccurred())
+		defer os.RemoveAll(resolvConfPath)
+
+		conf := fmt.Sprintf(`{
+    "cniVersion": "0.3.1",
+    "name": "mynet",
+    "type": "ptp",
+    "ipMasq": true,
+    "mtu": 5000,
+    "ipam": {
+        "type": "host-local",
+        "subnet": "10.1.2.0/24",
+        "resolvConf": "%s"
+    },
+    "dns": {
+        "nameservers": [],
+        "search": [],
+        "options": []
+    }
+}`, resolvConfPath)
+
+		doTest(conf, 1, types.DNS{})
 	})
 
 	It("deconfigures an unconfigured ptp link with DEL", func() {

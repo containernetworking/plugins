@@ -247,10 +247,23 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	}
 
-	result.DNS = conf.DNS
+	// Only override the DNS settings in the previous result if any DNS fields
+	// were provided to the ptp plugin. This allows, for example, IPAM plugins
+	// to specify the DNS settings instead of the ptp plugin.
+	if dnsConfSet(conf.DNS) {
+		result.DNS = conf.DNS
+	}
+
 	result.Interfaces = []*current.Interface{hostInterface, containerInterface}
 
 	return types.PrintResult(result, conf.CNIVersion)
+}
+
+func dnsConfSet(dnsConf types.DNS) bool {
+	return dnsConf.Nameservers != nil ||
+		dnsConf.Search != nil ||
+		dnsConf.Options != nil ||
+		dnsConf.Domain != ""
 }
 
 func cmdDel(args *skel.CmdArgs) error {
