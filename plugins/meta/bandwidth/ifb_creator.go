@@ -50,7 +50,7 @@ func TeardownIfb(deviceName string) error {
 	return err
 }
 
-func CreateIngressQdisc(rateInBits, burstInBits int, hostDeviceName string) error {
+func CreateIngressQdisc(rateInBits, burstInBits uint64, hostDeviceName string) error {
 	hostDevice, err := netlink.LinkByName(hostDeviceName)
 	if err != nil {
 		return fmt.Errorf("get host device: %s", err)
@@ -58,7 +58,7 @@ func CreateIngressQdisc(rateInBits, burstInBits int, hostDeviceName string) erro
 	return createTBF(rateInBits, burstInBits, hostDevice.Attrs().Index)
 }
 
-func CreateEgressQdisc(rateInBits, burstInBits int, hostDeviceName string, ifbDeviceName string) error {
+func CreateEgressQdisc(rateInBits, burstInBits uint64, hostDeviceName string, ifbDeviceName string) error {
 	ifbDevice, err := netlink.LinkByName(ifbDeviceName)
 	if err != nil {
 		return fmt.Errorf("get ifb device: %s", err)
@@ -113,7 +113,7 @@ func CreateEgressQdisc(rateInBits, burstInBits int, hostDeviceName string, ifbDe
 	return nil
 }
 
-func createTBF(rateInBits, burstInBits, linkIndex int) error {
+func createTBF(rateInBits, burstInBits uint64, linkIndex int) error {
 	// Equivalent to
 	// tc qdisc add dev link root tbf
 	//		rate netConf.BandwidthLimits.Rate
