@@ -68,9 +68,15 @@ func parseConf(data []byte) (*FirewallNetConf, *current.Result, error) {
 		return nil, nil, fmt.Errorf("failed to load netconf: %v", err)
 	}
 
+	// Default the firewalld zone to trusted
+	if conf.FirewalldZone == "" {
+		conf.FirewalldZone = "trusted"
+	}
+
 	// Parse previous result.
 	if conf.RawPrevResult == nil {
-		return nil, nil, fmt.Errorf("missing prevResult from earlier plugin")
+		// return early if there was no previous result, which is allowed for DEL calls
+		return &conf, &current.Result{}, nil
 	}
 
 	// Parse previous result.
@@ -83,11 +89,6 @@ func parseConf(data []byte) (*FirewallNetConf, *current.Result, error) {
 	result, err = current.NewResultFromResult(conf.PrevResult)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not convert result to current version: %v", err)
-	}
-
-	// Default the firewalld zone to trusted
-	if conf.FirewalldZone == "" {
-		conf.FirewalldZone = "trusted"
 	}
 
 	return &conf, result, nil
@@ -114,6 +115,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 	conf, result, err := parseConf(args.StdinData)
 	if err != nil {
 		return err
+	}
+
+	if conf.PrevResult == nil {
+		return fmt.Errorf("missing prevResult from earlier plugin")
 	}
 
 	backend, err := getBackend(conf)
@@ -167,8 +172,8 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 
 	// Ensure we have previous result.
-	if result == nil {
-		return fmt.Errorf("Required prevResult missing")
+	if conf.PrevResult == nil {
+		return fmt.Errorf("missing prevResult from earlier plugin")
 	}
 
 	backend, err := getBackend(conf)
