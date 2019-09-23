@@ -621,6 +621,21 @@ var _ = Describe("bandwidth test", func() {
 		})
 	})
 
+	Describe("Validating input", func() {
+		It("Should allow only 4GB burst rate", func() {
+			err := validateRateAndBurst(5000, 4*1024*1024*1024*8-16) // 2 bytes less than the max should pass
+			Expect(err).NotTo(HaveOccurred())
+			err = validateRateAndBurst(5000, 4*1024*1024*1024*8) // we're 1 bit above MaxUint32
+			Expect(err).To(HaveOccurred())
+			err = validateRateAndBurst(0, 1)
+			Expect(err).To(HaveOccurred())
+			err = validateRateAndBurst(1, 0)
+			Expect(err).To(HaveOccurred())
+			err = validateRateAndBurst(0, 0)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
 	Describe("Getting the host interface which plugin should work on from veth peer of container interface", func() {
 		It("Should work with multiple host veth interfaces", func() {
 			conf := `{
@@ -874,8 +889,8 @@ var _ = Describe("bandwidth test", func() {
 
 	Context("when chaining bandwidth plugin with PTP using 0.3.0 config", func() {
 		var ptpConf string
-		var rateInBits int
-		var burstInBits int
+		var rateInBits uint64
+		var burstInBits uint64
 		var packetInBytes int
 		var containerWithoutTbfNS ns.NetNS
 		var containerWithTbfNS ns.NetNS
@@ -889,7 +904,7 @@ var _ = Describe("bandwidth test", func() {
 
 		BeforeEach(func() {
 			rateInBytes := 1000
-			rateInBits = rateInBytes * 8
+			rateInBits = uint64(rateInBytes * 8)
 			burstInBits = rateInBits * 2
 			packetInBytes = rateInBytes * 25
 
@@ -1019,8 +1034,8 @@ var _ = Describe("bandwidth test", func() {
 
 	Context("when chaining bandwidth plugin with PTP using 0.4.0 config", func() {
 		var ptpConf string
-		var rateInBits int
-		var burstInBits int
+		var rateInBits uint64
+		var burstInBits uint64
 		var packetInBytes int
 		var containerWithoutTbfNS ns.NetNS
 		var containerWithTbfNS ns.NetNS
@@ -1034,7 +1049,7 @@ var _ = Describe("bandwidth test", func() {
 
 		BeforeEach(func() {
 			rateInBytes := 1000
-			rateInBits = rateInBytes * 8
+			rateInBits = uint64(rateInBytes * 8)
 			burstInBits = rateInBits * 2
 			packetInBytes = rateInBytes * 25
 
