@@ -27,7 +27,6 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 
-	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
@@ -145,12 +144,6 @@ func cmdDel(args *skel.CmdArgs) error {
 	backend, err := getBackend(conf)
 	if err != nil {
 		return err
-	}
-
-	// Tolerate errors if the container namespace has been torn down already
-	containerNS, err := ns.GetNS(args.Netns)
-	if err == nil {
-		defer containerNS.Close()
 	}
 
 	// Runtime errors are ignored
