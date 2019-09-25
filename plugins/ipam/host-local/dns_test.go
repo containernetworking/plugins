@@ -65,12 +65,11 @@ options four
 
 func parse(contents string) (*types.DNS, error) {
 	f, err := ioutil.TempFile("", "host_local_resolv")
-	defer f.Close()
-	defer os.Remove(f.Name())
-
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
+	defer os.Remove(f.Name())
 
 	if _, err := f.WriteString(contents); err != nil {
 		return nil, err
