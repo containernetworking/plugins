@@ -20,9 +20,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
+	"path/filepath"
 	"runtime"
 	"syscall"
 
+	"github.com/alexflint/go-filemutex"
 	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
 
@@ -41,6 +44,7 @@ import (
 var debugPostIPAMError error
 
 const defaultBrName = "cni0"
+const defaultLockDir = "/var/lib/cni/bridge"
 
 type NetConf struct {
 	types.NetConf
@@ -53,12 +57,19 @@ type NetConf struct {
 	HairpinMode  bool   `json:"hairpinMode"`
 	PromiscMode  bool   `json:"promiscMode"`
 	Vlan         int    `json:"vlan"`
+	Prune        bool   `json:"prune"`
+	LockDir      string `json:"lockDir"`
 }
 
 type gwInfo struct {
 	gws               []net.IPNet
 	family            int
 	defaultRouteFound bool
+}
+
+// BridgeLock wraps os.File to be used as a lock using flock for bridge
+type BridgeLock struct {
+	f *filemutex.FileMutex
 }
 
 func init() {
@@ -76,6 +87,52 @@ func loadNetConf(bytes []byte) (*NetConf, string, error) {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
 	}
 	return n, n.CNIVersion, nil
+}
+
+func createLockDir(lockDir string) error {
+	if lockDir == "" {
+		lockDir = defaultLockDir
+	}
+
+	if err := os.MkdirAll(lockDir, 0755); err != nil {
+		return err
+	}
+	return nil
+}
+
+// NewBridgeLock opens file/dir at path and returns unlocked FileLock object
+func NewBridgeLock(lockDir, bridge string) (*BridgeLock, error) {
+	if lockDir == "" {
+		lockDir = defaultLockDir
+	}
+	path := filepath.Join(lockDir, fmt.Sprintf("%s.lock", bridge))
+
+	if err := createLockDir(lockDir); err != nil {
+		return nil, err
+	}
+
+	f, err := filemutex.New(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return &BridgeLock{f}, nil
+}
+
+// Close closes the lock structure
+func (b *BridgeLock) Close() error {
+	b.f.Unlock()
+	return b.f.Close()
+}
+
+// Lock acquires an exclusive lock
+func (b *BridgeLock) Lock() error {
+	return b.f.Lock()
+}
+
+// Unlock releases the lock
+func (b *BridgeLock) Unlock() error {
+	return b.f.Unlock()
 }
 
 // calcGateways processes the results from the IPAM plugin and does the
@@ -375,6 +432,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	lock, err := NewBridgeLock(n.LockDir, n.BrName)
+	lock.Lock()
+	defer lock.Close()
+
 	isLayer3 := n.IPAM.Type != ""
 
 	if n.IsDefaultGW {
@@ -400,6 +461,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
+	lock.Unlock()
 
 	// Assume L2 interface only
 	result := &current.Result{CNIVersion: cniVersion, Interfaces: []*current.Interface{brInterface, hostInterface, containerInterface}}
@@ -562,6 +624,9 @@ func cmdDel(args *skel.CmdArgs) error {
 		return nil
 	}
 
+	lock, err := NewBridgeLock(n.LockDir, n.BrName)
+	lock.Lock()
+	defer lock.Close()
 	// There is a netns so try to clean up. Delete can be called multiple times
 	// so don't return an error if the device is already removed.
 	// If the device isn't there then don't try to clean up IP masq either.
@@ -574,6 +639,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		}
 		return err
 	})
+	lock.Unlock()
 
 	if err != nil {
 		return err
@@ -586,6 +652,39 @@ func cmdDel(args *skel.CmdArgs) error {
 			if err := ip.TeardownIPMasq(ipn, chain, comment); err != nil {
 				return err
 			}
+		}
+	}
+
+	// Remove bride if prunening is required
+	if n.Prune == true {
+		links, err := netlink.LinkList()
+		if err != nil {
+			return err
+		}
+
+		var br netlink.Link
+		brIndex := 0
+		for _, l := range links {
+			if l.Attrs().Name == n.BrName {
+				brIndex = l.Attrs().Index
+				br = l
+				break
+			}
+		}
+
+		if brIndex == 0 {
+			return fmt.Errorf("cannot found bridge")
+		}
+
+		portCount := 0
+		for _, l := range links {
+			if l.Attrs().MasterIndex == brIndex {
+				portCount = portCount + 1
+				break
+			}
+		}
+		if portCount == 0 {
+			netlink.LinkDel(br)
 		}
 	}
 

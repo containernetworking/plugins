@@ -73,6 +73,7 @@ type testCase struct {
 	expGWCIDRs []string // Expected gateway addresses in CIDR form
 	vlan       int
 	ipMasq     bool
+	prune      bool
 }
 
 // Range definition for each entry in the ranges list
@@ -126,6 +127,9 @@ const (
 	gatewayConfStr = `,
         "gateway": "%s"`
 
+	pruneConfStr = `,
+        "prune": %t`
+
 	// Ranges (multiple subnets) configuration
 	rangesStartStr = `,
         "ranges": [`
@@ -154,6 +158,9 @@ func (tc testCase) netConfJSON(dataDir string) string {
 	}
 	if tc.ipMasq {
 		conf += tc.ipMasqConfig()
+	}
+	if tc.prune {
+		conf += tc.pruneConfig()
 	}
 
 	if !tc.isLayer2 {
@@ -188,6 +195,11 @@ func (tc testCase) subnetConfig() string {
 
 func (tc testCase) ipMasqConfig() string {
 	conf := fmt.Sprintf(ipMasqConfStr, tc.ipMasq)
+	return conf
+}
+
+func (tc testCase) pruneConfig() string {
+	conf := fmt.Sprintf(pruneConfStr, tc.prune)
 	return conf
 }
 
@@ -1017,7 +1029,9 @@ func cmdAddDelTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	tester.cmdDelTest(tc, dataDir)
 
 	// Clean up bridge addresses for next test case
-	delBridgeAddrs(testNS)
+	if tc.prune != true {
+		delBridgeAddrs(testNS)
+	}
 }
 
 func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result) (*Net, error) {
@@ -1641,6 +1655,40 @@ var _ = Describe("bridge Operations", func() {
 				return cmdDel(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("configures and deconfigures a bridge with prune using ADD/DEL for 0.4.0 config", func() {
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			tc := testCase{
+				ranges: []rangeInfo{{
+					subnet: "10.1.2.0/24",
+				}},
+				prune:      true,
+				cniVersion: "0.4.0",
+			}
+
+			args := tc.createCmdArgs(originalNS, dataDir)
+			r, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			result, err := current.GetResult(r)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IPs).Should(HaveLen(1))
+
+			err = testutils.CmdDelWithArgs(args, func() error {
+				return cmdDel(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			//Check if bridge is removed
+			br, err := netlink.LinkByName(BRNAME)
+			fmt.Printf("XXX: %v %v\n", br, err)
+			Expect(err).To(HaveOccurred())
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())

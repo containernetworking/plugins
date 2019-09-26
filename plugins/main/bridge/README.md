@@ -53,6 +53,7 @@ If the bridge is missing, the plugin will create one on first use and, if gatewa
 * `ipam` (dictionary, required): IPAM configuration to be used for this network. For L2-only network, create empty dictionary.
 * `promiscMode` (boolean, optional): set promiscuous mode on the bridge. Defaults to false.
 * `vlan` (int, optional): assign VLAN tag. Defaults to none.
+* `prune` (boolean, optional): Prune the bridge if not used so far. Defaults to false.
 
 *Note:* The VLAN parameter configures the VLAN tag on the host end of the veth and also enables the vlan_filtering feature on the bridge interface.
 
