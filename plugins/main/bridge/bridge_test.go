@@ -1645,4 +1645,48 @@ var _ = Describe("bridge Operations", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	It("check vlan id when loading net conf", func() {
+		tests := []struct {
+			tc  testCase
+			err error
+		}{
+			{
+				tc: testCase{
+					cniVersion: "0.4.0",
+				},
+				err: nil,
+			},
+			{
+				tc: testCase{
+					cniVersion: "0.4.0",
+					vlan:       0,
+				},
+				err: nil,
+			},
+			{
+				tc: testCase{
+					cniVersion: "0.4.0",
+					vlan:       -100,
+				},
+				err: fmt.Errorf("invalid VLAN ID -100 (must be between 0 and 4094)"),
+			},
+			{
+				tc: testCase{
+					cniVersion: "0.4.0",
+					vlan:       5000,
+				},
+				err: fmt.Errorf("invalid VLAN ID 5000 (must be between 0 and 4094)"),
+			},
+		}
+
+		for _, test := range tests {
+			_, _, err := loadNetConf([]byte(test.tc.netConfJSON("")))
+			if test.err == nil {
+				Expect(err).To(BeNil())
+			} else {
+				Expect(err).To(Equal(test.err))
+			}
+		}
+	})
 })
