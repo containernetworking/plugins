@@ -27,7 +27,6 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 
-	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
@@ -68,9 +67,15 @@ func parseConf(data []byte) (*FirewallNetConf, *current.Result, error) {
 		return nil, nil, fmt.Errorf("failed to load netconf: %v", err)
 	}
 
+	// Default the firewalld zone to trusted
+	if conf.FirewalldZone == "" {
+		conf.FirewalldZone = "trusted"
+	}
+
 	// Parse previous result.
 	if conf.RawPrevResult == nil {
-		return nil, nil, fmt.Errorf("missing prevResult from earlier plugin")
+		// return early if there was no previous result, which is allowed for DEL calls
+		return &conf, &current.Result{}, nil
 	}
 
 	// Parse previous result.
@@ -83,11 +88,6 @@ func parseConf(data []byte) (*FirewallNetConf, *current.Result, error) {
 	result, err = current.NewResultFromResult(conf.PrevResult)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not convert result to current version: %v", err)
-	}
-
-	// Default the firewalld zone to trusted
-	if conf.FirewalldZone == "" {
-		conf.FirewalldZone = "trusted"
 	}
 
 	return &conf, result, nil
@@ -116,6 +116,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	if conf.PrevResult == nil {
+		return fmt.Errorf("missing prevResult from earlier plugin")
+	}
+
 	backend, err := getBackend(conf)
 	if err != nil {
 		return err
@@ -142,12 +146,6 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	// Tolerate errors if the container namespace has been torn down already
-	containerNS, err := ns.GetNS(args.Netns)
-	if err == nil {
-		defer containerNS.Close()
-	}
-
 	// Runtime errors are ignored
 	if err := backend.Del(conf, result); err != nil {
 		return err
@@ -167,8 +165,8 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 
 	// Ensure we have previous result.
-	if result == nil {
-		return fmt.Errorf("Required prevResult missing")
+	if conf.PrevResult == nil {
+		return fmt.Errorf("missing prevResult from earlier plugin")
 	}
 
 	backend, err := getBackend(conf)
