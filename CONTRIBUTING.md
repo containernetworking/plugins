@@ -75,7 +75,7 @@ go get github.com/onsi/ginkgo/ginkgo
 cd /go/src/github.com/containernetworking/plugins
 
 # to run the full test suite
-./test.sh
+./test_linux.sh
 
 # to focus on a particular test suite
 cd plugins/main/loopback
