@@ -72,6 +72,7 @@ vagrant ssh
 # you're now in a shell in a virtual machine
 sudo su
 go get github.com/onsi/ginkgo/ginkgo
+go install github.com/containernetworking/cni/cnitool
 cd /go/src/github.com/containernetworking/plugins
 
 # to run the full test suite
