@@ -76,7 +76,7 @@ func loadNetConf(bytes []byte) (*NetConf, string, error) {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
 	}
 	if n.Vlan < 0 || n.Vlan > 4094 {
-		return nil, "", fmt.Errorf(`invalid VLAN ID %d (must be between 0 and 4094)`, n.Vlan)
+		return nil, "", fmt.Errorf("invalid VLAN ID %d (must be between 0 and 4094)", n.Vlan)
 	}
 	return n, n.CNIVersion, nil
 }

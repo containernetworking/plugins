@@ -53,10 +53,10 @@ func loadConf(bytes []byte) (*NetConf, string, error) {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
 	}
 	if n.Master == "" {
-		return nil, "", fmt.Errorf(`"master" field is required. It specifies the host interface name to create the VLAN for.`)
+		return nil, "", fmt.Errorf("\"master\" field is required. It specifies the host interface name to create the VLAN for.")
 	}
 	if n.VlanId < 0 || n.VlanId > 4094 {
-		return nil, "", fmt.Errorf(`invalid VLAN ID %d (must be between 0 and 4095 inclusive)`, n.VlanId)
+		return nil, "", fmt.Errorf("invalid VLAN ID %d (must be between 0 and 4095 inclusive)", n.VlanId)
 	}
 	return n, n.CNIVersion, nil
 }
