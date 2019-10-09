@@ -17,6 +17,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/vishvananda/netlink"
 
@@ -37,11 +38,11 @@ const ifbDevicePrefix = "bwp"
 // BandwidthEntry corresponds to a single entry in the bandwidth argument,
 // see CONVENTIONS.md
 type BandwidthEntry struct {
-	IngressRate  int `json:"ingressRate"`  //Bandwidth rate in bps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
-	IngressBurst int `json:"ingressBurst"` //Bandwidth burst in bits for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
+	IngressRate  uint64 `json:"ingressRate"`  //Bandwidth rate in bps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
+	IngressBurst uint64 `json:"ingressBurst"` //Bandwidth burst in bits for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
 
-	EgressRate  int `json:"egressRate"`  //Bandwidth rate in bps for traffic through container. 0 for no limit. If egressRate is set, egressBurst must also be set
-	EgressBurst int `json:"egressBurst"` //Bandwidth burst in bits for traffic through container. 0 for no limit. If egressBurst is set, egressRate must also be set
+	EgressRate  uint64 `json:"egressRate"`  //Bandwidth rate in bps for traffic through container. 0 for no limit. If egressRate is set, egressBurst must also be set
+	EgressBurst uint64 `json:"egressBurst"` //Bandwidth burst in bits for traffic through container. 0 for no limit. If egressBurst is set, egressRate must also be set
 }
 
 func (bw *BandwidthEntry) isZero() bool {
@@ -101,7 +102,7 @@ func getBandwidth(conf *PluginConf) *BandwidthEntry {
 	return conf.BandwidthEntry
 }
 
-func validateRateAndBurst(rate int, burst int) error {
+func validateRateAndBurst(rate, burst uint64) error {
 	switch {
 	case burst < 0 || rate < 0:
 		return fmt.Errorf("rate and burst must be a positive integer")
@@ -109,6 +110,8 @@ func validateRateAndBurst(rate int, burst int) error {
 		return fmt.Errorf("if rate is set, burst must also be set")
 	case rate == 0 && burst != 0:
 		return fmt.Errorf("if burst is set, rate must also be set")
+	case burst/8 >= math.MaxUint32:
+		return fmt.Errorf("burst cannot be more than 4GB")
 	}
 
 	return nil
