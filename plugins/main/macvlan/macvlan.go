@@ -85,7 +85,25 @@ func loadConf(bytes []byte) (*NetConf, string, error) {
 		}
 		n.Master = defaultRouteInterface
 	}
+
+	// check existing and MTU of master interface
+	masterMTU, err := getMTUByName(n.Master)
+	if err != nil {
+		return nil, "", err
+	}
+	if n.MTU < 0 || n.MTU > masterMTU {
+		return nil, "", fmt.Errorf("invalid MTU %d, must be [0, master MTU(%d)]", n.MTU, masterMTU)
+	}
+
 	return n, n.CNIVersion, nil
+}
+
+func getMTUByName(ifName string) (int, error) {
+	link, err := netlink.LinkByName(ifName)
+	if err != nil {
+		return 0, err
+	}
+	return link.Attrs().MTU, nil
 }
 
 func modeFromString(s string) (netlink.MacvlanMode, error) {
