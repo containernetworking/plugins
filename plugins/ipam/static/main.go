@@ -145,11 +145,44 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		return nil, "", err
 	}
 
-	if len(n.RuntimeConfig.IPs) != 0 {
-		// args IP overwrites IP, so clear IPAM Config
-		n.IPAM.Addresses = make([]Address, 0, len(n.RuntimeConfig.IPs))
-		for _, addr := range n.RuntimeConfig.IPs {
-			n.IPAM.Addresses = append(n.IPAM.Addresses, Address{AddressStr: addr})
+	// load IP from CNI_ARGS
+	if envArgs != "" {
+		e := IPAMEnvArgs{}
+		err := types.LoadArgs(envArgs, &e)
+		if err != nil {
+			return nil, "", err
+		}
+
+		if e.IP != "" {
+			for _, item := range strings.Split(string(e.IP), ",") {
+				ipstr := strings.TrimSpace(item)
+
+				ip, subnet, err := net.ParseCIDR(ipstr)
+				if err != nil {
+					return nil, "", fmt.Errorf("invalid CIDR %s: %s", ipstr, err)
+				}
+
+				addr := Address{
+					Address:    net.IPNet{IP: ip, Mask: subnet.Mask},
+					AddressStr: ipstr,
+				}
+				n.IPAM.Addresses = append(n.IPAM.Addresses, addr)
+			}
+		}
+
+		if e.GATEWAY != "" {
+			for _, item := range strings.Split(string(e.GATEWAY), ",") {
+				gwip := net.ParseIP(strings.TrimSpace(item))
+				if gwip == nil {
+					return nil, "", fmt.Errorf("invalid gateway address: %s", item)
+				}
+
+				for i := range n.IPAM.Addresses {
+					if n.IPAM.Addresses[i].Address.Contains(gwip) {
+						n.IPAM.Addresses[i].Gateway = gwip
+					}
+				}
+			}
 		}
 	}
 
@@ -158,6 +191,15 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		// args IP overwrites IP, so clear IPAM Config
 		n.IPAM.Addresses = make([]Address, 0, len(n.Args.A.IPs))
 		for _, addr := range n.Args.A.IPs {
+			n.IPAM.Addresses = append(n.IPAM.Addresses, Address{AddressStr: addr})
+		}
+	}
+
+	// import address from runtimeConfig
+	if len(n.RuntimeConfig.IPs) != 0 {
+		// runtimeConfig IP overwrites IP, so clear IPAM Config
+		n.IPAM.Addresses = make([]Address, 0, len(n.RuntimeConfig.IPs))
+		for _, addr := range n.RuntimeConfig.IPs {
 			n.IPAM.Addresses = append(n.IPAM.Addresses, Address{AddressStr: addr})
 		}
 	}
@@ -188,50 +230,6 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		} else {
 			n.IPAM.Addresses[i].Version = "6"
 			numV6++
-		}
-	}
-
-	if envArgs != "" {
-		e := IPAMEnvArgs{}
-		err := types.LoadArgs(envArgs, &e)
-		if err != nil {
-			return nil, "", err
-		}
-
-		if e.IP != "" {
-			for _, item := range strings.Split(string(e.IP), ",") {
-				ipstr := strings.TrimSpace(item)
-
-				ip, subnet, err := net.ParseCIDR(ipstr)
-				if err != nil {
-					return nil, "", fmt.Errorf("invalid CIDR %s: %s", ipstr, err)
-				}
-
-				addr := Address{Address: net.IPNet{IP: ip, Mask: subnet.Mask}}
-				if addr.Address.IP.To4() != nil {
-					addr.Version = "4"
-					numV4++
-				} else {
-					addr.Version = "6"
-					numV6++
-				}
-				n.IPAM.Addresses = append(n.IPAM.Addresses, addr)
-			}
-		}
-
-		if e.GATEWAY != "" {
-			for _, item := range strings.Split(string(e.GATEWAY), ",") {
-				gwip := net.ParseIP(strings.TrimSpace(item))
-				if gwip == nil {
-					return nil, "", fmt.Errorf("invalid gateway address: %s", item)
-				}
-
-				for i := range n.IPAM.Addresses {
-					if n.IPAM.Addresses[i].Address.Contains(gwip) {
-						n.IPAM.Addresses[i].Gateway = gwip
-					}
-				}
-			}
 		}
 	}
 

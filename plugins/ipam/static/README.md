@@ -60,3 +60,9 @@ The plugin also support following [capability argument](https://github.com/conta
 The following [args conventions](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md#args-in-network-config) are supported:
 
 * `ips` (array of strings): A list of custom IPs to attempt to allocate, with prefix (e.g. '10.10.0.1/24')
+
+Notice: If some of above are used at same time, only one will work according to the priorities below
+
+1. [capability argument](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md)
+1. [args conventions](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md#args-in-network-config)
+1. [CNI_ARGS](https://github.com/containernetworking/cni/blob/master/SPEC.md#parameters)
