@@ -58,7 +58,25 @@ func loadConf(bytes []byte) (*NetConf, string, error) {
 	if n.VlanId < 0 || n.VlanId > 4094 {
 		return nil, "", fmt.Errorf("invalid VLAN ID %d (must be between 0 and 4095 inclusive)", n.VlanId)
 	}
+
+	// check existing and MTU of master interface
+	masterMTU, err := getMTUByName(n.Master)
+	if err != nil {
+		return nil, "", err
+	}
+	if n.MTU < 0 || n.MTU > masterMTU {
+		return nil, "", fmt.Errorf("invalid MTU %d, must be [0, master MTU(%d)]", n.MTU, masterMTU)
+	}
+
 	return n, n.CNIVersion, nil
+}
+
+func getMTUByName(ifName string) (int, error) {
+	link, err := netlink.LinkByName(ifName)
+	if err != nil {
+		return 0, err
+	}
+	return link.Attrs().MTU, nil
 }
 
 func createVlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interface, error) {
@@ -74,10 +92,6 @@ func createVlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interfac
 	tmpName, err := ip.RandomVethName()
 	if err != nil {
 		return nil, err
-	}
-
-	if conf.MTU <= 0 {
-		conf.MTU = m.Attrs().MTU
 	}
 
 	v := &netlink.Vlan{
