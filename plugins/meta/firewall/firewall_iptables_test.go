@@ -270,6 +270,13 @@ var _ = Describe("firewall plugin iptables backend", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			validateFullRuleset(fullConf)
+
+			// ensure creation is idempotent
+			_, _, err = testutils.CmdAdd(targetNS.Path(), args.ContainerID, IFNAME, fullConf, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
