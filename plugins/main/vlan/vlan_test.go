@@ -408,4 +408,75 @@ var _ = Describe("vlan Operations", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	Describe("fails to create vlan link with invalid MTU", func() {
+		conf := `{
+    "cniVersion": "0.3.1",
+    "name": "mynet",
+    "type": "vlan",
+    "master": "%s",
+    "mtu": %d,
+    "ipam": {
+        "type": "host-local",
+        "subnet": "10.1.2.0/24"
+    }
+}`
+		BeforeEach(func() {
+			var err error
+			err = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				// set master link's MTU to 1500
+				link, err := netlink.LinkByName(MASTER_NAME)
+				Expect(err).NotTo(HaveOccurred())
+				err = netlink.LinkSetMTU(link, 1500)
+				Expect(err).NotTo(HaveOccurred())
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("fails to create vlan link with greater MTU than master interface", func() {
+			var err error
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       "/var/run/netns/test",
+				IfName:      "eth0",
+				StdinData:   []byte(fmt.Sprintf(conf, MASTER_NAME, 1600)),
+			}
+
+			_ = originalNS.Do(func(netNS ns.NetNS) error {
+				defer GinkgoRecover()
+
+				_, _, err = testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).To(Equal(fmt.Errorf("invalid MTU 1600, must be [0, master MTU(1500)]")))
+				return nil
+			})
+		})
+
+		It("fails to create vlan link with negative MTU", func() {
+			var err error
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       "/var/run/netns/test",
+				IfName:      "eth0",
+				StdinData:   []byte(fmt.Sprintf(conf, MASTER_NAME, -100)),
+			}
+
+			_ = originalNS.Do(func(netNS ns.NetNS) error {
+				defer GinkgoRecover()
+
+				_, _, err = testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).To(Equal(fmt.Errorf("invalid MTU -100, must be [0, master MTU(1500)]")))
+				return nil
+			})
+		})
+	})
 })
