@@ -4,12 +4,12 @@
     "plugins": [
         {
             "type": "bridge",
-            "bridge": "test-bridge-0",
+            "bridge": "test-bridge-1",
             "isDefaultGateway": true,
             "ipam": {
                 "type": "host-local",
-                "subnet": "10.11.2.0/24",
-                "dataDir": "/tmp/foo"
+                "subnet": "10.12.2.0/24",
+                "dataDir": "/tmp/bar"
             }
         },
         {
