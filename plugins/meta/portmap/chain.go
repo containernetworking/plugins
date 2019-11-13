@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/containernetworking/plugins/pkg/utils"
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/mattn/go-shellwords"
 )
@@ -35,15 +36,10 @@ type chain struct {
 
 // setup idempotently creates the chain. It will not error if the chain exists.
 func (c *chain) setup(ipt *iptables.IPTables) error {
-	// create the chain
-	exists, err := chainExists(ipt, c.table, c.name)
+
+	err := utils.EnsureChain(ipt, c.table, c.name)
 	if err != nil {
 		return err
-	}
-	if !exists {
-		if err := ipt.NewChain(c.table, c.name); err != nil {
-			return err
-		}
 	}
 
 	// Add the rules to the chain
@@ -125,24 +121,10 @@ func insertUnique(ipt *iptables.IPTables, table, chain string, prepend bool, rul
 	}
 }
 
-func chainExists(ipt *iptables.IPTables, tableName, chainName string) (bool, error) {
-	chains, err := ipt.ListChains(tableName)
-	if err != nil {
-		return false, err
-	}
-
-	for _, ch := range chains {
-		if ch == chainName {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 // check the chain.
 func (c *chain) check(ipt *iptables.IPTables) error {
 
-	exists, err := chainExists(ipt, c.table, c.name)
+	exists, err := utils.ChainExists(ipt, c.table, c.name)
 	if err != nil {
 		return err
 	}

@@ -124,7 +124,7 @@ func checkPorts(config *PortMapConf, containerIP net.IP) error {
 	}
 
 	if ip4t != nil {
-		exists, err := chainExists(ip4t, dnatChain.table, dnatChain.name)
+		exists, err := utils.ChainExists(ip4t, dnatChain.table, dnatChain.name)
 		if err != nil {
 			return err
 		}
@@ -137,7 +137,7 @@ func checkPorts(config *PortMapConf, containerIP net.IP) error {
 	}
 
 	if ip6t != nil {
-		exists, err := chainExists(ip6t, dnatChain.table, dnatChain.name)
+		exists, err := utils.ChainExists(ip6t, dnatChain.table, dnatChain.name)
 		if err != nil {
 			return err
 		}
