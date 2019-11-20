@@ -220,28 +220,21 @@ func DelLinkByNameAddr(ifName string) ([]*net.IPNet, error) {
 	return out, nil
 }
 
-func SetHWAddrByIP(ifName string, ip4 net.IP, ip6 net.IP) error {
+// SetHardwareAddress will set the interface to a specified MAC address,
+// if the address is not assigned, we will generate a random CNI-OUI MAC
+// address for the interface.
+func SetHardwareAddress(ifName string, hwAddr net.HardwareAddr) error {
 	iface, err := netlink.LinkByName(ifName)
 	if err != nil {
 		return fmt.Errorf("failed to lookup %q: %v", ifName, err)
 	}
 
-	switch {
-	case ip4 == nil && ip6 == nil:
-		return fmt.Errorf("neither ip4 or ip6 specified")
+	if hwAddr == nil {
+		hwAddr = hwaddr.GenerateMAC()
+	}
 
-	case ip4 != nil:
-		{
-			hwAddr, err := hwaddr.GenerateHardwareAddr4(ip4, hwaddr.PrivateMACPrefix)
-			if err != nil {
-				return fmt.Errorf("failed to generate hardware addr: %v", err)
-			}
-			if err = netlink.LinkSetHardwareAddr(iface, hwAddr); err != nil {
-				return fmt.Errorf("failed to add hardware addr to %q: %v", ifName, err)
-			}
-		}
-	case ip6 != nil:
-		// TODO: IPv6
+	if err = netlink.LinkSetHardwareAddr(iface, hwAddr); err != nil {
+		return fmt.Errorf("failed to set hardware address for %s: %v", ifName, err)
 	}
 
 	return nil

@@ -40,7 +40,7 @@ var _ = Describe("Link", func() {
 	const (
 		ifaceFormatString string = "i%d"
 		mtu               int    = 1400
-		ip4onehwaddr             = "0a:58:01:01:01:01"
+		cniOUIPrefix             = "02:58:00"
 	)
 	var (
 		hostNetNS         ns.NetNS
@@ -51,9 +51,8 @@ var _ = Describe("Link", func() {
 		hostVethName      string
 		containerVethName string
 
-		ip4one             = net.ParseIP("1.1.1.1")
-		ip4two             = net.ParseIP("1.1.1.2")
-		originalRandReader = rand.Reader
+		specifiedHardwareAddress = net.HardwareAddr{0x00, 0x01, 0x02, 0x03, 0x04, 0x05}
+		originalRandReader       = rand.Reader
 	)
 
 	BeforeEach(func() {
@@ -271,37 +270,37 @@ var _ = Describe("Link", func() {
 		})
 	})
 
-	It("SetHWAddrByIP must change the interface hwaddr and be predictable", func() {
-
+	It("SetHardwareAddress should set hardware address to the specified one", func() {
 		_ = containerNetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
 			var err error
 			hwaddrBefore := getHwAddr(containerVethName)
 
-			err = ip.SetHWAddrByIP(containerVethName, ip4one, nil)
+			err = ip.SetHardwareAddress(containerVethName, specifiedHardwareAddress)
 			Expect(err).NotTo(HaveOccurred())
 			hwaddrAfter1 := getHwAddr(containerVethName)
 
 			Expect(hwaddrBefore).NotTo(Equal(hwaddrAfter1))
-			Expect(hwaddrAfter1).To(Equal(ip4onehwaddr))
+			Expect(hwaddrAfter1).To(Equal(specifiedHardwareAddress.String()))
 
 			return nil
 		})
 	})
 
-	It("SetHWAddrByIP must be injective", func() {
-
+	It("SetHardwareAddress should set hardware address to CNI-OUI style if not assigned", func() {
 		_ = containerNetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			err := ip.SetHWAddrByIP(containerVethName, ip4one, nil)
+			err := ip.SetHardwareAddress(containerVethName, nil)
 			Expect(err).NotTo(HaveOccurred())
 			hwaddrAfter1 := getHwAddr(containerVethName)
+			Expect(hwaddrAfter1).To(HavePrefix(cniOUIPrefix))
 
-			err = ip.SetHWAddrByIP(containerVethName, ip4two, nil)
+			err = ip.SetHardwareAddress(containerVethName, nil)
 			Expect(err).NotTo(HaveOccurred())
 			hwaddrAfter2 := getHwAddr(containerVethName)
+			Expect(hwaddrAfter2).To(HavePrefix(cniOUIPrefix))
 
 			Expect(hwaddrAfter1).NotTo(Equal(hwaddrAfter2))
 			return nil

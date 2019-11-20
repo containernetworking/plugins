@@ -31,8 +31,10 @@ var cniOUI = []byte{0x02, 0x58, 0x00}
 
 // GenerateMAC will generate MAC addresses with fixed first 24 bits (CNI OUI), and the last 24 bits
 // will be random, so there are at most 16777216(2^24) different addresses.
-// To avoid MAC address collision, we suggest to use this function when length of subnet masking is
-// greater or equal than 20 in IPAM.
+// To avoid MAC address collision as much as possible, this function is suggested to be used within
+// the limitation that each subnet should contain no more 1024(2^10) using IP addresses.
+// For example, a subnet whose prefix is greater or equal than 22 is safe to use this function
+// as MAC address generator.
 func GenerateMAC() net.HardwareAddr {
 	hw := make(net.HardwareAddr, 6)
 	copy(hw[:3], cniOUI)
