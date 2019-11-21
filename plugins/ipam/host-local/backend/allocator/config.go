@@ -29,8 +29,10 @@ type Net struct {
 	Name          string      `json:"name"`
 	CNIVersion    string      `json:"cniVersion"`
 	IPAM          *IPAMConfig `json:"ipam"`
-	RuntimeConfig struct {    // The capability arg
+	RuntimeConfig struct {
+		// The capability args
 		IPRanges []RangeSet `json:"ipRanges,omitempty"`
+		IPs      []net.IP   `json:"ips,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
 	Args *struct {
 		A *IPAMArgs `json:"cni"`
@@ -48,7 +50,7 @@ type IPAMConfig struct {
 	DataDir    string         `json:"dataDir"`
 	ResolvConf string         `json:"resolvConf"`
 	Ranges     []RangeSet     `json:"ranges"`
-	IPArgs     []net.IP       `json:"-"` // Requested IPs from CNI_ARGS and args
+	IPArgs     []net.IP       `json:"-"` // Requested IPs from CNI_ARGS, args and capabilities
 }
 
 type IPAMEnvArgs struct {
@@ -80,7 +82,8 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		return nil, "", fmt.Errorf("IPAM config missing 'ipam' key")
 	}
 
-	// Parse custom IP from both env args *and* the top-level args config
+	// Parse custom IP from env args, the top-level args config and capabilities
+	// in runtime configuration
 	if envArgs != "" {
 		e := IPAMEnvArgs{}
 		err := types.LoadArgs(envArgs, &e)
@@ -95,6 +98,10 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 
 	if n.Args != nil && n.Args.A != nil && len(n.Args.A.IPs) != 0 {
 		n.IPAM.IPArgs = append(n.IPAM.IPArgs, n.Args.A.IPs...)
+	}
+
+	if len(n.RuntimeConfig.IPs) > 0 {
+		n.IPAM.IPArgs = append(n.IPAM.IPArgs, n.RuntimeConfig.IPs...)
 	}
 
 	for idx := range n.IPAM.IPArgs {
