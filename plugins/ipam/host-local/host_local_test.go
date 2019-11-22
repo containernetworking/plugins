@@ -630,6 +630,49 @@ var _ = Describe("host-local Operations", func() {
 		Expect(result.IPs[0].Address.IP).To(Equal(net.ParseIP("10.1.2.88")))
 	})
 
+	It("allocates a custom IP when requested by IPs capability in runtime config", func() {
+		const ifname string = "eth0"
+		const nspath string = "/some/where"
+
+		tmpDir, err := getTmpDir()
+		Expect(err).NotTo(HaveOccurred())
+		defer os.RemoveAll(tmpDir)
+
+		conf := fmt.Sprintf(`{
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"dataDir": "%s",
+				"ranges": [
+					[{ "subnet": "10.1.2.0/24" }]
+				]
+			},
+			"runtimeConfig": {
+				"ips": ["10.1.2.99"]
+			}
+		}`, tmpDir)
+
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       nspath,
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+
+		// Allocate the IP
+		r, _, err := testutils.CmdAddWithArgs(args, func() error {
+			return cmdAdd(args)
+		})
+		Expect(err).NotTo(HaveOccurred())
+		result, err := current.GetResult(r)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.IPs).To(HaveLen(1))
+		Expect(result.IPs[0].Address.IP).To(Equal(net.ParseIP("10.1.2.99")))
+	})
+
 	It("allocates custom IPs from multiple ranges", func() {
 		const ifname string = "eth0"
 		const nspath string = "/some/where"
