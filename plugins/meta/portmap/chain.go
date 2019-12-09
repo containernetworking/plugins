@@ -71,7 +71,14 @@ func (c *chain) teardown(ipt *iptables.IPTables) error {
 	// This will succeed *and create the chain* if it does not exist.
 	// If the chain doesn't exist, the next checks will fail.
 	if err := ipt.ClearChain(c.table, c.name); err != nil {
-		return err
+		eerr, eok := err.(*iptables.Error)
+		switch {
+		case eok && eerr.IsNotExist():
+			// swallow here, the chain was already deleted
+			return nil
+		default:
+			return err
+		}
 	}
 
 	for _, entryChain := range c.entryChains {
@@ -91,16 +98,31 @@ func (c *chain) teardown(ipt *iptables.IPTables) error {
 				chainParts = chainParts[2:] // List results always include an -A CHAINNAME
 
 				if err := ipt.Delete(c.table, entryChain, chainParts...); err != nil {
-					return fmt.Errorf("Failed to delete referring rule %s %s: %v", c.table, entryChainRule, err)
+					eerr, eok := err.(*iptables.Error)
+					switch {
+					case eok && eerr.IsNotExist():
+						// swallow here, the chain was already deleted
+						continue
+					case eok && eerr.ExitStatus() == 2:
+						// swallow here, invalid command line parameter because the referring rule is missing
+						continue
+					default:
+						return fmt.Errorf("Failed to delete referring rule %s %s: %v", c.table, entryChainRule, err)
+					}
 				}
 			}
 		}
 	}
 
-	if err := ipt.DeleteChain(c.table, c.name); err != nil {
+	err := ipt.DeleteChain(c.table, c.name)
+	eerr, eok := err.(*iptables.Error)
+	switch {
+	case eok && eerr.IsNotExist():
+		// swallow here, the chain was already deleted
+		return nil
+	default:
 		return err
 	}
-	return nil
 }
 
 // insertUnique will add a rule to a chain if it does not already exist.
