@@ -18,6 +18,7 @@ require (
 	github.com/golang/protobuf v1.3.1 // indirect
 	github.com/j-keck/arping v0.0.0-20160618110441-2cf9dc699c56
 	github.com/juju/errors v0.0.0-20180806074554-22422dad46e1
+	github.com/juju/fslock v0.0.0-20160525022230-4d5c94c67b4b
 	github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8 // indirect
 	github.com/juju/testing v0.0.0-20190613124551-e81189438503 // indirect
 	github.com/kr/pretty v0.1.0 // indirect

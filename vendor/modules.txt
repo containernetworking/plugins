@@ -50,6 +50,8 @@ github.com/godbus/dbus
 github.com/j-keck/arping
 # github.com/juju/errors v0.0.0-20180806074554-22422dad46e1
 github.com/juju/errors
+# github.com/juju/fslock v0.0.0-20160525022230-4d5c94c67b4b
+github.com/juju/fslock
 # github.com/mattn/go-shellwords v1.0.3
 github.com/mattn/go-shellwords
 # github.com/onsi/ginkgo v0.0.0-20151202141238-7f8ab55aaf3b

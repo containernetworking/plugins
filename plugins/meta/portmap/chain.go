@@ -17,11 +17,15 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/containernetworking/plugins/pkg/utils"
 	"github.com/coreos/go-iptables/iptables"
+	"github.com/juju/fslock"
 	"github.com/mattn/go-shellwords"
 )
+
+const lockfile = "/tmp/portmap.lock"
 
 type chain struct {
 	table       string
@@ -67,6 +71,13 @@ func (c *chain) setup(ipt *iptables.IPTables) error {
 // teardown idempotently deletes a chain. It will not error if the chain doesn't exist.
 // It will first delete all references to this chain in the entryChains.
 func (c *chain) teardown(ipt *iptables.IPTables) error {
+	m := fslock.New(lockfile)
+
+	// Will block until lock can be acquired and timeout after 5 seconds
+	if err := m.LockWithTimeout(5 * time.Second); err != nil {
+		return fmt.Errorf("failed to acquire the lock file %s : %v", lockfile, err)
+	}
+	defer m.Unlock()
 	// flush the chain
 	// This will succeed *and create the chain* if it does not exist.
 	// If the chain doesn't exist, the next checks will fail.

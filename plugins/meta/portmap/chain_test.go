@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math/rand"
 	"runtime"
+	"sync"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
@@ -32,6 +33,7 @@ const TABLE = "filter" // We'll monkey around here
 var _ = Describe("chain tests", func() {
 	var testChain chain
 	var ipt *iptables.IPTables
+	var testNs ns.NetNS
 	var cleanup func()
 
 	BeforeEach(func() {
@@ -41,7 +43,7 @@ var _ = Describe("chain tests", func() {
 		currNs, err := ns.GetCurrentNS()
 		Expect(err).NotTo(HaveOccurred())
 
-		testNs, err := testutils.NewNS()
+		testNs, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
 		tlChainName := fmt.Sprintf("cni-test-%d", rand.Intn(10000000))
@@ -194,5 +196,47 @@ var _ = Describe("chain tests", func() {
 				Fail("Chain was not deleted")
 			}
 		}
+	})
+
+	It("deletes chains idempotently in parallel", func() {
+		defer cleanup()
+		// number of parallel executions
+		N := 10
+		var wg sync.WaitGroup
+		err := testChain.setup(ipt)
+		Expect(err).NotTo(HaveOccurred())
+		errCh := make(chan error, N)
+		for i := 0; i < N; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				// Use the testing namespace
+				runtime.LockOSThread()
+				defer runtime.UnlockOSThread()
+				err = testNs.Set()
+				Expect(err).NotTo(HaveOccurred())
+				// teardown chain
+				errCh <- testChain.teardown(ipt)
+			}()
+		}
+		wg.Wait()
+		close(errCh)
+		errs := 0
+		for err := range errCh {
+			if err != nil {
+				errs++
+			}
+		}
+
+		Expect(errs).Should(BeNumerically("==", 0))
+
+		chains, err := ipt.ListChains(TABLE)
+		Expect(err).NotTo(HaveOccurred())
+		for _, chain := range chains {
+			if chain == testChain.name {
+				Fail("Chain was not deleted")
+			}
+		}
+
 	})
 })
