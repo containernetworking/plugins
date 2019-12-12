@@ -67,12 +67,31 @@ var _ = Describe("chain tests", func() {
 		cleanup()
 	})
 
-	It("creates chains idempotently", func() {
-		err := EnsureChain(ipt, TABLE, testChain)
-		Expect(err).NotTo(HaveOccurred())
+	Describe("EnsureChain", func() {
+		It("creates chains idempotently", func() {
+			err := EnsureChain(ipt, TABLE, testChain)
+			Expect(err).NotTo(HaveOccurred())
 
-		// Create it again!
-		err = EnsureChain(ipt, TABLE, testChain)
-		Expect(err).NotTo(HaveOccurred())
+			// Create it again!
+			err = EnsureChain(ipt, TABLE, testChain)
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
+
+	Describe("DeleteChain", func() {
+		It("delete chains idempotently", func() {
+			// Create chain
+			err := EnsureChain(ipt, TABLE, testChain)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Delete chain
+			err = DeleteChain(ipt, TABLE, testChain)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Delete it again!
+			err = DeleteChain(ipt, TABLE, testChain)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
 })

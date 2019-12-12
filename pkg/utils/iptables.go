@@ -62,3 +62,60 @@ func ChainExists(ipt *iptables.IPTables, table, chain string) (bool, error) {
 	}
 	return false, nil
 }
+
+// DeleteRule idempotently delete the iptables rule in the specified table/chain.
+// It does not return an error if the referring chain doesn't exist
+func DeleteRule(ipt *iptables.IPTables, table, chain string, rulespec ...string) error {
+	if ipt == nil {
+		return errors.New("failed to ensure iptable chain: IPTables was nil")
+	}
+	if err := ipt.Delete(table, chain, rulespec...); err != nil {
+		eerr, eok := err.(*iptables.Error)
+		switch {
+		case eok && eerr.IsNotExist():
+			// swallow here, the chain was already deleted
+			return nil
+		case eok && eerr.ExitStatus() == 2:
+			// swallow here, invalid command line parameter because the referring rule is missing
+			return nil
+		default:
+			return fmt.Errorf("Failed to delete referring rule %s %s: %v", table, chain, err)
+		}
+	}
+	return nil
+}
+
+// DeleteChain idempotently deletes the specified table/chain.
+// It does not return an errors if the chain does not exist
+func DeleteChain(ipt *iptables.IPTables, table, chain string) error {
+	if ipt == nil {
+		return errors.New("failed to ensure iptable chain: IPTables was nil")
+	}
+
+	err := ipt.DeleteChain(table, chain)
+	eerr, eok := err.(*iptables.Error)
+	switch {
+	case eok && eerr.IsNotExist():
+		// swallow here, the chain was already deleted
+		return nil
+	default:
+		return err
+	}
+}
+
+// ClearChain idempotently clear the iptables rules in the specified table/chain.
+// If the chain does not exist, a new one will be created
+func ClearChain(ipt *iptables.IPTables, table, chain string) error {
+	if ipt == nil {
+		return errors.New("failed to ensure iptable chain: IPTables was nil")
+	}
+	err := ipt.ClearChain(table, chain)
+	eerr, eok := err.(*iptables.Error)
+	switch {
+	case eok && eerr.IsNotExist():
+		// swallow here, the chain was already deleted
+		return EnsureChain(ipt, table, chain)
+	default:
+		return err
+	}
+}
