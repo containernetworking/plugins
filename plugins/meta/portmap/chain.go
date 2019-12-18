@@ -70,7 +70,7 @@ func (c *chain) teardown(ipt *iptables.IPTables) error {
 	// flush the chain
 	// This will succeed *and create the chain* if it does not exist.
 	// If the chain doesn't exist, the next checks will fail.
-	if err := ipt.ClearChain(c.table, c.name); err != nil {
+	if err := utils.ClearChain(ipt, c.table, c.name); err != nil {
 		return err
 	}
 
@@ -90,17 +90,15 @@ func (c *chain) teardown(ipt *iptables.IPTables) error {
 				}
 				chainParts = chainParts[2:] // List results always include an -A CHAINNAME
 
-				if err := ipt.Delete(c.table, entryChain, chainParts...); err != nil {
-					return fmt.Errorf("Failed to delete referring rule %s %s: %v", c.table, entryChainRule, err)
+				if err := utils.DeleteRule(ipt, c.table, entryChain, chainParts...); err != nil {
+					return err
 				}
+
 			}
 		}
 	}
 
-	if err := ipt.DeleteChain(c.table, c.name); err != nil {
-		return err
-	}
-	return nil
+	return utils.DeleteChain(ipt, c.table, c.name)
 }
 
 // insertUnique will add a rule to a chain if it does not already exist.
