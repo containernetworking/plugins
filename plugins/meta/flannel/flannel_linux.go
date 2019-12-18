@@ -28,7 +28,7 @@ import (
 	"os"
 )
 
-func doCmdAdd(args *skel.CmdArgs, n *NetConf, fenv *subnetEnv) error {
+func doCmdAdd(args *skel.CmdArgs, n *NetConf, fenv *subnetEnv) (err error) {
 	n.Delegate["name"] = n.Name
 
 	if !hasKey(n.Delegate, "type") {
@@ -64,6 +64,12 @@ func doCmdAdd(args *skel.CmdArgs, n *NetConf, fenv *subnetEnv) error {
 			},
 		},
 	}
+
+	defer func() {
+		if err != nil {
+			doCmdDel(args, n)
+		}
+	}()
 
 	return delegateAdd(args.ContainerID, n.DataDir, n.Delegate)
 }
