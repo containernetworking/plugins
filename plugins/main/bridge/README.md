@@ -14,17 +14,18 @@ If the bridge is missing, the plugin will create one on first use and, if gatewa
 ## Example configuration
 ```
 {
-	"name": "mynet",
-	"type": "bridge",
-	"bridge": "mynet0",
-	"isDefaultGateway": true,
-	"forceAddress": false,
-	"ipMasq": true,
-	"hairpinMode": true,
-	"ipam": {
-		"type": "host-local",
-		"subnet": "10.10.0.0/16"
-	}
+    "cniVersion": "0.3.1",
+    "name": "mynet",
+    "type": "bridge",
+    "bridge": "mynet0",
+    "isDefaultGateway": true,
+    "forceAddress": false,
+    "ipMasq": true,
+    "hairpinMode": true,
+    "ipam": {
+        "type": "host-local",
+        "subnet": "10.10.0.0/16"
+    }
 }
 ```
 
@@ -32,10 +33,10 @@ If the bridge is missing, the plugin will create one on first use and, if gatewa
 ```
 {
     "cniVersion": "0.3.1",
-	"name": "mynet",
-	"type": "bridge",
-	"bridge": "mynet0",
-	"ipam": {}
+    "name": "mynet",
+    "type": "bridge",
+    "bridge": "mynet0",
+    "ipam": {}
 }
 ```
 
