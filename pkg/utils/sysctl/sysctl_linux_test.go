@@ -74,7 +74,7 @@ var _ = Describe("Sysctl tests", func() {
 
 	Describe("Sysctl", func() {
 		It("reads keys with dot separators", func() {
-			sysctlIfaceName := strings.ReplaceAll(testIfaceName, ".", "/")
+			sysctlIfaceName := strings.Replace(testIfaceName, ".", "/", -1)
 			sysctlKey := fmt.Sprintf(sysctlDotKeyTemplate, sysctlIfaceName)
 
 			_, err := Sysctl(sysctlKey)
@@ -93,7 +93,7 @@ var _ = Describe("Sysctl tests", func() {
 
 	Describe("Sysctl", func() {
 		It("writes keys with dot separators", func() {
-			sysctlIfaceName := strings.ReplaceAll(testIfaceName, ".", "/")
+			sysctlIfaceName := strings.Replace(testIfaceName, ".", "/", -1)
 			sysctlKey := fmt.Sprintf(sysctlDotKeyTemplate, sysctlIfaceName)
 
 			_, err := Sysctl(sysctlKey, "1")
