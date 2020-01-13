@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	sysctlDotKeyTemplate = "net.ipv4.conf.%s.proxy_arp"
+	sysctlDotKeyTemplate   = "net.ipv4.conf.%s.proxy_arp"
 	sysctlSlashKeyTemplate = "net/ipv4/conf/%s/proxy_arp"
 )
 
