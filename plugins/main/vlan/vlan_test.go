@@ -292,6 +292,19 @@ var _ = Describe("vlan Operations", func() {
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
+
+		// DEL can be called multiple times, make sure no error is returned
+		// if the device is already removed.
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			err = testutils.CmdDelWithArgs(args, func() error {
+				return cmdDel(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("configures and deconfigures an CNI V4 vlan link with ADD/CHECK/DEL", func() {

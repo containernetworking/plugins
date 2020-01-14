@@ -207,7 +207,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		err = ip.DelLinkByName(args.IfName)
-		if err != nil && err != ip.ErrLinkNotFound {
+		if err != nil && err == ip.ErrLinkNotFound {
 			return nil
 		}
 		return err
