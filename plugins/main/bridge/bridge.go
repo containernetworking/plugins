@@ -224,7 +224,9 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 			// default packet limit
 			TxQLen: -1,
 		},
-		VlanFiltering: &vlanFiltering,
+	}
+	if vlanFiltering {
+		br.VlanFiltering = &vlanFiltering
 	}
 
 	err := netlink.LinkAdd(br)
