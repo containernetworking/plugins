@@ -35,7 +35,7 @@ func Sysctl(name string, params ...string) (string, error) {
 }
 
 func getSysctl(name string) (string, error) {
-	fullName := filepath.Join("/proc/sys", strings.Replace(name, ".", "/", -1))
+	fullName := filepath.Join("/proc/sys", toNormalName(name))
 	fullName = filepath.Clean(fullName)
 	data, err := ioutil.ReadFile(fullName)
 	if err != nil {
@@ -46,11 +46,35 @@ func getSysctl(name string) (string, error) {
 }
 
 func setSysctl(name, value string) (string, error) {
-	fullName := filepath.Join("/proc/sys", strings.Replace(name, ".", "/", -1))
+	fullName := filepath.Join("/proc/sys", toNormalName(name))
 	fullName = filepath.Clean(fullName)
 	if err := ioutil.WriteFile(fullName, []byte(value), 0644); err != nil {
 		return "", err
 	}
 
 	return getSysctl(name)
+}
+
+// Normalize names by using slash as separator
+// Sysctl names can use dots or slashes as separator:
+// - if dots are used, dots and slashes are interchanged.
+// - if slashes are used, slashes and dots are left intact.
+// Separator in use is determined by firt ocurrence.
+func toNormalName(name string) string {
+	interchange := false
+	for _, c := range name {
+		if c == '.' {
+			interchange = true
+			break
+		}
+		if c == '/' {
+			break
+		}
+	}
+
+	if interchange {
+		r := strings.NewReplacer(".", "/", "/", ".")
+		return r.Replace(name)
+	}
+	return name
 }
