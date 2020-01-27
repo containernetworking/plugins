@@ -68,6 +68,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if err != nil {
 			return err // not tested
 		}
+
 		v4Addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 		if err != nil {
 			return err // not tested
@@ -89,7 +90,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if len(v6Addrs) != 0 {
 			v6Addr = v6Addrs[0].IPNet
 			// sanity check that this is a loopback address
-			for _, addr := range v4Addrs {
+			for _, addr := range v6Addrs {
 				if !addr.IP.IsLoopback() {
 					return fmt.Errorf("loopback interface found with non-loopback address %q", addr.IP)
 				}
