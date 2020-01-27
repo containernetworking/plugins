@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sysctl
+package sysctl_test
 
 import (
 	"fmt"
@@ -22,6 +22,7 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
+	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
@@ -77,7 +78,7 @@ var _ = Describe("Sysctl tests", func() {
 			sysctlIfaceName := strings.Replace(testIfaceName, ".", "/", -1)
 			sysctlKey := fmt.Sprintf(sysctlDotKeyTemplate, sysctlIfaceName)
 
-			_, err := Sysctl(sysctlKey)
+			_, err := sysctl.Sysctl(sysctlKey)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -86,7 +87,7 @@ var _ = Describe("Sysctl tests", func() {
 		It("reads keys with slash separators", func() {
 			sysctlKey := fmt.Sprintf(sysctlSlashKeyTemplate, testIfaceName)
 
-			_, err := Sysctl(sysctlKey)
+			_, err := sysctl.Sysctl(sysctlKey)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -96,7 +97,7 @@ var _ = Describe("Sysctl tests", func() {
 			sysctlIfaceName := strings.Replace(testIfaceName, ".", "/", -1)
 			sysctlKey := fmt.Sprintf(sysctlDotKeyTemplate, sysctlIfaceName)
 
-			_, err := Sysctl(sysctlKey, "1")
+			_, err := sysctl.Sysctl(sysctlKey, "1")
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -105,7 +106,7 @@ var _ = Describe("Sysctl tests", func() {
 		It("writes keys with slash separators", func() {
 			sysctlKey := fmt.Sprintf(sysctlSlashKeyTemplate, testIfaceName)
 
-			_, err := Sysctl(sysctlKey, "1")
+			_, err := sysctl.Sysctl(sysctlKey, "1")
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
