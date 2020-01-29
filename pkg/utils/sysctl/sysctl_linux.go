@@ -59,7 +59,7 @@ func setSysctl(name, value string) (string, error) {
 // Sysctl names can use dots or slashes as separator:
 // - if dots are used, dots and slashes are interchanged.
 // - if slashes are used, slashes and dots are left intact.
-// Separator in use is determined by firt ocurrence.
+// Separator in use is determined by first occurrence.
 func toNormalName(name string) string {
 	interchange := false
 	for _, c := range name {
