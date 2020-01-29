@@ -178,7 +178,7 @@ func SetupVeth(contVethName string, mtu int, hostNS ns.NetNS) (net.Interface, ne
 func DelLinkByName(ifName string) error {
 	iface, err := netlink.LinkByName(ifName)
 	if err != nil {
-		if err.Error() == "Link not found" {
+		if _, ok := err.(netlink.LinkNotFoundError); ok {
 			return ErrLinkNotFound
 		}
 		return fmt.Errorf("failed to lookup %q: %v", ifName, err)
@@ -195,7 +195,7 @@ func DelLinkByName(ifName string) error {
 func DelLinkByNameAddr(ifName string) ([]*net.IPNet, error) {
 	iface, err := netlink.LinkByName(ifName)
 	if err != nil {
-		if err != nil && err.Error() == "Link not found" {
+		if _, ok := err.(netlink.LinkNotFoundError); ok {
 			return nil, ErrLinkNotFound
 		}
 		return nil, fmt.Errorf("failed to lookup %q: %v", ifName, err)
