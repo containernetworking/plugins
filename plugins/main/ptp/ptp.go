@@ -228,7 +228,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	hostInterface, containerInterface, err := setupContainerVeth(netns, args.IfName, conf.MTU, result)
+	hostInterface, _, err := setupContainerVeth(netns, args.IfName, conf.MTU, result)
 	if err != nil {
 		return err
 	}
@@ -253,8 +253,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if dnsConfSet(conf.DNS) {
 		result.DNS = conf.DNS
 	}
-
-	result.Interfaces = []*current.Interface{hostInterface, containerInterface}
 
 	return types.PrintResult(result, conf.CNIVersion)
 }
