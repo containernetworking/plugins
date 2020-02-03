@@ -68,8 +68,8 @@ func doCmdAdd(args *skel.CmdArgs, n *NetConf, fenv *subnetEnv) error {
 	return delegateAdd(args.ContainerID, n.DataDir, n.Delegate)
 }
 
-func doCmdDel(args *skel.CmdArgs, n *NetConf) error {
-	netconfBytes, err := consumeScratchNetConf(args.ContainerID, n.DataDir)
+func doCmdDel(args *skel.CmdArgs, n *NetConf) (err error) {
+	cleanup, netConfBytes, err := consumeScratchNetConf(args.ContainerID, n.DataDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Per spec should ignore error if resources are missing / already removed
@@ -78,10 +78,15 @@ func doCmdDel(args *skel.CmdArgs, n *NetConf) error {
 		return err
 	}
 
+	// cleanup will work when no error happens
+	defer func() {
+		cleanup(err)
+	}()
+
 	nc := &types.NetConf{}
-	if err = json.Unmarshal(netconfBytes, nc); err != nil {
+	if err = json.Unmarshal(netConfBytes, nc); err != nil {
 		return fmt.Errorf("failed to parse netconf: %v", err)
 	}
 
-	return invoke.DelegateDel(context.TODO(), nc.Type, netconfBytes, nil)
+	return invoke.DelegateDel(context.TODO(), nc.Type, netConfBytes, nil)
 }
