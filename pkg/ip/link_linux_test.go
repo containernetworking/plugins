@@ -270,40 +270,46 @@ var _ = Describe("Link", func() {
 		})
 	})
 
-	It("SetHardwareAddress should set hardware address to the specified one", func() {
-		_ = containerNetNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			var err error
-			hwaddrBefore := getHwAddr(containerVethName)
-
-			err = ip.SetHardwareAddress(containerVethName, specifiedHardwareAddress)
-			Expect(err).NotTo(HaveOccurred())
-			hwaddrAfter1 := getHwAddr(containerVethName)
-
-			Expect(hwaddrBefore).NotTo(Equal(hwaddrAfter1))
-			Expect(hwaddrAfter1).To(Equal(specifiedHardwareAddress.String()))
-
-			return nil
+	Context("SetHardwareAddress tests", func() {
+		BeforeEach(func() {
+			// random generator is needed in these cases
+			rand.Reader = originalRandReader
 		})
-	})
+		It("SetHardwareAddress should set hardware address to the specified one", func() {
+			_ = containerNetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-	It("SetHardwareAddress should set hardware address to CNI-OUI style if not assigned", func() {
-		_ = containerNetNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+				var err error
+				hwaddrBefore := getHwAddr(containerVethName)
 
-			err := ip.SetHardwareAddress(containerVethName, nil)
-			Expect(err).NotTo(HaveOccurred())
-			hwaddrAfter1 := getHwAddr(containerVethName)
-			Expect(hwaddrAfter1).To(HavePrefix(cniOUIPrefix))
+				err = ip.SetHardwareAddress(containerVethName, specifiedHardwareAddress)
+				Expect(err).NotTo(HaveOccurred())
+				hwaddrAfter1 := getHwAddr(containerVethName)
 
-			err = ip.SetHardwareAddress(containerVethName, nil)
-			Expect(err).NotTo(HaveOccurred())
-			hwaddrAfter2 := getHwAddr(containerVethName)
-			Expect(hwaddrAfter2).To(HavePrefix(cniOUIPrefix))
+				Expect(hwaddrBefore).NotTo(Equal(hwaddrAfter1))
+				Expect(hwaddrAfter1).To(Equal(specifiedHardwareAddress.String()))
 
-			Expect(hwaddrAfter1).NotTo(Equal(hwaddrAfter2))
-			return nil
+				return nil
+			})
+		})
+
+		It("SetHardwareAddress should set hardware address to CNI-OUI style if not assigned", func() {
+			_ = containerNetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				err := ip.SetHardwareAddress(containerVethName, nil)
+				Expect(err).NotTo(HaveOccurred())
+				hwaddrAfter1 := getHwAddr(containerVethName)
+				Expect(hwaddrAfter1).To(HavePrefix(cniOUIPrefix))
+
+				err = ip.SetHardwareAddress(containerVethName, nil)
+				Expect(err).NotTo(HaveOccurred())
+				hwaddrAfter2 := getHwAddr(containerVethName)
+				Expect(hwaddrAfter2).To(HavePrefix(cniOUIPrefix))
+
+				Expect(hwaddrAfter1).NotTo(Equal(hwaddrAfter2))
+				return nil
+			})
 		})
 	})
 })

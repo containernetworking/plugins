@@ -35,9 +35,9 @@ var cniOUI = []byte{0x02, 0x58, 0x00}
 // the limitation that each subnet should contain no more 1024(2^10) using IP addresses.
 // For example, a subnet whose prefix is greater or equal than 22 is safe to use this function
 // as MAC address generator.
-func GenerateMAC() net.HardwareAddr {
+func GenerateMAC() (net.HardwareAddr, error) {
 	hw := make(net.HardwareAddr, 6)
 	copy(hw[:3], cniOUI)
-	_, _ = rand.Read(hw[3:])
-	return hw
+	_, err := rand.Read(hw[3:])
+	return hw, err
 }

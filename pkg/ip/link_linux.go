@@ -230,7 +230,10 @@ func SetHardwareAddress(ifName string, hwAddr net.HardwareAddr) error {
 	}
 
 	if hwAddr == nil {
-		hwAddr = hwaddr.GenerateMAC()
+		hwAddr, err = hwaddr.GenerateMAC()
+		if err != nil {
+			return fmt.Errorf("failed to generate random CNI-OUI MAC address: %v", err)
+		}
 	}
 
 	if err = netlink.LinkSetHardwareAddr(iface, hwAddr); err != nil {

@@ -25,7 +25,8 @@ var _ = Describe("Hwaddr", func() {
 	Context("Generate Hardware Address", func() {
 		It("generate CNI MAC addresses", func() {
 			for i := 0; i < 100; i++ {
-				cniMACAddress := hwaddr.GenerateMAC()
+				cniMACAddress, err := hwaddr.GenerateMAC()
+				Expect(err).NotTo(HaveOccurred())
 				Expect(len(cniMACAddress)).To(Equal(6))
 				Expect(cniMACAddress[0]).To(Equal(byte(0x02)))
 				Expect(cniMACAddress[1]).To(Equal(byte(0x58)))
