@@ -296,7 +296,12 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) 
 	} else if len(pciaddr) > 0 {
 		netDir := filepath.Join(sysBusPCI, pciaddr, "net")
 		if _, err := os.Lstat(netDir); err != nil {
-			return nil, fmt.Errorf("no net directory under pci device %s: %q", pciaddr, err)
+			virtioNetDir := filepath.Join(sysBusPCI, pciaddr, "virtio*", "net")
+			matches, err := filepath.Glob(virtioNetDir)
+			if matches == nil || err != nil {
+				return nil, fmt.Errorf("no net directory under pci device %s", pciaddr)
+			}
+			netDir = matches[0]
 		}
 		fInfo, err := ioutil.ReadDir(netDir)
 		if err != nil {
