@@ -89,7 +89,7 @@ Additionally, for the bridge plugin, `isGateway` will be set to `true`, if not p
 
 ## Windows Support (Experimental)
 This plugin supports delegating to the windows CNI plugins (overlay.exe, l2bridge.exe) to work in conjunction with [Flannel on Windows](https://github.com/coreos/flannel/issues/833). 
-Flannel sets up an [HNS Network](https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/container-networking) in L2Bridge mode for host-gw and in Overlay mode for vxlan. 
+Flannel sets up an [HNS Network](https://docs.microsoft.com/en-us/virtualization/windowscontainers/container-networking/architecture) in L2Bridge mode for host-gw and in Overlay mode for vxlan. 
 
 The following fields must be set in the delegated plugin configuration:
 * `name` (string, required): the name of the network (must match the name in Flannel config / name of the HNS network)
