@@ -48,8 +48,6 @@ github.com/d2g/dhcp4server/leasepool/memorypool
 github.com/godbus/dbus
 # github.com/j-keck/arping v0.0.0-20160618110441-2cf9dc699c56
 github.com/j-keck/arping
-# github.com/juju/errors v0.0.0-20180806074554-22422dad46e1
-github.com/juju/errors
 # github.com/mattn/go-shellwords v1.0.3
 github.com/mattn/go-shellwords
 # github.com/onsi/ginkgo v0.0.0-20151202141238-7f8ab55aaf3b

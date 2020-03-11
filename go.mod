@@ -17,10 +17,6 @@ require (
 	github.com/godbus/dbus v0.0.0-20180201030542-885f9cc04c9c
 	github.com/golang/protobuf v1.3.1 // indirect
 	github.com/j-keck/arping v0.0.0-20160618110441-2cf9dc699c56
-	github.com/juju/errors v0.0.0-20180806074554-22422dad46e1
-	github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8 // indirect
-	github.com/juju/testing v0.0.0-20190613124551-e81189438503 // indirect
-	github.com/kr/pretty v0.1.0 // indirect
 	github.com/mattn/go-shellwords v1.0.3
 	github.com/onsi/ginkgo v0.0.0-20151202141238-7f8ab55aaf3b
 	github.com/onsi/gomega v0.0.0-20151007035656-2152b45fa28a
@@ -33,8 +29,5 @@ require (
 	golang.org/x/net v0.0.0-20181011144130-49bb7cea24b1 // indirect
 	golang.org/x/sys v0.0.0-20190616124812-15dcb6c0061f
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
-	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect
-	gopkg.in/mgo.v2 v2.0.0-20180705113604-9856a29383ce // indirect
-	gopkg.in/yaml.v2 v2.2.2 // indirect
 )

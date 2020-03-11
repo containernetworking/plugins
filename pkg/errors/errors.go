@@ -16,7 +16,6 @@ package errors
 
 import "fmt"
 
-
 // Annotate is used to add extra context to an existing error. The return will be
 // a new error which carries error message from both context message and existing error.
 func Annotate(err error, message string) error {
