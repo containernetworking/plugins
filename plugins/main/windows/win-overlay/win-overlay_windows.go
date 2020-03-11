@@ -21,13 +21,13 @@ import (
 	"strings"
 
 	"github.com/Microsoft/hcsshim"
-	"github.com/juju/errors"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 
+	"github.com/containernetworking/plugins/pkg/errors"
 	"github.com/containernetworking/plugins/pkg/hns"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
@@ -100,12 +100,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		if len(result.IPs) == 0 {
-			return nil, errors.New("IPAM plugin return is missing IP config")
+			return nil, fmt.Errorf("IPAM plugin return is missing IP config")
 		}
 
 		ipAddr := result.IPs[0].Address.IP.To4()
 		if ipAddr == nil {
-			return nil, errors.New("win-overlay doesn't support IPv6 now")
+			return nil, fmt.Errorf("win-overlay doesn't support IPv6 now")
 		}
 
 		// conjure a MAC based on the IP for Overlay
