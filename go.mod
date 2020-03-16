@@ -16,6 +16,7 @@ require (
 	github.com/d2g/hardwareaddr v0.0.0-20190221164911-e7d9fbe030e4 // indirect
 	github.com/godbus/dbus v0.0.0-20180201030542-885f9cc04c9c
 	github.com/golang/protobuf v1.3.1 // indirect
+	github.com/google/nftables v0.0.0-20200802175506-c25e4f69b425
 	github.com/j-keck/arping v0.0.0-20160618110441-2cf9dc699c56
 	github.com/mattn/go-shellwords v1.0.3
 	github.com/onsi/ginkgo v0.0.0-20151202141238-7f8ab55aaf3b
@@ -24,10 +25,8 @@ require (
 	github.com/sirupsen/logrus v1.0.6 // indirect
 	github.com/stretchr/testify v1.3.0 // indirect
 	github.com/vishvananda/netlink v0.0.0-20181108222139-023a6dafdcdf
-	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
-	golang.org/x/crypto v0.0.0-20181009213950-7c1a557ab941 // indirect
-	golang.org/x/net v0.0.0-20181011144130-49bb7cea24b1 // indirect
-	golang.org/x/sys v0.0.0-20190616124812-15dcb6c0061f
+	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc
+	golang.org/x/sys v0.0.0-20191029155521-f43be2a4598c
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
 	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect
 )
