@@ -22,6 +22,7 @@ import (
 	"net"
 	"runtime"
 	"syscall"
+	"time"
 
 	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
@@ -444,11 +445,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		// Configure the container hardware address and IP address(es)
 		if err := netns.Do(func(_ ns.NetNS) error {
-			contVeth, err := net.InterfaceByName(args.IfName)
-			if err != nil {
-				return err
-			}
-
 			// Disable IPv6 DAD just in case hairpin mode is enabled on the
 			// bridge. Hairpin mode causes echos of neighbor solicitation
 			// packets, which causes DAD failures.
@@ -465,8 +461,36 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if err := ipam.ConfigureIface(args.IfName, result); err != nil {
 				return err
 			}
+			return nil
+		}); err != nil {
+			return err
+		}
 
-			// Send a gratuitous arp
+		// check bridge port state
+		retries := []int{0, 50, 500, 1000, 1000}
+		for idx, sleep := range retries {
+			time.Sleep(time.Duration(sleep) * time.Millisecond)
+
+			hostVeth, err := netlink.LinkByName(hostInterface.Name)
+			if err != nil {
+				return err
+			}
+			if hostVeth.Attrs().OperState == netlink.OperUp {
+				break
+			}
+
+			if idx == len(retries)-1 {
+				return fmt.Errorf("bridge port in error state: %s", hostVeth.Attrs().OperState)
+			}
+		}
+
+		// Send a gratuitous arp
+		if err := netns.Do(func(_ ns.NetNS) error {
+			contVeth, err := net.InterfaceByName(args.IfName)
+			if err != nil {
+				return err
+			}
+
 			for _, ipc := range result.IPs {
 				if ipc.Version == "4" {
 					_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
