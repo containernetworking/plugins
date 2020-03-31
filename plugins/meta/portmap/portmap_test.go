@@ -16,7 +16,8 @@ package main
 
 import (
 	"fmt"
-	"net"
+
+	"github.com/containernetworking/cni/pkg/types"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -77,8 +78,10 @@ var _ = Describe("portmapping configuration", func() {
 			Expect(c.SNAT).To(Equal(&fvar))
 			Expect(c.Name).To(Equal("test"))
 
-			Expect(c.ContIPv4).To(Equal(net.ParseIP("10.0.0.2")))
-			Expect(c.ContIPv6).To(Equal(net.ParseIP("2001:db8:1::2")))
+			n, err := types.ParseCIDR("10.0.0.2/24")
+			Expect(c.ContIPv4).To(Equal(*n))
+			n, err = types.ParseCIDR("2001:db8:1::2/64")
+			Expect(c.ContIPv6).To(Equal(*n))
 		})
 
 		It("Correctly parses a DEL config", func() {
@@ -186,7 +189,8 @@ var _ = Describe("portmapping configuration", func() {
 					entryChains: []string{"CNI-HOSTPORT-DNAT"},
 				}))
 
-				fillDnatRules(&ch, conf, net.ParseIP("10.0.0.2"))
+				n, err := types.ParseCIDR("10.0.0.2/24")
+				fillDnatRules(&ch, conf, *n)
 
 				Expect(ch.entryRules).To(Equal([][]string{
 					{"-m", "comment", "--comment",
@@ -204,16 +208,16 @@ var _ = Describe("portmapping configuration", func() {
 				}))
 
 				Expect(ch.rules).To(Equal([][]string{
-					{"-p", "tcp", "--dport", "8080", "-s", "10.0.0.2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "tcp", "--dport", "8080", "-s", "10.0.0.2/24", "-j", "CNI-HOSTPORT-SETMARK"},
 					{"-p", "tcp", "--dport", "8080", "-s", "127.0.0.1", "-j", "CNI-HOSTPORT-SETMARK"},
 					{"-p", "tcp", "--dport", "8080", "-j", "DNAT", "--to-destination", "10.0.0.2:80"},
-					{"-p", "tcp", "--dport", "8081", "-s", "10.0.0.2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "tcp", "--dport", "8081", "-s", "10.0.0.2/24", "-j", "CNI-HOSTPORT-SETMARK"},
 					{"-p", "tcp", "--dport", "8081", "-s", "127.0.0.1", "-j", "CNI-HOSTPORT-SETMARK"},
 					{"-p", "tcp", "--dport", "8081", "-j", "DNAT", "--to-destination", "10.0.0.2:80"},
-					{"-p", "udp", "--dport", "8080", "-s", "10.0.0.2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "udp", "--dport", "8080", "-s", "10.0.0.2/24", "-j", "CNI-HOSTPORT-SETMARK"},
 					{"-p", "udp", "--dport", "8080", "-s", "127.0.0.1", "-j", "CNI-HOSTPORT-SETMARK"},
 					{"-p", "udp", "--dport", "8080", "-j", "DNAT", "--to-destination", "10.0.0.2:81"},
-					{"-p", "udp", "--dport", "8082", "-s", "10.0.0.2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "udp", "--dport", "8082", "-s", "10.0.0.2/24", "-j", "CNI-HOSTPORT-SETMARK"},
 					{"-p", "udp", "--dport", "8082", "-s", "127.0.0.1", "-j", "CNI-HOSTPORT-SETMARK"},
 					{"-p", "udp", "--dport", "8082", "-j", "DNAT", "--to-destination", "10.0.0.2:82"},
 				}))
@@ -221,16 +225,17 @@ var _ = Describe("portmapping configuration", func() {
 				ch.rules = nil
 				ch.entryRules = nil
 
-				fillDnatRules(&ch, conf, net.ParseIP("2001:db8::2"))
+				n, err = types.ParseCIDR("2001:db8::2/64")
+				fillDnatRules(&ch, conf, *n)
 
 				Expect(ch.rules).To(Equal([][]string{
-					{"-p", "tcp", "--dport", "8080", "-s", "2001:db8::2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "tcp", "--dport", "8080", "-s", "2001:db8::2/64", "-j", "CNI-HOSTPORT-SETMARK"},
 					{"-p", "tcp", "--dport", "8080", "-j", "DNAT", "--to-destination", "[2001:db8::2]:80"},
-					{"-p", "tcp", "--dport", "8081", "-s", "2001:db8::2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "tcp", "--dport", "8081", "-s", "2001:db8::2/64", "-j", "CNI-HOSTPORT-SETMARK"},
 					{"-p", "tcp", "--dport", "8081", "-j", "DNAT", "--to-destination", "[2001:db8::2]:80"},
-					{"-p", "udp", "--dport", "8080", "-s", "2001:db8::2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "udp", "--dport", "8080", "-s", "2001:db8::2/64", "-j", "CNI-HOSTPORT-SETMARK"},
 					{"-p", "udp", "--dport", "8080", "-j", "DNAT", "--to-destination", "[2001:db8::2]:81"},
-					{"-p", "udp", "--dport", "8082", "-s", "2001:db8::2", "-j", "CNI-HOSTPORT-SETMARK"},
+					{"-p", "udp", "--dport", "8082", "-s", "2001:db8::2/64", "-j", "CNI-HOSTPORT-SETMARK"},
 					{"-p", "udp", "--dport", "8082", "-j", "DNAT", "--to-destination", "[2001:db8::2]:82"},
 				}))
 
@@ -240,7 +245,8 @@ var _ = Describe("portmapping configuration", func() {
 				fvar := false
 				conf.SNAT = &fvar
 
-				fillDnatRules(&ch, conf, net.ParseIP("10.0.0.2"))
+				n, err = types.ParseCIDR("10.0.0.2/24")
+				fillDnatRules(&ch, conf, *n)
 				Expect(ch.rules).To(Equal([][]string{
 					{"-p", "tcp", "--dport", "8080", "-j", "DNAT", "--to-destination", "10.0.0.2:80"},
 					{"-p", "tcp", "--dport", "8081", "-j", "DNAT", "--to-destination", "10.0.0.2:80"},
@@ -276,9 +282,10 @@ var _ = Describe("portmapping configuration", func() {
 				conf.ContainerID = containerID
 
 				ch = genDnatChain(conf.Name, containerID)
-				fillDnatRules(&ch, conf, net.ParseIP("10.0.0.2"))
+				n, err := types.ParseCIDR("10.0.0.2/24")
+				fillDnatRules(&ch, conf, *n)
 				Expect(ch.rules).To(Equal([][]string{
-					{"-p", "tcp", "--dport", "8080", "-s", "10.0.0.2", "-j", "PLZ-SET-MARK"},
+					{"-p", "tcp", "--dport", "8080", "-s", "10.0.0.2/24", "-j", "PLZ-SET-MARK"},
 					{"-p", "tcp", "--dport", "8080", "-s", "127.0.0.1", "-j", "PLZ-SET-MARK"},
 					{"-p", "tcp", "--dport", "8080", "-j", "DNAT", "--to-destination", "10.0.0.2:80"},
 				}))

@@ -48,9 +48,9 @@ const MarkMasqChainName = "CNI-HOSTPORT-MASQ"
 const OldTopLevelSNATChainName = "CNI-HOSTPORT-SNAT"
 
 // forwardPorts establishes port forwarding to a given container IP.
-// containerIP can be either v4 or v6.
-func forwardPorts(config *PortMapConf, containerIP net.IP) error {
-	isV6 := (containerIP.To4() == nil)
+// containerNet.IP can be either v4 or v6.
+func forwardPorts(config *PortMapConf, containerNet net.IPNet) error {
+	isV6 := (containerNet.IP.To4() == nil)
 
 	var ipt *iptables.IPTables
 	var err error
@@ -86,7 +86,7 @@ func forwardPorts(config *PortMapConf, containerIP net.IP) error {
 		if !isV6 {
 			// Set the route_localnet bit on the host interface, so that
 			// 127/8 can cross a routing boundary.
-			hostIfName := getRoutableHostIF(containerIP)
+			hostIfName := getRoutableHostIF(containerNet.IP)
 			if hostIfName != "" {
 				if err := enableLocalnetRouting(hostIfName); err != nil {
 					return fmt.Errorf("unable to enable route_localnet: %v", err)
@@ -104,7 +104,7 @@ func forwardPorts(config *PortMapConf, containerIP net.IP) error {
 	dnatChain := genDnatChain(config.Name, config.ContainerID)
 	// First, idempotently tear down this chain in case there was some
 	// sort of collision or bad state.
-	fillDnatRules(&dnatChain, config, containerIP)
+	fillDnatRules(&dnatChain, config, containerNet)
 	if err := dnatChain.setup(ipt); err != nil {
 		return fmt.Errorf("unable to setup DNAT: %v", err)
 	}
@@ -112,10 +112,10 @@ func forwardPorts(config *PortMapConf, containerIP net.IP) error {
 	return nil
 }
 
-func checkPorts(config *PortMapConf, containerIP net.IP) error {
+func checkPorts(config *PortMapConf, containerNet net.IPNet) error {
 
 	dnatChain := genDnatChain(config.Name, config.ContainerID)
-	fillDnatRules(&dnatChain, config, containerIP)
+	fillDnatRules(&dnatChain, config, containerNet)
 
 	ip4t := maybeGetIptables(false)
 	ip6t := maybeGetIptables(true)
@@ -180,8 +180,8 @@ func genDnatChain(netName, containerID string) chain {
 
 // dnatRules generates the destination NAT rules, one per port, to direct
 // traffic from hostip:hostport to podip:podport
-func fillDnatRules(c *chain, config *PortMapConf, containerIP net.IP) {
-	isV6 := (containerIP.To4() == nil)
+func fillDnatRules(c *chain, config *PortMapConf, containerNet net.IPNet) {
+	isV6 := (containerNet.IP.To4() == nil)
 	comment := trimComment(fmt.Sprintf(`dnat name: "%s" id: "%s"`, config.Name, config.ContainerID))
 	entries := config.RuntimeConfig.PortMaps
 	setMarkChainName := SetMarkChainName
@@ -249,7 +249,7 @@ func fillDnatRules(c *chain, config *PortMapConf, containerIP net.IP) {
 			copy(hpRule, ruleBase)
 
 			hpRule = append(hpRule,
-				"-s", containerIP.String(),
+				"-s", containerNet.String(),
 				"-j", setMarkChainName,
 			)
 			c.rules = append(c.rules, hpRule)
@@ -272,7 +272,7 @@ func fillDnatRules(c *chain, config *PortMapConf, containerIP net.IP) {
 		copy(dnatRule, ruleBase)
 		dnatRule = append(dnatRule,
 			"-j", "DNAT",
-			"--to-destination", fmtIpPort(containerIP, entry.ContainerPort),
+			"--to-destination", fmtIpPort(containerNet.IP, entry.ContainerPort),
 		)
 		c.rules = append(c.rules, dnatRule)
 	}
