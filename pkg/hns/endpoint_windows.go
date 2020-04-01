@@ -21,9 +21,10 @@ import (
 
 	"github.com/Microsoft/hcsshim"
 	"github.com/Microsoft/hcsshim/hcn"
+
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
-	"github.com/juju/errors"
+	"github.com/containernetworking/plugins/pkg/errors"
 )
 
 const (
@@ -64,14 +65,14 @@ func GenerateHnsEndpoint(epInfo *EndpointInfo, n *NetConf) (*hcsshim.HNSEndpoint
 	// run the IPAM plugin and get back the config to apply
 	hnsEndpoint, err := hcsshim.GetHNSEndpointByName(epInfo.EndpointName)
 	if err != nil && !hcsshim.IsNotExist(err) {
-		return nil, errors.Annotatef(err, "Attempt to get endpoint \"%v\" failed", epInfo.EndpointName)
+		return nil, errors.Annotatef(err, "failed to get endpoint %q", epInfo.EndpointName)
 	}
 
 	if hnsEndpoint != nil {
 		if hnsEndpoint.VirtualNetwork != epInfo.NetworkId {
 			_, err = hnsEndpoint.Delete()
 			if err != nil {
-				return nil, errors.Annotatef(err, "Failed to delete endpoint %v", epInfo.EndpointName)
+				return nil, errors.Annotatef(err, "failed to delete endpoint %s", epInfo.EndpointName)
 			}
 			hnsEndpoint = nil
 		}
@@ -98,7 +99,7 @@ func GenerateHcnEndpoint(epInfo *EndpointInfo, n *NetConf) (*hcn.HostComputeEndp
 	// run the IPAM plugin and get back the config to apply
 	hcnEndpoint, err := hcn.GetEndpointByName(epInfo.EndpointName)
 	if err != nil && !hcn.IsNotFoundError(err) {
-		return nil, errors.Annotatef(err, "Attempt to get endpoint \"%v\" failed", epInfo.EndpointName)
+		return nil, errors.Annotatef(err, "failed to get endpoint %q", epInfo.EndpointName)
 	}
 
 	if hcnEndpoint != nil {
@@ -108,12 +109,10 @@ func GenerateHcnEndpoint(epInfo *EndpointInfo, n *NetConf) (*hcn.HostComputeEndp
 		if !strings.EqualFold(hcnEndpoint.HostComputeNetwork, epInfo.NetworkId) {
 			err = hcnEndpoint.Delete()
 			if err != nil {
-				return nil, errors.Annotatef(err, "Failed to delete endpoint %v", epInfo.EndpointName)
-				hcnEndpoint = nil
-
+				return nil, errors.Annotatef(err, "failed to delete endpoint %s", epInfo.EndpointName)
 			}
 		} else {
-			return nil, fmt.Errorf("Endpoint \"%v\" already exits", epInfo.EndpointName)
+			return nil, fmt.Errorf("endpoint %q already exits", epInfo.EndpointName)
 		}
 	}
 
@@ -270,7 +269,7 @@ func AddHcnEndpoint(epName string, expectedNetworkId string, namespace string,
 		if err != nil {
 			return nil, errors.Annotatef(err, "failed to Remove Endpoint after AddNamespaceEndpoint failure")
 		}
-		return nil, errors.Annotatef(err, "Failed to Add endpoint to namespace")
+		return nil, errors.Annotate(err, "failed to Add endpoint to namespace")
 	}
 	return hcnEndpoint, nil
 

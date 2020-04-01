@@ -22,13 +22,13 @@ import (
 
 	"github.com/Microsoft/hcsshim"
 	"github.com/Microsoft/hcsshim/hcn"
-	"github.com/juju/errors"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 
+	"github.com/containernetworking/plugins/pkg/errors"
 	"github.com/containernetworking/plugins/pkg/hns"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
@@ -72,7 +72,7 @@ func ProcessEndpointArgs(args *skel.CmdArgs, n *NetConf) (*hns.EndpointInfo, err
 			return nil, errors.Annotatef(err, "error while NewResultFromResult")
 		} else {
 			if len(result.IPs) == 0 {
-				return nil, errors.New("IPAM plugin return is missing IP config")
+				return nil, fmt.Errorf("IPAM plugin return is missing IP config")
 			}
 			epInfo.IpAddress = result.IPs[0].Address.IP
 			epInfo.Gateway = result.IPs[0].Address.IP.Mask(result.IPs[0].Address.Mask)
@@ -194,7 +194,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	if result == nil {
-		return errors.New("result for ADD not populated correctly")
+		return fmt.Errorf("result for ADD not populated correctly")
 	}
 	return types.PrintResult(result, cniVersion)
 }
