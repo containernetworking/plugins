@@ -46,10 +46,10 @@ const (
 //NetConf for host-device config, look the README to learn how to use those parameters
 type NetConf struct {
 	types.NetConf
-	Device     string `json:"device"`     // Device-Name, something like eth0 or can0 etc.
-	HWAddr     string `json:"hwaddr"`     // MAC Address of target network interface
-	KernelPath string `json:"kernelpath"` // Kernelpath of the device
-	PCIAddr    string `json:"pciBusID"`   // PCI Address of target network device
+	Device        string `json:"device"`     // Device-Name, something like eth0 or can0 etc.
+	HWAddr        string `json:"hwaddr"`     // MAC Address of target network interface
+	KernelPath    string `json:"kernelpath"` // Kernelpath of the device
+	PCIAddr       string `json:"pciBusID"`   // PCI Address of target network device
 	RuntimeConfig struct {
 		DeviceID string `json:"deviceID,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
