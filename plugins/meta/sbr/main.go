@@ -296,6 +296,10 @@ func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface strin
 
 		route.Table = table
 
+		// Reset the route flags since if it is dynamically created,
+		// adding it to the new table will fail with "invalid argument"
+		route.Flags = 0
+
 		// We use route replace in case the route already exists, which
 		// is possible for the default gateway we added above.
 		err = netlink.RouteReplace(&route)
