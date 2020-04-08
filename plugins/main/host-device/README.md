@@ -17,6 +17,9 @@ The device can be specified with any one of four properties:
 
 For this plugin, `CNI_IFNAME` will be ignored. Upon DEL, the device will be moved back.
 
+The plugin also supports the following [capability argument](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md):
+* `deviceID`: A PCI address of the network device, e.g `0000:00:1f.6`
+
 ## Example configuration
 
 A sample configuration with `device` property looks like:
@@ -38,3 +41,26 @@ A sample configuration with `pciBusID` property looks like:
 	"pciBusID": "0000:3d:00.1"
 }
 ```
+
+A sample configuration utilizing `deviceID` runtime configuration looks like:
+
+1. From operator perspective:
+     ```json
+    {
+    	"cniVersion": "0.3.1",
+    	"type": "host-device",
+    	"capabilities": {
+    		"deviceID":  true
+    	}
+    }
+    ```
+2. From plugin perspective:
+    ```json
+    {
+    	"cniVersion": "0.3.1",
+    	"type": "host-device",
+    	"runtimeConfig": {
+    		"deviceID":  "0000:3d:00.1"
+    	}
+    }
+    ```
