@@ -46,10 +46,13 @@ const (
 //NetConf for host-device config, look the README to learn how to use those parameters
 type NetConf struct {
 	types.NetConf
-	Device     string `json:"device"`     // Device-Name, something like eth0 or can0 etc.
-	HWAddr     string `json:"hwaddr"`     // MAC Address of target network interface
-	KernelPath string `json:"kernelpath"` // Kernelpath of the device
-	PCIAddr    string `json:"pciBusID"`   // PCI Address of target network device
+	Device        string `json:"device"`     // Device-Name, something like eth0 or can0 etc.
+	HWAddr        string `json:"hwaddr"`     // MAC Address of target network interface
+	KernelPath    string `json:"kernelpath"` // Kernelpath of the device
+	PCIAddr       string `json:"pciBusID"`   // PCI Address of target network device
+	RuntimeConfig struct {
+		DeviceID string `json:"deviceID,omitempty"`
+	} `json:"runtimeConfig,omitempty"`
 }
 
 func init() {
@@ -64,9 +67,16 @@ func loadConf(bytes []byte) (*NetConf, error) {
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, fmt.Errorf("failed to load netconf: %v", err)
 	}
+
+	if n.RuntimeConfig.DeviceID != "" {
+		// Override PCI device with the standardized DeviceID provided in Runtime Config.
+		n.PCIAddr = n.RuntimeConfig.DeviceID
+	}
+
 	if n.Device == "" && n.HWAddr == "" && n.KernelPath == "" && n.PCIAddr == "" {
 		return nil, fmt.Errorf(`specify either "device", "hwaddr", "kernelpath" or "pciBusID"`)
 	}
+
 	return n, nil
 }
 
