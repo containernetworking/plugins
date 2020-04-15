@@ -35,7 +35,8 @@ With win-bridge plugin, all containers (on the same host) are plugged into an L2
     ],
     "loopbackDSR": true,
     "capabilities": {
-        "dns": true
+        "dns": true,
+        "portMappings":  true
     }
 }
 ```
@@ -55,3 +56,4 @@ With win-bridge plugin, all containers (on the same host) are plugged into an L2
 * `loopbackDSR` (bool, optional): If true, will add a policy to allow the interface to support loopback direct server return.
 * `capabilities` (dictionary, optional): Runtime capabilities to enable.
  * `dns` (boolean, optional): If true, will take the dns config supplied by the runtime and override other settings.
+ * `portMappings` (boolean, optional): If true, will handle HostPort<>ContainerPort mapping using NAT HNS Policies

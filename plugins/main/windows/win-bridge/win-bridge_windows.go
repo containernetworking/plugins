@@ -86,6 +86,9 @@ func ProcessEndpointArgs(args *skel.CmdArgs, n *NetConf) (*hns.EndpointInfo, err
 		n.ApplyOutboundNatPolicy(n.IPMasqNetwork)
 	}
 
+	// Add HostPort mapping if any present
+	n.ApplyPortMappingPolicy(n.RuntimeConfig.PortMaps)
+
 	epInfo.DNS = n.GetDNS()
 
 	return epInfo, nil
@@ -107,7 +110,6 @@ func cmdHnsAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 	}
 
 	epName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
-
 	hnsEndpoint, err := hns.ProvisionEndpoint(epName, hnsNetwork.Id, args.ContainerID, args.Netns, func() (*hcsshim.HNSEndpoint, error) {
 		epInfo, err := ProcessEndpointArgs(args, n)
 		epInfo.NetworkId = hnsNetwork.Id
@@ -130,7 +132,6 @@ func cmdHnsAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 	}
 
 	return result, nil
-
 }
 
 func cmdHcnAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {

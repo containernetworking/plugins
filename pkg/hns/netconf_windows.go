@@ -20,10 +20,11 @@ import (
 	"fmt"
 	"net"
 
+	"strings"
+
 	"github.com/Microsoft/hcsshim/hcn"
 	"github.com/buger/jsonparser"
 	"github.com/containernetworking/cni/pkg/types"
-	"strings"
 )
 
 // NetConf is the CNI spec
@@ -46,8 +47,16 @@ type RuntimeDNS struct {
 	Search      []string `json:"searches,omitempty"`
 }
 
+type PortMapEntry struct {
+	HostPort      int    `json:"hostPort"`
+	ContainerPort int    `json:"containerPort"`
+	Protocol      string `json:"protocol"`
+	HostIP        string `json:"hostIP,omitempty"`
+}
+
 type RuntimeConfig struct {
-	DNS RuntimeDNS `json:"dns"`
+	DNS      RuntimeDNS     `json:"dns"`
+	PortMaps []PortMapEntry `json:"portMappings,omitempty"`
 }
 
 type policy struct {
@@ -206,4 +215,22 @@ func (n *NetConf) ApplyDefaultPAPolicy(paAddress string) {
 		Name:  "EndpointPolicy",
 		Value: []byte(`{"Type": "PA", "PA": "` + paAddress + `"}`),
 	})
+}
+
+// ApplyPortMappingPolicy is used to configure HostPort<>ContainerPort mapping in HNS
+func (n *NetConf) ApplyPortMappingPolicy(portMappings []PortMapEntry) {
+	if portMappings == nil {
+		return
+	}
+
+	if n.Policies == nil {
+		n.Policies = make([]policy, 0)
+	}
+
+	for _, portMapping := range portMappings {
+		n.Policies = append(n.Policies, policy{
+			Name:  "EndpointPolicy",
+			Value: []byte(fmt.Sprintf(`{"Type": "NAT", "InternalPort": %d, "ExternalPort": %d, "Protocol": "%s"}`, portMapping.ContainerPort, portMapping.HostPort, portMapping.Protocol)),
+		})
+	}
 }
