@@ -72,7 +72,7 @@ will masquerade traffic as needed.
 The DNAT rule rewrites the destination port and address of new connections.
 There is a top-level chain, `CNI-HOSTPORT-DNAT` which is always created and
 never deleted. Each plugin execution creates an additional chain for ease
-of cleanup. So, if a single container exists on IP 172.16.30.2 with ports 
+of cleanup. So, if a single container exists on IP 172.16.30.2/24 with ports
 8080 and 8043 on the host forwarded to ports 80 and 443 in the container, the 
 rules look like this:
 
@@ -86,10 +86,10 @@ rules look like this:
 - `-j MARK --set-xmark 0x2000/0x2000`
 
 `CNI-DN-xxxxxx` chain:
-- `-p tcp -s 172.16.30.2 --dport 8080 -j CNI-HOSTPORT-SETMARK` (masquerade hairpin traffic)
+- `-p tcp -s 172.16.30.0/24 --dport 8080 -j CNI-HOSTPORT-SETMARK` (masquerade hairpin traffic)
 - `-p tcp -s 127.0.0.1 --dport 8080 -j CNI-HOSTPORT-SETMARK` (masquerade localhost traffic)
 - `-p tcp --dport 8080 -j DNAT --to-destination 172.16.30.2:80` (rewrite destination)
-- `-p tcp -s 172.16.30.2 --dport 8043 -j CNI-HOSTPORT-SETMARK`
+- `-p tcp -s 172.16.30.0/24 --dport 8043 -j CNI-HOSTPORT-SETMARK`
 - `-p tcp -s 127.0.0.1 --dport 8043 -j CNI-HOSTPORT-SETMARK`
 - `-p tcp --dport 8043 -j DNAT --to-destination 172.16.30.2:443`
 
