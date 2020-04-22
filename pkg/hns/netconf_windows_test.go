@@ -128,6 +128,53 @@ var _ = Describe("HNS NetConf", func() {
 		})
 	})
 
+	Describe("ApplyPortMappingPolicy", func() {
+		Context("when portMappings not activated", func() {
+			It("does nothing", func() {
+				n := NetConf{}
+				n.ApplyPortMappingPolicy(nil)
+				Expect(n.Policies).Should(BeNil())
+
+				n.ApplyPortMappingPolicy([]PortMapEntry{})
+				Expect(n.Policies).Should(HaveLen(0))
+			})
+		})
+
+		Context("when portMappings is activated", func() {
+			It("creates NAT policies", func() {
+				n := NetConf{}
+				n.ApplyPortMappingPolicy([]PortMapEntry{
+					{
+						ContainerPort: 80,
+						HostPort:      8080,
+						Protocol:      "TCP",
+						HostIP:        "ignored",
+					},
+				})
+
+				Expect(n.Policies).Should(HaveLen(1))
+
+				policy := n.Policies[0]
+				Expect(policy.Name).Should(Equal("EndpointPolicy"))
+
+				value := make(map[string]interface{})
+				json.Unmarshal(policy.Value, &value)
+
+				Expect(value).Should(HaveKey("Type"))
+				Expect(value["Type"]).Should(Equal("NAT"))
+
+				Expect(value).Should(HaveKey("InternalPort"))
+				Expect(value["InternalPort"]).Should(Equal(float64(80)))
+
+				Expect(value).Should(HaveKey("ExternalPort"))
+				Expect(value["ExternalPort"]).Should(Equal(float64(8080)))
+
+				Expect(value).Should(HaveKey("Protocol"))
+				Expect(value["Protocol"]).Should(Equal("TCP"))
+			})
+		})
+	})
+
 	Describe("MarshalPolicies", func() {
 		Context("when not set by user", func() {
 			It("sets it by adding a policy", func() {
