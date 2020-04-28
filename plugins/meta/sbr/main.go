@@ -237,7 +237,7 @@ func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface strin
 		if ipCfg.Version == "4" {
 			src.Mask = net.CIDRMask(32, 32)
 		} else {
-			src.Mask = net.CIDRMask(64, 64)
+			src.Mask = net.CIDRMask(128, 128)
 		}
 
 		log.Printf("Source to use %s", src.String())
@@ -258,7 +258,7 @@ func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface strin
 				dest.Mask = net.CIDRMask(0, 32)
 			} else {
 				dest.IP = net.IPv6zero
-				dest.Mask = net.CIDRMask(0, 64)
+				dest.Mask = net.CIDRMask(0, 128)
 			}
 
 			route := netlink.Route{
