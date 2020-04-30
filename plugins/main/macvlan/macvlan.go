@@ -45,6 +45,17 @@ type NetConf struct {
 	Master string `json:"master"`
 	Mode   string `json:"mode"`
 	MTU    int    `json:"mtu"`
+	Mac    string `json:"mac,omitempty"`
+
+	RuntimeConfig struct {
+		Mac string `json:"mac,omitempty"`
+	} `json:"runtimeConfig,omitempty"`
+}
+
+// MacEnvArgs represents CNI_ARG
+type MacEnvArgs struct {
+	types.CommonArgs
+	MAC types.UnmarshallableString `json:"mac,omitempty"`
 }
 
 func init() {
@@ -73,7 +84,7 @@ func getDefaultRouteInterfaceName() (string, error) {
 	return "", fmt.Errorf("no default route interface found")
 }
 
-func loadConf(bytes []byte) (*NetConf, string, error) {
+func loadConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 	n := &NetConf{}
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
@@ -93,6 +104,22 @@ func loadConf(bytes []byte) (*NetConf, string, error) {
 	}
 	if n.MTU < 0 || n.MTU > masterMTU {
 		return nil, "", fmt.Errorf("invalid MTU %d, must be [0, master MTU(%d)]", n.MTU, masterMTU)
+	}
+
+	if envArgs != "" {
+		e := MacEnvArgs{}
+		err := types.LoadArgs(envArgs, &e)
+		if err != nil {
+			return nil, "", err
+		}
+
+		if e.MAC != "" {
+			n.Mac = string(e.MAC)
+		}
+	}
+
+	if n.RuntimeConfig.Mac != "" {
+		n.Mac = n.RuntimeConfig.Mac
 	}
 
 	return n, n.CNIVersion, nil
@@ -156,14 +183,24 @@ func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Inter
 		return nil, err
 	}
 
+	linkAttrs := netlink.LinkAttrs{
+		MTU:         conf.MTU,
+		Name:        tmpName,
+		ParentIndex: m.Attrs().Index,
+		Namespace:   netlink.NsFd(int(netns.Fd())),
+	}
+
+	if conf.Mac != "" {
+		addr, err := net.ParseMAC(conf.Mac)
+		if err != nil {
+			return nil, fmt.Errorf("invalid args %v for MAC addr: %v", conf.Mac, err)
+		}
+		linkAttrs.HardwareAddr = addr
+	}
+
 	mv := &netlink.Macvlan{
-		LinkAttrs: netlink.LinkAttrs{
-			MTU:         conf.MTU,
-			Name:        tmpName,
-			ParentIndex: m.Attrs().Index,
-			Namespace:   netlink.NsFd(int(netns.Fd())),
-		},
-		Mode: mode,
+		LinkAttrs: linkAttrs,
+		Mode:      mode,
 	}
 
 	if err := netlink.LinkAdd(mv); err != nil {
@@ -204,7 +241,7 @@ func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Inter
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
-	n, cniVersion, err := loadConf(args.StdinData)
+	n, cniVersion, err := loadConf(args.StdinData, args.Args)
 	if err != nil {
 		return err
 	}
@@ -311,7 +348,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
-	n, _, err := loadConf(args.StdinData)
+	n, _, err := loadConf(args.StdinData, args.Args)
 	if err != nil {
 		return err
 	}
@@ -349,7 +386,7 @@ func main() {
 
 func cmdCheck(args *skel.CmdArgs) error {
 
-	n, _, err := loadConf(args.StdinData)
+	n, _, err := loadConf(args.StdinData, args.Args)
 	if err != nil {
 		return err
 	}
