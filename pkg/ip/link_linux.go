@@ -21,10 +21,12 @@ import (
 	"net"
 	"os"
 
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/utils/hwaddr"
 	"github.com/safchain/ethtool"
 	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/utils/hwaddr"
+	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 )
 
 var (
@@ -158,6 +160,9 @@ func SetupVethWithName(contVethName, hostVethName string, mtu int, hostNS ns.Net
 		if err = netlink.LinkSetUp(hostVeth); err != nil {
 			return fmt.Errorf("failed to set %q up: %v", hostVethName, err)
 		}
+
+		// we want to own the routes for this interface
+		_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv6/conf/%s/accept_ra", hostVethName), "0")
 		return nil
 	})
 	if err != nil {
