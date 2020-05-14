@@ -193,6 +193,10 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, ifName string) (netl
 		if err != nil {
 			return fmt.Errorf("failed to find %q: %v", hostDev.Attrs().Name, err)
 		}
+		// Devices can be renamed only when down
+		if err = netlink.LinkSetDown(contDev); err != nil {
+			return fmt.Errorf("failed to set %q down: %v", hostDev.Attrs().Name, err)
+		}
 		// Save host device name into the container device's alias property
 		if err := netlink.LinkSetAlias(contDev, hostDev.Attrs().Name); err != nil {
 			return fmt.Errorf("failed to set alias to %q: %v", hostDev.Attrs().Name, err)
