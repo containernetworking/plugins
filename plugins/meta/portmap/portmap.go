@@ -225,6 +225,8 @@ func fillDnatRules(c *chain, config *PortMapConf, containerNet net.IPNet) {
 	c.rules = make([][]string, 0, 3*len(entries))
 	for _, entry := range entries {
 		// If a HostIP is given, only process the entry if host and container address families match
+		// and append it to the iptables rules
+		addRuleBaseDst := false
 		if entry.HostIP != "" {
 			hostIP := net.ParseIP(entry.HostIP)
 			isHostV6 := (hostIP.To4() == nil)
@@ -232,12 +234,17 @@ func fillDnatRules(c *chain, config *PortMapConf, containerNet net.IPNet) {
 			if isV6 != isHostV6 {
 				continue
 			}
+
+			// Unspecified addresses can not be used as destination
+			if !hostIP.IsUnspecified() {
+				addRuleBaseDst = true
+			}
 		}
 
 		ruleBase := []string{
 			"-p", entry.Protocol,
 			"--dport", strconv.Itoa(entry.HostPort)}
-		if entry.HostIP != "" {
+		if addRuleBaseDst {
 			ruleBase = append(ruleBase,
 				"-d", entry.HostIP)
 		}
