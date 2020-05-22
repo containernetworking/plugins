@@ -43,6 +43,8 @@ const (
 	sysBusPCI = "/sys/bus/pci/devices"
 )
 
+var userspaceDrivers = []string{"vfio-pci", "uio_pci_generic", "igb_uio"}
+
 //NetConf for host-device config, look the README to learn how to use those parameters
 type NetConf struct {
 	types.NetConf
@@ -91,6 +93,23 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer containerNs.Close()
 
+	var result *current.Result
+	if len(cfg.PCIAddr) > 0 {
+		isDpdkMode, _ := hasDpdkDriver(cfg.PCIAddr)
+		if isDpdkMode {
+			result := current.Result{
+				CNIVersion: current.ImplementedSpecVersion,
+				Interfaces: []*current.Interface{
+					{
+						Name:    args.IfName,
+						Sandbox: containerNs.Path(),
+					},
+				},
+			}
+			return types.PrintResult(&result, cfg.CNIVersion)
+		}
+	}
+
 	hostDev, err := getLink(cfg.Device, cfg.HWAddr, cfg.KernelPath, cfg.PCIAddr)
 	if err != nil {
 		return fmt.Errorf("failed to find host device: %v", err)
@@ -101,7 +120,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to move link %v", err)
 	}
 
-	var result *current.Result
 	// run the IPAM plugin and get back the config to apply
 	if cfg.IPAM.Type != "" {
 		r, err := ipam.ExecAdd(cfg.IPAM.Type, args.StdinData)
@@ -167,6 +185,13 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
 	}
 	defer containerNs.Close()
+
+	if len(cfg.PCIAddr) > 0 {
+		isDpdkMode, _ := hasDpdkDriver(cfg.PCIAddr)
+		if isDpdkMode {
+			return nil
+		}
+	}
 
 	if err := moveLinkOut(containerNs, args.IfName); err != nil {
 		return err
@@ -253,6 +278,25 @@ func moveLinkOut(containerNs ns.NetNS, ifName string) error {
 		}
 		return nil
 	})
+}
+
+func hasDpdkDriver(pciaddr string) (bool, error) {
+	driverLink := filepath.Join(sysBusPCI, pciaddr, "driver")
+	driverPath, err := filepath.EvalSymlinks(driverLink)
+	if err != nil {
+		return false, err
+	}
+	driverStat, err := os.Stat(driverPath)
+	if err != nil {
+		return false, err
+	}
+	driverName := driverStat.Name()
+	for _, drv := range userspaceDrivers {
+		if driverName == drv {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func printLink(dev netlink.Link, cniVersion string, containerNs ns.NetNS) error {
