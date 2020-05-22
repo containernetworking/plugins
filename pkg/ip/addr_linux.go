@@ -38,7 +38,7 @@ func SettleAddresses(ifName string, timeout int) error {
 		return fmt.Errorf("failed to retrieve link: %v", err)
 	}
 
-	cxt, cancel := context.WithTimeout(context.Background(), time.Duration(timeout) * time.Second)
+	cxt, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 	timeEventChan := make(chan readOnlyTimeChan, 1)
 
@@ -69,8 +69,8 @@ func SettleAddresses(ifName string, timeout int) error {
 		}()
 
 		select {
-		case <- <-timeEventChan:
-		case <- cxt.Done():
+		case <-<-timeEventChan:
+		case <-cxt.Done():
 			return fmt.Errorf("link %s still has tentative addresses after %d seconds",
 				ifName,
 				timeout)
