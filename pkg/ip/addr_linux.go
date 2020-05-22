@@ -15,6 +15,7 @@
 package ip
 
 import (
+	"context"
 	"fmt"
 	"syscall"
 	"time"
@@ -23,6 +24,8 @@ import (
 )
 
 const SETTLE_INTERVAL = 50 * time.Millisecond
+
+type readOnlyTimeChan <-chan time.Time
 
 // SettleAddresses waits for all addresses on a link to leave tentative state.
 // This is particularly useful for ipv6, where all addresses need to do DAD.
@@ -35,7 +38,10 @@ func SettleAddresses(ifName string, timeout int) error {
 		return fmt.Errorf("failed to retrieve link: %v", err)
 	}
 
-	deadline := time.Now().Add(time.Duration(timeout) * time.Second)
+	cxt, cancel := context.WithTimeout(context.Background(), time.Duration(timeout) * time.Second)
+	defer cancel()
+	timeEventChan := make(chan readOnlyTimeChan, 1)
+
 	for {
 		addrs, err := netlink.AddrList(link, netlink.FAMILY_ALL)
 		if err != nil {
@@ -57,12 +63,17 @@ func SettleAddresses(ifName string, timeout int) error {
 		if ok {
 			return nil
 		}
-		if time.Now().After(deadline) {
+
+		go func() {
+			timeEventChan <- time.After(SETTLE_INTERVAL)
+		}()
+
+		select {
+		case <- <-timeEventChan:
+		case <- cxt.Done():
 			return fmt.Errorf("link %s still has tentative addresses after %d seconds",
 				ifName,
 				timeout)
 		}
-
-		time.Sleep(SETTLE_INTERVAL)
 	}
 }
