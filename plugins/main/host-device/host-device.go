@@ -43,6 +43,7 @@ const (
 	sysBusPCI = "/sys/bus/pci/devices"
 )
 
+// Array of different linux drivers bound to network device needed for DPDK
 var userspaceDrivers = []string{"vfio-pci", "uio_pci_generic", "igb_uio"}
 
 //NetConf for host-device config, look the README to learn how to use those parameters
@@ -94,10 +95,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 	defer containerNs.Close()
 
 	var result *current.Result
+
 	if len(cfg.PCIAddr) > 0 {
-		isDpdkMode, _ := hasDpdkDriver(cfg.PCIAddr)
+		isDpdkMode, err := hasDpdkDriver(cfg.PCIAddr)
+		if err != nil {
+			return fmt.Errorf("error with host device: %v", err)
+		}
 		if isDpdkMode {
-			result := current.Result{
+			result = &current.Result{
 				CNIVersion: current.ImplementedSpecVersion,
 				Interfaces: []*current.Interface{
 					{
@@ -106,7 +111,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 					},
 				},
 			}
-			return types.PrintResult(&result, cfg.CNIVersion)
+			return types.PrintResult(result, cfg.CNIVersion)
 		}
 	}
 
@@ -187,7 +192,10 @@ func cmdDel(args *skel.CmdArgs) error {
 	defer containerNs.Close()
 
 	if len(cfg.PCIAddr) > 0 {
-		isDpdkMode, _ := hasDpdkDriver(cfg.PCIAddr)
+		isDpdkMode, err := hasDpdkDriver(cfg.PCIAddr)
+		if err != nil {
+			return fmt.Errorf("error with host device: %v", err)
+		}
 		if isDpdkMode {
 			return nil
 		}
