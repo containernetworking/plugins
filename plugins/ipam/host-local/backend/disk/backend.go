@@ -59,9 +59,24 @@ func New(network, dataDir string) (*Store, error) {
 func (s *Store) Reserve(id string, ifname string, ip net.IP, rangeID string) (bool, error) {
 	fname := GetEscapedPath(s.dataDir, ip.String())
 
-	f, err := os.OpenFile(fname, os.O_RDWR|os.O_EXCL|os.O_CREATE, 0644)
+	var f *os.File
+	var err error
+
+	f, err = os.OpenFile(fname, os.O_RDWR|os.O_EXCL|os.O_CREATE, 0644)
 	if os.IsExist(err) {
-		return false, nil
+		// file fname exists and f is nil, try to reopen it without O_CREATE flag.
+		f, err = os.OpenFile(fname, os.O_RDWR, 0644)
+		if err != nil {
+			return false, err
+		}
+		statInfo, err := f.Stat()
+		if err != nil {
+			return false, err
+		}
+		// non-empty file means it is already occupied by a container. Otherwise we can still allocate it to a new container.
+		if statInfo.Size() != 0 {
+			return false, nil
+		}
 	}
 	if err != nil {
 		return false, err
