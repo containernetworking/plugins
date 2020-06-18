@@ -94,24 +94,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer containerNs.Close()
 
-	var result *current.Result
-
 	if len(cfg.PCIAddr) > 0 {
 		isDpdkMode, err := hasDpdkDriver(cfg.PCIAddr)
 		if err != nil {
 			return fmt.Errorf("error with host device: %v", err)
 		}
 		if isDpdkMode {
-			result = &current.Result{
-				CNIVersion: current.ImplementedSpecVersion,
-				Interfaces: []*current.Interface{
-					{
-						Name:    args.IfName,
-						Sandbox: containerNs.Path(),
-					},
-				},
-			}
-			return types.PrintResult(result, cfg.CNIVersion)
+			return types.PrintResult(&current.Result{}, cfg.CNIVersion)
 		}
 	}
 
@@ -125,6 +114,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to move link %v", err)
 	}
 
+	var result *current.Result
 	// run the IPAM plugin and get back the config to apply
 	if cfg.IPAM.Type != "" {
 		r, err := ipam.ExecAdd(cfg.IPAM.Type, args.StdinData)
