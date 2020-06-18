@@ -34,7 +34,7 @@ import (
 // RFC 2131 suggests using exponential backoff, starting with 4sec
 // and randomized to +/- 1sec
 const resendDelay0 = 4 * time.Second
-const resendDelayMax = 32 * time.Second
+const resendDelayMax = 62 * time.Second
 
 const (
 	leaseStateBound = iota
@@ -335,8 +335,9 @@ func jitter(span time.Duration) time.Duration {
 
 func backoffRetry(f func() (*dhcp4.Packet, error)) (*dhcp4.Packet, error) {
 	var baseDelay time.Duration = resendDelay0
+	var sleepTime time.Duration
 
-	for i := 0; i < resendCount; i++ {
+	for {
 		pkt, err := f()
 		if err == nil {
 			return pkt, nil
@@ -344,10 +345,16 @@ func backoffRetry(f func() (*dhcp4.Packet, error)) (*dhcp4.Packet, error) {
 
 		log.Print(err)
 
-		time.Sleep(baseDelay + jitter(time.Second))
+		sleepTime = baseDelay + jitter(time.Second)
+
+		log.Printf("retrying in %f seconds", sleepTime.Seconds())
+
+		time.Sleep(sleepTime)
 
 		if baseDelay < resendDelayMax {
 			baseDelay *= 2
+		} else {
+			break
 		}
 	}
 
