@@ -57,7 +57,7 @@ func ensureFirstChainRule(ipt *iptables.IPTables, chain string, rule []string) e
 
 func (ib *iptablesBackend) setupChains(ipt *iptables.IPTables) error {
 	privRule := generateFilterRule(ib.privChainName)
-	adminRule := generateFilterRule(ib.adminChainName)
+	adminRule := generateAdminRule(ib.adminChainName)
 
 	// Ensure our private chains exist
 	if err := utils.EnsureChain(ipt, "filter", ib.privChainName); err != nil {
@@ -165,7 +165,7 @@ func (ib *iptablesBackend) checkRules(conf *FirewallNetConf, result *current.Res
 	}
 
 	// Ensure our admin override chain rule exists in our private chain
-	adminRule := generateFilterRule(ib.adminChainName)
+	adminRule := generateAdminRule(ib.adminChainName)
 	adminExists, err := ipt.Exists("filter", ib.privChainName, adminRule...)
 	if err != nil {
 		return err
