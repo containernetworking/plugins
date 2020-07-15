@@ -107,6 +107,10 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to parse config: %v", err)
 	}
 
+	if len(netConf.RuntimeConfig.PortMaps) == 0 {
+		return nil
+	}
+
 	netConf.ContainerID = args.ContainerID
 
 	// We don't need to parse out whether or not we're using v6 or snat,
