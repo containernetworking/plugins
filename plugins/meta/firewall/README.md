@@ -28,7 +28,7 @@ The following network configuration file
         }
       },
       {
-        "type": "firewall",
+        "type": "firewall"
       }
     ]
 }
@@ -72,7 +72,7 @@ look like:
       },
       {
         "type": "firewall",
-	"backend": "firewalld"
+        "backend": "firewalld"
       }
     ]
 }
@@ -111,7 +111,7 @@ look like:
       },
       {
         "type": "firewall",
-	"backend": "iptables"
+        "backend": "iptables"
       }
     ]
 }
@@ -129,7 +129,7 @@ when containers are created and from where rules will be removed when containers
 CNI-FORWARD will have a pair of rules added, one for each direction, using the IPAM assigned IP address
 of the container as shown:
 
-`CNI_FORWARD` chain:
-- `-s 10.88.0.2 -m conntrack --ctstate RELATED,ESTABLISHED -j CNI-FORWARD`
-- `-d 10.88.0.2 -j CNI-FORWARD`
+`CNI-FORWARD` chain:
+- `-s 10.88.0.2 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT`
+- `-d 10.88.0.2 -j ACCEPT`
 
