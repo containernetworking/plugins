@@ -1,6 +1,8 @@
 # github.com/Microsoft/go-winio v0.4.11
+## explicit
 github.com/Microsoft/go-winio
 # github.com/Microsoft/hcsshim v0.8.6
+## explicit
 github.com/Microsoft/hcsshim
 github.com/Microsoft/hcsshim/hcn
 github.com/Microsoft/hcsshim/internal/cni
@@ -21,10 +23,13 @@ github.com/Microsoft/hcsshim/internal/schema2
 github.com/Microsoft/hcsshim/internal/timeout
 github.com/Microsoft/hcsshim/internal/wclayer
 # github.com/alexflint/go-filemutex v0.0.0-20171022225611-72bdc8eae2ae
+## explicit
 github.com/alexflint/go-filemutex
 # github.com/buger/jsonparser v0.0.0-20180808090653-f4dd9f5a6b44
+## explicit
 github.com/buger/jsonparser
 # github.com/containernetworking/cni v0.7.1
+## explicit
 github.com/containernetworking/cni/libcni
 github.com/containernetworking/cni/pkg/invoke
 github.com/containernetworking/cni/pkg/skel
@@ -33,34 +38,48 @@ github.com/containernetworking/cni/pkg/types/020
 github.com/containernetworking/cni/pkg/types/current
 github.com/containernetworking/cni/pkg/version
 # github.com/coreos/go-iptables v0.4.5
+## explicit
 github.com/coreos/go-iptables/iptables
 # github.com/coreos/go-systemd v0.0.0-20180511133405-39ca1b05acc7
+## explicit
 github.com/coreos/go-systemd/activation
 # github.com/d2g/dhcp4 v0.0.0-20170904100407-a1d1b6c41b1c
+## explicit
 github.com/d2g/dhcp4
 # github.com/d2g/dhcp4client v1.0.0
+## explicit
 github.com/d2g/dhcp4client
 # github.com/d2g/dhcp4server v0.0.0-20181031114812-7d4a0a7f59a5
+## explicit
 github.com/d2g/dhcp4server
 github.com/d2g/dhcp4server/leasepool
 github.com/d2g/dhcp4server/leasepool/memorypool
+# github.com/d2g/hardwareaddr v0.0.0-20190221164911-e7d9fbe030e4
+## explicit
 # github.com/godbus/dbus v0.0.0-20180201030542-885f9cc04c9c
+## explicit
 github.com/godbus/dbus
+# github.com/golang/protobuf v1.3.1
+## explicit
 # github.com/google/nftables v0.0.0-20200802175506-c25e4f69b425
+## explicit
 github.com/google/nftables
 github.com/google/nftables/binaryutil
 github.com/google/nftables/expr
 # github.com/j-keck/arping v0.0.0-20160618110441-2cf9dc699c56
+## explicit
 github.com/j-keck/arping
 # github.com/koneu/natend v0.0.0-20150829182554-ec0926ea948d
 github.com/koneu/natend
 # github.com/mattn/go-shellwords v1.0.3
+## explicit
 github.com/mattn/go-shellwords
 # github.com/mdlayher/netlink v0.0.0-20191009155606-de872b0d824b
 github.com/mdlayher/netlink
 github.com/mdlayher/netlink/nlenc
 github.com/mdlayher/netlink/nltest
 # github.com/onsi/ginkgo v0.0.0-20151202141238-7f8ab55aaf3b
+## explicit
 github.com/onsi/ginkgo
 github.com/onsi/ginkgo/config
 github.com/onsi/ginkgo/extensions/table
@@ -78,6 +97,7 @@ github.com/onsi/ginkgo/reporters
 github.com/onsi/ginkgo/reporters/stenographer
 github.com/onsi/ginkgo/types
 # github.com/onsi/gomega v0.0.0-20151007035656-2152b45fa28a
+## explicit
 github.com/onsi/gomega
 github.com/onsi/gomega/format
 github.com/onsi/gomega/gbytes
@@ -93,13 +113,19 @@ github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
 # github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
+## explicit
 github.com/safchain/ethtool
 # github.com/sirupsen/logrus v1.0.6
+## explicit
 github.com/sirupsen/logrus
+# github.com/stretchr/testify v1.3.0
+## explicit
 # github.com/vishvananda/netlink v0.0.0-20181108222139-023a6dafdcdf
+## explicit
 github.com/vishvananda/netlink
 github.com/vishvananda/netlink/nl
 # github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc
+## explicit
 github.com/vishvananda/netns
 # golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
 golang.org/x/crypto/ssh/terminal
@@ -109,6 +135,11 @@ golang.org/x/net/internal/iana
 golang.org/x/net/internal/socket
 golang.org/x/net/ipv4
 # golang.org/x/sys v0.0.0-20191029155521-f43be2a4598c
+## explicit
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
+# gopkg.in/airbrake/gobrake.v2 v2.0.9
+## explicit
+# gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2
+## explicit

@@ -116,6 +116,8 @@ var _ = Describe("portmap integration tests", func() {
 				},
 			}
 
+			fmt.Fprintf(GinkgoWriter, "configList: %T %v\n", configList, configList)
+
 			// Make delete idempotent, so we can clean up on failure
 			netDeleted := false
 			deleteNetwork := func() error {
@@ -132,6 +134,10 @@ var _ = Describe("portmap integration tests", func() {
 			dnatChainName := genDnatChain("cni-portmap-unit-test", runtimeConfig.ContainerID).name
 
 			// Create the network
+			fmt.Fprintf(GinkgoWriter, "configList: %s\n", configList.Bytes)
+			fmt.Fprintf(GinkgoWriter, "runtime config: %v\n", runtimeConfig)
+			fmt.Fprintf(GinkgoWriter, "runtime config: %v\n", runtimeConfig)
+
 			resI, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig)
 			Expect(err).NotTo(HaveOccurred())
 			defer deleteNetwork()
