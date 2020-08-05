@@ -133,3 +133,17 @@ of the container as shown:
 - `-s 10.88.0.2 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT`
 - `-d 10.88.0.2 -j ACCEPT`
 
+The `CNI-FORWARD` chain first sends all traffic to `CNI-ADMIN` chain, which is intended as an user-controlled chain for custom rules that run prior to rules managed by the `firewall` plugin. The `firewall` plugin does not add, delete or modify rules in the `CNI-ADMIN` chain.
+
+`CNI-FORWARD` chain:
+- `-j CNI-ADMIN`
+
+The chain name `CNI-ADMIN` can be overridden by specifying `iptablesAdminChainName` in the plugin configuration
+
+```
+      {
+        "type": "firewall",
+	"backend": "iptables",
+	"iptablesAdminChainName": "SOME-OTHER-CHAIN-NAME",
+      }
+```
