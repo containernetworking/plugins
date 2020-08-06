@@ -336,4 +336,18 @@ table ip6 filter {
                 iifname "dummy0" oifname "dummy0" counter packets 0 bytes 0 accept
         }
 }
+=======
+The `CNI-FORWARD` chain first sends all traffic to `CNI-ADMIN` chain, which is intended as an user-controlled chain for custom rules that run prior to rules managed by the `firewall` plugin. The `firewall` plugin does not add, delete or modify rules in the `CNI-ADMIN` chain.
+
+`CNI-FORWARD` chain:
+- `-j CNI-ADMIN`
+
+The chain name `CNI-ADMIN` can be overridden by specifying `iptablesAdminChainName` in the plugin configuration
+
+```json
+      {
+        "type": "firewall",
+	"backend": "iptables",
+	"iptablesAdminChainName": "SOME-OTHER-CHAIN-NAME",
+      }
 ```

@@ -45,7 +45,7 @@ var _ = Describe("Loopback", func() {
 		environ = []string{
 			fmt.Sprintf("CNI_CONTAINERID=%s", "dummy"),
 			fmt.Sprintf("CNI_NETNS=%s", networkNS.Path()),
-			fmt.Sprintf("CNI_IFNAME=%s", "this is ignored"),
+			fmt.Sprintf("CNI_IFNAME=%s", "lo"),
 			fmt.Sprintf("CNI_ARGS=%s", "none"),
 			fmt.Sprintf("CNI_PATH=%s", "/some/test/path"),
 		}
