@@ -238,19 +238,22 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool, maste
 		return nil, fmt.Errorf("could not add %q: %v", brName, err)
 	}
 
-	// check if master was specified for the bridge
+	// check if master option was specified for the bridge
 	if master != "" {
 		m, err := netlink.LinkByName(master)
 		if err != nil {
-			return nil, fmt.Errorf("failed to lookup master %q: %v", master, err)
+			// remove bridge
+			netlink.LinkDel(br)
+			return nil, fmt.Errorf("failed to lookup interface %q to set this bridge as master: %v", master, err)
 		} else {
-			// adds the master to bridge
+			// sets this bridge as master of m
 			netlink.LinkSetMaster(m, br)
 		}
 	}
 
 	if promiscMode {
 		if err := netlink.SetPromiscOn(br); err != nil {
+			netlink.LinkDel(br)
 			return nil, fmt.Errorf("could not set promiscuous mode on %q: %v", brName, err)
 		}
 	}
@@ -259,6 +262,7 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool, maste
 	// ensure it's really a bridge with similar configuration
 	br, err = bridgeByName(brName)
 	if err != nil {
+		netlink.LinkDel(br)
 		return nil, err
 	}
 
@@ -266,6 +270,7 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool, maste
 	_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv6/conf/%s/accept_ra", brName), "0")
 
 	if err := netlink.LinkSetUp(br); err != nil {
+		netlink.LinkDel(br)
 		return nil, err
 	}
 
