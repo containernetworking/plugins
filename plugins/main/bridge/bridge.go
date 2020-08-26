@@ -46,16 +46,16 @@ const defaultBrName = "cni0"
 
 type NetConf struct {
 	types.NetConf
-	BrName       string `json:"bridge"`
-	Master       string `json:"master"`
-	IsGW         bool   `json:"isGateway"`
-	IsDefaultGW  bool   `json:"isDefaultGateway"`
-	ForceAddress bool   `json:"forceAddress"`
-	IPMasq       bool   `json:"ipMasq"`
-	MTU          int    `json:"mtu"`
-	HairpinMode  bool   `json:"hairpinMode"`
-	PromiscMode  bool   `json:"promiscMode"`
-	Vlan         int    `json:"vlan"`
+	BrName       string   `json:"bridge"`
+	Ports        []string `json:"ports"`
+	IsGW         bool     `json:"isGateway"`
+	IsDefaultGW  bool     `json:"isDefaultGateway"`
+	ForceAddress bool     `json:"forceAddress"`
+	IPMasq       bool     `json:"ipMasq"`
+	MTU          int      `json:"mtu"`
+	HairpinMode  bool     `json:"hairpinMode"`
+	PromiscMode  bool     `json:"promiscMode"`
+	Vlan         int      `json:"vlan"`
 }
 
 type gwInfo struct {
@@ -216,7 +216,7 @@ func bridgeByName(name string) (*netlink.Bridge, error) {
 	return br, nil
 }
 
-func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool, master string) (*netlink.Bridge, error) {
+func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool, ports []string) (*netlink.Bridge, error) {
 	br := &netlink.Bridge{
 		LinkAttrs: netlink.LinkAttrs{
 			Name: brName,
@@ -238,16 +238,18 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool, maste
 		return nil, fmt.Errorf("could not add %q: %v", brName, err)
 	}
 
-	// check if master option was specified for the bridge
-	if master != "" {
-		m, err := netlink.LinkByName(master)
-		if err != nil {
-			// remove bridge
-			netlink.LinkDel(br)
-			return nil, fmt.Errorf("failed to lookup interface %q to set this bridge as master: %v", master, err)
-		} else {
-			// sets this bridge as master of m
-			netlink.LinkSetMaster(m, br)
+	// add ports that are specified for the bridge
+	if len(ports) > 0 {
+		for _, port := range ports {
+			p, err := netlink.LinkByName(port)
+			if err != nil {
+				// remove bridge
+				netlink.LinkDel(br)
+				return nil, fmt.Errorf("failed to lookup interface %q to set up as a port of the bridge: %v", port, err)
+			} else {
+				// sets this interface as a port of bridge
+				netlink.LinkSetMaster(p, br)
+			}
 		}
 	}
 
@@ -363,7 +365,7 @@ func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
 		vlanFiltering = true
 	}
 	// create bridge if necessary
-	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, vlanFiltering, n.Master)
+	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, vlanFiltering, n.Ports)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create bridge %q: %v", n.BrName, err)
 	}
