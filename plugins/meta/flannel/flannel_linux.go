@@ -85,6 +85,8 @@ func doCmdAdd(args *skel.CmdArgs, n *NetConf, fenv *subnetEnv) error {
 	}
 	n.Delegate["ipam"] = ipam
 
+	Log(DebugLevel, "flannel CNI doCmdAdd() Delegate: %v", n.Delegate)
+
 	return delegateAdd(args.ContainerID, n.DataDir, n.Delegate)
 }
 

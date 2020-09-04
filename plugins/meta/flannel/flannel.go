@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
@@ -41,6 +42,7 @@ import (
 const (
 	defaultSubnetFile = "/run/flannel/subnet.env"
 	defaultDataDir    = "/var/lib/cni/flannel"
+	defaultLogLevel   = "error"
 )
 
 type NetConf struct {
@@ -52,6 +54,7 @@ type NetConf struct {
 	DataDir       string                 `json:"dataDir"`
 	Delegate      map[string]interface{} `json:"delegate"`
 	RuntimeConfig map[string]interface{} `json:"runtimeConfig,omitempty"`
+	LogLevel      string                 `json:"logLevel"`
 }
 
 type subnetEnv struct {
@@ -59,6 +62,61 @@ type subnetEnv struct {
 	sn     *net.IPNet
 	mtu    *uint
 	ipmasq *bool
+}
+
+type LogLevel uint32
+
+const (
+	FatalLevel LogLevel = iota
+	ErrorLevel
+	VerboseLevel
+	DebugLevel
+	MaxLevel
+)
+
+var logLevel LogLevel = ErrorLevel
+
+func (l LogLevel) String() string {
+	switch l {
+	case FatalLevel:
+		return "fatal"
+	case VerboseLevel:
+		return "verbose"
+	case ErrorLevel:
+		return "error"
+	case DebugLevel:
+		return "debug"
+	}
+	return "unknown"
+}
+
+// SetLogLevel sets the log level
+func SetLogLevel(levelStr string) {
+	switch strings.ToLower(levelStr) {
+	case "debug":
+		logLevel = DebugLevel
+	case "verbose":
+		logLevel = VerboseLevel
+	case "error":
+		logLevel = ErrorLevel
+	case "fatal":
+		logLevel = FatalLevel
+	default:
+		fmt.Fprintf(os.Stderr, "flannel: invalid log level %q\n", levelStr)
+		return
+	}
+}
+
+func Log(level LogLevel, format string, a ...interface{}) {
+	header := "%s [%s] "
+	t := time.Now()
+	if level > logLevel {
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, header, t.Format(time.RFC3339), level)
+	fmt.Fprintf(os.Stderr, format, a...)
+	fmt.Fprintf(os.Stderr, "\n")
 }
 
 func (se *subnetEnv) missing() string {
@@ -83,10 +141,13 @@ func loadFlannelNetConf(bytes []byte) (*NetConf, error) {
 	n := &NetConf{
 		SubnetFile: defaultSubnetFile,
 		DataDir:    defaultDataDir,
+		LogLevel:   defaultLogLevel,
 	}
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, fmt.Errorf("failed to load netconf: %v", err)
 	}
+
+	SetLogLevel(n.LogLevel)
 
 	return n, nil
 }
@@ -215,6 +276,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	Log(VerboseLevel, "flannel CNI cmdAdd() NetConf: %v", n)
+
 	if n.Delegate == nil {
 		n.Delegate = make(map[string]interface{})
 	} else {
@@ -237,10 +300,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
+
 	nc, err := loadFlannelNetConf(args.StdinData)
 	if err != nil {
 		return err
 	}
+
+	Log(VerboseLevel, "flannel CNI cmdDel() NetConf: %v", nc)
 
 	if nc.RuntimeConfig != nil {
 		if nc.Delegate == nil {
@@ -258,5 +324,6 @@ func main() {
 
 func cmdCheck(args *skel.CmdArgs) error {
 	// TODO: implement
+	Log(VerboseLevel, "flannel CNI cmdCheck(): NOT IMPLEMTED")
 	return nil
 }
