@@ -72,12 +72,18 @@ func loadConf(bytes []byte, cmdCheck bool) (*NetConf, string, error) {
 	}
 	if n.Master == "" {
 		if result == nil {
-			return nil, "", fmt.Errorf(`"master" field is required. It specifies the host interface name to virtualize`)
-		}
-		if len(result.Interfaces) == 1 && result.Interfaces[0].Name != "" {
-			n.Master = result.Interfaces[0].Name
+			defaultRouteInterface, err := getDefaultRouteInterfaceName()
+
+			if err != nil {
+				return nil, "", err
+			}
+			n.Master = defaultRouteInterface
 		} else {
-			return nil, "", fmt.Errorf("chained master failure. PrevResult lacks a single named interface")
+			if len(result.Interfaces) == 1 && result.Interfaces[0].Name != "" {
+				n.Master = result.Interfaces[0].Name
+			} else {
+				return nil, "", fmt.Errorf("chained master failure. PrevResult lacks a single named interface")
+			}
 		}
 	}
 	return n, n.CNIVersion, nil
@@ -165,6 +171,25 @@ func createIpvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interf
 	}
 
 	return ipvlan, nil
+}
+
+func getDefaultRouteInterfaceName() (string, error) {
+	routeToDstIP, err := netlink.RouteList(nil, netlink.FAMILY_ALL)
+	if err != nil {
+		return "", err
+	}
+
+	for _, v := range routeToDstIP {
+		if v.Dst == nil {
+			l, err := netlink.LinkByIndex(v.LinkIndex)
+			if err != nil {
+				return "", err
+			}
+			return l.Attrs().Name, nil
+		}
+	}
+
+	return "", fmt.Errorf("no default route interface found")
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
