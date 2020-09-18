@@ -35,6 +35,8 @@ type VRFNetConf struct {
 
 	// VRFName is the name of the vrf to add the interface to.
 	VRFName string `json:"vrfname"`
+	// Table is the optional name of the routing table set for the vrf
+	Table uint32 `json:"table"`
 }
 
 func main() {
@@ -54,8 +56,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		vrf, err := findVRF(conf.VRFName)
 
+		// If the user set a tableid and the vrf is already in the namespace
+		// we check if the tableid is the same one already assigned to the vrf.
+		if err == nil && conf.Table != 0 && vrf.Table != conf.Table {
+			return fmt.Errorf("VRF %s already exist with different routing table %d", conf.VRFName, vrf.Table)
+		}
+
 		if _, ok := err.(netlink.LinkNotFoundError); ok {
-			vrf, err = createVRF(conf.VRFName)
+			vrf, err = createVRF(conf.VRFName, conf.Table)
 		}
 
 		if err != nil {

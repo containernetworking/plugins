@@ -35,15 +35,19 @@ func findVRF(name string) (*netlink.Vrf, error) {
 }
 
 // createVRF creates a new VRF and sets it up.
-func createVRF(name string) (*netlink.Vrf, error) {
+func createVRF(name string, tableID uint32) (*netlink.Vrf, error) {
 	links, err := netlink.LinkList()
 	if err != nil {
 		return nil, fmt.Errorf("createVRF: Failed to find links %v", err)
 	}
-	tableID, err := findFreeRoutingTableID(links)
-	if err != nil {
-		return nil, err
+
+	if tableID == 0 {
+		tableID, err = findFreeRoutingTableID(links)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	vrf := &netlink.Vrf{
 		LinkAttrs: netlink.LinkAttrs{
 			Name: name,
