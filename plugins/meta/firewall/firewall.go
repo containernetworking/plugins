@@ -24,7 +24,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
@@ -130,7 +130,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	if result == nil {
-		result = &current.Result{}
+		result = &current.Result{
+			CNIVersion: current.ImplementedSpecVersion,
+		}
 	}
 	return types.PrintResult(result, conf.CNIVersion)
 }

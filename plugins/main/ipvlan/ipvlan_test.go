@@ -22,7 +22,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -105,21 +105,22 @@ func ipvlanAddDelTest(conf, IFNAME string, originalNS ns.NetNS) {
 		StdinData:   []byte(conf),
 	}
 
-	var result *current.Result
+	var result types.Result
+	var curResult *current.Result
 	err = originalNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
-		r, _, err := testutils.CmdAddWithArgs(args, func() error {
+		result, _, err = testutils.CmdAddWithArgs(args, func() error {
 			return cmdAdd(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		result, err = current.GetResult(r)
+		curResult, err = current.GetResult(result)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(len(result.Interfaces)).To(Equal(1))
-		Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-		Expect(len(result.IPs)).To(Equal(1))
+		Expect(len(curResult.Interfaces)).To(Equal(1))
+		Expect(curResult.Interfaces[0].Name).To(Equal(IFNAME))
+		Expect(len(curResult.IPs)).To(Equal(1))
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
@@ -132,7 +133,7 @@ func ipvlanAddDelTest(conf, IFNAME string, originalNS ns.NetNS) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(link.Attrs().Name).To(Equal(IFNAME))
 
-		hwaddr, err := net.ParseMAC(result.Interfaces[0].Mac)
+		hwaddr, err := net.ParseMAC(curResult.Interfaces[0].Mac)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
 
@@ -178,21 +179,22 @@ func ipvlanAddCheckDelTest(conf string, netName string, IFNAME string, originalN
 		StdinData:   []byte(conf),
 	}
 
-	var result *current.Result
+	var result types.Result
+	var curResult *current.Result
 	err = originalNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
-		r, _, err := testutils.CmdAddWithArgs(args, func() error {
+		result, _, err = testutils.CmdAddWithArgs(args, func() error {
 			return cmdAdd(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		result, err = current.GetResult(r)
+		curResult, err = current.GetResult(result)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(len(result.Interfaces)).To(Equal(1))
-		Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-		Expect(len(result.IPs)).To(Equal(1))
+		Expect(len(curResult.Interfaces)).To(Equal(1))
+		Expect(curResult.Interfaces[0].Name).To(Equal(IFNAME))
+		Expect(len(curResult.IPs)).To(Equal(1))
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
@@ -205,7 +207,7 @@ func ipvlanAddCheckDelTest(conf string, netName string, IFNAME string, originalN
 		Expect(err).NotTo(HaveOccurred())
 		Expect(link.Attrs().Name).To(Equal(IFNAME))
 
-		hwaddr, err := net.ParseMAC(result.Interfaces[0].Mac)
+		hwaddr, err := net.ParseMAC(curResult.Interfaces[0].Mac)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
 

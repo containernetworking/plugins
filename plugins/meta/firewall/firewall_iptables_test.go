@@ -21,7 +21,8 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/containernetworking/cni/pkg/types/040"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
@@ -169,13 +170,14 @@ var _ = Describe("firewall plugin iptables backend", func() {
 	var originalNS, targetNS ns.NetNS
 	const IFNAME string = "dummy0"
 
-	fullConf := []byte(`{
+	fullConf := []byte(fmt.Sprintf(`{
 		"name": "test",
 		"type": "firewall",
 		"backend": "iptables",
 		"ifName": "dummy0",
-		"cniVersion": "0.3.1",
+		"cniVersion": "%s",
 		"prevResult": {
+			"cniVersion": "%s",
 			"interfaces": [
 				{"name": "dummy0"}
 			],
@@ -192,7 +194,7 @@ var _ = Describe("firewall plugin iptables backend", func() {
 				}
 			]
 		}
-	}`)
+	}`, current.ImplementedSpecVersion, current.ImplementedSpecVersion))
 
 	BeforeEach(func() {
 		// Create a new NetNS so we don't modify the host
@@ -283,14 +285,15 @@ var _ = Describe("firewall plugin iptables backend", func() {
 	})
 
 	It("correctly handles a custom IptablesAdminChainName", func() {
-		conf := []byte(`{
+		conf := []byte(fmt.Sprintf(`{
 	"name": "test",
 	"type": "firewall",
 	"backend": "iptables",
 	"ifName": "dummy0",
-	"cniVersion": "0.3.1",
+	"cniVersion": "%s",
 	"iptablesAdminChainName": "CNI-foobar",
 	"prevResult": {
+		"cniVersion": "%s",
 		"interfaces": [
 			{"name": "dummy0"}
 		],
@@ -307,7 +310,7 @@ var _ = Describe("firewall plugin iptables backend", func() {
 			}
 		]
 	}
-}`)
+}`, current.ImplementedSpecVersion, current.ImplementedSpecVersion))
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -434,6 +437,7 @@ var _ = Describe("firewall plugin iptables backend v0.4.x", func() {
 		"ifName": "dummy0",
 		"cniVersion": "0.4.0",
 		"prevResult": {
+			"cniVersion": "0.4.0",
 			"interfaces": [
 				{"name": "dummy0"}
 			],
@@ -498,7 +502,7 @@ var _ = Describe("firewall plugin iptables backend v0.4.x", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = current.GetResult(r)
+			_, err = types040.GetResult(r)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = testutils.CmdCheckWithArgs(args, func() error {

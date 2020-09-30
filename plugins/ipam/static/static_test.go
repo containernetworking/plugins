@@ -20,7 +20,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
 	. "github.com/onsi/ginkgo"
@@ -79,14 +79,12 @@ var _ = Describe("static Operations", func() {
 		// Gomega is cranky about slices with different caps
 		Expect(*result.IPs[0]).To(Equal(
 			current.IPConfig{
-				Version: "4",
 				Address: mustCIDR("10.10.0.1/24"),
 				Gateway: net.ParseIP("10.10.0.254"),
 			}))
 
 		Expect(*result.IPs[1]).To(Equal(
 			current.IPConfig{
-				Version: "6",
 				Address: mustCIDR("3ffe:ffff:0:01ff::1/64"),
 				Gateway: net.ParseIP("3ffe:ffff:0::1"),
 			},
@@ -192,7 +190,6 @@ var _ = Describe("static Operations", func() {
 		// Gomega is cranky about slices with different caps
 		Expect(*result.IPs[0]).To(Equal(
 			current.IPConfig{
-				Version: "4",
 				Address: mustCIDR("10.10.0.1/24"),
 				Gateway: net.ParseIP("10.10.0.254"),
 			}))
@@ -246,13 +243,11 @@ var _ = Describe("static Operations", func() {
 		// Gomega is cranky about slices with different caps
 		Expect(*result.IPs[0]).To(Equal(
 			current.IPConfig{
-				Version: "4",
 				Address: mustCIDR("10.10.0.1/24"),
 				Gateway: net.ParseIP("10.10.0.254"),
 			}))
 		Expect(*result.IPs[1]).To(Equal(
 			current.IPConfig{
-				Version: "4",
 				Address: mustCIDR("11.11.0.1/24"),
 				Gateway: nil,
 			}))
@@ -313,12 +308,10 @@ var _ = Describe("static Operations", func() {
 		// Gomega is cranky about slices with different caps
 		Expect(*result.IPs[0]).To(Equal(
 			current.IPConfig{
-				Version: "4",
 				Address: mustCIDR("10.10.0.1/24"),
 			}))
 		Expect(*result.IPs[1]).To(Equal(
 			current.IPConfig{
-				Version: "6",
 				Address: mustCIDR("3ffe:ffff:0:01ff::1/64"),
 			},
 		))
@@ -383,12 +376,10 @@ var _ = Describe("static Operations", func() {
 		// Gomega is cranky about slices with different caps
 		Expect(*result.IPs[0]).To(Equal(
 			current.IPConfig{
-				Version: "4",
 				Address: mustCIDR("10.10.0.1/24"),
 			}))
 		Expect(*result.IPs[1]).To(Equal(
 			current.IPConfig{
-				Version: "6",
 				Address: mustCIDR("3ffe:ffff:0:01ff::1/64"),
 			},
 		))
@@ -458,12 +449,10 @@ var _ = Describe("static Operations", func() {
 		// only addresses in runtimeConfig configured because of its priorities
 		Expect(*result.IPs[0]).To(Equal(
 			current.IPConfig{
-				Version: "4",
 				Address: mustCIDR("10.10.0.1/24"),
 			}))
 		Expect(*result.IPs[1]).To(Equal(
 			current.IPConfig{
-				Version: "6",
 				Address: mustCIDR("3ffe:ffff:0:01ff::1/64"),
 			},
 		))

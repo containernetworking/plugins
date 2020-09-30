@@ -23,8 +23,9 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	types020 "github.com/containernetworking/cni/pkg/types/020"
-	"github.com/containernetworking/cni/pkg/types/current"
+	types040 "github.com/containernetworking/cni/pkg/types/040"
+	current "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -110,10 +111,8 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		}
 
 		if n.IPAM.Addresses[i].Address.IP.To4() != nil {
-			n.IPAM.Addresses[i].Version = "4"
 			numV4++
 		} else {
-			n.IPAM.Addresses[i].Version = "6"
 			numV6++
 		}
 	}
@@ -136,10 +135,8 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 
 				addr := Address{Address: net.IPNet{IP: ip, Mask: subnet.Mask}}
 				if addr.Address.IP.To4() != nil {
-					addr.Version = "4"
 					numV4++
 				} else {
-					addr.Version = "6"
 					numV6++
 				}
 				n.IPAM.Addresses = append(n.IPAM.Addresses, addr)
@@ -164,10 +161,8 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 
 	// CNI spec 0.2.0 and below supported only one v4 and v6 address
 	if numV4 > 1 || numV6 > 1 {
-		for _, v := range types020.SupportedVersions {
-			if n.CNIVersion == v {
-				return nil, "", fmt.Errorf("CNI version %v does not support more than 1 address per family", n.CNIVersion)
-			}
+		if ok, _ := version.GreaterThanOrEqualTo(n.CNIVersion, "0.3.0"); !ok {
+			return nil, "", fmt.Errorf("CNI version %v does not support more than 1 address per family", n.CNIVersion)
 		}
 	}
 
@@ -262,11 +257,11 @@ var _ = Describe("base functionality", func() {
 
 		cniName := "eth0"
 		conf := fmt.Sprintf(`{
-			"cniVersion": "0.3.0",
+			"cniVersion": "%s",
 			"name": "cni-plugin-host-device-test",
 			"type": "host-device",
 			"device": %q
-		}`, ifname)
+		}`, current.ImplementedSpecVersion, ifname)
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
 			Netns:       targetNS.Path(),
@@ -352,11 +347,11 @@ var _ = Describe("base functionality", func() {
 
 		cniName := "eth0"
 		conf := fmt.Sprintf(`{
-			"cniVersion": "0.3.0",
+			"cniVersion": "%s",
 			"name": "cni-plugin-host-device-test",
 			"type": "host-device",
 			"device": %q
-		}`, ifname)
+		}`, current.ImplementedSpecVersion, ifname)
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
 			Netns:       targetNS.Path(),
@@ -487,7 +482,7 @@ var _ = Describe("base functionality", func() {
 		targetIP := "10.10.0.1/24"
 		cniName := "eth0"
 		conf := fmt.Sprintf(`{
-			"cniVersion": "0.3.0",
+			"cniVersion": "%s",
 			"name": "cni-plugin-host-device-test",
 			"type": "host-device",
 			"ipam": {
@@ -499,7 +494,7 @@ var _ = Describe("base functionality", func() {
 				}]
 			},
 			"device": %q
-		}`, ifname)
+		}`, current.ImplementedSpecVersion, ifname)
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
 			Netns:       targetNS.Path(),
@@ -566,11 +561,11 @@ var _ = Describe("base functionality", func() {
 	})
 
 	It("fails an invalid config", func() {
-		conf := `{
-			"cniVersion": "0.3.0",
+		conf := fmt.Sprintf(`{
+			"cniVersion": "%s",
 			"name": "cni-plugin-host-device-test",
 			"type": "host-device"
-		}`
+		}`, current.ImplementedSpecVersion)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -629,9 +624,9 @@ var _ = Describe("base functionality", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// check that the result was sane
-		res, err := current.NewResultFromResult(resI)
+		res, err := types040.GetResult(resI)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Interfaces).To(Equal([]*current.Interface{
+		Expect(res.Interfaces).To(Equal([]*types040.Interface{
 			{
 				Name:    cniName,
 				Mac:     origLink.Attrs().HardwareAddr.String(),
@@ -748,9 +743,9 @@ var _ = Describe("base functionality", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// check that the result was sane
-		res, err := current.NewResultFromResult(resI)
+		res, err := types040.GetResult(resI)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Interfaces).To(Equal([]*current.Interface{
+		Expect(res.Interfaces).To(Equal([]*types040.Interface{
 			{
 				Name:    cniName,
 				Mac:     origLink.Attrs().HardwareAddr.String(),
@@ -873,9 +868,9 @@ var _ = Describe("base functionality", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// check that the result is sane
-		res, err := current.NewResultFromResult(resI)
+		res, err := types040.GetResult(resI)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Interfaces).To(Equal([]*current.Interface{
+		Expect(res.Interfaces).To(Equal([]*types040.Interface{
 			{
 				Name:    cniName,
 				Mac:     origLink.Attrs().HardwareAddr.String(),

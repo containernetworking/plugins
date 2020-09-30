@@ -19,7 +19,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 
@@ -60,7 +60,7 @@ func ConfigureIface(ifName string, res *current.Result) error {
 
 		// Make sure sysctl "disable_ipv6" is 0 if we are about to add
 		// an IPv6 address to the interface
-		if !has_enabled_ipv6 && ipc.Version == "6" {
+		if !has_enabled_ipv6 && ipc.Address.IP.To4() == nil {
 			// Enabled IPv6 for loopback "lo" and the interface
 			// being configured
 			for _, iface := range [2]string{"lo", ifName} {

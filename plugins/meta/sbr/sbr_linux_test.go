@@ -241,6 +241,7 @@ var _ = Describe("sbr test", func() {
 	"name": "cni-plugin-sbr-test",
 	"type": "sbr",
 	"prevResult": {
+		"cniVersion": "0.3.0",
 		"interfaces": [
 			{
 				"name": "%s",
@@ -332,6 +333,7 @@ var _ = Describe("sbr test", func() {
 	"name": "cni-plugin-sbr-test",
 	"type": "sbr",
 	"prevResult": {
+		"cniVersion": "0.3.0",
 		"interfaces": [
 			{
 				"name": "%s",
@@ -399,19 +401,12 @@ var _ = Describe("sbr test", func() {
 		Expect(equalRoutes(expNet1.Routes, devNet1.Routes)).To(BeTrue())
 	})
 
-	It("works with a 0.2.0 config", func() {
+	It("fails with CNI spec versions that don't support plugin chaining", func() {
 		conf := `{
 	"cniVersion": "0.2.0",
 	"name": "cni-plugin-sbr-test",
 	"type": "sbr",
-	"anotherAwesomeArg": "foo",
-	"prevResult": {
-		"ip4": {
-        	"ip": "192.168.1.209/24",
-		    "gateway": "192.168.1.1",
-			"routes": []
-		}
-	}
+	"anotherAwesomeArg": "foo"
 }`
 
 		args := &skel.CmdArgs{
@@ -424,7 +419,7 @@ var _ = Describe("sbr test", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		_, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).To(MatchError("This plugin must be called as chained plugin"))
 	})
 
 })

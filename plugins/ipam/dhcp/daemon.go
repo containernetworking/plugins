@@ -30,7 +30,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/coreos/go-systemd/activation"
 )
 
@@ -81,7 +81,6 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 	d.setLease(clientID, l)
 
 	result.IPs = []*current.IPConfig{{
-		Version: "4",
 		Address: *ipn,
 		Gateway: l.Gateway(),
 	}}

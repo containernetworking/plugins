@@ -19,7 +19,7 @@ import (
 	"syscall"
 
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -109,13 +109,11 @@ var _ = Describe("ConfigureIface", func() {
 			},
 			IPs: []*current.IPConfig{
 				{
-					Version:   "4",
 					Interface: current.Int(0),
 					Address:   *ipv4,
 					Gateway:   ipgw4,
 				},
 				{
-					Version:   "6",
 					Interface: current.Int(0),
 					Address:   *ipv6,
 					Gateway:   ipgw6,
@@ -281,12 +279,10 @@ var _ = Describe("ConfigureIface", func() {
 			},
 			IPs: []*current.IPConfig{
 				{
-					Version: "4",
 					Address: *ipv4,
 					Gateway: ipgw4,
 				},
 				{
-					Version: "6",
 					Address: *ipv6,
 					Gateway: ipgw6,
 				},

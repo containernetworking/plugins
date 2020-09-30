@@ -22,7 +22,8 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/containernetworking/cni/pkg/types/040"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -127,7 +128,7 @@ var _ = Describe("vlan Operations", func() {
 	It("creates an vlan link in a non-default namespace with given MTU", func() {
 		conf := &NetConf{
 			NetConf: types.NetConf{
-				CNIVersion: "0.3.0",
+				CNIVersion: current.ImplementedSpecVersion,
 				Name:       "testConfig",
 				Type:       "vlan",
 			},
@@ -167,7 +168,7 @@ var _ = Describe("vlan Operations", func() {
 	It("creates an vlan link in a non-default namespace with master's MTU", func() {
 		conf := &NetConf{
 			NetConf: types.NetConf{
-				CNIVersion: "0.3.0",
+				CNIVersion: current.ImplementedSpecVersion,
 				Name:       "testConfig",
 				Type:       "vlan",
 			},
@@ -212,7 +213,7 @@ var _ = Describe("vlan Operations", func() {
 		const IFNAME = "eth0"
 
 		conf := fmt.Sprintf(`{
-    "cniVersion": "0.3.0",
+    "cniVersion": "%s",
     "name": "mynet",
     "type": "vlan",
     "master": "%s",
@@ -220,7 +221,7 @@ var _ = Describe("vlan Operations", func() {
         "type": "host-local",
         "subnet": "10.1.2.0/24"
     }
-}`, MASTER_NAME)
+}`, current.ImplementedSpecVersion, MASTER_NAME)
 
 		targetNs, err := testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
@@ -307,7 +308,7 @@ var _ = Describe("vlan Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("configures and deconfigures an CNI V4 vlan link with ADD/CHECK/DEL", func() {
+	It("configures and deconfigures an CNI v0.4.0 vlan link with ADD/CHECK/DEL", func() {
 		const IFNAME = "eth0"
 
 		conf := fmt.Sprintf(`{
@@ -333,7 +334,7 @@ var _ = Describe("vlan Operations", func() {
 			StdinData:   []byte(conf),
 		}
 
-		var result *current.Result
+		var result *types040.Result
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
@@ -342,7 +343,7 @@ var _ = Describe("vlan Operations", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			result, err = current.GetResult(r)
+			result, err = types040.GetResult(r)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(len(result.Interfaces)).To(Equal(1))
@@ -423,8 +424,8 @@ var _ = Describe("vlan Operations", func() {
 	})
 
 	Describe("fails to create vlan link with invalid MTU", func() {
-		conf := `{
-    "cniVersion": "0.3.1",
+		confFmt := `{
+    "cniVersion": "%s",
     "name": "mynet",
     "type": "vlan",
     "master": "%s",
@@ -457,7 +458,7 @@ var _ = Describe("vlan Operations", func() {
 				ContainerID: "dummy",
 				Netns:       "/var/run/netns/test",
 				IfName:      "eth0",
-				StdinData:   []byte(fmt.Sprintf(conf, MASTER_NAME, 1600)),
+				StdinData:   []byte(fmt.Sprintf(confFmt, current.ImplementedSpecVersion, MASTER_NAME, 1600)),
 			}
 
 			_ = originalNS.Do(func(netNS ns.NetNS) error {
@@ -478,7 +479,7 @@ var _ = Describe("vlan Operations", func() {
 				ContainerID: "dummy",
 				Netns:       "/var/run/netns/test",
 				IfName:      "eth0",
-				StdinData:   []byte(fmt.Sprintf(conf, MASTER_NAME, -100)),
+				StdinData:   []byte(fmt.Sprintf(confFmt, current.ImplementedSpecVersion, MASTER_NAME, -100)),
 			}
 
 			_ = originalNS.Do(func(netNS ns.NetNS) error {

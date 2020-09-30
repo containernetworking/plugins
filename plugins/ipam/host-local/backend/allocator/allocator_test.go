@@ -19,7 +19,7 @@ import (
 	"net"
 
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	fakestore "github.com/containernetworking/plugins/plugins/ipam/host-local/backend/testing"
 
 	. "github.com/onsi/ginkgo"

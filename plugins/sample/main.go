@@ -19,11 +19,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
@@ -33,20 +32,14 @@ import (
 // is passed in on stdin. Your plugin may wish to expose its functionality via
 // runtime args, see CONVENTIONS.md in the CNI spec.
 type PluginConf struct {
-	types.NetConf // You may wish to not nest this type
+	// This embeds the standard NetConf structure which allows your plugin
+	// to more easily parse standard fields like Name, Type, CNIVersion,
+	// and PrevResult.
+	types.NetConf
+
 	RuntimeConfig *struct {
 		SampleConfig map[string]interface{} `json:"sample"`
 	} `json:"runtimeConfig"`
-
-	// This is the previous result, when called in the context of a chained
-	// plugin. Because this plugin supports multiple versions, we'll have to
-	// parse this in two passes. If your plugin is not chained, this can be
-	// removed (though you may wish to error if a non-chainable plugin is
-	// chained.
-	// If you need to modify the result before returning it, you will need
-	// to actually convert it to a concrete versioned struct.
-	RawPrevResult *map[string]interface{} `json:"prevResult"`
-	PrevResult    *current.Result         `json:"-"`
 
 	// Add plugin-specifc flags here
 	MyAwesomeFlag     bool   `json:"myAwesomeFlag"`
@@ -61,21 +54,12 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 		return nil, fmt.Errorf("failed to parse network configuration: %v", err)
 	}
 
-	// Parse previous result. Remove this if your plugin is not chained.
-	if conf.RawPrevResult != nil {
-		resultBytes, err := json.Marshal(conf.RawPrevResult)
-		if err != nil {
-			return nil, fmt.Errorf("could not serialize prevResult: %v", err)
-		}
-		res, err := version.NewResult(conf.CNIVersion, resultBytes)
-		if err != nil {
-			return nil, fmt.Errorf("could not parse prevResult: %v", err)
-		}
-		conf.RawPrevResult = nil
-		conf.PrevResult, err = current.NewResultFromResult(res)
-		if err != nil {
-			return nil, fmt.Errorf("could not convert result to current version: %v", err)
-		}
+	// Parse previous result. This will parse, validate, and place the
+	// previous result object into conf.PrevResult. If you need to modify
+	// or inspect the PrevResult you will need to convert it to a concrete
+	// versioned Result struct.
+	if err := version.ParsePrevResult(&conf.NetConf); err != nil {
+		return nil, fmt.Errorf("could not parse prevResult: %v", err)
 	}
 	// End previous result parsing
 
@@ -94,50 +78,62 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	// Remove this if this is an "originating" plugin
+	// A plugin can be either an "originating" plugin or a "chained" plugin.
+	// Originating plugins perform initial sandbox setup and do not require
+	// any result from a previous plugin in the chain. A chained plugin
+	// modifies sandbox configuration that was previously set up by an
+	// originating plugin and may optionally require a PrevResult from
+	// earlier plugins in the chain.
+
+	// START chained plugin code
 	if conf.PrevResult == nil {
 		return fmt.Errorf("must be called as chained plugin")
 	}
 
-	// Uncomment if this is an "originating" plugin
-
-	//if conf.PrevResult != nil {
-	//		return fmt.Errorf("must be called as the first plugin")
-	//	}
-
-	// This is some sample code to generate the list of container-side IPs.
-	// We're casting the prevResult to a 0.3.0 response, which can also include
-	// host-side IPs (but doesn't when converted from a 0.2.0 response).
-	//
-	// You don't need this if you are writing an "originating" plugin.
-	containerIPs := make([]net.IP, 0, len(conf.PrevResult.IPs))
-	if conf.CNIVersion != "0.3.0" {
-		for _, ip := range conf.PrevResult.IPs {
-			containerIPs = append(containerIPs, ip.Address.IP)
-		}
-	} else {
-		for _, ip := range conf.PrevResult.IPs {
-			if ip.Interface == nil {
-				continue
-			}
-			intIdx := *ip.Interface
-			// Every IP is indexed in to the interfaces array, with "-1" standing
-			// for an unknown interface (which we'll assume to be Container-side
-			// Skip all IPs we know belong to an interface with the wrong name.
-			if intIdx >= 0 && intIdx < len(conf.PrevResult.Interfaces) && conf.PrevResult.Interfaces[intIdx].Name != args.IfName {
-				continue
-			}
-			containerIPs = append(containerIPs, ip.Address.IP)
-		}
+	// Convert the PrevResult to a concrete Result type that can be modified.
+	prevResult, err := current.GetResult(conf.PrevResult)
+	if err != nil {
+		return fmt.Errorf("failed to convert prevResult: %v", err)
 	}
-	if len(containerIPs) == 0 {
+
+	if len(prevResult.IPs) == 0 {
 		return fmt.Errorf("got no container IPs")
 	}
+
+	// Pass the prevResult through this plugin to the next one
+	result := prevResult
+
+	// END chained plugin code
+
+	// START originating plugin code
+	// if conf.PrevResult != nil {
+	//	return fmt.Errorf("must be called as the first plugin")
+	// }
+
+	// Generate some fake container IPs and add to the result
+	// result := &current.Result{CNIVersion: current.ImplementedSpecVersion}
+	// result.Interfaces = []*current.Interface{
+	// 	{
+	// 		Name:    "intf0",
+	// 		Sandbox: args.Netns,
+	// 		Mac:     "00:11:22:33:44:55",
+	// 	},
+	// }
+	// result.IPs = []*current.IPConfig{
+	// 	{
+	// 		Address:   "1.2.3.4/24",
+	// 		Gateway:   "1.2.3.1",
+	// 		// Interface is an index into the Interfaces array
+	// 		// of the Interface element this IP applies to
+	// 		Interface: current.Int(0),
+	// 	}
+	// }
+	// END originating plugin code
 
 	// Implement your plugin here
 
 	// Pass through the result for the next plugin
-	return types.PrintResult(conf.PrevResult, conf.CNIVersion)
+	return types.PrintResult(result, conf.CNIVersion)
 }
 
 // cmdDel is called for DELETE requests

@@ -20,7 +20,7 @@ import (
 	"os"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -50,12 +50,12 @@ var _ = Describe("Flannel", func() {
 		Expect(originalNS.Close()).To(Succeed())
 	})
 
-	const inputTemplate = `
-{
-    "name": "cni-flannel",
-    "type": "flannel",
-    "subnetFile": "%s",
-    "dataDir": "%s"%s
+	const inputTemplate = `{
+	"name": "cni-flannel",
+	"type": "flannel",
+	"cniVersion": "%s",
+	"subnetFile": "%s",
+	"dataDir": "%s"%s
 }`
 
 	const inputIPAMTemplate = `
@@ -120,7 +120,7 @@ FLANNEL_IPMASQ=true
 			ipamPart = ",\n  \"ipam\":\n" + inputIPAM
 		}
 
-		return fmt.Sprintf(inputTemplate, subnetFile, dataDir, ipamPart)
+		return fmt.Sprintf(inputTemplate, current.ImplementedSpecVersion, subnetFile, dataDir, ipamPart)
 	}
 
 	BeforeEach(func() {
@@ -176,7 +176,8 @@ FLANNEL_IPMASQ=true
 
 					netConfBytes, err := ioutil.ReadFile(path)
 					Expect(err).NotTo(HaveOccurred())
-					expected := `{
+					expected := fmt.Sprintf(`{
+    "cniVersion": "%s",
     "ipMasq": false,
     "ipam": {
         "routes": [
@@ -195,8 +196,7 @@ FLANNEL_IPMASQ=true
     "mtu": 1472,
     "name": "cni-flannel",
     "type": "bridge"
-}
-`
+}`, current.ImplementedSpecVersion)
 					Expect(netConfBytes).Should(MatchJSON(expected))
 
 					result, err := current.NewResultFromResult(resI)
@@ -255,7 +255,8 @@ FLANNEL_IPMASQ=true
 
 					netConfBytes, err := ioutil.ReadFile(path)
 					Expect(err).NotTo(HaveOccurred())
-					expected := `{
+					expected := fmt.Sprintf(`{
+    "cniVersion": "%s",
     "ipMasq": false,
     "ipam": {
         "routes": [
@@ -274,8 +275,7 @@ FLANNEL_IPMASQ=true
     "mtu": 1472,
     "name": "cni-flannel",
     "type": "bridge"
-}
-`
+}`, current.ImplementedSpecVersion)
 					Expect(netConfBytes).Should(MatchJSON(expected))
 
 					result, err := current.NewResultFromResult(resI)
@@ -334,7 +334,8 @@ FLANNEL_IPMASQ=true
 
 					netConfBytes, err := ioutil.ReadFile(path)
 					Expect(err).NotTo(HaveOccurred())
-					expected := `{
+					expected := fmt.Sprintf(`{
+    "cniVersion": "%s",
     "ipMasq": false,
     "ipam": {
         "routes": [
@@ -359,8 +360,7 @@ FLANNEL_IPMASQ=true
     "mtu": 1472,
     "name": "cni-flannel",
     "type": "bridge"
-}
-`
+}`, current.ImplementedSpecVersion)
 					Expect(netConfBytes).Should(MatchJSON(expected))
 
 					result, err := current.NewResultFromResult(resI)

@@ -45,6 +45,7 @@ var _ = Describe("sample test", func() {
 	"type": "sample",
 	"anotherAwesomeArg": "awesome",
 	"prevResult": {
+		"cniVersion": "0.3.0",
 		"interfaces": [
 			{
 				"name": "%s",
@@ -71,7 +72,6 @@ var _ = Describe("sample test", func() {
 		}
 		_, _, err := testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
 		Expect(err).NotTo(HaveOccurred())
-
 	})
 
 	It("fails an invalid config", func() {
@@ -106,22 +106,14 @@ var _ = Describe("sample test", func() {
 		}
 		_, _, err := testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
 		Expect(err).To(MatchError("anotherAwesomeArg must be specified"))
-
 	})
 
-	It("works with a 0.2.0 config", func() {
+	It("fails with CNI spec versions that don't support plugin chaining", func() {
 		conf := `{
 	"cniVersion": "0.2.0",
 	"name": "cni-plugin-sample-test",
 	"type": "sample",
-	"anotherAwesomeArg": "foo",
-	"prevResult": {
-		"ip4": {
-			"ip": "10.0.0.2/24",
-			"gateway": "10.0.0.1",
-			"routes": []
-		}
-	}
+	"anotherAwesomeArg": "foo"
 }`
 
 		args := &skel.CmdArgs{
@@ -131,8 +123,7 @@ var _ = Describe("sample test", func() {
 			StdinData:   []byte(conf),
 		}
 		_, _, err := testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
-		Expect(err).NotTo(HaveOccurred())
-
+		Expect(err).To(MatchError("must be called as chained plugin"))
 	})
 
 })

@@ -27,8 +27,9 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	types020 "github.com/containernetworking/cni/pkg/types/020"
-	"github.com/containernetworking/cni/pkg/types/current"
+	types040 "github.com/containernetworking/cni/pkg/types/040"
+	current "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -350,7 +351,7 @@ func checkVlan(vlanId int, bridgeVlanInfo []*nl.BridgeVlanInfo) bool {
 
 type cmdAddDelTester interface {
 	setNS(testNS ns.NetNS, targetNS ns.NetNS)
-	cmdAddTest(tc testCase, dataDir string) (*current.Result, error)
+	cmdAddTest(tc testCase, dataDir string) (types.Result, error)
 	cmdCheckTest(tc testCase, conf *Net, dataDir string)
 	cmdDelTest(tc testCase, dataDir string)
 }
@@ -378,12 +379,12 @@ func (tester *testerV04x) setNS(testNS ns.NetNS, targetNS ns.NetNS) {
 	tester.targetNS = targetNS
 }
 
-func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (*current.Result, error) {
+func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result, error) {
 	// Generate network config and command arguments
 	tester.args = tc.createCmdArgs(tester.targetNS, dataDir)
 
 	// Execute cmdADD on the plugin
-	var result *current.Result
+	var result *types040.Result
 	err := tester.testNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
@@ -393,8 +394,9 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (*current.Resu
 		Expect(err).NotTo(HaveOccurred())
 		Expect(strings.Index(string(raw), "\"interfaces\":")).Should(BeNumerically(">", 0))
 
-		result, err = current.GetResult(r)
+		resultType, err := r.GetAsVersion(tc.cniVersion)
 		Expect(err).NotTo(HaveOccurred())
+		result = resultType.(*types040.Result)
 
 		Expect(len(result.Interfaces)).To(Equal(3))
 		Expect(result.Interfaces[0].Name).To(Equal(BRNAME))
@@ -635,12 +637,12 @@ func (tester *testerV03x) setNS(testNS ns.NetNS, targetNS ns.NetNS) {
 	tester.targetNS = targetNS
 }
 
-func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (*current.Result, error) {
+func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result, error) {
 	// Generate network config and command arguments
 	tester.args = tc.createCmdArgs(tester.targetNS, dataDir)
 
 	// Execute cmdADD on the plugin
-	var result *current.Result
+	var result *types040.Result
 	err := tester.testNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
@@ -650,8 +652,9 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (*current.Resu
 		Expect(err).NotTo(HaveOccurred())
 		Expect(strings.Index(string(raw), "\"interfaces\":")).Should(BeNumerically(">", 0))
 
-		result, err = current.GetResult(r)
+		resultType, err := r.GetAsVersion(tc.cniVersion)
 		Expect(err).NotTo(HaveOccurred())
+		result = resultType.(*types040.Result)
 
 		if !tc.isLayer2 && tc.vlan != 0 {
 			Expect(len(result.Interfaces)).To(Equal(4))
@@ -870,7 +873,7 @@ func (tester *testerV01xOr02x) setNS(testNS ns.NetNS, targetNS ns.NetNS) {
 	tester.targetNS = targetNS
 }
 
-func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (*current.Result, error) {
+func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (types.Result, error) {
 	// Generate network config and calculate gateway addresses
 	tester.args = tc.createCmdArgs(tester.targetNS, dataDir)
 
@@ -885,7 +888,7 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (*current
 		Expect(strings.Index(string(raw), "\"ip\":")).Should(BeNumerically(">", 0))
 
 		// We expect a version 0.1.0 result
-		_, err = types020.GetResult(r)
+		_, err = r.GetAsVersion(tc.cniVersion)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Make sure bridge link exists
@@ -1006,7 +1009,9 @@ func cmdAddDelTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	result, err := tester.cmdAddTest(tc, dataDir)
 	Expect(err).NotTo(HaveOccurred())
 
-	if strings.HasPrefix(tc.cniVersion, "0.3.") {
+	greater, err := version.GreaterThanOrEqualTo(tc.cniVersion, "0.3.0")
+	Expect(err).NotTo(HaveOccurred())
+	if greater {
 		Expect(result).NotTo(BeNil())
 	} else {
 		Expect(result).To(BeNil())
@@ -1527,18 +1532,24 @@ var _ = Describe("bridge Operations", func() {
 		}
 
 		for _, tc := range testCases {
-			tc.cniVersion = "0.3.1"
-			_, _, err := setupBridge(tc.netConf())
-			Expect(err).NotTo(HaveOccurred())
-			link, err := netlink.LinkByName(BRNAME)
-			Expect(err).NotTo(HaveOccurred())
-			origMac := link.Attrs().HardwareAddr
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-			cmdAddDelTest(originalNS, tc, dataDir)
+				tc.cniVersion = "0.3.1"
+				_, _, err := setupBridge(tc.netConf())
+				Expect(err).NotTo(HaveOccurred())
+				link, err := netlink.LinkByName(BRNAME)
+				Expect(err).NotTo(HaveOccurred())
+				origMac := link.Attrs().HardwareAddr
 
-			link, err = netlink.LinkByName(BRNAME)
+				cmdAddDelTest(originalNS, tc, dataDir)
+
+				link, err = netlink.LinkByName(BRNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().HardwareAddr).To(Equal(origMac))
+				return nil
+			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr).To(Equal(origMac))
 		}
 	})
 

@@ -21,7 +21,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -155,7 +155,7 @@ var _ = Describe("ptp Operations", func() {
 				daddr := ipc.Gateway.String()
 				fmt.Fprintln(GinkgoWriter, "ping", saddr, "->", daddr)
 
-				if err := testutils.Ping(saddr, daddr, (ipc.Version == "6"), 30); err != nil {
+				if err := testutils.Ping(saddr, daddr, 30); err != nil {
 					return fmt.Errorf("ping %s -> %s failed: %s", saddr, daddr, err)
 				}
 			}
@@ -257,7 +257,7 @@ var _ = Describe("ptp Operations", func() {
 				daddr := ipc.Gateway.String()
 				fmt.Fprintln(GinkgoWriter, "ping", saddr, "->", daddr)
 
-				if err := testutils.Ping(saddr, daddr, (ipc.Version == "6"), 30); err != nil {
+				if err := testutils.Ping(saddr, daddr, 30); err != nil {
 					return fmt.Errorf("ping %s -> %s failed: %s", saddr, daddr, err)
 				}
 			}
@@ -288,7 +288,7 @@ var _ = Describe("ptp Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		cniVersion := "0.4.0"
-		newConf, err := buildOneConfig(netName, cniVersion, n, res)
+		newConf, err := buildOneConfig(netName, cniVersion, n, resI)
 		Expect(err).NotTo(HaveOccurred())
 
 		confString, err := json.Marshal(newConf)
@@ -484,8 +484,8 @@ var _ = Describe("ptp Operations", func() {
 	It("deconfigures an unconfigured ptp link with DEL", func() {
 		const IFNAME = "ptp0"
 
-		conf := `{
-    "cniVersion": "0.3.0",
+		conf := fmt.Sprintf(`{
+    "cniVersion": "%s",
     "name": "mynet",
     "type": "ptp",
     "ipMasq": true,
@@ -494,7 +494,7 @@ var _ = Describe("ptp Operations", func() {
         "type": "host-local",
         "subnet": "10.1.2.0/24"
     }
-}`
+}`, current.ImplementedSpecVersion)
 
 		targetNs, err := testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())

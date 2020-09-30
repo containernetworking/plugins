@@ -26,7 +26,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
@@ -69,7 +69,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	result := &current.Result{}
+	result := &current.Result{CNIVersion: current.ImplementedSpecVersion}
 	if err := rpcCall("DHCP.Allocate", args, result); err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 		return err
 	}
 
-	result := &current.Result{}
+	result := &current.Result{CNIVersion: current.ImplementedSpecVersion}
 	if err := rpcCall("DHCP.Allocate", args, result); err != nil {
 		return err
 	}

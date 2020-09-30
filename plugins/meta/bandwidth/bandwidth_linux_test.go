@@ -26,7 +26,8 @@ import (
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/containernetworking/cni/pkg/types/040"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -160,7 +161,7 @@ var _ = Describe("bandwidth test", func() {
 				defer GinkgoRecover()
 				r, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
 				Expect(err).NotTo(HaveOccurred(), string(out))
-				result, err := current.GetResult(r)
+				result, err := types040.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(result.Interfaces).To(HaveLen(3))
@@ -451,7 +452,7 @@ var _ = Describe("bandwidth test", func() {
 				defer GinkgoRecover()
 				r, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
 				Expect(err).NotTo(HaveOccurred(), string(out))
-				result, err := current.GetResult(r)
+				result, err := types040.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(result.Interfaces).To(HaveLen(3))
@@ -693,7 +694,7 @@ var _ = Describe("bandwidth test", func() {
 				defer GinkgoRecover()
 				r, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
 				Expect(err).NotTo(HaveOccurred(), string(out))
-				result, err := current.GetResult(r)
+				result, err := types040.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(result.Interfaces).To(HaveLen(5))
@@ -908,8 +909,8 @@ var _ = Describe("bandwidth test", func() {
 			burstInBits = rateInBits * 2
 			packetInBytes = rateInBytes * 25
 
-			ptpConf = `{
-    "cniVersion": "0.3.0",
+			ptpConf = fmt.Sprintf(`{
+    "cniVersion": "%s",
     "name": "mynet",
     "type": "ptp",
     "ipMasq": true,
@@ -918,7 +919,7 @@ var _ = Describe("bandwidth test", func() {
         "type": "host-local",
         "subnet": "10.1.2.0/24"
     }
-}`
+}`, current.ImplementedSpecVersion)
 
 			containerWithTbfIFName := "ptp0"
 			containerWithoutTbfIFName := "ptp1"
@@ -1099,7 +1100,7 @@ var _ = Describe("bandwidth test", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 
-				containerWithTbfResult, err := current.GetResult(containerWithTbfRes)
+				containerWithTbfResult, err := types040.GetResult(containerWithTbfRes)
 				Expect(err).NotTo(HaveOccurred())
 
 				tbfPluginConf := &PluginConf{}
@@ -1181,7 +1182,7 @@ var _ = Describe("bandwidth test", func() {
 			By("gather timing statistics about both containers")
 			By("sending tcp traffic to the container that has traffic shaped", func() {
 				runtimeWithLimit = b.Time("with tbf", func() {
-					result, err := current.GetResult(containerWithTbfRes)
+					result, err := types040.GetResult(containerWithTbfRes)
 					Expect(err).NotTo(HaveOccurred())
 
 					makeTcpClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithTbf, packetInBytes)
@@ -1190,7 +1191,7 @@ var _ = Describe("bandwidth test", func() {
 
 			By("sending tcp traffic to the container that does not have traffic shaped", func() {
 				runtimeWithoutLimit = b.Time("without tbf", func() {
-					result, err := current.GetResult(containerWithoutTbfRes)
+					result, err := types040.GetResult(containerWithoutTbfRes)
 					Expect(err).NotTo(HaveOccurred())
 
 					makeTcpClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithoutTbf, packetInBytes)

@@ -25,7 +25,7 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/020"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/disk"
@@ -89,14 +89,12 @@ var _ = Describe("host-local Operations", func() {
 		// Gomega is cranky about slices with different caps
 		Expect(*result.IPs[0]).To(Equal(
 			current.IPConfig{
-				Version: "4",
 				Address: mustCIDR("10.1.2.2/24"),
 				Gateway: net.ParseIP("10.1.2.1"),
 			}))
 
 		Expect(*result.IPs[1]).To(Equal(
 			current.IPConfig{
-				Version: "6",
 				Address: mustCIDR("2001:db8:1::2/64"),
 				Gateway: net.ParseIP("2001:db8:1::1"),
 			},
@@ -487,7 +485,7 @@ var _ = Describe("host-local Operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(contents)).To(Equal("10.1.2.2"))
 
-		Expect(result.DNS).To(Equal(types.DNS{Nameservers: []string{"192.0.2.3"}}))
+		Expect(result.DNS.Nameservers).To(Equal([]string{"192.0.2.3"}))
 
 		// Release the IP
 		err = testutils.CmdDelWithArgs(args, func() error {
