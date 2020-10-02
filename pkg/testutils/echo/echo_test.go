@@ -20,7 +20,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	Expect(err).NotTo(HaveOccurred())
 	clientBinaryPath, err := gexec.Build("github.com/containernetworking/plugins/pkg/testutils/echo/client")
 	Expect(err).NotTo(HaveOccurred())
-	return []byte(fmt.Sprintf("%s,%s", serverBinaryPath, clientBinaryPath))
+	return []byte(strings.Join([]string{serverBinaryPath, clientBinaryPath}, ","))
 }, func(data []byte) {
 	binaries := strings.Split(string(data), ",")
 	serverBinaryPath = binaries[0]

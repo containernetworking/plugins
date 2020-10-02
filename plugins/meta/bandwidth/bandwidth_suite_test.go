@@ -39,14 +39,18 @@ func TestTBF(t *testing.T) {
 	RunSpecs(t, "plugins/meta/bandwidth")
 }
 
-var echoServerBinaryPath string
+var echoServerBinaryPath, echoClientBinaryPath string
 
 var _ = SynchronizedBeforeSuite(func() []byte {
-	binaryPath, err := gexec.Build("github.com/containernetworking/plugins/pkg/testutils/echosvr")
+	serverBinaryPath, err := gexec.Build("github.com/containernetworking/plugins/pkg/testutils/echo/server")
 	Expect(err).NotTo(HaveOccurred())
-	return []byte(binaryPath)
+	clientBinaryPath, err := gexec.Build("github.com/containernetworking/plugins/pkg/testutils/echo/client")
+	Expect(err).NotTo(HaveOccurred())
+	return []byte(strings.Join([]string{serverBinaryPath, clientBinaryPath}, ","))
 }, func(data []byte) {
-	echoServerBinaryPath = string(data)
+	binaries := strings.Split(string(data), ",")
+	echoServerBinaryPath = binaries[0]
+	echoClientBinaryPath = binaries[1]
 })
 
 var _ = SynchronizedAfterSuite(func() {}, func() {
@@ -84,23 +88,22 @@ func startEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session, error) {
 }
 
 func makeTcpClientInNS(netns string, address string, port int, numBytes int) {
-	message := bytes.Repeat([]byte{'a'}, numBytes)
+	payload := bytes.Repeat([]byte{'a'}, numBytes)
+	message := string(payload)
 
-	bin, err := exec.LookPath("nc")
-	Expect(err).NotTo(HaveOccurred())
 	var cmd *exec.Cmd
 	if netns != "" {
 		netns = filepath.Base(netns)
-		cmd = exec.Command("ip", "netns", "exec", netns, bin, "-v", address, strconv.Itoa(port))
+		cmd = exec.Command("ip", "netns", "exec", netns, echoClientBinaryPath, "--target", fmt.Sprintf("%s:%d", address, port), "--message", message)
 	} else {
-		cmd = exec.Command("nc", address, strconv.Itoa(port))
+		cmd = exec.Command(echoClientBinaryPath, "--target", fmt.Sprintf("%s:%d", address, port), "--message", message)
 	}
 	cmd.Stdin = bytes.NewBuffer([]byte(message))
 	cmd.Stderr = GinkgoWriter
 	out, err := cmd.Output()
 
 	Expect(err).NotTo(HaveOccurred())
-	Expect(string(out)).To(Equal(string(message)))
+	Expect(string(out)).To(Equal(message))
 }
 
 func createVeth(hostNamespace string, hostVethIfName string, containerNamespace string, containerVethIfName string, hostIP []byte, containerIP []byte, hostIfaceMTU int) {
