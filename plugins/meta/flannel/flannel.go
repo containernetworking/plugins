@@ -46,6 +46,8 @@ const (
 type NetConf struct {
 	types.NetConf
 
+	// IPAM field "replaces" that of types.NetConf which is incomplete
+	IPAM          map[string]interface{} `json:"ipam,omitempty"`
 	SubnetFile    string                 `json:"subnetFile"`
 	DataDir       string                 `json:"dataDir"`
 	Delegate      map[string]interface{} `json:"delegate"`
@@ -87,6 +89,18 @@ func loadFlannelNetConf(bytes []byte) (*NetConf, error) {
 	}
 
 	return n, nil
+}
+
+func getIPAMRoutes(n *NetConf) ([]types.Route, error) {
+	rtes := []types.Route{}
+
+	if n.IPAM != nil && hasKey(n.IPAM, "routes") {
+		buf, _ := json.Marshal(n.IPAM["routes"])
+		if err := json.Unmarshal(buf, &rtes); err != nil {
+			return rtes, fmt.Errorf("failed to parse ipam.routes: %w", err)
+		}
+	}
+	return rtes, nil
 }
 
 func loadFlannelSubnetEnv(fn string) (*subnetEnv, error) {

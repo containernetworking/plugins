@@ -22,11 +22,35 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"os"
 )
+
+// Return IPAM section for Delegate using input IPAM if present and replacing
+// or complementing as needed.
+func getDelegateIPAM(n *NetConf, fenv *subnetEnv) (map[string]interface{}, error) {
+	ipam := n.IPAM
+	if ipam == nil {
+		ipam = map[string]interface{}{}
+	}
+
+	if !hasKey(ipam, "type") {
+		ipam["type"] = "host-local"
+	}
+	ipam["subnet"] = fenv.sn.String()
+
+	rtes, err := getIPAMRoutes(n)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read IPAM routes: %w", err)
+	}
+	rtes = append(rtes, types.Route{Dst: *fenv.nw})
+	ipam["routes"] = rtes
+
+	return ipam, nil
+}
 
 func doCmdAdd(args *skel.CmdArgs, n *NetConf, fenv *subnetEnv) error {
 	n.Delegate["name"] = n.Name
@@ -55,15 +79,11 @@ func doCmdAdd(args *skel.CmdArgs, n *NetConf, fenv *subnetEnv) error {
 		n.Delegate["cniVersion"] = n.CNIVersion
 	}
 
-	n.Delegate["ipam"] = map[string]interface{}{
-		"type":   "host-local",
-		"subnet": fenv.sn.String(),
-		"routes": []types.Route{
-			{
-				Dst: *fenv.nw,
-			},
-		},
+	ipam, err := getDelegateIPAM(n, fenv)
+	if err != nil {
+		return fmt.Errorf("failed to assemble Delegate IPAM: %w", err)
 	}
+	n.Delegate["ipam"] = ipam
 
 	return delegateAdd(args.ContainerID, n.DataDir, n.Delegate)
 }

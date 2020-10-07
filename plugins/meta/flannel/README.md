@@ -68,6 +68,8 @@ To use `ipvlan` instead of `bridge`, the following configuration can be specifie
 }
 ```
 
+The `ipam` part of the network configuration generated for the delegated plugin, can also be customized by adding a base `ipam` section to the input flannel network configuration. This `ipam` element is then updated with the flannel subnet, a route to the flannel network and, unless provided, an `ipam` `type` set to `host-local` before being provided to the delegated plugin.
+
 ## Network configuration reference
 
 * `name` (string, required): the name of the network
@@ -75,17 +77,20 @@ To use `ipvlan` instead of `bridge`, the following configuration can be specifie
 * `subnetFile` (string, optional): full path to the subnet file written out by flanneld. Defaults to /run/flannel/subnet.env
 * `dataDir` (string, optional): path to directory where plugin will store generated network configuration files. Defaults to `/var/lib/cni/flannel`
 * `delegate` (dictionary, optional): specifies configuration options for the delegated plugin.
+* `ipam` (dictionary, optional, Linux only): when specified, is used as basis to construct the `ipam` section of the delegated plugin configuration.
 
 flannel plugin will always set the following fields in the delegated plugin configuration:
 
 * `name`: value of its "name" field.
-* `ipam`: "host-local" type will be used with "subnet" set to `$FLANNEL_SUBNET`.
+* `ipam`: based on the received `ipam` section if present, with a `type` defaulting to `host-local`, a `subnet` set to `$FLANNEL_SUBNET` and (Linux only) a `routes` element assembled from the routes listed in the received `ipam` element and a route to the flannel network. Other fields present in the input `ipam` section will be transparently provided to the delegate.
 
 flannel plugin will set the following fields in the delegated plugin configuration if they are not present:
 * `ipMasq`: the inverse of `$FLANNEL_IPMASQ`
 * `mtu`: `$FLANNEL_MTU`
 
 Additionally, for the bridge plugin, `isGateway` will be set to `true`, if not present.
+
+One use case of the `ipam` configuration is to allow adding back the routes to the cluster services and/or to the hosts when using `isDefaultGateway=false`. In that case, the bridge plugin does not install a default route and, as a result, only pod-to-pod connectivity would be available.
 
 ## Windows Support (Experimental)
 This plugin supports delegating to the windows CNI plugins (overlay.exe, l2bridge.exe) to work in conjunction with [Flannel on Windows](https://github.com/coreos/flannel/issues/833). 

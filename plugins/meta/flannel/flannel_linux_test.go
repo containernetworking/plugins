@@ -14,6 +14,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -50,8 +51,24 @@ var _ = Describe("Flannel", func() {
   "name": "cni-flannel",
   "type": "flannel",
 	"subnetFile": "%s",
-	"dataDir": "%s"
+	"dataDir": "%s"%s
 }`
+
+	const inputIPAMTemplate = `
+    "unknown-param": "unknown-value",
+    "routes": [%s]%s`
+
+	const inputIPAMType = "my-ipam"
+
+	const inputIPAMNoTypeTemplate = `
+{
+    "unknown-param": "unknown-value",
+    "routes": [%s]%s
+}`
+
+	const inputIPAMRoutes = `
+      { "dst": "10.96.0.0/12" },
+      { "dst": "192.168.244.0/24", "gw": "10.1.17.20" }`
 
 	const flannelSubnetEnv = `
 FLANNEL_NETWORK=10.1.0.0/16
@@ -68,6 +85,26 @@ FLANNEL_IPMASQ=true
 		return file.Name()
 	}
 
+	var makeInputIPAM = func(ipamType, routes, extra string) string {
+		c := "{\n"
+		if len(ipamType) > 0 {
+			c += fmt.Sprintf("    \"type\": \"%s\",", ipamType)
+		}
+		c += fmt.Sprintf(inputIPAMTemplate, routes, extra)
+		c += "\n}"
+
+		return c
+	}
+
+	var makeInput = func(inputIPAM string) string {
+		ipamPart := ""
+		if len(inputIPAM) > 0 {
+			ipamPart = ",\n  \"ipam\":\n" + inputIPAM
+		}
+
+		return fmt.Sprintf(inputTemplate, subnetFile, dataDir, ipamPart)
+	}
+
 	BeforeEach(func() {
 		var err error
 		// flannel subnet.env
@@ -76,7 +113,7 @@ FLANNEL_IPMASQ=true
 		// flannel state dir
 		dataDir, err = ioutil.TempDir("", "dataDir")
 		Expect(err).NotTo(HaveOccurred())
-		input = fmt.Sprintf(inputTemplate, subnetFile, dataDir)
+		input = makeInput("")
 	})
 
 	AfterEach(func() {
@@ -108,7 +145,7 @@ FLANNEL_IPMASQ=true
 				})
 				Expect(err).NotTo(HaveOccurred())
 
-				By("check that plugin writes to net config to dataDir")
+				By("check that plugin writes the net config to dataDir")
 				path := fmt.Sprintf("%s/%s", dataDir, "some-container-id")
 				Expect(path).Should(BeAnExistingFile())
 
@@ -210,6 +247,51 @@ FLANNEL_IPMASQ=true
 					_, err := loadFlannelSubnetEnv(subnetFile)
 					Expect(err).To(MatchError(ContainSubstring("missing FLANNEL_NETWORK, FLANNEL_SUBNET, FLANNEL_MTU, FLANNEL_IPMASQ")))
 				})
+			})
+		})
+	})
+
+	Describe("getDelegateIPAM", func() {
+		Context("when input IPAM is provided", func() {
+			BeforeEach(func() {
+				inputIPAM := makeInputIPAM(inputIPAMType, inputIPAMRoutes, "")
+				input = makeInput(inputIPAM)
+			})
+			It("configures Delegate IPAM accordingly", func() {
+				conf, err := loadFlannelNetConf([]byte(input))
+				Expect(err).ShouldNot(HaveOccurred())
+				fenv, err := loadFlannelSubnetEnv(subnetFile)
+				Expect(err).ShouldNot(HaveOccurred())
+
+				ipam, err := getDelegateIPAM(conf, fenv)
+				Expect(err).ShouldNot(HaveOccurred())
+
+				podsRoute := "{ \"dst\": \"10.1.0.0/16\" }\n"
+				subnet := "\"subnet\": \"10.1.17.0/24\""
+				expected := makeInputIPAM(inputIPAMType, inputIPAMRoutes+",\n"+podsRoute, ",\n"+subnet)
+				buf, _ := json.Marshal(ipam)
+				Expect(buf).Should(MatchJSON(expected))
+			})
+		})
+
+		Context("when input IPAM is provided without 'type'", func() {
+			BeforeEach(func() {
+				inputIPAM := makeInputIPAM("", inputIPAMRoutes, "")
+				input = makeInput(inputIPAM)
+			})
+			It("configures Delegate IPAM with 'host-local' ipam", func() {
+				conf, err := loadFlannelNetConf([]byte(input))
+				Expect(err).ShouldNot(HaveOccurred())
+				fenv, err := loadFlannelSubnetEnv(subnetFile)
+				Expect(err).ShouldNot(HaveOccurred())
+				ipam, err := getDelegateIPAM(conf, fenv)
+				Expect(err).ShouldNot(HaveOccurred())
+
+				podsRoute := "{ \"dst\": \"10.1.0.0/16\" }\n"
+				subnet := "\"subnet\": \"10.1.17.0/24\""
+				expected := makeInputIPAM("host-local", inputIPAMRoutes+",\n"+podsRoute, ",\n"+subnet)
+				buf, _ := json.Marshal(ipam)
+				Expect(buf).Should(MatchJSON(expected))
 			})
 		})
 	})
