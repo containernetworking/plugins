@@ -234,7 +234,7 @@ func ipvlanAddCheckDelTest(conf string, netName string, IFNAME string, originalN
 
 	args.StdinData = confString
 
-	// CNI Check on macvlan in the target namespace
+	// CNI Check on ipvlan in the target namespace
 	err = originalNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
@@ -464,5 +464,51 @@ var _ = Describe("ipvlan Operations", func() {
 	   }`, MASTER_NAME)
 
 		ipvlanAddCheckDelTest(conf, "ipvlanTest2", IFNAME, originalNS)
+	})
+
+	It("configures and deconfigures a ipvlan link with ADD/DEL, without master config", func() {
+		const IFNAME = "ipvl0"
+		conf := `{
+    "cniVersion": "0.3.1",
+    "name": "mynet",
+    "type": "ipvlan",
+    "ipam": {
+        "type": "host-local",
+        "subnet": "10.1.2.0/24"
+    }
+}`
+
+		targetNs, err := testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+		defer targetNs.Close()
+
+		// Make MASTER_NAME as default route interface
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			link, err := netlink.LinkByName(MASTER_NAME)
+			Expect(err).NotTo(HaveOccurred())
+			err = netlink.LinkSetUp(link)
+			Expect(err).NotTo(HaveOccurred())
+
+			var address = &net.IPNet{IP: net.IPv4(192, 0, 0, 1), Mask: net.CIDRMask(24, 32)}
+			var addr = &netlink.Addr{IPNet: address}
+			err = netlink.AddrAdd(link, addr)
+			Expect(err).NotTo(HaveOccurred())
+
+			// add default gateway into MASTER
+			dst := &net.IPNet{
+				IP:   net.IPv4(0, 0, 0, 0),
+				Mask: net.CIDRMask(0, 0),
+			}
+			ip := net.IPv4(192, 0, 0, 254)
+			route := netlink.Route{LinkIndex: link.Attrs().Index, Dst: dst, Gw: ip}
+			err = netlink.RouteAdd(&route)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		ipvlanAddDelTest(conf, IFNAME, originalNS)
 	})
 })
