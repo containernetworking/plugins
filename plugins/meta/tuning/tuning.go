@@ -20,8 +20,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
+	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -37,9 +40,12 @@ import (
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
+const defaultDataDir = "/var/lib/cni/tuning"
+
 // TuningConf represents the network tuning configuration.
 type TuningConf struct {
 	types.NetConf
+	DataDir string            `json:"dataDir,omitempty"`
 	SysCtl  map[string]string `json:"sysctl"`
 	Mac     string            `json:"mac,omitempty"`
 	Promisc bool              `json:"promisc,omitempty"`
@@ -60,6 +66,14 @@ type IPAMArgs struct {
 	Mtu     *int               `json:"mtu,omitempty"`
 }
 
+// configToRestore will contain interface attributes that should be restored on cmdDel
+type configToRestore struct {
+	Tuned   bool   `json:"tuned"`
+	Mac     string `json:"mac,omitempty"`
+	Promisc *bool  `json:"promisc,omitempty"`
+	Mtu     int    `json:"mtu,omitempty"`
+}
+
 // MacEnvArgs represents CNI_ARG
 type MacEnvArgs struct {
 	types.CommonArgs
@@ -70,6 +84,10 @@ func parseConf(data []byte, envArgs string) (*TuningConf, error) {
 	conf := TuningConf{Promisc: false}
 	if err := json.Unmarshal(data, &conf); err != nil {
 		return nil, fmt.Errorf("failed to load netconf: %v", err)
+	}
+
+	if conf.DataDir == "" {
+		conf.DataDir = defaultDataDir
 	}
 
 	// Parse custom Mac from both env args
@@ -165,6 +183,122 @@ func changeMtu(ifName string, mtu int) error {
 	return netlink.LinkSetMTU(link, mtu)
 }
 
+func createBackup(ifName, containerID, backupPath string, tuned bool, tuningConf *TuningConf) error {
+	config := configToRestore{Tuned: tuned}
+	if tuned {
+		link, err := netlink.LinkByName(ifName)
+		if err != nil {
+			return fmt.Errorf("failed to get %q: %v", ifName, err)
+		}
+		if tuningConf.Mac != "" {
+			config.Mac = link.Attrs().HardwareAddr.String()
+		}
+		if tuningConf.Promisc {
+			config.Promisc = new(bool)
+			*config.Promisc = (link.Attrs().Promisc != 0)
+		}
+		if tuningConf.Mtu != 0 {
+			config.Mtu = link.Attrs().MTU
+		}
+	}
+
+	backupDir := path.Join(backupPath, containerID)
+
+	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
+		if err = os.MkdirAll(backupDir, 0600); err != nil {
+			return fmt.Errorf("failed to create backup directory: %v", err)
+		}
+	}
+
+	data, err := json.MarshalIndent(config, "", " ")
+	if err != nil {
+		return fmt.Errorf("failed to marshall data for %q: %v", ifName, err)
+	}
+	if err = ioutil.WriteFile(path.Join(backupDir, ifName+".json"), data, 0600); err != nil {
+		return fmt.Errorf("failed to save file %s.json: %v", ifName, err)
+	}
+
+	return nil
+}
+
+func restoreBackup(ifName, containerID, backupPath string) error {
+	backupDir := path.Join(backupPath, containerID)
+	filePath := path.Join(backupDir, ifName+".json")
+
+	file, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open file %q: %v", filePath, err)
+	}
+
+	config := configToRestore{}
+	if err = json.Unmarshal([]byte(file), &config); err != nil {
+		return fmt.Errorf("failed to unmarshall file %q: %v", filePath, err)
+	}
+
+	var errStr []string
+
+	if config.Tuned {
+		_, err = netlink.LinkByName(ifName)
+		if err != nil {
+			return fmt.Errorf("failed to get %q: %v", ifName, err)
+		}
+
+		if config.Mtu != 0 {
+			if err = changeMtu(ifName, config.Mtu); err != nil {
+				err = fmt.Errorf("failed to restore MAC address: %v", err)
+				errStr = append(errStr, err.Error())
+			}
+		}
+		if config.Mac != "" {
+			if err = changeMacAddr(ifName, config.Mac); err != nil {
+				err = fmt.Errorf("failed to restore MAC address: %v", err)
+				errStr = append(errStr, err.Error())
+			}
+		}
+		if config.Promisc != nil {
+			if err = changePromisc(ifName, *config.Promisc); err != nil {
+				err = fmt.Errorf("failed to restore promiscuous mode: %v", err)
+				errStr = append(errStr, err.Error())
+			}
+		}
+	}
+
+	if len(errStr) > 0 {
+		return fmt.Errorf(strings.Join(errStr, "; "))
+	}
+
+	if err = os.Remove(filePath); err != nil {
+		return fmt.Errorf("failed to remove file %v: %v", filePath, err)
+	}
+
+	if err = delDirIfEmpty(backupDir); err != nil {
+		return err
+	}
+
+	if err = delDirIfEmpty(backupPath); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func delDirIfEmpty(path string) error {
+	dir, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+
+	_, err = dir.Readdir(1)
+	if err == io.EOF {
+		if err = os.Remove(path); err != nil {
+			return fmt.Errorf("failed to remove directory %v: %v", path, err)
+		}
+	}
+
+	return nil
+}
+
 func cmdAdd(args *skel.CmdArgs) error {
 	tuningConf, err := parseConf(args.StdinData, args.Args)
 	if err != nil {
@@ -173,7 +307,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// Parse previous result.
 	if tuningConf.RawPrevResult == nil {
-		return fmt.Errorf("Required prevResult missing")
+		return fmt.Errorf("required prevResult missing")
 	}
 
 	if err := version.ParsePrevResult(&tuningConf.NetConf); err != nil {
@@ -189,6 +323,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// network namespace before writing on it.
 
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+
 		for key, value := range tuningConf.SysCtl {
 			fileName := filepath.Join("/proc/sys", strings.Replace(key, ".", "/", -1))
 			fileName = filepath.Clean(fileName)
@@ -205,6 +340,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 
+		isTuned := (tuningConf.Mac != "" || tuningConf.Mtu != 0 || tuningConf.Promisc)
+		if err = createBackup(args.IfName, args.ContainerID, tuningConf.DataDir, isTuned, tuningConf); err != nil {
+			return err
+		}
+
 		if tuningConf.Mac != "" {
 			if err = changeMacAddr(args.IfName, tuningConf.Mac); err != nil {
 				return err
@@ -219,7 +359,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			updateResultsMacAddr(*tuningConf, args.IfName, tuningConf.Mac)
 		}
 
-		if tuningConf.Promisc != false {
+		if tuningConf.Promisc {
 			if err = changePromisc(args.IfName, true); err != nil {
 				return err
 			}
@@ -239,11 +379,18 @@ func cmdAdd(args *skel.CmdArgs) error {
 	return types.PrintResult(tuningConf.PrevResult, tuningConf.CNIVersion)
 }
 
+// cmdDel will restore NIC attributes to the original ones when called
 func cmdDel(args *skel.CmdArgs) error {
-	// TODO: the settings are not reverted to the previous values. Reverting the
-	// settings is not useful when the whole container goes away but it could be
-	// useful in scenarios where plugins are added and removed at runtime.
-	return nil
+	tuningConf, err := parseConf(args.StdinData, args.Args)
+	if err != nil {
+		return err
+	}
+
+	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+		// MAC address, MTU and promiscuous mode settings will be restored
+		return restoreBackup(args.IfName, args.ContainerID, tuningConf.DataDir)
+	})
+	return err
 }
 
 func main() {
@@ -258,7 +405,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	// Parse previous result.
 	if tuningConf.RawPrevResult == nil {
-		return fmt.Errorf("Required prevResult missing")
+		return fmt.Errorf("required prevResult missing")
 	}
 
 	if err := version.ParsePrevResult(&tuningConf.NetConf); err != nil {
@@ -282,42 +429,44 @@ func cmdCheck(args *skel.CmdArgs) error {
 			}
 			curValue := strings.TrimSuffix(string(contents), "\n")
 			if confValue != curValue {
-				return fmt.Errorf("Error: Tuning configured value of %s is %s, current value is %s", fileName, confValue, curValue)
+				return fmt.Errorf("error: Tuning configured value of %s is %s, current value is %s", fileName, confValue, curValue)
 			}
 		}
 
 		link, err := netlink.LinkByName(args.IfName)
 		if err != nil {
-			return fmt.Errorf("Cannot find container link %v", args.IfName)
+			return fmt.Errorf("cannot find container link %v", args.IfName)
 		}
 
 		if tuningConf.Mac != "" {
 			if tuningConf.Mac != link.Attrs().HardwareAddr.String() {
-				return fmt.Errorf("Error: Tuning configured Ethernet of %s is %s, current value is %s",
+				return fmt.Errorf("error: Tuning configured Ethernet of %s is %s, current value is %s",
 					args.IfName, tuningConf.Mac, link.Attrs().HardwareAddr)
 			}
 		}
 
 		if tuningConf.Promisc {
 			if link.Attrs().Promisc == 0 {
-				return fmt.Errorf("Error: Tuning link %s configured promisc is %v, current value is %d",
+				return fmt.Errorf("error: Tuning link %s configured promisc is %v, current value is %d",
 					args.IfName, tuningConf.Promisc, link.Attrs().Promisc)
 			}
 		} else {
 			if link.Attrs().Promisc != 0 {
-				return fmt.Errorf("Error: Tuning link %s configured promisc is %v, current value is %d",
+				return fmt.Errorf("error: Tuning link %s configured promisc is %v, current value is %d",
 					args.IfName, tuningConf.Promisc, link.Attrs().Promisc)
 			}
 		}
 
 		if tuningConf.Mtu != 0 {
 			if tuningConf.Mtu != link.Attrs().MTU {
-				return fmt.Errorf("Error: Tuning configured MTU of %s is %d, current value is %d",
+				return fmt.Errorf("error: Tuning configured MTU of %s is %d, current value is %d",
 					args.IfName, tuningConf.Mtu, link.Attrs().MTU)
 			}
 		}
+
 		return nil
 	})
+
 	if err != nil {
 		return err
 	}

@@ -46,6 +46,8 @@ The parameters, "mac", "mtu" and "promisc", changes the interface attributes as 
 }
 ```
 
+All the interface attributes set by tuning plugin will be restored to original values on container's removal.
+
 ## Interface attribute configuration reference
 
 * `mac` (string, optional): MAC address (i.e. hardware address) of interface
@@ -71,3 +73,7 @@ The following [args conventions](https://github.com/containernetworking/cni/blob
 * `mtu` (integer, optional): MTU of interface
 * `promisc` (bool, optional): Change the promiscuous mode of interface
 * `sysctl` (object, optional): Change system controls
+* `dataDir` (string, optional): Path to a directory to use for interfaces configuration backup
+
+## Files
+Backup data for each interface is stored in `/var/lib/cni/tuning`. The path can be customized with the dataDir option listed above.
