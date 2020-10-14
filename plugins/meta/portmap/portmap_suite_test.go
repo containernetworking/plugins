@@ -40,14 +40,18 @@ func TestPortmap(t *testing.T) {
 	RunSpecs(t, "plugins/meta/portmap")
 }
 
-var echoServerBinaryPath string
+var echoServerBinaryPath, echoClientBinaryPath string
 
 var _ = SynchronizedBeforeSuite(func() []byte {
-	binaryPath, err := gexec.Build("github.com/containernetworking/plugins/pkg/testutils/echosvr")
+	serverBinaryPath, err := gexec.Build("github.com/containernetworking/plugins/pkg/testutils/echo/server")
 	Expect(err).NotTo(HaveOccurred())
-	return []byte(binaryPath)
+	clientBinaryPath, err := gexec.Build("github.com/containernetworking/plugins/pkg/testutils/echo/client")
+	Expect(err).NotTo(HaveOccurred())
+	return []byte(strings.Join([]string{serverBinaryPath, clientBinaryPath}, ","))
 }, func(data []byte) {
-	echoServerBinaryPath = string(data)
+	binaries := strings.Split(string(data), ",")
+	echoServerBinaryPath = binaries[0]
+	echoClientBinaryPath = binaries[1]
 })
 
 var _ = SynchronizedAfterSuite(func() {}, func() {

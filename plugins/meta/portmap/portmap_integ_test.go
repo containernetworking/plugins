@@ -23,7 +23,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 
 	"github.com/containernetworking/cni/libcni"
 	"github.com/containernetworking/cni/pkg/types/current"
@@ -227,16 +226,14 @@ var _ = Describe("portmap integration tests", func() {
 
 // testEchoServer returns true if we found an echo server on the port
 func testEchoServer(address string, port int, netns string) bool {
-	message := "Aliquid melius quam pessimum optimum non est."
+	message := "'Aliquid melius quam pessimum optimum non est.'"
 
-	bin, err := exec.LookPath("nc")
-	Expect(err).NotTo(HaveOccurred())
 	var cmd *exec.Cmd
 	if netns != "" {
 		netns = filepath.Base(netns)
-		cmd = exec.Command("ip", "netns", "exec", netns, bin, "-v", address, strconv.Itoa(port))
+		cmd = exec.Command("ip", "netns", "exec", netns, echoClientBinaryPath, "--target", fmt.Sprintf("%s:%d", address, port), "--message", message)
 	} else {
-		cmd = exec.Command("nc", address, strconv.Itoa(port))
+		cmd = exec.Command(echoClientBinaryPath, "--target", fmt.Sprintf("%s:%d", address, port), "--message", message)
 	}
 	cmd.Stdin = bytes.NewBufferString(message)
 	cmd.Stderr = GinkgoWriter

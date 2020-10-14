@@ -14,11 +14,10 @@
 package integration_test
 
 import (
-	"math/rand"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 )
@@ -28,15 +27,18 @@ func TestIntegration(t *testing.T) {
 	RunSpecs(t, "integration")
 }
 
-var echoServerBinaryPath string
+var echoServerBinaryPath, echoClientBinaryPath string
 
 var _ = SynchronizedBeforeSuite(func() []byte {
-	binaryPath, err := gexec.Build("github.com/containernetworking/plugins/pkg/testutils/echosvr")
+	serverBinaryPath, err := gexec.Build("github.com/containernetworking/plugins/pkg/testutils/echo/server")
 	Expect(err).NotTo(HaveOccurred())
-	return []byte(binaryPath)
+	clientBinaryPath, err := gexec.Build("github.com/containernetworking/plugins/pkg/testutils/echo/client")
+	Expect(err).NotTo(HaveOccurred())
+	return []byte(strings.Join([]string{serverBinaryPath, clientBinaryPath}, ","))
 }, func(data []byte) {
-	echoServerBinaryPath = string(data)
-	rand.Seed(config.GinkgoConfig.RandomSeed + int64(GinkgoParallelNode()))
+	binaries := strings.Split(string(data), ",")
+	echoServerBinaryPath = binaries[0]
+	echoClientBinaryPath = binaries[1]
 })
 
 var _ = SynchronizedAfterSuite(func() {}, func() {

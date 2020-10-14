@@ -1,6 +1,6 @@
 language: go
 sudo: required
-dist: xenial
+dist: bionic
 
 go:
   - 1.13.x

@@ -225,23 +225,22 @@ func (n Namespace) Del() {
 }
 
 func makeTcpClientInNS(netns string, address string, port int, numBytes int) {
-	message := bytes.Repeat([]byte{'a'}, numBytes)
+	payload := bytes.Repeat([]byte{'a'}, numBytes)
+	message := string(payload)
 
-	bin, err := exec.LookPath("nc")
-	Expect(err).NotTo(HaveOccurred())
 	var cmd *exec.Cmd
 	if netns != "" {
 		netns = filepath.Base(netns)
-		cmd = exec.Command("ip", "netns", "exec", netns, bin, "-v", address, strconv.Itoa(port))
+		cmd = exec.Command("ip", "netns", "exec", netns, echoClientBinaryPath, "--target", fmt.Sprintf("%s:%d", address, port), "--message", message)
 	} else {
-		cmd = exec.Command("nc", address, strconv.Itoa(port))
+		cmd = exec.Command(echoClientBinaryPath, "--target", fmt.Sprintf("%s:%d", address, port), "--message", message)
 	}
 	cmd.Stdin = bytes.NewBuffer([]byte(message))
 	cmd.Stderr = GinkgoWriter
 	out, err := cmd.Output()
 
 	Expect(err).NotTo(HaveOccurred())
-	Expect(string(out)).To(Equal(string(message)))
+	Expect(string(out)).To(Equal(message))
 }
 
 func startEchoServerInNamespace(netNS Namespace) (int, *gexec.Session, error) {
