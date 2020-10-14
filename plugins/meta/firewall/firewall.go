@@ -97,6 +97,8 @@ func getBackend(conf *FirewallNetConf) (FirewallBackend, error) {
 	switch conf.Backend {
 	case "iptables":
 		return newIptablesBackend(conf)
+	case "nftables":
+		return newNftablesBackend(conf)
 	case "firewalld":
 		return newFirewalldBackend(conf)
 	}

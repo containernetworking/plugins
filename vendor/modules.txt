@@ -62,12 +62,23 @@ github.com/d2g/dhcp4server/leasepool/memorypool
 github.com/godbus/dbus
 # github.com/golang/protobuf v1.3.1
 ## explicit
+# github.com/google/nftables v0.0.0-20200802175506-c25e4f69b425
+## explicit
+github.com/google/nftables
+github.com/google/nftables/binaryutil
+github.com/google/nftables/expr
 # github.com/j-keck/arping v0.0.0-20160618110441-2cf9dc699c56
 ## explicit
 github.com/j-keck/arping
+# github.com/koneu/natend v0.0.0-20150829182554-ec0926ea948d
+github.com/koneu/natend
 # github.com/mattn/go-shellwords v1.0.3
 ## explicit
 github.com/mattn/go-shellwords
+# github.com/mdlayher/netlink v0.0.0-20191009155606-de872b0d824b
+github.com/mdlayher/netlink
+github.com/mdlayher/netlink/nlenc
+github.com/mdlayher/netlink/nltest
 # github.com/onsi/ginkgo v0.0.0-20151202141238-7f8ab55aaf3b
 ## explicit
 github.com/onsi/ginkgo
@@ -117,16 +128,14 @@ github.com/vishvananda/netlink/nl
 # github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc
 ## explicit
 github.com/vishvananda/netns
-# golang.org/x/crypto v0.0.0-20181009213950-7c1a557ab941
-## explicit
+# golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
 golang.org/x/crypto/ssh/terminal
-# golang.org/x/net v0.0.0-20181011144130-49bb7cea24b1
-## explicit
+# golang.org/x/net v0.0.0-20191028085509-fe3aa8a45271
 golang.org/x/net/bpf
 golang.org/x/net/internal/iana
 golang.org/x/net/internal/socket
 golang.org/x/net/ipv4
-# golang.org/x/sys v0.0.0-20190616124812-15dcb6c0061f
+# golang.org/x/sys v0.0.0-20191029155521-f43be2a4598c
 ## explicit
 golang.org/x/sys/unix
 golang.org/x/sys/windows
