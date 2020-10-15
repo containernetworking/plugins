@@ -113,26 +113,26 @@ var _ = Describe("tuning plugin", func() {
 
 	It("passes prevResult through unchanged", func() {
 		conf := []byte(`{
-		"name": "test",
-		"type": "tuning",
-		"cniVersion": "0.3.1",
-		"sysctl": {
-			"net.ipv4.conf.all.log_martians": "1"
-		},
-		"prevResult": {
-			"interfaces": [
-				{"name": "dummy0", "sandbox":"netns"}
-			],
-			"ips": [
-				{
-					"version": "4",
-					"address": "10.0.0.2/24",
-					"gateway": "10.0.0.1",
-					"interface": 0
-				}
-			]
-		}
-	}`)
+	"name": "test",
+	"type": "tuning",
+	"cniVersion": "0.3.1",
+	"sysctl": {
+		"net.ipv4.conf.all.log_martians": "1"
+	},
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
 
 		targetNs, err := testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
@@ -174,24 +174,24 @@ var _ = Describe("tuning plugin", func() {
 
 	It("configures and deconfigures promiscuous mode with ADD/DEL", func() {
 		conf := []byte(`{
-		"name": "test",
-		"type": "iplink",
-		"cniVersion": "0.3.1",
-		"promisc": true,
-		"prevResult": {
-			"interfaces": [
-				{"name": "dummy0", "sandbox":"netns"}
-			],
-			"ips": [
-				{
-					"version": "4",
-					"address": "10.0.0.2/24",
-					"gateway": "10.0.0.1",
-					"interface": 0
-				}
-			]
-		}
-	}`)
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.3.1",
+	"promisc": true,
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -235,28 +235,28 @@ var _ = Describe("tuning plugin", func() {
 
 	It("configures and deconfigures promiscuous mode from args with ADD/DEL", func() {
 		conf := []byte(`{
-		"name": "test",
-		"type": "iplink",
-		"cniVersion": "0.3.1",
-	        "args": {
-	            "cni": {
-		        "promisc": true
-	            }
-	        },
-		"prevResult": {
-			"interfaces": [
-				{"name": "dummy0", "sandbox":"netns"}
-			],
-			"ips": [
-				{
-					"version": "4",
-					"address": "10.0.0.2/24",
-					"gateway": "10.0.0.1",
-					"interface": 0
-				}
-			]
-		}
-	}`)
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.3.1",
+        "args": {
+            "cni": {
+	        "promisc": true
+            }
+        },
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -300,24 +300,24 @@ var _ = Describe("tuning plugin", func() {
 
 	It("configures and deconfigures mtu with ADD/DEL", func() {
 		conf := []byte(`{
-		"name": "test",
-		"type": "iplink",
-		"cniVersion": "0.3.1",
-		"mtu": 1454,
-		"prevResult": {
-			"interfaces": [
-				{"name": "dummy0", "sandbox":"netns"}
-			],
-			"ips": [
-				{
-					"version": "4",
-					"address": "10.0.0.2/24",
-					"gateway": "10.0.0.1",
-					"interface": 0
-				}
-			]
-		}
-	}`)
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.3.1",
+	"mtu": 1454,
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -361,28 +361,28 @@ var _ = Describe("tuning plugin", func() {
 
 	It("configures and deconfigures mtu from args with ADD/DEL", func() {
 		conf := []byte(`{
-		"name": "test",
-		"type": "iplink",
-		"cniVersion": "0.3.1",
-	        "args": {
-	            "cni": {
-	                "mtu": 1454
-	            }
-	        },
-		"prevResult": {
-			"interfaces": [
-				{"name": "dummy0", "sandbox":"netns"}
-			],
-			"ips": [
-				{
-					"version": "4",
-					"address": "10.0.0.2/24",
-					"gateway": "10.0.0.1",
-					"interface": 0
-				}
-			]
-		}
-	}`)
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.3.1",
+        "args": {
+            "cni": {
+                "mtu": 1454
+            }
+        },
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -426,24 +426,24 @@ var _ = Describe("tuning plugin", func() {
 
 	It("configures and deconfigures mac address (from conf file) with ADD/DEL", func() {
 		conf := []byte(`{
-		"name": "test",
-		"type": "iplink",
-		"cniVersion": "0.3.1",
-		"mac": "c2:11:22:33:44:55",
-		"prevResult": {
-			"interfaces": [
-				{"name": "dummy0", "sandbox":"netns"}
-			],
-			"ips": [
-				{
-					"version": "4",
-					"address": "10.0.0.2/24",
-					"gateway": "10.0.0.1",
-					"interface": 0
-				}
-			]
-		}
-	}`)
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.3.1",
+	"mac": "c2:11:22:33:44:55",
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -489,28 +489,28 @@ var _ = Describe("tuning plugin", func() {
 
 	It("configures and deconfigures mac address (from args) with ADD/DEL", func() {
 		conf := []byte(`{
-		"name": "test",
-		"type": "iplink",
-		"cniVersion": "0.3.1",
-	        "args": {
-	            "cni": {
-	                "mac": "c2:11:22:33:44:55"
-	            }
-	        },
-		"prevResult": {
-			"interfaces": [
-				{"name": "dummy0", "sandbox":"netns"}
-			],
-			"ips": [
-				{
-					"version": "4",
-					"address": "10.0.0.2/24",
-					"gateway": "10.0.0.1",
-					"interface": 0
-				}
-			]
-		}
-	}`)
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.3.1",
+        "args": {
+            "cni": {
+                "mac": "c2:11:22:33:44:55"
+            }
+        },
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -556,23 +556,23 @@ var _ = Describe("tuning plugin", func() {
 
 	It("configures and deconfigures mac address (from CNI_ARGS) with ADD/DEL", func() {
 		conf := []byte(`{
-		"name": "test",
-		"type": "iplink",
-		"cniVersion": "0.3.1",
-		"prevResult": {
-			"interfaces": [
-				{"name": "dummy0", "sandbox":"netns"}
-			],
-			"ips": [
-				{
-					"version": "4",
-					"address": "10.0.0.2/24",
-					"gateway": "10.0.0.1",
-					"interface": 0
-				}
-			]
-		}
-	}`)
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.3.1",
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -620,24 +620,24 @@ var _ = Describe("tuning plugin", func() {
 
 	It("configures and deconfigures promiscuous mode with CNI 0.4.0 ADD/DEL", func() {
 		conf := []byte(`{
-		"name": "test",
-		"type": "iplink",
-		"cniVersion": "0.4.0",
-		"promisc": true,
-		"prevResult": {
-			"interfaces": [
-				{"name": "dummy0", "sandbox":"netns"}
-			],
-			"ips": [
-				{
-					"version": "4",
-					"address": "10.0.0.2/24",
-					"gateway": "10.0.0.1",
-					"interface": 0
-				}
-			]
-		}
-	}`)
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.4.0",
+	"promisc": true,
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -696,24 +696,24 @@ var _ = Describe("tuning plugin", func() {
 
 	It("configures and deconfigures mtu with CNI 0.4.0 ADD/DEL", func() {
 		conf := []byte(`{
-		"name": "test",
-		"type": "iplink",
-		"cniVersion": "0.4.0",
-		"mtu": 1454,
-		"prevResult": {
-			"interfaces": [
-				{"name": "dummy0", "sandbox":"netns"}
-			],
-			"ips": [
-				{
-					"version": "4",
-					"address": "10.0.0.2/24",
-					"gateway": "10.0.0.1",
-					"interface": 0
-				}
-			]
-		}
-	}`)
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.4.0",
+	"mtu": 1454,
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -772,24 +772,24 @@ var _ = Describe("tuning plugin", func() {
 
 	It("configures and deconfigures mac address (from conf file) with CNI v4.0 ADD/DEL", func() {
 		conf := []byte(`{
-		"name": "test",
-		"type": "iplink",
-		"cniVersion": "0.4.0",
-		"mac": "c2:11:22:33:44:55",
-		"prevResult": {
-			"interfaces": [
-				{"name": "dummy0", "sandbox":"netns"}
-			],
-			"ips": [
-				{
-					"version": "4",
-					"address": "10.0.0.2/24",
-					"gateway": "10.0.0.1",
-					"interface": 0
-				}
-			]
-		}
-	}`)
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.4.0",
+	"mac": "c2:11:22:33:44:55",
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -850,23 +850,23 @@ var _ = Describe("tuning plugin", func() {
 
 	It("configures and deconfigures mac address (from CNI_ARGS) with CNI v4 ADD/DEL", func() {
 		conf := []byte(`{
-		"name": "test",
-		"type": "iplink",
-		"cniVersion": "0.4.0",
-		"prevResult": {
-			"interfaces": [
-				{"name": "dummy0", "sandbox":"netns"}
-			],
-			"ips": [
-				{
-					"version": "4",
-					"address": "10.0.0.2/24",
-					"gateway": "10.0.0.1",
-					"interface": 0
-				}
-			]
-		}
-	}`)
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.4.0",
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -928,27 +928,27 @@ var _ = Describe("tuning plugin", func() {
 
 	It("configures and deconfigures mac address (from RuntimeConfig) with ADD/DEL", func() {
 		conf := []byte(`{
-		"name": "test",
-		"type": "iplink",
-		"cniVersion": "0.3.1",
-	        "capabilities": {"mac": true},
-	        "RuntimeConfig": {
-	            "mac": "c2:11:22:33:44:55"
-	        },
-		"prevResult": {
-			"interfaces": [
-				{"name": "dummy0", "sandbox":"netns"}
-			],
-			"ips": [
-				{
-					"version": "4",
-					"address": "10.0.0.2/24",
-					"gateway": "10.0.0.1",
-					"interface": 0
-				}
-			]
-		}
-	}`)
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.3.1",
+        "capabilities": {"mac": true},
+        "RuntimeConfig": {
+            "mac": "c2:11:22:33:44:55"
+        },
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
 
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
@@ -1078,4 +1078,5 @@ var _ = Describe("tuning plugin", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
+
 })

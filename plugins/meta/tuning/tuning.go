@@ -307,7 +307,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// Parse previous result.
 	if tuningConf.RawPrevResult == nil {
-		return fmt.Errorf("required prevResult missing")
+		return fmt.Errorf("Required prevResult missing")
 	}
 
 	if err := version.ParsePrevResult(&tuningConf.NetConf); err != nil {
@@ -323,7 +323,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// network namespace before writing on it.
 
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
-
 		for key, value := range tuningConf.SysCtl {
 			fileName := filepath.Join("/proc/sys", strings.Replace(key, ".", "/", -1))
 			fileName = filepath.Clean(fileName)
@@ -359,7 +358,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			updateResultsMacAddr(*tuningConf, args.IfName, tuningConf.Mac)
 		}
 
-		if tuningConf.Promisc {
+		if tuningConf.Promisc != false {
 			if err = changePromisc(args.IfName, true); err != nil {
 				return err
 			}
@@ -405,7 +404,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	// Parse previous result.
 	if tuningConf.RawPrevResult == nil {
-		return fmt.Errorf("required prevResult missing")
+		return fmt.Errorf("Required prevResult missing")
 	}
 
 	if err := version.ParsePrevResult(&tuningConf.NetConf); err != nil {
@@ -429,44 +428,42 @@ func cmdCheck(args *skel.CmdArgs) error {
 			}
 			curValue := strings.TrimSuffix(string(contents), "\n")
 			if confValue != curValue {
-				return fmt.Errorf("error: Tuning configured value of %s is %s, current value is %s", fileName, confValue, curValue)
+				return fmt.Errorf("Error: Tuning configured value of %s is %s, current value is %s", fileName, confValue, curValue)
 			}
 		}
 
 		link, err := netlink.LinkByName(args.IfName)
 		if err != nil {
-			return fmt.Errorf("cannot find container link %v", args.IfName)
+			return fmt.Errorf("Cannot find container link %v", args.IfName)
 		}
 
 		if tuningConf.Mac != "" {
 			if tuningConf.Mac != link.Attrs().HardwareAddr.String() {
-				return fmt.Errorf("error: Tuning configured Ethernet of %s is %s, current value is %s",
+				return fmt.Errorf("Error: Tuning configured Ethernet of %s is %s, current value is %s",
 					args.IfName, tuningConf.Mac, link.Attrs().HardwareAddr)
 			}
 		}
 
 		if tuningConf.Promisc {
 			if link.Attrs().Promisc == 0 {
-				return fmt.Errorf("error: Tuning link %s configured promisc is %v, current value is %d",
+				return fmt.Errorf("Error: Tuning link %s configured promisc is %v, current value is %d",
 					args.IfName, tuningConf.Promisc, link.Attrs().Promisc)
 			}
 		} else {
 			if link.Attrs().Promisc != 0 {
-				return fmt.Errorf("error: Tuning link %s configured promisc is %v, current value is %d",
+				return fmt.Errorf("Error: Tuning link %s configured promisc is %v, current value is %d",
 					args.IfName, tuningConf.Promisc, link.Attrs().Promisc)
 			}
 		}
 
 		if tuningConf.Mtu != 0 {
 			if tuningConf.Mtu != link.Attrs().MTU {
-				return fmt.Errorf("error: Tuning configured MTU of %s is %d, current value is %d",
+				return fmt.Errorf("Error: Tuning configured MTU of %s is %d, current value is %d",
 					args.IfName, tuningConf.Mtu, link.Attrs().MTU)
 			}
 		}
-
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}
