@@ -1,41 +1,45 @@
 language: go
-sudo: required
 dist: bionic
 
 go:
-  - 1.13.x
-  - 1.14.x
+  - 1.15.x
+
+os: linux
+
+arch:
+  - amd64
+  - arm64
+  - ppc64le
+  - s390x
 
 env:
   global:
   - PATH=$GOROOT/bin:$GOPATH/bin:$PATH
   - CGO_ENABLED=0
-  matrix:
-  # note: arm64 is tested below
-  - TARGET=386
-  - TARGET=amd64
-  - TARGET=arm
-  - TARGET=ppc64le
-  - TARGET=s390x
-  - TARGET=mips64le
 
-matrix:
+jobs:
   fast_finish: true
+  allow_failures:
+    # just too slow to run the test suite
+    - arch: s390x
   include:
     - os: windows
-      env: TARGET=amd64
-      go: 1.13.x
-    - os: windows
-      env: TARGET=amd64
+      arch: amd64
+      go: 1.15.x
+    - name: "compile all supported architectures, go 1.14"
+      env:
+        - "TARGET='amd64 386 arm arm64 s390x mips64le ppc64le'"
+        - SKIP_TESTS=1
       go: 1.14.x
-    - os: linux
-      env: TARGET=arm64
-      go: 1.13.x
-      arch: arm64
-    - os: linux
-      env: TARGET=arm64
-      go: 1.14.x
-      arch: arm64
+      os: linux
+      arch: amd64
+    - name: "compile all supported architectures, go 1.15"
+      env:
+        - "TARGET='amd64 386 arm arm64 s390x mips64le ppc64le'"
+        - SKIP_TESTS=1
+      go: 1.15.x
+      os: linux
+      arch: amd64
 
 install:
   - go get github.com/onsi/ginkgo/ginkgo
@@ -43,18 +47,32 @@ install:
   - go get golang.org/x/tools/cmd/cover
   - go get github.com/modocache/gover
   - go get github.com/mattn/goveralls
-  - go mod vendor
+  # installing the tools has changed our vendoring; undo that
+  - git checkout -- go.mod go.sum
+
 
 script:
- - |
-   if [ "${TARGET}" == $(go env GOARCH) ]; then
-     GOARCH="${TARGET}" ./test_${TRAVIS_OS_NAME}.sh
-   else
-     GOARCH="${TARGET}" ./build_linux.sh
-   fi
+  - |
+    TARGET=${TARGET:-$(go env GOARCH)}
+    if [[ ${TRAVIS_OS_NAME} == linux ]]; then
+      ip addr
+      ip link
+      ip route
+      ip -6 route
+      sudo iptables-save
+    fi
+    for tgt in ${TARGET}; do
+      if [[ "${tgt}" == $(go env GOARCH) && -z ${SKIP_TESTS} ]]; then
+        echo "testing GOARCH=${tgt}"
+        GOARCH=${tgt} ./test_${TRAVIS_OS_NAME}.sh || exit 1
+      else
+        echo "building, but not testing GOARCH=${tgt}"
+        GOARCH="${tgt}" ./build_${TRAVIS_OS_NAME}.sh || exit 1
+      fi
+    done
 
 notifications:
   email: false
 
 git:
-  depth: 9999999
+  quiet: true
