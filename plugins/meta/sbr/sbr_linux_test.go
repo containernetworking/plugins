@@ -20,6 +20,7 @@ import (
 	"net"
 
 	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -81,6 +82,7 @@ func setup(targetNs ns.NetNS, status netStatus) error {
 					return err
 				}
 			}
+			ip.SettleAddresses(dev.Name, 10)
 		}
 		return nil
 	})
