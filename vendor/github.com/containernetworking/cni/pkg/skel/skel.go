@@ -200,6 +200,7 @@ func (t *dispatcher) pluginMain(cmdAdd, cmdCheck, cmdDel func(_ *CmdArgs) error,
 		}
 		return err
 	}
+
 	if cmd != "VERSION" {
 		if err = validateConfig(cmdArgs.StdinData); err != nil {
 			return err

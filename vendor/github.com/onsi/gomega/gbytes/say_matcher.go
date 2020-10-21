@@ -1,3 +1,5 @@
+// untested sections: 1
+
 package gbytes
 
 import (
@@ -15,14 +17,14 @@ type BufferProvider interface {
 /*
 Say is a Gomega matcher that operates on gbytes.Buffers:
 
-	Ω(buffer).Should(Say("something"))
+	Expect(buffer).Should(Say("something"))
 
 will succeed if the unread portion of the buffer matches the regular expression "something".
 
-When Say succeeds, it fast forwards the gbytes.Buffer's read cursor to just after the succesful match.
+When Say succeeds, it fast forwards the gbytes.Buffer's read cursor to just after the successful match.
 Thus, subsequent calls to Say will only match against the unread portion of the buffer
 
-Say pairs very well with Eventually.  To asser that a buffer eventually receives data matching "[123]-star" within 3 seconds you can:
+Say pairs very well with Eventually.  To assert that a buffer eventually receives data matching "[123]-star" within 3 seconds you can:
 
 	Eventually(buffer, 3).Should(Say("[123]-star"))
 
@@ -36,12 +38,11 @@ In such cases, Say simply operates on the *gbytes.Buffer returned by Buffer()
 If the buffer is closed, the Say matcher will tell Eventually to abort.
 */
 func Say(expected string, args ...interface{}) *sayMatcher {
-	formattedRegexp := expected
 	if len(args) > 0 {
-		formattedRegexp = fmt.Sprintf(expected, args...)
+		expected = fmt.Sprintf(expected, args...)
 	}
 	return &sayMatcher{
-		re: regexp.MustCompile(formattedRegexp),
+		re: regexp.MustCompile(expected),
 	}
 }
 
