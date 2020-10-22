@@ -202,10 +202,9 @@ func createBackup(ifName, containerID, backupPath string, tuned bool, tuningConf
 		}
 	}
 
-	backupDir := path.Join(backupPath, containerID)
 
-	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
-		if err = os.MkdirAll(backupDir, 0600); err != nil {
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		if err = os.MkdirAll(backupPath, 0600); err != nil {
 			return fmt.Errorf("failed to create backup directory: %v", err)
 		}
 	}
@@ -214,7 +213,7 @@ func createBackup(ifName, containerID, backupPath string, tuned bool, tuningConf
 	if err != nil {
 		return fmt.Errorf("failed to marshall data for %q: %v", ifName, err)
 	}
-	if err = ioutil.WriteFile(path.Join(backupDir, ifName+".json"), data, 0600); err != nil {
+	if err = ioutil.WriteFile(path.Join(backupPath, containerID + "_" + ifName + ".json"), data, 0600); err != nil {
 		return fmt.Errorf("failed to save file %s.json: %v", ifName, err)
 	}
 
@@ -222,8 +221,7 @@ func createBackup(ifName, containerID, backupPath string, tuned bool, tuningConf
 }
 
 func restoreBackup(ifName, containerID, backupPath string) error {
-	backupDir := path.Join(backupPath, containerID)
-	filePath := path.Join(backupDir, ifName+".json")
+	filePath := path.Join(backupPath, containerID + "_" + ifName + ".json")
 
 	file, err := ioutil.ReadFile(filePath)
 	if err != nil {
@@ -269,10 +267,6 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 
 	if err = os.Remove(filePath); err != nil {
 		return fmt.Errorf("failed to remove file %v: %v", filePath, err)
-	}
-
-	if err = delDirIfEmpty(backupDir); err != nil {
-		return err
 	}
 
 	if err = delDirIfEmpty(backupPath); err != nil {
