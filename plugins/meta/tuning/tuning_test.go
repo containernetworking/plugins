@@ -1047,7 +1047,7 @@ var _ = Describe("tuning plugin", func() {
 			Expect(link.Attrs().Promisc).To(Equal(1))
 			Expect(link.Attrs().MTU).To(Equal(4000))
 
-			Expect("/tmp/tuning-test/dummy/dummy0.json").Should(BeAnExistingFile())
+			Expect("/tmp/tuning-test/dummy_dummy0.json").Should(BeAnExistingFile())
 
 			n := &TuningConf{}
 			err = json.Unmarshal([]byte(conf), &n)
