@@ -775,8 +775,6 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (*current.Resu
 		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(addrs)).To(Equal(len(expCIDRsV4)))
-		addrs, err = netlink.AddrList(link, netlink.FAMILY_V6)
-		Expect(len(addrs)).To(Equal(len(expCIDRsV6) + 1)) //add one for the link-local
 		Expect(err).NotTo(HaveOccurred())
 		// Ignore link local address which may or may not be
 		// ready when we read addresses.
