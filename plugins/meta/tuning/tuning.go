@@ -68,7 +68,6 @@ type IPAMArgs struct {
 
 // configToRestore will contain interface attributes that should be restored on cmdDel
 type configToRestore struct {
-	Tuned   bool   `json:"tuned"`
 	Mac     string `json:"mac,omitempty"`
 	Promisc *bool  `json:"promisc,omitempty"`
 	Mtu     int    `json:"mtu,omitempty"`
@@ -183,23 +182,21 @@ func changeMtu(ifName string, mtu int) error {
 	return netlink.LinkSetMTU(link, mtu)
 }
 
-func createBackup(ifName, containerID, backupPath string, tuned bool, tuningConf *TuningConf) error {
-	config := configToRestore{Tuned: tuned}
-	if tuned {
-		link, err := netlink.LinkByName(ifName)
-		if err != nil {
-			return fmt.Errorf("failed to get %q: %v", ifName, err)
-		}
-		if tuningConf.Mac != "" {
-			config.Mac = link.Attrs().HardwareAddr.String()
-		}
-		if tuningConf.Promisc {
-			config.Promisc = new(bool)
-			*config.Promisc = (link.Attrs().Promisc != 0)
-		}
-		if tuningConf.Mtu != 0 {
-			config.Mtu = link.Attrs().MTU
-		}
+func createBackup(ifName, containerID, backupPath string, tuningConf *TuningConf) error {
+	config := configToRestore{}
+	link, err := netlink.LinkByName(ifName)
+	if err != nil {
+		return fmt.Errorf("failed to get %q: %v", ifName, err)
+	}
+	if tuningConf.Mac != "" {
+		config.Mac = link.Attrs().HardwareAddr.String()
+	}
+	if tuningConf.Promisc {
+		config.Promisc = new(bool)
+		*config.Promisc = (link.Attrs().Promisc != 0)
+	}
+	if tuningConf.Mtu != 0 {
+		config.Mtu = link.Attrs().MTU
 	}
 
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
@@ -222,6 +219,11 @@ func createBackup(ifName, containerID, backupPath string, tuned bool, tuningConf
 func restoreBackup(ifName, containerID, backupPath string) error {
 	filePath := path.Join(backupPath, containerID+"_"+ifName+".json")
 
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		// No backup file - nothing to revert
+		return nil
+	}
+
 	file, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to open file %q: %v", filePath, err)
@@ -234,29 +236,27 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 
 	var errStr []string
 
-	if config.Tuned {
-		_, err = netlink.LinkByName(ifName)
-		if err != nil {
-			return fmt.Errorf("failed to get %q: %v", ifName, err)
-		}
+	_, err = netlink.LinkByName(ifName)
+	if err != nil {
+		return fmt.Errorf("failed to get %q: %v", ifName, err)
+	}
 
-		if config.Mtu != 0 {
-			if err = changeMtu(ifName, config.Mtu); err != nil {
-				err = fmt.Errorf("failed to restore MAC address: %v", err)
-				errStr = append(errStr, err.Error())
-			}
+	if config.Mtu != 0 {
+		if err = changeMtu(ifName, config.Mtu); err != nil {
+			err = fmt.Errorf("failed to restore MAC address: %v", err)
+			errStr = append(errStr, err.Error())
 		}
-		if config.Mac != "" {
-			if err = changeMacAddr(ifName, config.Mac); err != nil {
-				err = fmt.Errorf("failed to restore MAC address: %v", err)
-				errStr = append(errStr, err.Error())
-			}
+	}
+	if config.Mac != "" {
+		if err = changeMacAddr(ifName, config.Mac); err != nil {
+			err = fmt.Errorf("failed to restore MAC address: %v", err)
+			errStr = append(errStr, err.Error())
 		}
-		if config.Promisc != nil {
-			if err = changePromisc(ifName, *config.Promisc); err != nil {
-				err = fmt.Errorf("failed to restore promiscuous mode: %v", err)
-				errStr = append(errStr, err.Error())
-			}
+	}
+	if config.Promisc != nil {
+		if err = changePromisc(ifName, *config.Promisc); err != nil {
+			err = fmt.Errorf("failed to restore promiscuous mode: %v", err)
+			errStr = append(errStr, err.Error())
 		}
 	}
 
@@ -332,9 +332,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 
-		isTuned := (tuningConf.Mac != "" || tuningConf.Mtu != 0 || tuningConf.Promisc)
-		if err = createBackup(args.IfName, args.ContainerID, tuningConf.DataDir, isTuned, tuningConf); err != nil {
-			return err
+		if tuningConf.Mac != "" || tuningConf.Mtu != 0 || tuningConf.Promisc {
+			if err = createBackup(args.IfName, args.ContainerID, tuningConf.DataDir, tuningConf); err != nil {
+				return err
+			}
 		}
 
 		if tuningConf.Mac != "" {

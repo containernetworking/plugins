@@ -46,7 +46,7 @@ The parameters, "mac", "mtu" and "promisc", changes the interface attributes as 
 }
 ```
 
-All the interface attributes set by tuning plugin will be restored to original values on container's removal.
+Interface attributes (MAC address, MTU, promiscuous mode) set by tuning plugin will be restored to original values on container's removal.
 
 ## Interface attribute configuration reference
 

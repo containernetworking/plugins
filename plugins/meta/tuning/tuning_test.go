@@ -97,7 +97,6 @@ var _ = Describe("tuning plugin", func() {
 			link, err := netlink.LinkByName(IFNAME)
 			Expect(err).NotTo(HaveOccurred())
 
-			beforeConf.Tuned = true
 			beforeConf.Mac = link.Attrs().HardwareAddr.String()
 			beforeConf.Mtu = link.Attrs().MTU
 			beforeConf.Promisc = new(bool)
@@ -145,7 +144,7 @@ var _ = Describe("tuning plugin", func() {
 			StdinData:   conf,
 		}
 
-		beforeConf = configToRestore{Tuned: false}
+		beforeConf = configToRestore{}
 
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
@@ -162,6 +161,8 @@ var _ = Describe("tuning plugin", func() {
 			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
 			Expect(len(result.IPs)).To(Equal(1))
 			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+			Expect("/tmp/tuning-test/dummy_dummy0.json").ShouldNot(BeAnExistingFile())
 
 			err = testutils.CmdDel(originalNS.Path(),
 				args.ContainerID, "", func() error { return cmdDel(args) })
