@@ -1,7 +1,9 @@
 language: go
 sudo: required
 dist: bionic
-
+arch:
+  - AMD64
+  - ppc64le
 go:
   - 1.13.x
   - 1.14.x
@@ -36,7 +38,15 @@ matrix:
       env: TARGET=arm64
       go: 1.14.x
       arch: arm64
-
+#power jobs
+    - os: linux
+      env: TARGET=arm64
+      go: 1.13.x
+      arch: ppc64le
+    - os: linux
+      env: TARGET=arm64
+      go: 1.14.x
+      arch: ppc64le
 install:
   - go get github.com/onsi/ginkgo/ginkgo
   - go get github.com/containernetworking/cni/cnitool
