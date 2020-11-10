@@ -30,7 +30,7 @@ With the daemon running, containers using the dhcp plugin can be launched.
 ```
 {
 	"ipam": {
-		"type": "dhcp",
+		"type": "dhcp"
 	}
 }
 
