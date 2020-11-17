@@ -19,10 +19,12 @@ import (
 	"net"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/containernetworking/plugins/pkg/utils"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 	"github.com/coreos/go-iptables/iptables"
+	"github.com/vishvananda/netlink"
 )
 
 // This creates the chains to be added to iptables. The basic structure is
@@ -42,10 +44,12 @@ import (
 // The names of the top-level summary chains.
 // These should never be changed, or else upgrading will require manual
 // intervention.
-const TopLevelDNATChainName = "CNI-HOSTPORT-DNAT"
-const SetMarkChainName = "CNI-HOSTPORT-SETMARK"
-const MarkMasqChainName = "CNI-HOSTPORT-MASQ"
-const OldTopLevelSNATChainName = "CNI-HOSTPORT-SNAT"
+const (
+	TopLevelDNATChainName    = "CNI-HOSTPORT-DNAT"
+	SetMarkChainName         = "CNI-HOSTPORT-SETMARK"
+	MarkMasqChainName        = "CNI-HOSTPORT-MASQ"
+	OldTopLevelSNATChainName = "CNI-HOSTPORT-SNAT"
+)
 
 // forwardPorts establishes port forwarding to a given container IP.
 // containerNet.IP can be either v4 or v6.
@@ -113,7 +117,6 @@ func forwardPorts(config *PortMapConf, containerNet net.IPNet) error {
 }
 
 func checkPorts(config *PortMapConf, containerNet net.IPNet) error {
-
 	dnatChain := genDnatChain(config.Name, config.ContainerID)
 	fillDnatRules(&dnatChain, config, containerNet)
 
@@ -189,7 +192,7 @@ func fillDnatRules(c *chain, config *PortMapConf, containerNet net.IPNet) {
 		setMarkChainName = *config.ExternalSetMarkChain
 	}
 
-	//Generate the dnat entry rules. We'll use multiport, but it ony accepts
+	// Generate the dnat entry rules. We'll use multiport, but it ony accepts
 	// up to 15 rules, so partition the list if needed.
 	// Do it in a stable order for testing
 	protoPorts := groupByProto(entries)
@@ -243,7 +246,8 @@ func fillDnatRules(c *chain, config *PortMapConf, containerNet net.IPNet) {
 
 		ruleBase := []string{
 			"-p", entry.Protocol,
-			"--dport", strconv.Itoa(entry.HostPort)}
+			"--dport", strconv.Itoa(entry.HostPort),
+		}
 		if addRuleBaseDst {
 			ruleBase = append(ruleBase,
 				"-d", entry.HostIP)
@@ -405,4 +409,20 @@ func maybeGetIptables(isV6 bool) *iptables.IPTables {
 	}
 
 	return ipt
+}
+
+// deletePortmapStaleConnections delete the UDP conntrack entries on the specified IP family
+// from the ports mapped to the container
+func deletePortmapStaleConnections(portMappings []PortMapEntry, family netlink.InetFamily) error {
+	for _, pm := range portMappings {
+		// skip if is not UDP
+		if strings.ToLower(pm.Protocol) != "udp" {
+			continue
+		}
+		err := utils.DeleteConntrackEntriesForDstPort(uint16(pm.HostPort), utils.PROTOCOL_UDP, family)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

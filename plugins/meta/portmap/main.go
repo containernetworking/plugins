@@ -28,12 +28,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
+	"golang.org/x/sys/unix"
 
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
@@ -89,11 +91,23 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if err := forwardPorts(netConf, netConf.ContIPv4); err != nil {
 			return err
 		}
+		// Delete conntrack entries for UDP to avoid conntrack blackholing traffic
+		// due to stale connections. We do that after the iptables rules are set, so
+		// the new traffic uses them. Failures are informative only.
+		if err := deletePortmapStaleConnections(netConf.RuntimeConfig.PortMaps, unix.AF_INET); err != nil {
+			log.Printf("failed to delete stale UDP conntrack entries for %s: %v", netConf.ContIPv4.IP, err)
+		}
 	}
 
 	if netConf.ContIPv6.IP != nil {
 		if err := forwardPorts(netConf, netConf.ContIPv6); err != nil {
 			return err
+		}
+		// Delete conntrack entries for UDP to avoid conntrack blackholing traffic
+		// due to stale connections. We do that after the iptables rules are set, so
+		// the new traffic uses them. Failures are informative only.
+		if err := deletePortmapStaleConnections(netConf.RuntimeConfig.PortMaps, unix.AF_INET6); err != nil {
+			log.Printf("failed to delete stale UDP conntrack entries for %s: %v", netConf.ContIPv6.IP, err)
 		}
 	}
 
