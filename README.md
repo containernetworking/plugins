@@ -1,7 +1,7 @@
 [![Build Status](https://travis-ci.org/containernetworking/plugins.svg?branch=master)](https://travis-ci.org/containernetworking/plugins)
 
 # plugins
-Some CNI network plugins, maintained by the containernetworking team. For more information, see the individual READMEs.
+Some CNI network plugins, maintained by the containernetworking team. For more information, see the [CNI website](https://www.cni.dev).
 
 Read [CONTRIBUTING](CONTRIBUTING.md) for build and test instructions.
 
