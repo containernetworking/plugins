@@ -1,6 +1,6 @@
 language: go
 sudo: required
-dist: xenial
+dist: bionic
 
 go:
   - 1.13.x
@@ -11,10 +11,10 @@ env:
   - PATH=$GOROOT/bin:$GOPATH/bin:$PATH
   - CGO_ENABLED=0
   matrix:
+  # note: arm64 is tested below
   - TARGET=386
   - TARGET=amd64
   - TARGET=arm
-  - TARGET=arm64
   - TARGET=ppc64le
   - TARGET=s390x
   - TARGET=mips64le
@@ -28,6 +28,14 @@ matrix:
     - os: windows
       env: TARGET=amd64
       go: 1.14.x
+    - os: linux
+      env: TARGET=arm64
+      go: 1.13.x
+      arch: arm64
+    - os: linux
+      env: TARGET=arm64
+      go: 1.14.x
+      arch: arm64
 
 install:
   - go get github.com/onsi/ginkgo/ginkgo
@@ -39,7 +47,7 @@ install:
 
 script:
  - |
-   if [ "${TARGET}" == "amd64" ]; then
+   if [ "${TARGET}" == $(go env GOARCH) ]; then
      GOARCH="${TARGET}" ./test_${TRAVIS_OS_NAME}.sh
    else
      GOARCH="${TARGET}" ./build_linux.sh
