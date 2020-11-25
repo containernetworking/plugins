@@ -10,6 +10,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"strings"
@@ -17,21 +18,50 @@ import (
 )
 
 func main() {
+	// Start TCP server
 	listener, err := net.Listen("tcp", ":")
 	if err != nil {
 		panic(err)
 	}
+	defer listener.Close()
+	// use the same port for UDP
 	_, port, err := net.SplitHostPort(listener.Addr().String())
 	if err != nil {
 		panic(err)
 	}
 	fmt.Printf("127.0.0.1:%s\n", port)
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			panic(err)
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				panic(err)
+			}
+			go handleConnection(conn)
 		}
-		go handleConnection(conn)
+	}()
+
+	// Start UDP server
+	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%s", port))
+	if err != nil {
+		log.Fatalf("Error from net.ResolveUDPAddr(): %s", err)
+	}
+	sock, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		log.Fatalf("Error from ListenUDP(): %s", err)
+	}
+	defer sock.Close()
+
+	buffer := make([]byte, 1024)
+	for {
+		n, addr, err := sock.ReadFrom(buffer)
+		if err != nil {
+			log.Fatalf("Error from ReadFrom(): %s", err)
+		}
+		sock.SetWriteDeadline(time.Now().Add(1 * time.Minute))
+		n, err = sock.WriteTo(buffer[0:n], addr)
+		if err != nil {
+			return
+		}
 	}
 }
 
@@ -53,5 +83,4 @@ func handleConnection(conn net.Conn) {
 		fmt.Fprint(os.Stderr, err.Error())
 		return
 	}
-
 }

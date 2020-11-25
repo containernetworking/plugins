@@ -184,16 +184,16 @@ var _ = Describe("portmap integration tests", func() {
 			Expect(cmd.Run()).To(Succeed())
 
 			// Sanity check: verify that the container is reachable directly
-			contOK := testEchoServer(contIP.String(), containerPort, "")
+			contOK := testEchoServer(contIP.String(), "tcp", containerPort, "")
 
 			// Verify that a connection to the forwarded port works
-			dnatOK := testEchoServer(hostIP, hostPort, "")
+			dnatOK := testEchoServer(hostIP, "tcp", hostPort, "")
 
 			// Verify that a connection to localhost works
-			snatOK := testEchoServer("127.0.0.1", hostPort, "")
+			snatOK := testEchoServer("127.0.0.1", "tcp", hostPort, "")
 
 			// verify that hairpin works
-			hairpinOK := testEchoServer(hostIP, hostPort, targetNS.Path())
+			hairpinOK := testEchoServer(hostIP, "tcp", hostPort, targetNS.Path())
 
 			// Cleanup
 			session.Terminate()
@@ -219,21 +219,216 @@ var _ = Describe("portmap integration tests", func() {
 			}
 
 			close(done)
+		}, TIMEOUT*9)
 
+		It("forwards a UDP port on ipv4 and keep working after creating a second container with the same HostPort", func(done Done) {
+			var err error
+			hostPort := rand.Intn(10000) + 1025
+			runtimeConfig := libcni.RuntimeConf{
+				ContainerID: fmt.Sprintf("unit-test-%d", hostPort),
+				NetNS:       targetNS.Path(),
+				IfName:      "eth0",
+				CapabilityArgs: map[string]interface{}{
+					"portMappings": []map[string]interface{}{
+						{
+							"hostPort":      hostPort,
+							"containerPort": containerPort,
+							"protocol":      "udp",
+						},
+					},
+				},
+			}
+
+			// Make delete idempotent, so we can clean up on failure
+			netDeleted := false
+			deleteNetwork := func() error {
+				if netDeleted {
+					return nil
+				}
+				netDeleted = true
+				return cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig)
+			}
+
+			// Create the network
+			resI, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig)
+			Expect(err).NotTo(HaveOccurred())
+			defer deleteNetwork()
+
+			// Undo Docker's forwarding policy
+			cmd := exec.Command("iptables", "-t", "filter",
+				"-P", "FORWARD", "ACCEPT")
+			cmd.Stderr = GinkgoWriter
+			err = cmd.Run()
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := current.GetResult(resI)
+			Expect(err).NotTo(HaveOccurred())
+			var contIP net.IP
+
+			for _, ip := range result.IPs {
+				intfIndex := *ip.Interface
+				if result.Interfaces[intfIndex].Sandbox == "" {
+					continue
+				}
+				contIP = ip.Address.IP
+			}
+			if contIP == nil {
+				Fail("could not determine container IP")
+			}
+
+			hostIP := getLocalIP()
+			fmt.Fprintf(GinkgoWriter, "First container hostIP: %s:%d, contIP: %s:%d\n",
+				hostIP, hostPort, contIP, containerPort)
+
+			// dump iptables-save output for debugging
+			cmd = exec.Command("iptables-save")
+			cmd.Stderr = GinkgoWriter
+			cmd.Stdout = GinkgoWriter
+			Expect(cmd.Run()).To(Succeed())
+
+			// dump ip routes output for debugging
+			cmd = exec.Command("ip", "route")
+			cmd.Stderr = GinkgoWriter
+			cmd.Stdout = GinkgoWriter
+			Expect(cmd.Run()).To(Succeed())
+
+			// dump ip addresses output for debugging
+			cmd = exec.Command("ip", "addr")
+			cmd.Stderr = GinkgoWriter
+			cmd.Stdout = GinkgoWriter
+			Expect(cmd.Run()).To(Succeed())
+
+			// Sanity check: verify that the container is reachable directly
+			fmt.Fprintln(GinkgoWriter, "Connect to container:", contIP.String(), containerPort)
+			contOK := testEchoServer(contIP.String(), "udp", containerPort, "")
+
+			// Verify that a connection to the forwarded port works
+			fmt.Fprintln(GinkgoWriter, "Connect to host:", hostIP, hostPort)
+			dnatOK := testEchoServer(hostIP, "udp", hostPort, "")
+
+			// Cleanup
+			session.Terminate()
+			err = deleteNetwork()
+			Expect(err).NotTo(HaveOccurred())
+
+			// Check that everything succeeded *after* we clean up the network
+			if !contOK {
+				Fail("connection direct to " + contIP.String() + " failed")
+			}
+			if !dnatOK {
+				Fail("Connection to " + hostIP + " was not forwarded")
+			}
+			// Create a second container
+			targetNS2, err := testutils.NewNS()
+			Expect(err).NotTo(HaveOccurred())
+			fmt.Fprintln(GinkgoWriter, "namespace:", targetNS2.Path())
+
+			// Start an echo server and get the port
+			containerPort, session2, err := StartEchoServerInNamespace(targetNS2)
+			Expect(err).NotTo(HaveOccurred())
+
+			runtimeConfig2 := libcni.RuntimeConf{
+				ContainerID: fmt.Sprintf("unit-test2-%d", hostPort),
+				NetNS:       targetNS2.Path(),
+				IfName:      "eth0",
+				CapabilityArgs: map[string]interface{}{
+					"portMappings": []map[string]interface{}{
+						{
+							"hostPort":      hostPort,
+							"containerPort": containerPort,
+							"protocol":      "udp",
+						},
+					},
+				},
+			}
+
+			// Make delete idempotent, so we can clean up on failure
+			net2Deleted := false
+			deleteNetwork2 := func() error {
+				if net2Deleted {
+					return nil
+				}
+				net2Deleted = true
+				return cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig2)
+			}
+
+			// Create the network
+			resI2, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig2)
+			Expect(err).NotTo(HaveOccurred())
+			defer deleteNetwork2()
+
+			result2, err := current.GetResult(resI2)
+			Expect(err).NotTo(HaveOccurred())
+			var contIP2 net.IP
+
+			for _, ip := range result2.IPs {
+				intfIndex := *ip.Interface
+				if result2.Interfaces[intfIndex].Sandbox == "" {
+					continue
+				}
+				contIP2 = ip.Address.IP
+			}
+			if contIP2 == nil {
+				Fail("could not determine container IP")
+			}
+
+			fmt.Fprintf(GinkgoWriter, "Second container: hostIP: %s:%d, contIP: %s:%d\n",
+				hostIP, hostPort, contIP2, containerPort)
+
+			// dump iptables-save output for debugging
+			cmd = exec.Command("iptables-save")
+			cmd.Stderr = GinkgoWriter
+			cmd.Stdout = GinkgoWriter
+			Expect(cmd.Run()).To(Succeed())
+
+			// dump ip routes output for debugging
+			cmd = exec.Command("ip", "route")
+			cmd.Stderr = GinkgoWriter
+			cmd.Stdout = GinkgoWriter
+			Expect(cmd.Run()).To(Succeed())
+
+			// dump ip addresses output for debugging
+			cmd = exec.Command("ip", "addr")
+			cmd.Stderr = GinkgoWriter
+			cmd.Stdout = GinkgoWriter
+			Expect(cmd.Run()).To(Succeed())
+
+			// Sanity check: verify that the container is reachable directly
+			fmt.Fprintln(GinkgoWriter, "Connect to container:", contIP2.String(), containerPort)
+			cont2OK := testEchoServer(contIP2.String(), "udp", containerPort, "")
+
+			// Verify that a connection to the forwarded port works
+			fmt.Fprintln(GinkgoWriter, "Connect to host:", hostIP, hostPort)
+			dnat2OK := testEchoServer(hostIP, "udp", hostPort, "")
+
+			// Cleanup
+			session2.Terminate()
+			err = deleteNetwork2()
+			Expect(err).NotTo(HaveOccurred())
+
+			// Check that everything succeeded *after* we clean up the network
+			if !cont2OK {
+				Fail("connection direct to " + contIP2.String() + " failed")
+			}
+			if !dnat2OK {
+				Fail("Connection to " + hostIP + " was not forwarded")
+			}
+
+			close(done)
 		}, TIMEOUT*9)
 	})
 })
 
 // testEchoServer returns true if we found an echo server on the port
-func testEchoServer(address string, port int, netns string) bool {
+func testEchoServer(address, protocol string, port int, netns string) bool {
 	message := "'Aliquid melius quam pessimum optimum non est.'"
 
 	var cmd *exec.Cmd
 	if netns != "" {
 		netns = filepath.Base(netns)
-		cmd = exec.Command("ip", "netns", "exec", netns, echoClientBinaryPath, "--target", fmt.Sprintf("%s:%d", address, port), "--message", message)
+		cmd = exec.Command("ip", "netns", "exec", netns, echoClientBinaryPath, "--target", fmt.Sprintf("%s:%d", address, port), "--message", message, "--protocol", protocol)
 	} else {
-		cmd = exec.Command(echoClientBinaryPath, "--target", fmt.Sprintf("%s:%d", address, port), "--message", message)
+		cmd = exec.Command(echoClientBinaryPath, "--target", fmt.Sprintf("%s:%d", address, port), "--message", message, "--protocol", protocol)
 	}
 	cmd.Stdin = bytes.NewBufferString(message)
 	cmd.Stderr = GinkgoWriter

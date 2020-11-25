@@ -110,12 +110,11 @@ github.com/safchain/ethtool
 github.com/sirupsen/logrus
 # github.com/stretchr/testify v1.3.0
 ## explicit
-# github.com/vishvananda/netlink v1.1.0
+# github.com/vishvananda/netlink v1.1.1-0.20201029203352-d40f9887b852
 ## explicit
 github.com/vishvananda/netlink
 github.com/vishvananda/netlink/nl
 # github.com/vishvananda/netns v0.0.0-20200728191858-db3c7e526aae
-## explicit
 github.com/vishvananda/netns
 # golang.org/x/crypto v0.0.0-20181009213950-7c1a557ab941
 ## explicit
@@ -126,7 +125,7 @@ golang.org/x/net/bpf
 golang.org/x/net/internal/iana
 golang.org/x/net/internal/socket
 golang.org/x/net/ipv4
-# golang.org/x/sys v0.0.0-20200831180312-196b9ba8737a
+# golang.org/x/sys v0.0.0-20201117170446-d9b008d0a637
 ## explicit
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
