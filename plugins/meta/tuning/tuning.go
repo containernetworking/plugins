@@ -20,7 +20,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -40,7 +39,7 @@ import (
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
-const defaultDataDir = "/var/lib/cni/tuning"
+const defaultDataDir = "/run/cni/tuning"
 
 // TuningConf represents the network tuning configuration.
 type TuningConf struct {
@@ -266,27 +265,6 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 
 	if err = os.Remove(filePath); err != nil {
 		return fmt.Errorf("failed to remove file %v: %v", filePath, err)
-	}
-
-	if err = delDirIfEmpty(backupPath); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func delDirIfEmpty(path string) error {
-	dir, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer dir.Close()
-
-	_, err = dir.Readdir(1)
-	if err == io.EOF {
-		if err = os.Remove(path); err != nil {
-			return fmt.Errorf("failed to remove directory %v: %v", path, err)
-		}
 	}
 
 	return nil
