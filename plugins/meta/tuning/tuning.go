@@ -230,19 +230,19 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 
 	config := configToRestore{}
 	if err = json.Unmarshal([]byte(file), &config); err != nil {
-		return fmt.Errorf("failed to unmarshall file %q: %v", filePath, err)
+		return nil
 	}
 
 	var errStr []string
 
 	_, err = netlink.LinkByName(ifName)
 	if err != nil {
-		return fmt.Errorf("failed to get %q: %v", ifName, err)
+		return nil
 	}
 
 	if config.Mtu != 0 {
 		if err = changeMtu(ifName, config.Mtu); err != nil {
-			err = fmt.Errorf("failed to restore MAC address: %v", err)
+			err = fmt.Errorf("failed to restore MTU: %v", err)
 			errStr = append(errStr, err.Error())
 		}
 	}
@@ -357,11 +357,11 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+	ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		// MAC address, MTU and promiscuous mode settings will be restored
 		return restoreBackup(args.IfName, args.ContainerID, tuningConf.DataDir)
 	})
-	return err
+	return nil
 }
 
 func main() {
