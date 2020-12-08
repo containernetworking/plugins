@@ -7,7 +7,7 @@
 set -e
 
 # switch into the repo root directory
-cd "$(dirname $0)"
+cd "$(dirname "$0")"
 
 # Build all plugins before testing
 source ./build_linux.sh
@@ -15,7 +15,7 @@ source ./build_linux.sh
 echo "Running tests"
 
 function testrun {
-    sudo -E bash -c "umask 0; cd ${GOPATH}/src; PATH=${GOROOT}/bin:$(pwd)/bin:${PATH} go test $@"
+    sudo -E bash -c "umask 0; PATH=${GOPATH}/bin:$(pwd)/bin:${PATH} go test $@"
 }
 
 COVERALLS=${COVERALLS:-""}
@@ -26,36 +26,30 @@ else
     echo "without coverage profile generation..."
 fi
 
-PKG=${PKG:-$(cd ${GOPATH}/src/${REPO_PATH}; go list ./... | xargs echo)}
+PKG=${PKG:-$(go list ./... | xargs echo)}
 
-# coverage profile only works per-package
 i=0
 for t in ${PKG}; do
     if [ -n "${COVERALLS}" ]; then
         COVERFLAGS="-covermode set -coverprofile ${i}.coverprofile"
     fi
+    echo "${t}"
     testrun "${COVERFLAGS:-""} ${t}"
     i=$((i+1))
 done
 
-# Submit coverage information
-if [ -n "${COVERALLS}" ]; then
-    gover
-    goveralls -service=travis-ci -coverprofile=gover.coverprofile
-fi
-
 echo "Checking gofmt..."
 fmtRes=$(go fmt $PKG)
 if [ -n "${fmtRes}" ]; then
-	echo -e "go fmt checking failed:\n${fmtRes}"
-	exit 255
+    echo -e "go fmt checking failed:\n${fmtRes}"
+    exit 255
 fi
 
 echo "Checking govet..."
 vetRes=$(go vet $PKG)
 if [ -n "${vetRes}" ]; then
-	echo -e "govet checking failed:\n${vetRes}"
-	exit 255
+    echo -e "govet checking failed:\n${vetRes}"
+    exit 255
 fi
 
 # Run the pkg/ns tests as non root user
