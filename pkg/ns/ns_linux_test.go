@@ -200,7 +200,9 @@ var _ = Describe("Linux namespace operations", func() {
 				By("comparing against the netns inode of every thread in the process")
 				for _, netnsPath := range allNetNSInCurrentProcess() {
 					netnsInode, err := getInode(netnsPath)
-					Expect(err).NotTo(HaveOccurred())
+					if !os.IsNotExist(err) {
+						Expect(err).NotTo(HaveOccurred())
+					}
 					Expect(netnsInode).NotTo(Equal(createdNetNSInode))
 				}
 			})
