@@ -22,9 +22,15 @@ func (t TableEntry) generateIt(itBody reflect.Value) {
 		return
 	}
 
-	values := []reflect.Value{}
-	for _, param := range t.Parameters {
-		values = append(values, reflect.ValueOf(param))
+	values := make([]reflect.Value, len(t.Parameters))
+	iBodyType := itBody.Type()
+	for i, param := range t.Parameters {
+		if param == nil {
+			inType := iBodyType.In(i)
+			values[i] = reflect.Zero(inType)
+		} else {
+			values[i] = reflect.ValueOf(param)
+		}
 	}
 
 	body := func() {
