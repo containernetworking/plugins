@@ -17,7 +17,6 @@ require (
 	github.com/godbus/dbus v0.0.0-20180201030542-885f9cc04c9c
 	github.com/j-keck/arping v0.0.0-20160618110441-2cf9dc699c56
 	github.com/mattn/go-shellwords v1.0.3
-	github.com/modocache/gover v0.0.0-20171022184752-b58185e213c5 // indirect
 	github.com/onsi/ginkgo v1.12.1
 	github.com/onsi/gomega v1.10.3
 	github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
