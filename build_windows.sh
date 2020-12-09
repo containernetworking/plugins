@@ -1,25 +1,15 @@
 #!/usr/bin/env bash
 set -e
-cd $(dirname "$0")
-
-ORG_PATH="github.com/containernetworking"
-export REPO_PATH="${ORG_PATH}/plugins"
-
-export GOPATH=$(mktemp -d)
-mkdir -p ${GOPATH}/src/${ORG_PATH}
-trap "{ rm -rf $GOPATH; }" EXIT
-ln -s ${PWD} ${GOPATH}/src/${REPO_PATH} || exit 255
+cd "$(dirname "$0")"
 
 export GO="${GO:-go}"
 export GOOS=windows
 export GOFLAGS="${GOFLAGS} -mod=vendor"
-echo $GOFLAGS
+echo "$GOFLAGS"
 
-PLUGINS=$(cat plugins/windows_only.txt)
+PLUGINS=$(cat plugins/windows_only.txt | dos2unix )
 for d in $PLUGINS; do
-  if [ -d "$d" ]; then
-    plugin="$(basename "$d").exe"
-    echo "  $plugin"
-    $GO build -o "${PWD}/bin/$plugin" "$@" "$REPO_PATH"/$d
-  fi
+	plugin="$(basename "$d").exe"
+	echo "building $plugin"
+	$GO build -o "${PWD}/bin/$plugin" "$@" ./"${d}"
 done
