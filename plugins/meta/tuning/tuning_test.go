@@ -17,13 +17,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-	"net"
 
 	"github.com/vishvananda/netlink"
 
@@ -77,6 +77,7 @@ func buildOneConfig(name, cniVersion string, orig *TuningConf, prevResult types.
 var _ = Describe("tuning plugin", func() {
 	var originalNS ns.NetNS
 	const IFNAME string = "dummy0"
+	var beforeConf configToRestore
 
 	BeforeEach(func() {
 		// Create a new NetNS so we don't modify the host
@@ -93,8 +94,13 @@ var _ = Describe("tuning plugin", func() {
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			_, err = netlink.LinkByName(IFNAME)
+			link, err := netlink.LinkByName(IFNAME)
 			Expect(err).NotTo(HaveOccurred())
+
+			beforeConf.Mac = link.Attrs().HardwareAddr.String()
+			beforeConf.Mtu = link.Attrs().MTU
+			beforeConf.Promisc = new(bool)
+			*beforeConf.Promisc = (link.Attrs().Promisc != 0)
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -138,6 +144,8 @@ var _ = Describe("tuning plugin", func() {
 			StdinData:   conf,
 		}
 
+		beforeConf = configToRestore{}
+
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
@@ -153,6 +161,13 @@ var _ = Describe("tuning plugin", func() {
 			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
 			Expect(len(result.IPs)).To(Equal(1))
 			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+			Expect("/tmp/tuning-test/dummy_dummy0.json").ShouldNot(BeAnExistingFile())
+
+			err = testutils.CmdDel(originalNS.Path(),
+				args.ContainerID, "", func() error { return cmdDel(args) })
+			Expect(err).NotTo(HaveOccurred())
+
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -209,6 +224,10 @@ var _ = Describe("tuning plugin", func() {
 			err = testutils.CmdDel(originalNS.Path(),
 				args.ContainerID, "", func() error { return cmdDel(args) })
 			Expect(err).NotTo(HaveOccurred())
+
+			link, err = netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().Promisc != 0).To(Equal(*beforeConf.Promisc))
 
 			return nil
 		})
@@ -271,6 +290,10 @@ var _ = Describe("tuning plugin", func() {
 				args.ContainerID, "", func() error { return cmdDel(args) })
 			Expect(err).NotTo(HaveOccurred())
 
+			link, err = netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().Promisc != 0).To(Equal(*beforeConf.Promisc))
+
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -327,6 +350,10 @@ var _ = Describe("tuning plugin", func() {
 			err = testutils.CmdDel(originalNS.Path(),
 				args.ContainerID, "", func() error { return cmdDel(args) })
 			Expect(err).NotTo(HaveOccurred())
+
+			link, err = netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().MTU).To(Equal(beforeConf.Mtu))
 
 			return nil
 		})
@@ -389,6 +416,10 @@ var _ = Describe("tuning plugin", func() {
 				args.ContainerID, "", func() error { return cmdDel(args) })
 			Expect(err).NotTo(HaveOccurred())
 
+			link, err = netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().MTU).To(Equal(beforeConf.Mtu))
+
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -447,6 +478,10 @@ var _ = Describe("tuning plugin", func() {
 			err = testutils.CmdDel(originalNS.Path(),
 				args.ContainerID, "", func() error { return cmdDel(args) })
 			Expect(err).NotTo(HaveOccurred())
+
+			link, err = netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
 
 			return nil
 		})
@@ -511,6 +546,10 @@ var _ = Describe("tuning plugin", func() {
 				args.ContainerID, "", func() error { return cmdDel(args) })
 			Expect(err).NotTo(HaveOccurred())
 
+			link, err = netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
+
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -570,6 +609,10 @@ var _ = Describe("tuning plugin", func() {
 			err = testutils.CmdDel(originalNS.Path(),
 				args.ContainerID, "", func() error { return cmdDel(args) })
 			Expect(err).NotTo(HaveOccurred())
+
+			link, err = netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
 
 			return nil
 		})
@@ -643,6 +686,10 @@ var _ = Describe("tuning plugin", func() {
 				args.ContainerID, "", func() error { return cmdDel(args) })
 			Expect(err).NotTo(HaveOccurred())
 
+			link, err = netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().Promisc != 0).To(Equal(*beforeConf.Promisc))
+
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -714,6 +761,10 @@ var _ = Describe("tuning plugin", func() {
 			err = testutils.CmdDel(originalNS.Path(),
 				args.ContainerID, "", func() error { return cmdDel(args) })
 			Expect(err).NotTo(HaveOccurred())
+
+			link, err = netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().MTU).To(Equal(beforeConf.Mtu))
 
 			return nil
 		})
@@ -789,6 +840,10 @@ var _ = Describe("tuning plugin", func() {
 				args.ContainerID, "", func() error { return cmdDel(args) })
 			Expect(err).NotTo(HaveOccurred())
 
+			link, err = netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
+
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -863,6 +918,10 @@ var _ = Describe("tuning plugin", func() {
 				args.ContainerID, "", func() error { return cmdDel(args) })
 			Expect(err).NotTo(HaveOccurred())
 
+			link, err = netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
+
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -924,6 +983,97 @@ var _ = Describe("tuning plugin", func() {
 			err = testutils.CmdDel(originalNS.Path(),
 				args.ContainerID, "", func() error { return cmdDel(args) })
 			Expect(err).NotTo(HaveOccurred())
+
+			link, err = netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
+
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("configures and deconfigures mac address, promisc mode and MTU (from conf file) with custom dataDir", func() {
+		conf := []byte(`{
+	"name": "test",
+	"type": "iplink",
+	"cniVersion": "0.4.0",
+	"mac": "c2:11:22:33:44:77",
+	"promisc": true,
+	"mtu": 4000,
+	"dataDir": "/tmp/tuning-test",
+	"prevResult": {
+		"interfaces": [
+			{"name": "dummy0", "sandbox":"netns"}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "10.0.0.2/24",
+				"gateway": "10.0.0.1",
+				"interface": 0
+			}
+		]
+	}
+}`)
+
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       originalNS.Path(),
+			IfName:      IFNAME,
+			StdinData:   conf,
+		}
+
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			r, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := current.GetResult(r)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(result.Interfaces)).To(Equal(1))
+			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+			Expect(len(result.IPs)).To(Equal(1))
+			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+			link, err := netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			hw, err := net.ParseMAC("c2:11:22:33:44:77")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr).To(Equal(hw))
+			Expect(link.Attrs().Promisc).To(Equal(1))
+			Expect(link.Attrs().MTU).To(Equal(4000))
+
+			Expect("/tmp/tuning-test/dummy_dummy0.json").Should(BeAnExistingFile())
+
+			n := &TuningConf{}
+			err = json.Unmarshal([]byte(conf), &n)
+			Expect(err).NotTo(HaveOccurred())
+
+			cniVersion := "0.4.0"
+			_, confString, err := buildOneConfig("testConfig", cniVersion, n, r)
+			Expect(err).NotTo(HaveOccurred())
+
+			args.StdinData = confString
+
+			err = testutils.CmdCheckWithArgs(args, func() error {
+				return cmdCheck(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = testutils.CmdDel(originalNS.Path(),
+				args.ContainerID, "", func() error { return cmdDel(args) })
+			Expect(err).NotTo(HaveOccurred())
+
+			link, err = netlink.LinkByName(IFNAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
+			Expect(link.Attrs().MTU).To(Equal(beforeConf.Mtu))
+			Expect(link.Attrs().Promisc != 0).To(Equal(*beforeConf.Promisc))
 
 			return nil
 		})

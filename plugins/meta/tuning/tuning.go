@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -37,9 +39,12 @@ import (
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
+const defaultDataDir = "/run/cni/tuning"
+
 // TuningConf represents the network tuning configuration.
 type TuningConf struct {
 	types.NetConf
+	DataDir string            `json:"dataDir,omitempty"`
 	SysCtl  map[string]string `json:"sysctl"`
 	Mac     string            `json:"mac,omitempty"`
 	Promisc bool              `json:"promisc,omitempty"`
@@ -60,6 +65,13 @@ type IPAMArgs struct {
 	Mtu     *int               `json:"mtu,omitempty"`
 }
 
+// configToRestore will contain interface attributes that should be restored on cmdDel
+type configToRestore struct {
+	Mac     string `json:"mac,omitempty"`
+	Promisc *bool  `json:"promisc,omitempty"`
+	Mtu     int    `json:"mtu,omitempty"`
+}
+
 // MacEnvArgs represents CNI_ARG
 type MacEnvArgs struct {
 	types.CommonArgs
@@ -70,6 +82,10 @@ func parseConf(data []byte, envArgs string) (*TuningConf, error) {
 	conf := TuningConf{Promisc: false}
 	if err := json.Unmarshal(data, &conf); err != nil {
 		return nil, fmt.Errorf("failed to load netconf: %v", err)
+	}
+
+	if conf.DataDir == "" {
+		conf.DataDir = defaultDataDir
 	}
 
 	// Parse custom Mac from both env args
@@ -165,6 +181,95 @@ func changeMtu(ifName string, mtu int) error {
 	return netlink.LinkSetMTU(link, mtu)
 }
 
+func createBackup(ifName, containerID, backupPath string, tuningConf *TuningConf) error {
+	config := configToRestore{}
+	link, err := netlink.LinkByName(ifName)
+	if err != nil {
+		return fmt.Errorf("failed to get %q: %v", ifName, err)
+	}
+	if tuningConf.Mac != "" {
+		config.Mac = link.Attrs().HardwareAddr.String()
+	}
+	if tuningConf.Promisc {
+		config.Promisc = new(bool)
+		*config.Promisc = (link.Attrs().Promisc != 0)
+	}
+	if tuningConf.Mtu != 0 {
+		config.Mtu = link.Attrs().MTU
+	}
+
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		if err = os.MkdirAll(backupPath, 0600); err != nil {
+			return fmt.Errorf("failed to create backup directory: %v", err)
+		}
+	}
+
+	data, err := json.MarshalIndent(config, "", " ")
+	if err != nil {
+		return fmt.Errorf("failed to marshall data for %q: %v", ifName, err)
+	}
+	if err = ioutil.WriteFile(path.Join(backupPath, containerID+"_"+ifName+".json"), data, 0600); err != nil {
+		return fmt.Errorf("failed to save file %s.json: %v", ifName, err)
+	}
+
+	return nil
+}
+
+func restoreBackup(ifName, containerID, backupPath string) error {
+	filePath := path.Join(backupPath, containerID+"_"+ifName+".json")
+
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		// No backup file - nothing to revert
+		return nil
+	}
+
+	file, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open file %q: %v", filePath, err)
+	}
+
+	config := configToRestore{}
+	if err = json.Unmarshal([]byte(file), &config); err != nil {
+		return nil
+	}
+
+	var errStr []string
+
+	_, err = netlink.LinkByName(ifName)
+	if err != nil {
+		return nil
+	}
+
+	if config.Mtu != 0 {
+		if err = changeMtu(ifName, config.Mtu); err != nil {
+			err = fmt.Errorf("failed to restore MTU: %v", err)
+			errStr = append(errStr, err.Error())
+		}
+	}
+	if config.Mac != "" {
+		if err = changeMacAddr(ifName, config.Mac); err != nil {
+			err = fmt.Errorf("failed to restore MAC address: %v", err)
+			errStr = append(errStr, err.Error())
+		}
+	}
+	if config.Promisc != nil {
+		if err = changePromisc(ifName, *config.Promisc); err != nil {
+			err = fmt.Errorf("failed to restore promiscuous mode: %v", err)
+			errStr = append(errStr, err.Error())
+		}
+	}
+
+	if len(errStr) > 0 {
+		return fmt.Errorf(strings.Join(errStr, "; "))
+	}
+
+	if err = os.Remove(filePath); err != nil {
+		return fmt.Errorf("failed to remove file %v: %v", filePath, err)
+	}
+
+	return nil
+}
+
 func cmdAdd(args *skel.CmdArgs) error {
 	tuningConf, err := parseConf(args.StdinData, args.Args)
 	if err != nil {
@@ -205,6 +310,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 
+		if tuningConf.Mac != "" || tuningConf.Mtu != 0 || tuningConf.Promisc {
+			if err = createBackup(args.IfName, args.ContainerID, tuningConf.DataDir, tuningConf); err != nil {
+				return err
+			}
+		}
+
 		if tuningConf.Mac != "" {
 			if err = changeMacAddr(args.IfName, tuningConf.Mac); err != nil {
 				return err
@@ -239,10 +350,17 @@ func cmdAdd(args *skel.CmdArgs) error {
 	return types.PrintResult(tuningConf.PrevResult, tuningConf.CNIVersion)
 }
 
+// cmdDel will restore NIC attributes to the original ones when called
 func cmdDel(args *skel.CmdArgs) error {
-	// TODO: the settings are not reverted to the previous values. Reverting the
-	// settings is not useful when the whole container goes away but it could be
-	// useful in scenarios where plugins are added and removed at runtime.
+	tuningConf, err := parseConf(args.StdinData, args.Args)
+	if err != nil {
+		return err
+	}
+
+	ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+		// MAC address, MTU and promiscuous mode settings will be restored
+		return restoreBackup(args.IfName, args.ContainerID, tuningConf.DataDir)
+	})
 	return nil
 }
 
