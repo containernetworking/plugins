@@ -68,8 +68,6 @@ github.com/j-keck/arping
 # github.com/mattn/go-shellwords v1.0.3
 ## explicit
 github.com/mattn/go-shellwords
-# github.com/modocache/gover v0.0.0-20171022184752-b58185e213c5
-## explicit
 # github.com/nxadm/tail v1.4.4
 github.com/nxadm/tail
 github.com/nxadm/tail/ratelimiter
