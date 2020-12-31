@@ -43,7 +43,7 @@ func CreateIfb(ifbDeviceName string, mtu int) error {
 }
 
 func TeardownIfb(deviceName string) error {
-	_, err := ip.DelLinkByNameAddr(deviceName)
+	err := ip.DelLinkByName(deviceName)
 	if err != nil && err == ip.ErrLinkNotFound {
 		return nil
 	}
