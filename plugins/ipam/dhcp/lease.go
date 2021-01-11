@@ -56,6 +56,7 @@ type DHCPLease struct {
 	renewalTime   time.Time
 	rebindingTime time.Time
 	expireTime    time.Time
+	timeout       time.Duration
 	stopping      uint32
 	stop          chan struct{}
 	wg            sync.WaitGroup
@@ -64,11 +65,15 @@ type DHCPLease struct {
 // AcquireLease gets an DHCP lease and then maintains it in the background
 // by periodically renewing it. The acquired lease can be released by
 // calling DHCPLease.Stop()
-func AcquireLease(clientID, netns, ifName string) (*DHCPLease, error) {
+func AcquireLease(
+	clientID, netns, ifName string,
+	timeout time.Duration,
+) (*DHCPLease, error) {
 	errCh := make(chan error, 1)
 	l := &DHCPLease{
 		clientID: clientID,
 		stop:     make(chan struct{}),
+		timeout:  timeout,
 	}
 
 	log.Printf("%v: acquiring lease", clientID)
@@ -115,7 +120,7 @@ func (l *DHCPLease) Stop() {
 }
 
 func (l *DHCPLease) acquire() error {
-	c, err := newDHCPClient(l.link, l.clientID)
+	c, err := newDHCPClient(l.link, l.clientID, l.timeout)
 	if err != nil {
 		return err
 	}
@@ -242,7 +247,7 @@ func (l *DHCPLease) downIface() {
 }
 
 func (l *DHCPLease) renew() error {
-	c, err := newDHCPClient(l.link, l.clientID)
+	c, err := newDHCPClient(l.link, l.clientID, l.timeout)
 	if err != nil {
 		return err
 	}
@@ -273,7 +278,7 @@ func (l *DHCPLease) renew() error {
 func (l *DHCPLease) release() error {
 	log.Printf("%v: releasing lease", l.clientID)
 
-	c, err := newDHCPClient(l.link, l.clientID)
+	c, err := newDHCPClient(l.link, l.clientID, l.timeout)
 	if err != nil {
 		return err
 	}
@@ -361,7 +366,10 @@ func backoffRetry(f func() (*dhcp4.Packet, error)) (*dhcp4.Packet, error) {
 	return nil, errNoMoreTries
 }
 
-func newDHCPClient(link netlink.Link, clientID string) (*dhcp4client.Client, error) {
+func newDHCPClient(
+	link netlink.Link, clientID string,
+	timeout time.Duration,
+) (*dhcp4client.Client, error) {
 	pktsock, err := dhcp4client.NewPacketSock(link.Attrs().Index)
 	if err != nil {
 		return nil, err
@@ -369,7 +377,7 @@ func newDHCPClient(link netlink.Link, clientID string) (*dhcp4client.Client, err
 
 	return dhcp4client.New(
 		dhcp4client.HardwareAddr(link.Attrs().HardwareAddr),
-		dhcp4client.Timeout(5*time.Second),
+		dhcp4client.Timeout(timeout),
 		dhcp4client.Broadcast(false),
 		dhcp4client.Connection(pktsock),
 	)
