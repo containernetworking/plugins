@@ -15,7 +15,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -32,14 +31,6 @@ import (
 
 func main() {
 	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("host-local"))
-}
-
-func loadNetConf(bytes []byte) (*types.NetConf, string, error) {
-	n := &types.NetConf{}
-	if err := json.Unmarshal(bytes, n); err != nil {
-		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
-	}
-	return n, n.CNIVersion, nil
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
