@@ -24,7 +24,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/020"
+	types020 "github.com/containernetworking/cni/pkg/types/020"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -299,14 +299,8 @@ var _ = Describe("host-local Operations", func() {
 		Expect(result0.IPs[0].Address.String()).Should(Equal("10.1.2.2/24"))
 
 		// Allocate the IP with the same container ID
-		_, _, err = testutils.CmdAddWithArgs(args, func() error {
+		r1, raw, err := testutils.CmdAddWithArgs(args, func() error {
 			return cmdAdd(args)
-		})
-		Expect(err).To(HaveOccurred())
-
-		// Allocate the IP with the another container ID
-		r1, raw, err := testutils.CmdAddWithArgs(args1, func() error {
-			return cmdAdd(args1)
 		})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(strings.Index(string(raw), "\"version\":")).Should(BeNumerically(">", 0))
@@ -314,13 +308,31 @@ var _ = Describe("host-local Operations", func() {
 		result1, err := current.GetResult(r1)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(result1.IPs)).Should(Equal(1))
-		Expect(result1.IPs[0].Address.String()).Should(Equal("10.1.2.3/24"))
+		Expect(result1.IPs[0].Address.String()).Should(Equal("10.1.2.2/24"))
+
+		// Allocate the IP with the another container ID
+		r2, raw, err := testutils.CmdAddWithArgs(args1, func() error {
+			return cmdAdd(args1)
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strings.Index(string(raw), "\"version\":")).Should(BeNumerically(">", 0))
+
+		result2, err := current.GetResult(r2)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(result2.IPs)).Should(Equal(1))
+		Expect(result2.IPs[0].Address.String()).Should(Equal("10.1.2.3/24"))
 
 		// Allocate the IP with the same container ID again
-		_, _, err = testutils.CmdAddWithArgs(args, func() error {
+		r3, raw, err := testutils.CmdAddWithArgs(args, func() error {
 			return cmdAdd(args)
 		})
-		Expect(err).To(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strings.Index(string(raw), "\"version\":")).Should(BeNumerically(">", 0))
+
+		result3, err := current.GetResult(r3)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(result3.IPs)).Should(Equal(1))
+		Expect(result3.IPs[0].Address.String()).Should(Equal("10.1.2.2/24"))
 
 		ipFilePath := filepath.Join(tmpDir, "mynet0", "10.1.2.2")
 

@@ -40,7 +40,7 @@ func NewIPAllocator(s *RangeSet, store backend.Store, id int) *IPAllocator {
 	}
 }
 
-// Get allocates an IP
+// Get allocates an IP or returns the IP if it has already been allocated
 func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*current.IPConfig, error) {
 	a.store.Lock()
 	defer a.store.Unlock()
@@ -73,14 +73,25 @@ func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*curren
 		gw = r.Gateway
 
 	} else {
-		// try to get allocated IPs for this given id, if exists, just return error
-		// because duplicate allocation is not allowed in SPEC
+		// try to get allocated IPs for this given id, if exists, it means it has already been allocated
+		// so just return it
 		// https://github.com/containernetworking/cni/blob/master/SPEC.md
 		allocatedIPs := a.store.GetByID(id, ifname)
 		for _, allocatedIP := range allocatedIPs {
 			// check whether the existing IP belong to this range set
 			if _, err := a.rangeset.RangeFor(allocatedIP); err == nil {
-				return nil, fmt.Errorf("%s has been allocated to %s, duplicate allocation is not allowed", allocatedIP.String(), id)
+				r, err := a.rangeset.RangeFor(allocatedIP)
+				if err != nil {
+					return nil, err
+				}
+				return &current.IPConfig{
+					Version: "4",
+					Address: net.IPNet{
+						IP:   allocatedIP,
+						Mask: r.Subnet.Mask,
+					},
+					Gateway: r.Gateway,
+				}, nil
 			}
 		}
 
