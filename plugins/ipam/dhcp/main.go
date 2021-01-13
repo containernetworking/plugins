@@ -43,7 +43,7 @@ func main() {
 		daemonFlags.StringVar(&pidfilePath, "pidfile", "", "optional path to write daemon PID to")
 		daemonFlags.StringVar(&hostPrefix, "hostprefix", "", "optional prefix to host root")
 		daemonFlags.StringVar(&socketPath, "socketpath", "", "optional dhcp server socketpath")
-		daemonFlags.DurationVar(&timeout, "timeout", 5*time.Second, "optional dhcp client timeout duration")
+		daemonFlags.DurationVar(&timeout, "timeout", 10*time.Second, "optional dhcp client timeout duration")
 		daemonFlags.Parse(os.Args[2:])
 
 		if socketPath == "" {
