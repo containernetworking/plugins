@@ -57,6 +57,8 @@ type NetConf struct {
 type subnetEnv struct {
 	nw     *net.IPNet
 	sn     *net.IPNet
+	ip6Nw  *net.IPNet
+	ip6Sn  *net.IPNet
 	mtu    *uint
 	ipmasq *bool
 }
@@ -64,11 +66,11 @@ type subnetEnv struct {
 func (se *subnetEnv) missing() string {
 	m := []string{}
 
-	if se.nw == nil {
-		m = append(m, "FLANNEL_NETWORK")
+	if se.nw == nil && se.ip6Nw == nil {
+		m = append(m, []string{"FLANNEL_NETWORK", "FLANNEL_IPV6_NETWORK"}...)
 	}
-	if se.sn == nil {
-		m = append(m, "FLANNEL_SUBNET")
+	if se.sn == nil && se.ip6Sn == nil {
+		m = append(m, []string{"FLANNEL_SUBNET", "FLANNEL_IPV6_SUBNET"}...)
 	}
 	if se.mtu == nil {
 		m = append(m, "FLANNEL_MTU")
@@ -124,6 +126,18 @@ func loadFlannelSubnetEnv(fn string) (*subnetEnv, error) {
 
 		case "FLANNEL_SUBNET":
 			_, se.sn, err = net.ParseCIDR(parts[1])
+			if err != nil {
+				return nil, err
+			}
+
+		case "FLANNEL_IPV6_NETWORK":
+			_, se.ip6Nw, err = net.ParseCIDR(parts[1])
+			if err != nil {
+				return nil, err
+			}
+
+		case "FLANNEL_IPV6_SUBNET":
+			_, se.ip6Sn, err = net.ParseCIDR(parts[1])
 			if err != nil {
 				return nil, err
 			}
