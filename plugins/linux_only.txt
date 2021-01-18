@@ -11,3 +11,4 @@ plugins/meta/tuning
 plugins/meta/bandwidth
 plugins/meta/firewall
 plugins/meta/vrf
+plugins/meta/isolation
