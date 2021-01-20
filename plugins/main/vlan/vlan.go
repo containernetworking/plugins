@@ -152,7 +152,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// run the IPAM plugin and get back the config to apply
 	r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to execute IPAM delegate: %v", err)
 	}
 
 	// Invoke ipam del if err to avoid ip leak
