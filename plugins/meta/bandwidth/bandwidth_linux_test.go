@@ -936,6 +936,7 @@ var _ = Describe("bandwidth test", func() {
 
 				containerWithTbfRes, _, err = testutils.CmdAdd(containerWithTbfNS.Path(), "dummy", containerWithTbfIFName, []byte(ptpConf), func() error {
 					r, err := invoke.DelegateAdd(context.TODO(), "ptp", []byte(ptpConf), nil)
+					Expect(err).NotTo(HaveOccurred())
 					Expect(r.Print()).To(Succeed())
 
 					return err
@@ -944,6 +945,7 @@ var _ = Describe("bandwidth test", func() {
 
 				containerWithoutTbfRes, _, err = testutils.CmdAdd(containerWithoutTbfNS.Path(), "dummy2", containerWithoutTbfIFName, []byte(ptpConf), func() error {
 					r, err := invoke.DelegateAdd(context.TODO(), "ptp", []byte(ptpConf), nil)
+					Expect(err).NotTo(HaveOccurred())
 					Expect(r.Print()).To(Succeed())
 
 					return err
@@ -1081,6 +1083,7 @@ var _ = Describe("bandwidth test", func() {
 
 				containerWithTbfRes, _, err = testutils.CmdAdd(containerWithTbfNS.Path(), "dummy", containerWithTbfIFName, []byte(ptpConf), func() error {
 					r, err := invoke.DelegateAdd(context.TODO(), "ptp", []byte(ptpConf), nil)
+					Expect(err).NotTo(HaveOccurred())
 					Expect(r.Print()).To(Succeed())
 
 					return err
@@ -1089,6 +1092,7 @@ var _ = Describe("bandwidth test", func() {
 
 				containerWithoutTbfRes, _, err = testutils.CmdAdd(containerWithoutTbfNS.Path(), "dummy2", containerWithoutTbfIFName, []byte(ptpConf), func() error {
 					r, err := invoke.DelegateAdd(context.TODO(), "ptp", []byte(ptpConf), nil)
+					Expect(err).NotTo(HaveOccurred())
 					Expect(r.Print()).To(Succeed())
 
 					return err
