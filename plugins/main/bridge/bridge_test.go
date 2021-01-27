@@ -350,33 +350,40 @@ func checkVlan(vlanId int, bridgeVlanInfo []*nl.BridgeVlanInfo) bool {
 }
 
 type cmdAddDelTester interface {
-	setNS(testNS ns.NetNS, targetNS ns.NetNS)
 	cmdAddTest(tc testCase, dataDir string) (types.Result, error)
 	cmdCheckTest(tc testCase, conf *Net, dataDir string)
 	cmdDelTest(tc testCase, dataDir string)
 }
 
-func testerByVersion(version string) cmdAddDelTester {
-	switch {
-	case strings.HasPrefix(version, "0.4."):
-		return &testerV04x{}
-	case strings.HasPrefix(version, "0.3."):
-		return &testerV03x{}
-	default:
-		return &testerV01xOr02x{}
-	}
-}
-
-type testerV04x struct {
+type testerBase struct {
 	testNS   ns.NetNS
 	targetNS ns.NetNS
 	args     *skel.CmdArgs
 	vethName string
 }
 
-func (tester *testerV04x) setNS(testNS ns.NetNS, targetNS ns.NetNS) {
-	tester.testNS = testNS
-	tester.targetNS = targetNS
+type testerV04x testerBase
+type testerV03x testerBase
+type testerV01xOr02x testerBase
+
+func newTesterByVersion(version string, testNS, targetNS ns.NetNS) cmdAddDelTester {
+	switch {
+	case strings.HasPrefix(version, "0.4."):
+		return &testerV04x{
+			testNS:   testNS,
+			targetNS: targetNS,
+		}
+	case strings.HasPrefix(version, "0.3."):
+		return &testerV03x{
+			testNS:   testNS,
+			targetNS: targetNS,
+		}
+	default:
+		return &testerV01xOr02x{
+			testNS:   testNS,
+			targetNS: targetNS,
+		}
+	}
 }
 
 func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result, error) {
@@ -625,18 +632,6 @@ func (tester *testerV04x) cmdDelTest(tc testCase, dataDir string) {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-type testerV03x struct {
-	testNS   ns.NetNS
-	targetNS ns.NetNS
-	args     *skel.CmdArgs
-	vethName string
-}
-
-func (tester *testerV03x) setNS(testNS ns.NetNS, targetNS ns.NetNS) {
-	tester.testNS = testNS
-	tester.targetNS = targetNS
-}
-
 func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result, error) {
 	// Generate network config and command arguments
 	tester.args = tc.createCmdArgs(tester.targetNS, dataDir)
@@ -861,18 +856,6 @@ func (tester *testerV03x) cmdDelTest(tc testCase, dataDir string) {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-type testerV01xOr02x struct {
-	testNS   ns.NetNS
-	targetNS ns.NetNS
-	args     *skel.CmdArgs
-	vethName string
-}
-
-func (tester *testerV01xOr02x) setNS(testNS ns.NetNS, targetNS ns.NetNS) {
-	tester.testNS = testNS
-	tester.targetNS = targetNS
-}
-
 func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (types.Result, error) {
 	// Generate network config and calculate gateway addresses
 	tester.args = tc.createCmdArgs(tester.targetNS, dataDir)
@@ -997,13 +980,11 @@ func (tester *testerV01xOr02x) cmdDelTest(tc testCase, dataDir string) {
 }
 
 func cmdAddDelTest(testNS ns.NetNS, tc testCase, dataDir string) {
-	// Get a Add/Del tester based on test case version
-	tester := testerByVersion(tc.cniVersion)
-
 	targetNS, err := testutils.NewNS()
 	Expect(err).NotTo(HaveOccurred())
 	defer targetNS.Close()
-	tester.setNS(testNS, targetNS)
+
+	tester := newTesterByVersion(tc.cniVersion, testNS, targetNS)
 
 	// Test IP allocation
 	result, err := tester.cmdAddTest(tc, dataDir)
@@ -1069,13 +1050,11 @@ func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result)
 func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	Expect(tc.cniVersion).To(Equal("0.4.0"))
 
-	// Get a Add/Del tester based on test case version
-	tester := testerByVersion(tc.cniVersion)
-
 	targetNS, err := testutils.NewNS()
 	Expect(err).NotTo(HaveOccurred())
 	defer targetNS.Close()
-	tester.setNS(testNS, targetNS)
+
+	tester := newTesterByVersion(tc.cniVersion, testNS, targetNS)
 
 	// Test IP allocation
 	prevResult, err := tester.cmdAddTest(tc, dataDir)
@@ -1331,11 +1310,14 @@ var _ = Describe("bridge Operations", func() {
 			expGWCIDRs: []string{"10.1.2.1/24"},
 		}
 
-		tester := testerV03x{}
 		targetNS, err := testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 		defer targetNS.Close()
-		tester.setNS(originalNS, targetNS)
+
+		tester := testerV03x{
+			testNS:   originalNS,
+			targetNS: targetNS,
+		}
 		tester.args = tc.createCmdArgs(targetNS, dataDir)
 
 		// Execute cmdDEL on the plugin, expect no errors
