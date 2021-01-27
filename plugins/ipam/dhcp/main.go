@@ -38,11 +38,13 @@ func main() {
 		var pidfilePath string
 		var hostPrefix string
 		var socketPath string
+		var broadcast bool
 		var timeout time.Duration
 		daemonFlags := flag.NewFlagSet("daemon", flag.ExitOnError)
 		daemonFlags.StringVar(&pidfilePath, "pidfile", "", "optional path to write daemon PID to")
 		daemonFlags.StringVar(&hostPrefix, "hostprefix", "", "optional prefix to host root")
 		daemonFlags.StringVar(&socketPath, "socketpath", "", "optional dhcp server socketpath")
+		daemonFlags.BoolVar(&broadcast, "broadcast", false, "broadcast DHCP leases")
 		daemonFlags.DurationVar(&timeout, "timeout", 10*time.Second, "optional dhcp client timeout duration")
 		daemonFlags.Parse(os.Args[2:])
 
@@ -50,7 +52,7 @@ func main() {
 			socketPath = defaultSocketPath
 		}
 
-		if err := runDaemon(pidfilePath, hostPrefix, socketPath, timeout); err != nil {
+		if err := runDaemon(pidfilePath, hostPrefix, socketPath, timeout, broadcast); err != nil {
 			log.Printf(err.Error())
 			os.Exit(1)
 		}

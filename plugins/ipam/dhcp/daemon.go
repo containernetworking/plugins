@@ -43,6 +43,7 @@ type DHCP struct {
 	leases          map[string]*DHCPLease
 	hostNetnsPrefix string
 	clientTimeout   time.Duration
+	broadcast       bool
 }
 
 func newDHCP(clientTimeout time.Duration) *DHCP {
@@ -66,7 +67,7 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 
 	clientID := generateClientID(args.ContainerID, conf.Name, args.IfName)
 	hostNetns := d.hostNetnsPrefix + args.Netns
-	l, err := AcquireLease(clientID, hostNetns, args.IfName, d.clientTimeout)
+	l, err := AcquireLease(clientID, hostNetns, args.IfName, d.clientTimeout, d.broadcast)
 	if err != nil {
 		return err
 	}
@@ -161,7 +162,7 @@ func getListener(socketPath string) (net.Listener, error) {
 
 func runDaemon(
 	pidfilePath, hostPrefix, socketPath string,
-	dhcpClientTimeout time.Duration,
+	dhcpClientTimeout time.Duration, broadcast bool,
 ) error {
 	// since other goroutines (on separate threads) will change namespaces,
 	// ensure the RPC server does not get scheduled onto those
@@ -184,6 +185,7 @@ func runDaemon(
 
 	dhcp := newDHCP(dhcpClientTimeout)
 	dhcp.hostNetnsPrefix = hostPrefix
+	dhcp.broadcast = broadcast
 	rpc.Register(dhcp)
 	rpc.HandleHTTP()
 	http.Serve(l, nil)
