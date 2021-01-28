@@ -15,7 +15,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -25,7 +27,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	current "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -208,6 +210,11 @@ var _ = Describe("DHCP Operations", func() {
 		dhcpPluginPath, err := exec.LookPath("dhcp")
 		Expect(err).NotTo(HaveOccurred())
 		clientCmd = exec.Command(dhcpPluginPath, "daemon", "-socketpath", socketPath)
+
+		// copy dhcp client's stdout/stderr to test stdout
+		clientCmd.Stdout = os.Stdout
+		clientCmd.Stderr = os.Stderr
+
 		err = clientCmd.Start()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(clientCmd.Process).NotTo(BeNil())
@@ -226,118 +233,127 @@ var _ = Describe("DHCP Operations", func() {
 		clientCmd.Wait()
 
 		Expect(originalNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
 		Expect(targetNS.Close()).To(Succeed())
-		defer os.RemoveAll(tmpDir)
+		Expect(testutils.UnmountNS(targetNS)).To(Succeed())
+
+		Expect(os.RemoveAll(tmpDir)).To(Succeed())
 	})
 
-	It("configures and deconfigures a link with ADD/DEL", func() {
-		conf := fmt.Sprintf(`{
-    "cniVersion": "0.3.1",
-    "name": "mynet",
-    "type": "ipvlan",
-    "ipam": {
-        "type": "dhcp",
-	"daemonSocketPath": "%s"
-    }
-}`, socketPath)
+	for _, ver := range testutils.AllSpecVersions {
+		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
+		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
+		ver := ver
 
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNS.Path(),
-			IfName:      contVethName,
-			StdinData:   []byte(conf),
-		}
+		It(fmt.Sprintf("[%s] configures and deconfigures a link with ADD/DEL", ver), func() {
+			conf := fmt.Sprintf(`{
+			    "cniVersion": "%s",
+			    "name": "mynet",
+			    "type": "ipvlan",
+			    "ipam": {
+				"type": "dhcp",
+				"daemonSocketPath": "%s"
+			    }
+			}`, ver, socketPath)
 
-		var addResult *current.Result
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNS.Path(),
+				IfName:      contVethName,
+				StdinData:   []byte(conf),
+			}
 
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			addResult, err = current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(addResult.IPs)).To(Equal(1))
-			Expect(addResult.IPs[0].Address.String()).To(Equal("192.168.1.5/24"))
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		err = originalNS.Do(func(ns.NetNS) error {
-			return testutils.CmdDelWithArgs(args, func() error {
-				return cmdDel(args)
-			})
-		})
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("correctly handles multiple DELs for the same container", func() {
-		conf := fmt.Sprintf(`{
-    "cniVersion": "0.3.1",
-    "name": "mynet",
-    "type": "ipvlan",
-    "ipam": {
-        "type": "dhcp",
-	"daemonSocketPath": "%s"
-    }
-}`, socketPath)
-
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNS.Path(),
-			IfName:      contVethName,
-			StdinData:   []byte(conf),
-		}
-
-		var addResult *current.Result
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			addResult, err = current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(addResult.IPs)).To(Equal(1))
-			Expect(addResult.IPs[0].Address.String()).To(Equal("192.168.1.5/24"))
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		wg := sync.WaitGroup{}
-		wg.Add(3)
-		started := sync.WaitGroup{}
-		started.Add(3)
-		for i := 0; i < 3; i++ {
-			go func() {
+			var addResult *types100.Result
+			err := originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
-				// Wait until all goroutines are running
-				started.Done()
-				started.Wait()
-
-				err = originalNS.Do(func(ns.NetNS) error {
-					return testutils.CmdDelWithArgs(args, func() error {
-						return cmdDel(args)
-					})
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
 				})
 				Expect(err).NotTo(HaveOccurred())
-				wg.Done()
-			}()
-		}
-		wg.Wait()
 
-		err = originalNS.Do(func(ns.NetNS) error {
-			return testutils.CmdDelWithArgs(args, func() error {
-				return cmdDel(args)
+				addResult, err = types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(addResult.IPs)).To(Equal(1))
+				Expect(addResult.IPs[0].Address.String()).To(Equal("192.168.1.5/24"))
+				return nil
 			})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = originalNS.Do(func(ns.NetNS) error {
+				return testutils.CmdDelWithArgs(args, func() error {
+					return cmdDel(args)
+				})
+			})
+			Expect(err).NotTo(HaveOccurred())
 		})
-		Expect(err).NotTo(HaveOccurred())
-	})
+
+		It(fmt.Sprintf("[%s] correctly handles multiple DELs for the same container", ver), func() {
+			conf := fmt.Sprintf(`{
+			    "cniVersion": "%s",
+			    "name": "mynet",
+			    "type": "ipvlan",
+			    "ipam": {
+				"type": "dhcp",
+				"daemonSocketPath": "%s"
+			    }
+			}`, ver, socketPath)
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNS.Path(),
+				IfName:      contVethName,
+				StdinData:   []byte(conf),
+			}
+
+			var addResult *types100.Result
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				addResult, err = types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(addResult.IPs)).To(Equal(1))
+				Expect(addResult.IPs[0].Address.String()).To(Equal("192.168.1.5/24"))
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			wg := sync.WaitGroup{}
+			wg.Add(3)
+			started := sync.WaitGroup{}
+			started.Add(3)
+			for i := 0; i < 3; i++ {
+				go func() {
+					defer GinkgoRecover()
+
+					// Wait until all goroutines are running
+					started.Done()
+					started.Wait()
+
+					err = originalNS.Do(func(ns.NetNS) error {
+						return testutils.CmdDelWithArgs(args, func() error {
+							return cmdDel(args)
+						})
+					})
+					Expect(err).NotTo(HaveOccurred())
+					wg.Done()
+				}()
+			}
+			wg.Wait()
+
+			err = originalNS.Do(func(ns.NetNS) error {
+				return testutils.CmdDelWithArgs(args, func() error {
+					return cmdDel(args)
+				})
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+	}
 })
 
 const (
@@ -508,7 +524,19 @@ var _ = Describe("DHCP Lease Unavailable Operations", func() {
 		// Start the DHCP client daemon
 		dhcpPluginPath, err := exec.LookPath("dhcp")
 		Expect(err).NotTo(HaveOccurred())
-		clientCmd = exec.Command(dhcpPluginPath, "daemon", "-socketpath", socketPath)
+		// Use very short timeouts for lease-unavailable operations because
+		// the same test is run many times, and the delays will exceed the
+		// `go test` timeout with default delays. Since our DHCP server
+		// and client daemon are local processes anyway, we can depend on
+		// them to respond very quickly.
+		clientCmd = exec.Command(dhcpPluginPath, "daemon", "-socketpath", socketPath, "-timeout", "2s", "-resendmax", "8s")
+
+		// copy dhcp client's stdout/stderr to test stdout
+		var b bytes.Buffer
+		mw := io.MultiWriter(os.Stdout, &b)
+		clientCmd.Stdout = mw
+		clientCmd.Stderr = mw
+
 		err = clientCmd.Start()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(clientCmd.Process).NotTo(BeNil())
@@ -527,92 +555,101 @@ var _ = Describe("DHCP Lease Unavailable Operations", func() {
 		clientCmd.Wait()
 
 		Expect(originalNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
 		Expect(targetNS.Close()).To(Succeed())
-		defer os.RemoveAll(tmpDir)
+		Expect(testutils.UnmountNS(targetNS)).To(Succeed())
+
+		Expect(os.RemoveAll(tmpDir)).To(Succeed())
 	})
 
-	It("Configures multiple links with multiple ADD with second lease unavailable", func() {
-		conf := fmt.Sprintf(`{
-	    "cniVersion": "0.3.1",
-	    "name": "mynet",
-	    "type": "bridge",
-	    "bridge": "%s",
-	    "ipam": {
-	        "type": "dhcp",
-		"daemonSocketPath": "%s"
-	    }
-	}`, hostBridgeName, socketPath)
+	for _, ver := range testutils.AllSpecVersions {
+		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
+		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
+		ver := ver
 
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNS.Path(),
-			IfName:      contVethName0,
-			StdinData:   []byte(conf),
-		}
+		It(fmt.Sprintf("[%s] configures multiple links with multiple ADD with second lease unavailable", ver), func() {
+			conf := fmt.Sprintf(`{
+			    "cniVersion": "%s",
+			    "name": "mynet",
+			    "type": "bridge",
+			    "bridge": "%s",
+			    "ipam": {
+				"type": "dhcp",
+				"daemonSocketPath": "%s"
+			    }
+			}`, ver, hostBridgeName, socketPath)
 
-		var addResult *current.Result
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNS.Path(),
+				IfName:      contVethName0,
+				StdinData:   []byte(conf),
+			}
 
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
+			var addResult *types100.Result
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				addResult, err = types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(addResult.IPs)).To(Equal(1))
+				Expect(addResult.IPs[0].Address.String()).To(Equal("192.168.1.5/24"))
+				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			addResult, err = current.GetResult(r)
+			args = &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNS.Path(),
+				IfName:      contVethName1,
+				StdinData:   []byte(conf),
+			}
+
+			err = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				_, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).To(HaveOccurred())
+				println(err.Error())
+				Expect(err.Error()).To(Equal("error calling DHCP.Allocate: no more tries"))
+				return nil
+			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(addResult.IPs)).To(Equal(1))
-			Expect(addResult.IPs[0].Address.String()).To(Equal("192.168.1.5/24"))
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
 
-		args = &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNS.Path(),
-			IfName:      contVethName1,
-			StdinData:   []byte(conf),
-		}
+			args = &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNS.Path(),
+				IfName:      contVethName1,
+				StdinData:   []byte(conf),
+			}
 
-		err = originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			_, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
+			err = originalNS.Do(func(ns.NetNS) error {
+				return testutils.CmdDelWithArgs(args, func() error {
+					return cmdDel(args)
+				})
 			})
-			Expect(err).To(HaveOccurred())
-			println(err.Error())
-			Expect(err.Error()).To(Equal("error calling DHCP.Allocate: no more tries"))
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
-		args = &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNS.Path(),
-			IfName:      contVethName1,
-			StdinData:   []byte(conf),
-		}
+			args = &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNS.Path(),
+				IfName:      contVethName0,
+				StdinData:   []byte(conf),
+			}
 
-		err = originalNS.Do(func(ns.NetNS) error {
-			return testutils.CmdDelWithArgs(args, func() error {
-				return cmdDel(args)
+			err = originalNS.Do(func(ns.NetNS) error {
+				return testutils.CmdDelWithArgs(args, func() error {
+					return cmdDel(args)
+				})
 			})
+			Expect(err).NotTo(HaveOccurred())
 		})
-		Expect(err).NotTo(HaveOccurred())
-
-		args = &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNS.Path(),
-			IfName:      contVethName0,
-			StdinData:   []byte(conf),
-		}
-
-		err = originalNS.Do(func(ns.NetNS) error {
-			return testutils.CmdDelWithArgs(args, func() error {
-				return cmdDel(args)
-			})
-		})
-		Expect(err).NotTo(HaveOccurred())
-	})
+	}
 })
