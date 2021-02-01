@@ -164,16 +164,12 @@ func (a *IPAllocator) GetIter() (*RangeIter, error) {
 		startFromLastReservedIP = a.rangeset.Contains(lastReservedIP)
 	}
 
-	// Find the range in the set with this IP
+	// lastReservedIP exist, start with lastReservedIP's next ip.
 	if startFromLastReservedIP {
 		for i, r := range *a.rangeset {
 			if r.Contains(lastReservedIP) {
-				iter.rangeIdx = i
-				iter.startRange = i
-
-				// We advance the cursor on every Next(), so the first call
-				// to next() will return lastReservedIP + 1
-				iter.cur = lastReservedIP
+				iter.rangeIdx, iter.startIP = nextIPInRangeSet(*iter.rangeset, i, lastReservedIP)
+				iter.startRange = iter.rangeIdx
 				break
 			}
 		}
@@ -190,11 +186,9 @@ func (a *IPAllocator) GetIter() (*RangeIter, error) {
 func (i *RangeIter) Next() (*net.IPNet, net.IP) {
 	r := (*i.rangeset)[i.rangeIdx]
 
-	// If this is the first time iterating and we're not starting in the middle
-	// of the range, then start at rangeStart, which is inclusive
+	// i.cur equals nil means the first time iterating, start at startIP, which is inclusive.
 	if i.cur == nil {
-		i.cur = r.RangeStart
-		i.startIP = i.cur
+		i.cur = i.startIP
 		if i.cur.Equal(r.Gateway) {
 			return i.Next()
 		}
@@ -203,19 +197,10 @@ func (i *RangeIter) Next() (*net.IPNet, net.IP) {
 
 	// If we've reached the end of this range, we need to advance the range
 	// RangeEnd is inclusive as well
-	if i.cur.Equal(r.RangeEnd) {
-		i.rangeIdx += 1
-		i.rangeIdx %= len(*i.rangeset)
-		r = (*i.rangeset)[i.rangeIdx]
+	i.rangeIdx, i.cur = nextIPInRangeSet(*i.rangeset, i.rangeIdx, i.cur)
+	r = (*i.rangeset)[i.rangeIdx]
 
-		i.cur = r.RangeStart
-	} else {
-		i.cur = ip.NextIP(i.cur)
-	}
-
-	if i.startIP == nil {
-		i.startIP = i.cur
-	} else if i.rangeIdx == i.startRange && i.cur.Equal(i.startIP) {
+	if i.rangeIdx == i.startRange && i.cur.Equal(i.startIP) {
 		// IF we've looped back to where we started, give up
 		return nil, nil
 	}
@@ -225,4 +210,16 @@ func (i *RangeIter) Next() (*net.IPNet, net.IP) {
 	}
 
 	return &net.IPNet{IP: i.cur, Mask: r.Subnet.Mask}, r.Gateway
+}
+
+// nextIPInRangeSet returns curIP's next ip and its index in rangeSet.
+func nextIPInRangeSet(ranges RangeSet, idx int, curIP net.IP) (int, net.IP) {
+	var nextIP net.IP
+	if ranges[idx].RangeEnd.Equal(curIP) {
+		idx = (idx + 1) % len(ranges)
+		nextIP = ranges[idx].RangeStart
+	} else {
+		nextIP = ip.NextIP(curIP)
+	}
+	return idx, nextIP
 }

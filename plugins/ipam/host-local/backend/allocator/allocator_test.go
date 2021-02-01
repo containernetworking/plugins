@@ -49,6 +49,23 @@ func mkalloc() IPAllocator {
 	return alloc
 }
 
+func mkMultiRangeAlloc() IPAllocator {
+	p := RangeSet{
+		Range{RangeStart: net.IP{192, 168, 1, 0}, RangeEnd: net.IP{192, 168, 1, 3}, Subnet: mustSubnet("192.168.1.1/30")},
+		Range{RangeStart: net.IP{192, 168, 2, 0}, RangeEnd: net.IP{192, 168, 2, 3}, Subnet: mustSubnet("192.168.2.1/30")},
+	}
+	p.Canonicalize()
+	store := fakestore.NewFakeStore(map[string]string{}, map[string]net.IP{})
+
+	alloc := IPAllocator{
+		rangeset: &p,
+		store:    store,
+		rangeID:  "rangeid",
+	}
+
+	return alloc
+}
+
 func (t AllocatorTestCase) run(idx int) (*current.IPConfig, error) {
 	fmt.Fprintln(GinkgoWriter, "Index:", idx)
 	p := RangeSet{}
@@ -318,6 +335,58 @@ var _ = Describe("host-local ip allocator", func() {
 				Expect(err).NotTo(BeNil())
 				Expect(err.Error()).To(HavePrefix("no IP addresses available in range set"))
 			}
+		})
+	})
+
+	Context("multi-range of a rangeSet", func() {
+		It("without lastReservedIP", func() {
+			a := mkMultiRangeAlloc()
+			r, _ := a.GetIter()
+			Expect(r.startRange).To(Equal(0))
+			Expect(r.startIP).To(Equal(net.IP{192, 168, 1, 0}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 0}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 1}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 2}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 3}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 2, 0}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 2, 1}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 2, 2}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 2, 3}))
+			Expect(r.nextip()).To(BeNil())
+		})
+
+		It("lastReservedIP is middle of range", func() {
+			a := mkMultiRangeAlloc()
+			a.store.Reserve("ID", "eth0", net.IP{192, 168, 1, 1}, a.rangeID)
+			r, _ := a.GetIter()
+			Expect(r.startRange).To(Equal(0))
+			Expect(r.startIP).To(Equal(net.IP{192, 168, 1, 2}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 2}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 3}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 2, 0}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 2, 1}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 2, 2}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 2, 3}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 0}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 1}))
+			Expect(r.nextip()).To(BeNil())
+		})
+
+		It("lastReservedIP is endIP of range", func() {
+			a := mkMultiRangeAlloc()
+			a.store.Reserve("ID", "eth0", net.IP{192, 168, 1, 3}, a.rangeID)
+			r, _ := a.GetIter()
+			Expect(r.startRange).To(Equal(1))
+			Expect(r.startIP).To(Equal(net.IP{192, 168, 2, 0}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 2, 0}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 2, 1}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 2, 2}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 2, 3}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 0}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 1}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 2}))
+			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 3}))
+			Expect(r.nextip()).To(BeNil())
 		})
 	})
 })
