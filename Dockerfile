@@ -7,7 +7,7 @@ WORKDIR /script
 RUN /script/test_install_cni_plugins.sh
 
 # In this container we build the plug-ins
-FROM golang:1.11 as build
+FROM golang:1.15 as build
 
 ENV BRANCH_OR_TAG=master
 
