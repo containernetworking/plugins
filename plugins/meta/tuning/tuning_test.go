@@ -21,7 +21,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	current "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -75,7 +75,7 @@ func buildOneConfig(name, cniVersion string, orig *TuningConf, prevResult types.
 }
 
 var _ = Describe("tuning plugin", func() {
-	var originalNS ns.NetNS
+	var originalNS, targetNS ns.NetNS
 	const IFNAME string = "dummy0"
 	var beforeConf configToRestore
 
@@ -83,6 +83,9 @@ var _ = Describe("tuning plugin", func() {
 		// Create a new NetNS so we don't modify the host
 		var err error
 		originalNS, err = testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+
+		targetNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
 		err = originalNS.Do(func(ns.NetNS) error {
@@ -108,976 +111,736 @@ var _ = Describe("tuning plugin", func() {
 
 	AfterEach(func() {
 		Expect(originalNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
+		Expect(targetNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(targetNS)).To(Succeed())
 	})
 
-	It("passes prevResult through unchanged", func() {
-		conf := []byte(`{
-	"name": "test",
-	"type": "tuning",
-	"cniVersion": "0.3.1",
-	"sysctl": {
-		"net.ipv4.conf.all.log_martians": "1"
-	},
-	"prevResult": {
-		"interfaces": [
-			{"name": "dummy0", "sandbox":"netns"}
-		],
-		"ips": [
-			{
-				"version": "4",
-				"address": "10.0.0.2/24",
-				"gateway": "10.0.0.1",
-				"interface": 0
+	for _, ver := range []string{"0.3.0", "0.3.1", "0.4.0", "1.0.0"} {
+		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
+		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
+		ver := ver
+
+		It(fmt.Sprintf("[%s] passes prevResult through unchanged", ver), func() {
+			conf := []byte(fmt.Sprintf(`{
+				"name": "test",
+				"type": "tuning",
+				"cniVersion": "%s",
+				"sysctl": {
+					"net.ipv4.conf.all.log_martians": "1"
+				},
+				"prevResult": {
+					"interfaces": [
+						{"name": "dummy0", "sandbox":"netns"}
+					],
+					"ips": [
+						{
+							"version": "4",
+							"address": "10.0.0.2/24",
+							"gateway": "10.0.0.1",
+							"interface": 0
+						}
+					]
+				}
+			}`, ver))
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   conf,
 			}
-		]
-	}
-}`)
 
-		targetNs, err := testutils.NewNS()
-		Expect(err).NotTo(HaveOccurred())
-		defer targetNs.Close()
+			beforeConf = configToRestore{}
 
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNs.Path(),
-			IfName:      IFNAME,
-			StdinData:   conf,
-		}
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-		beforeConf = configToRestore{}
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
 
-		err = originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+				result, err := types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
 
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
+				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+				Expect("/tmp/tuning-test/dummy_dummy0.json").ShouldNot(BeAnExistingFile())
+
+				err = testutils.CmdDel(originalNS.Path(),
+					args.ContainerID, "", func() error { return cmdDel(args) })
+				Expect(err).NotTo(HaveOccurred())
+
+				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
-
-			Expect("/tmp/tuning-test/dummy_dummy0.json").ShouldNot(BeAnExistingFile())
-
-			err = testutils.CmdDel(originalNS.Path(),
-				args.ContainerID, "", func() error { return cmdDel(args) })
-			Expect(err).NotTo(HaveOccurred())
-
-			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
-	})
 
-	It("configures and deconfigures promiscuous mode with ADD/DEL", func() {
-		conf := []byte(`{
-	"name": "test",
-	"type": "iplink",
-	"cniVersion": "0.3.1",
-	"promisc": true,
-	"prevResult": {
-		"interfaces": [
-			{"name": "dummy0", "sandbox":"netns"}
-		],
-		"ips": [
-			{
-				"version": "4",
-				"address": "10.0.0.2/24",
-				"gateway": "10.0.0.1",
-				"interface": 0
+		It(fmt.Sprintf("[%s] configures and deconfigures promiscuous mode with ADD/DEL", ver), func() {
+			conf := []byte(fmt.Sprintf(`{
+				"name": "test",
+				"type": "iplink",
+				"cniVersion": "%s",
+				"promisc": true,
+				"prevResult": {
+					"interfaces": [
+						{"name": "dummy0", "sandbox":"netns"}
+					],
+					"ips": [
+						{
+							"version": "4",
+							"address": "10.0.0.2/24",
+							"gateway": "10.0.0.1",
+							"interface": 0
+						}
+					]
+				}
+			}`, ver))
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       originalNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   conf,
 			}
-		]
-	}
-}`)
 
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       originalNS.Path(),
-			IfName:      IFNAME,
-			StdinData:   conf,
-		}
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
 
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
+				result, err := types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+				link, err := netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().Promisc).To(Equal(1))
+
+				if testutils.SpecVersionHasCHECK(ver) {
+					n := &TuningConf{}
+					err = json.Unmarshal([]byte(conf), &n)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					Expect(err).NotTo(HaveOccurred())
+
+					args.StdinData = confString
+
+					err = testutils.CmdCheckWithArgs(args, func() error {
+						return cmdCheck(args)
+					})
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				err = testutils.CmdDel(originalNS.Path(),
+					args.ContainerID, "", func() error { return cmdDel(args) })
+				Expect(err).NotTo(HaveOccurred())
+
+				link, err = netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().Promisc != 0).To(Equal(*beforeConf.Promisc))
+
+				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Promisc).To(Equal(1))
-
-			err = testutils.CmdDel(originalNS.Path(),
-				args.ContainerID, "", func() error { return cmdDel(args) })
-			Expect(err).NotTo(HaveOccurred())
-
-			link, err = netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Promisc != 0).To(Equal(*beforeConf.Promisc))
-
-			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
-	})
 
-	It("configures and deconfigures promiscuous mode from args with ADD/DEL", func() {
-		conf := []byte(`{
-	"name": "test",
-	"type": "iplink",
-	"cniVersion": "0.3.1",
-        "args": {
-            "cni": {
-	        "promisc": true
-            }
-        },
-	"prevResult": {
-		"interfaces": [
-			{"name": "dummy0", "sandbox":"netns"}
-		],
-		"ips": [
-			{
-				"version": "4",
-				"address": "10.0.0.2/24",
-				"gateway": "10.0.0.1",
-				"interface": 0
+		It(fmt.Sprintf("[%s] configures and deconfigures promiscuous mode from args with ADD/DEL", ver), func() {
+			conf := []byte(fmt.Sprintf(`{
+				"name": "test",
+				"type": "iplink",
+				"cniVersion": "%s",
+				"args": {
+				    "cni": {
+					"promisc": true
+				    }
+				},
+				"prevResult": {
+					"interfaces": [
+						{"name": "dummy0", "sandbox":"netns"}
+					],
+					"ips": [
+						{
+							"version": "4",
+							"address": "10.0.0.2/24",
+							"gateway": "10.0.0.1",
+							"interface": 0
+						}
+					]
+				}
+			}`, ver))
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       originalNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   conf,
 			}
-		]
-	}
-}`)
 
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       originalNS.Path(),
-			IfName:      IFNAME,
-			StdinData:   conf,
-		}
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
 
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
+				result, err := types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+				link, err := netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().Promisc).To(Equal(1))
+
+				err = testutils.CmdDel(originalNS.Path(),
+					args.ContainerID, "", func() error { return cmdDel(args) })
+				Expect(err).NotTo(HaveOccurred())
+
+				link, err = netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().Promisc != 0).To(Equal(*beforeConf.Promisc))
+
+				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Promisc).To(Equal(1))
-
-			err = testutils.CmdDel(originalNS.Path(),
-				args.ContainerID, "", func() error { return cmdDel(args) })
-			Expect(err).NotTo(HaveOccurred())
-
-			link, err = netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Promisc != 0).To(Equal(*beforeConf.Promisc))
-
-			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
-	})
 
-	It("configures and deconfigures mtu with ADD/DEL", func() {
-		conf := []byte(`{
-	"name": "test",
-	"type": "iplink",
-	"cniVersion": "0.3.1",
-	"mtu": 1454,
-	"prevResult": {
-		"interfaces": [
-			{"name": "dummy0", "sandbox":"netns"}
-		],
-		"ips": [
-			{
-				"version": "4",
-				"address": "10.0.0.2/24",
-				"gateway": "10.0.0.1",
-				"interface": 0
+		It(fmt.Sprintf("[%s] configures and deconfigures mtu with ADD/DEL", ver), func() {
+			conf := []byte(fmt.Sprintf(`{
+				"name": "test",
+				"type": "iplink",
+				"cniVersion": "%s",
+				"mtu": 1454,
+				"prevResult": {
+					"interfaces": [
+						{"name": "dummy0", "sandbox":"netns"}
+					],
+					"ips": [
+						{
+							"version": "4",
+							"address": "10.0.0.2/24",
+							"gateway": "10.0.0.1",
+							"interface": 0
+						}
+					]
+				}
+			}`, ver))
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       originalNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   conf,
 			}
-		]
-	}
-}`)
 
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       originalNS.Path(),
-			IfName:      IFNAME,
-			StdinData:   conf,
-		}
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
 
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
+				result, err := types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+				link, err := netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().MTU).To(Equal(1454))
+
+				if testutils.SpecVersionHasCHECK(ver) {
+					n := &TuningConf{}
+					err = json.Unmarshal([]byte(conf), &n)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					Expect(err).NotTo(HaveOccurred())
+
+					args.StdinData = confString
+
+					err = testutils.CmdCheckWithArgs(args, func() error {
+						return cmdCheck(args)
+					})
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				err = testutils.CmdDel(originalNS.Path(),
+					args.ContainerID, "", func() error { return cmdDel(args) })
+				Expect(err).NotTo(HaveOccurred())
+
+				link, err = netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().MTU).To(Equal(beforeConf.Mtu))
+
+				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().MTU).To(Equal(1454))
-
-			err = testutils.CmdDel(originalNS.Path(),
-				args.ContainerID, "", func() error { return cmdDel(args) })
-			Expect(err).NotTo(HaveOccurred())
-
-			link, err = netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().MTU).To(Equal(beforeConf.Mtu))
-
-			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
-	})
 
-	It("configures and deconfigures mtu from args with ADD/DEL", func() {
-		conf := []byte(`{
-	"name": "test",
-	"type": "iplink",
-	"cniVersion": "0.3.1",
-        "args": {
-            "cni": {
-                "mtu": 1454
-            }
-        },
-	"prevResult": {
-		"interfaces": [
-			{"name": "dummy0", "sandbox":"netns"}
-		],
-		"ips": [
-			{
-				"version": "4",
-				"address": "10.0.0.2/24",
-				"gateway": "10.0.0.1",
-				"interface": 0
+		It(fmt.Sprintf("[%s] configures and deconfigures mtu from args with ADD/DEL", ver), func() {
+			conf := []byte(fmt.Sprintf(`{
+				"name": "test",
+				"type": "iplink",
+				"cniVersion": "%s",
+				"args": {
+				    "cni": {
+					"mtu": 1454
+				    }
+				},
+				"prevResult": {
+					"interfaces": [
+						{"name": "dummy0", "sandbox":"netns"}
+					],
+					"ips": [
+						{
+							"version": "4",
+							"address": "10.0.0.2/24",
+							"gateway": "10.0.0.1",
+							"interface": 0
+						}
+					]
+				}
+			}`, ver))
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       originalNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   conf,
 			}
-		]
-	}
-}`)
 
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       originalNS.Path(),
-			IfName:      IFNAME,
-			StdinData:   conf,
-		}
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
 
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
+				result, err := types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+				link, err := netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().MTU).To(Equal(1454))
+
+				err = testutils.CmdDel(originalNS.Path(),
+					args.ContainerID, "", func() error { return cmdDel(args) })
+				Expect(err).NotTo(HaveOccurred())
+
+				link, err = netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().MTU).To(Equal(beforeConf.Mtu))
+
+				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().MTU).To(Equal(1454))
-
-			err = testutils.CmdDel(originalNS.Path(),
-				args.ContainerID, "", func() error { return cmdDel(args) })
-			Expect(err).NotTo(HaveOccurred())
-
-			link, err = netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().MTU).To(Equal(beforeConf.Mtu))
-
-			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
-	})
 
-	It("configures and deconfigures mac address (from conf file) with ADD/DEL", func() {
-		conf := []byte(`{
-	"name": "test",
-	"type": "iplink",
-	"cniVersion": "0.3.1",
-	"mac": "c2:11:22:33:44:55",
-	"prevResult": {
-		"interfaces": [
-			{"name": "dummy0", "sandbox":"netns"}
-		],
-		"ips": [
-			{
-				"version": "4",
-				"address": "10.0.0.2/24",
-				"gateway": "10.0.0.1",
-				"interface": 0
+		It(fmt.Sprintf("[%s] configures and deconfigures mac address (from conf file) with ADD/DEL", ver), func() {
+			conf := []byte(fmt.Sprintf(`{
+				"name": "test",
+				"type": "iplink",
+				"cniVersion": "%s",
+				"mac": "c2:11:22:33:44:55",
+				"prevResult": {
+					"interfaces": [
+						{"name": "dummy0", "sandbox":"netns"}
+					],
+					"ips": [
+						{
+							"version": "4",
+							"address": "10.0.0.2/24",
+							"gateway": "10.0.0.1",
+							"interface": 0
+						}
+					]
+				}
+			}`, ver))
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       originalNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   conf,
 			}
-		]
-	}
-}`)
 
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       originalNS.Path(),
-			IfName:      IFNAME,
-			StdinData:   conf,
-		}
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
 
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
+				result, err := types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+				link, err := netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				hw, err := net.ParseMAC("c2:11:22:33:44:55")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().HardwareAddr).To(Equal(hw))
+
+				if testutils.SpecVersionHasCHECK(ver) {
+					n := &TuningConf{}
+					err = json.Unmarshal([]byte(conf), &n)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					Expect(err).NotTo(HaveOccurred())
+
+					args.StdinData = confString
+
+					err = testutils.CmdCheckWithArgs(args, func() error {
+						return cmdCheck(args)
+					})
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				err = testutils.CmdDel(originalNS.Path(),
+					args.ContainerID, "", func() error { return cmdDel(args) })
+				Expect(err).NotTo(HaveOccurred())
+
+				link, err = netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
+
+				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			hw, err := net.ParseMAC("c2:11:22:33:44:55")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr).To(Equal(hw))
-
-			err = testutils.CmdDel(originalNS.Path(),
-				args.ContainerID, "", func() error { return cmdDel(args) })
-			Expect(err).NotTo(HaveOccurred())
-
-			link, err = netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
-
-			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
-	})
 
-	It("configures and deconfigures mac address (from args) with ADD/DEL", func() {
-		conf := []byte(`{
-	"name": "test",
-	"type": "iplink",
-	"cniVersion": "0.3.1",
-        "args": {
-            "cni": {
-                "mac": "c2:11:22:33:44:55"
-            }
-        },
-	"prevResult": {
-		"interfaces": [
-			{"name": "dummy0", "sandbox":"netns"}
-		],
-		"ips": [
-			{
-				"version": "4",
-				"address": "10.0.0.2/24",
-				"gateway": "10.0.0.1",
-				"interface": 0
+		It(fmt.Sprintf("[%s] configures and deconfigures mac address (from args) with ADD/DEL", ver), func() {
+			conf := []byte(fmt.Sprintf(`{
+				"name": "test",
+				"type": "iplink",
+				"cniVersion": "%s",
+				"args": {
+				    "cni": {
+					"mac": "c2:11:22:33:44:55"
+				    }
+				},
+				"prevResult": {
+					"interfaces": [
+						{"name": "dummy0", "sandbox":"netns"}
+					],
+					"ips": [
+						{
+							"version": "4",
+							"address": "10.0.0.2/24",
+							"gateway": "10.0.0.1",
+							"interface": 0
+						}
+					]
+				}
+			}`, ver))
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       originalNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   conf,
 			}
-		]
-	}
-}`)
 
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       originalNS.Path(),
-			IfName:      IFNAME,
-			StdinData:   conf,
-		}
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
 
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
+				result, err := types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+				link, err := netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				hw, err := net.ParseMAC("c2:11:22:33:44:55")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().HardwareAddr).To(Equal(hw))
+
+				err = testutils.CmdDel(originalNS.Path(),
+					args.ContainerID, "", func() error { return cmdDel(args) })
+				Expect(err).NotTo(HaveOccurred())
+
+				link, err = netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
+
+				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			hw, err := net.ParseMAC("c2:11:22:33:44:55")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr).To(Equal(hw))
-
-			err = testutils.CmdDel(originalNS.Path(),
-				args.ContainerID, "", func() error { return cmdDel(args) })
-			Expect(err).NotTo(HaveOccurred())
-
-			link, err = netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
-
-			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
-	})
 
-	It("configures and deconfigures mac address (from CNI_ARGS) with ADD/DEL", func() {
-		conf := []byte(`{
-	"name": "test",
-	"type": "iplink",
-	"cniVersion": "0.3.1",
-	"prevResult": {
-		"interfaces": [
-			{"name": "dummy0", "sandbox":"netns"}
-		],
-		"ips": [
-			{
-				"version": "4",
-				"address": "10.0.0.2/24",
-				"gateway": "10.0.0.1",
-				"interface": 0
+		It(fmt.Sprintf("[%s] configures and deconfigures mac address (from CNI_ARGS) with ADD/DEL", ver), func() {
+			conf := []byte(fmt.Sprintf(`{
+				"name": "test",
+				"type": "iplink",
+				"cniVersion": "%s",
+				"prevResult": {
+					"interfaces": [
+						{"name": "dummy0", "sandbox":"netns"}
+					],
+					"ips": [
+						{
+							"version": "4",
+							"address": "10.0.0.2/24",
+							"gateway": "10.0.0.1",
+							"interface": 0
+						}
+					]
+				}
+			}`, ver))
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       originalNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   conf,
+				Args:        "IgnoreUnknown=true;MAC=c2:11:22:33:44:66",
 			}
-		]
-	}
-}`)
 
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       originalNS.Path(),
-			IfName:      IFNAME,
-			StdinData:   conf,
-			Args:        "IgnoreUnknown=true;MAC=c2:11:22:33:44:66",
-		}
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
 
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
+				result, err := types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+				link, err := netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				hw, err := net.ParseMAC("c2:11:22:33:44:66")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().HardwareAddr).To(Equal(hw))
+
+				if testutils.SpecVersionHasCHECK(ver) {
+					n := &TuningConf{}
+					err = json.Unmarshal([]byte(conf), &n)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					Expect(err).NotTo(HaveOccurred())
+
+					args.StdinData = confString
+
+					err = testutils.CmdCheckWithArgs(args, func() error {
+						return cmdCheck(args)
+					})
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				err = testutils.CmdDel(originalNS.Path(),
+					args.ContainerID, "", func() error { return cmdDel(args) })
+				Expect(err).NotTo(HaveOccurred())
+
+				link, err = netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
+
+				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			hw, err := net.ParseMAC("c2:11:22:33:44:66")
-			Expect(err).NotTo(HaveOccurred())
-			fmt.Printf("%v, %v\n", link.Attrs().HardwareAddr, hw)
-			Expect(link.Attrs().HardwareAddr).To(Equal(hw))
-
-			err = testutils.CmdDel(originalNS.Path(),
-				args.ContainerID, "", func() error { return cmdDel(args) })
-			Expect(err).NotTo(HaveOccurred())
-
-			link, err = netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
-
-			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
-	})
 
-	It("configures and deconfigures promiscuous mode with CNI 0.4.0 ADD/DEL", func() {
-		conf := []byte(`{
-	"name": "test",
-	"type": "iplink",
-	"cniVersion": "0.4.0",
-	"promisc": true,
-	"prevResult": {
-		"interfaces": [
-			{"name": "dummy0", "sandbox":"netns"}
-		],
-		"ips": [
-			{
-				"version": "4",
-				"address": "10.0.0.2/24",
-				"gateway": "10.0.0.1",
-				"interface": 0
+		It(fmt.Sprintf("[%s] configures and deconfigures mac address (from RuntimeConfig) with ADD/DEL", ver), func() {
+			conf := []byte(fmt.Sprintf(`{
+				"name": "test",
+				"type": "iplink",
+				"cniVersion": "%s",
+				"capabilities": {"mac": true},
+				"RuntimeConfig": {
+				    "mac": "c2:11:22:33:44:55"
+				},
+				"prevResult": {
+					"interfaces": [
+						{"name": "dummy0", "sandbox":"netns"}
+					],
+					"ips": [
+						{
+							"version": "4",
+							"address": "10.0.0.2/24",
+							"gateway": "10.0.0.1",
+							"interface": 0
+						}
+					]
+				}
+			}`, ver))
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       originalNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   conf,
 			}
-		]
-	}
-}`)
 
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       originalNS.Path(),
-			IfName:      IFNAME,
-			StdinData:   conf,
-		}
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
 
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
+				result, err := types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+				link, err := netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				hw, err := net.ParseMAC("c2:11:22:33:44:55")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().HardwareAddr).To(Equal(hw))
+
+				err = testutils.CmdDel(originalNS.Path(),
+					args.ContainerID, "", func() error { return cmdDel(args) })
+				Expect(err).NotTo(HaveOccurred())
+
+				link, err = netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
+
+				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Promisc).To(Equal(1))
-
-			n := &TuningConf{}
-			err = json.Unmarshal([]byte(conf), &n)
-			Expect(err).NotTo(HaveOccurred())
-
-			cniVersion := "0.4.0"
-			_, confString, err := buildOneConfig("testConfig", cniVersion, n, r)
-			Expect(err).NotTo(HaveOccurred())
-
-			args.StdinData = confString
-
-			err = testutils.CmdCheckWithArgs(args, func() error {
-				return cmdCheck(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			err = testutils.CmdDel(originalNS.Path(),
-				args.ContainerID, "", func() error { return cmdDel(args) })
-			Expect(err).NotTo(HaveOccurred())
-
-			link, err = netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Promisc != 0).To(Equal(*beforeConf.Promisc))
-
-			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
-	})
 
-	It("configures and deconfigures mtu with CNI 0.4.0 ADD/DEL", func() {
-		conf := []byte(`{
-	"name": "test",
-	"type": "iplink",
-	"cniVersion": "0.4.0",
-	"mtu": 1454,
-	"prevResult": {
-		"interfaces": [
-			{"name": "dummy0", "sandbox":"netns"}
-		],
-		"ips": [
-			{
-				"version": "4",
-				"address": "10.0.0.2/24",
-				"gateway": "10.0.0.1",
-				"interface": 0
+		It(fmt.Sprintf("[%s] configures and deconfigures mac address, promisc mode and MTU (from conf file) with custom dataDir", ver), func() {
+			conf := []byte(fmt.Sprintf(`{
+				"name": "test",
+				"type": "iplink",
+				"cniVersion": "%s",
+				"mac": "c2:11:22:33:44:77",
+				"promisc": true,
+				"mtu": 4000,
+				"dataDir": "/tmp/tuning-test",
+				"prevResult": {
+					"interfaces": [
+						{"name": "dummy0", "sandbox":"netns"}
+					],
+					"ips": [
+						{
+							"version": "4",
+							"address": "10.0.0.2/24",
+							"gateway": "10.0.0.1",
+							"interface": 0
+						}
+					]
+				}
+			}`, ver))
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       originalNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   conf,
 			}
-		]
-	}
-}`)
 
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       originalNS.Path(),
-			IfName:      IFNAME,
-			StdinData:   conf,
-		}
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
 
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
+				result, err := types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+				link, err := netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				hw, err := net.ParseMAC("c2:11:22:33:44:77")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().HardwareAddr).To(Equal(hw))
+				Expect(link.Attrs().Promisc).To(Equal(1))
+				Expect(link.Attrs().MTU).To(Equal(4000))
+
+				Expect("/tmp/tuning-test/dummy_dummy0.json").Should(BeAnExistingFile())
+
+				if testutils.SpecVersionHasCHECK(ver) {
+					n := &TuningConf{}
+					err = json.Unmarshal([]byte(conf), &n)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					Expect(err).NotTo(HaveOccurred())
+
+					args.StdinData = confString
+
+					err = testutils.CmdCheckWithArgs(args, func() error {
+						return cmdCheck(args)
+					})
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				err = testutils.CmdDel(originalNS.Path(),
+					args.ContainerID, "", func() error { return cmdDel(args) })
+				Expect(err).NotTo(HaveOccurred())
+
+				link, err = netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
+				Expect(link.Attrs().MTU).To(Equal(beforeConf.Mtu))
+				Expect(link.Attrs().Promisc != 0).To(Equal(*beforeConf.Promisc))
+
+				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().MTU).To(Equal(1454))
-
-			n := &TuningConf{}
-			err = json.Unmarshal([]byte(conf), &n)
-			Expect(err).NotTo(HaveOccurred())
-
-			cniVersion := "0.4.0"
-			_, confString, err := buildOneConfig("testConfig", cniVersion, n, r)
-			Expect(err).NotTo(HaveOccurred())
-
-			args.StdinData = confString
-
-			err = testutils.CmdCheckWithArgs(args, func() error {
-				return cmdCheck(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			err = testutils.CmdDel(originalNS.Path(),
-				args.ContainerID, "", func() error { return cmdDel(args) })
-			Expect(err).NotTo(HaveOccurred())
-
-			link, err = netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().MTU).To(Equal(beforeConf.Mtu))
-
-			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("configures and deconfigures mac address (from conf file) with CNI v4.0 ADD/DEL", func() {
-		conf := []byte(`{
-	"name": "test",
-	"type": "iplink",
-	"cniVersion": "0.4.0",
-	"mac": "c2:11:22:33:44:55",
-	"prevResult": {
-		"interfaces": [
-			{"name": "dummy0", "sandbox":"netns"}
-		],
-		"ips": [
-			{
-				"version": "4",
-				"address": "10.0.0.2/24",
-				"gateway": "10.0.0.1",
-				"interface": 0
-			}
-		]
 	}
-}`)
-
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       originalNS.Path(),
-			IfName:      IFNAME,
-			StdinData:   conf,
-		}
-
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			hw, err := net.ParseMAC("c2:11:22:33:44:55")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr).To(Equal(hw))
-
-			n := &TuningConf{}
-			err = json.Unmarshal([]byte(conf), &n)
-			Expect(err).NotTo(HaveOccurred())
-
-			cniVersion := "0.4.0"
-			_, confString, err := buildOneConfig("testConfig", cniVersion, n, r)
-			Expect(err).NotTo(HaveOccurred())
-
-			args.StdinData = confString
-
-			err = testutils.CmdCheckWithArgs(args, func() error {
-				return cmdCheck(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			err = testutils.CmdDel(originalNS.Path(),
-				args.ContainerID, "", func() error { return cmdDel(args) })
-			Expect(err).NotTo(HaveOccurred())
-
-			link, err = netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
-
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("configures and deconfigures mac address (from CNI_ARGS) with CNI v4 ADD/DEL", func() {
-		conf := []byte(`{
-	"name": "test",
-	"type": "iplink",
-	"cniVersion": "0.4.0",
-	"prevResult": {
-		"interfaces": [
-			{"name": "dummy0", "sandbox":"netns"}
-		],
-		"ips": [
-			{
-				"version": "4",
-				"address": "10.0.0.2/24",
-				"gateway": "10.0.0.1",
-				"interface": 0
-			}
-		]
-	}
-}`)
-
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       originalNS.Path(),
-			IfName:      IFNAME,
-			StdinData:   conf,
-			Args:        "IgnoreUnknown=true;MAC=c2:11:22:33:44:66",
-		}
-
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			hw, err := net.ParseMAC("c2:11:22:33:44:66")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr).To(Equal(hw))
-
-			n := &TuningConf{}
-			err = json.Unmarshal([]byte(conf), &n)
-			Expect(err).NotTo(HaveOccurred())
-
-			cniVersion := "0.4.0"
-			_, confString, err := buildOneConfig("testConfig", cniVersion, n, r)
-			Expect(err).NotTo(HaveOccurred())
-
-			args.StdinData = confString
-
-			err = testutils.CmdCheckWithArgs(args, func() error {
-				return cmdCheck(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			err = testutils.CmdDel(originalNS.Path(),
-				args.ContainerID, "", func() error { return cmdDel(args) })
-			Expect(err).NotTo(HaveOccurred())
-
-			link, err = netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
-
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("configures and deconfigures mac address (from RuntimeConfig) with ADD/DEL", func() {
-		conf := []byte(`{
-	"name": "test",
-	"type": "iplink",
-	"cniVersion": "0.3.1",
-        "capabilities": {"mac": true},
-        "RuntimeConfig": {
-            "mac": "c2:11:22:33:44:55"
-        },
-	"prevResult": {
-		"interfaces": [
-			{"name": "dummy0", "sandbox":"netns"}
-		],
-		"ips": [
-			{
-				"version": "4",
-				"address": "10.0.0.2/24",
-				"gateway": "10.0.0.1",
-				"interface": 0
-			}
-		]
-	}
-}`)
-
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       originalNS.Path(),
-			IfName:      IFNAME,
-			StdinData:   conf,
-		}
-
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			hw, err := net.ParseMAC("c2:11:22:33:44:55")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr).To(Equal(hw))
-
-			err = testutils.CmdDel(originalNS.Path(),
-				args.ContainerID, "", func() error { return cmdDel(args) })
-			Expect(err).NotTo(HaveOccurred())
-
-			link, err = netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
-
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("configures and deconfigures mac address, promisc mode and MTU (from conf file) with custom dataDir", func() {
-		conf := []byte(`{
-	"name": "test",
-	"type": "iplink",
-	"cniVersion": "0.4.0",
-	"mac": "c2:11:22:33:44:77",
-	"promisc": true,
-	"mtu": 4000,
-	"dataDir": "/tmp/tuning-test",
-	"prevResult": {
-		"interfaces": [
-			{"name": "dummy0", "sandbox":"netns"}
-		],
-		"ips": [
-			{
-				"version": "4",
-				"address": "10.0.0.2/24",
-				"gateway": "10.0.0.1",
-				"interface": 0
-			}
-		]
-	}
-}`)
-
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       originalNS.Path(),
-			IfName:      IFNAME,
-			StdinData:   conf,
-		}
-
-		err := originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			hw, err := net.ParseMAC("c2:11:22:33:44:77")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr).To(Equal(hw))
-			Expect(link.Attrs().Promisc).To(Equal(1))
-			Expect(link.Attrs().MTU).To(Equal(4000))
-
-			Expect("/tmp/tuning-test/dummy_dummy0.json").Should(BeAnExistingFile())
-
-			n := &TuningConf{}
-			err = json.Unmarshal([]byte(conf), &n)
-			Expect(err).NotTo(HaveOccurred())
-
-			cniVersion := "0.4.0"
-			_, confString, err := buildOneConfig("testConfig", cniVersion, n, r)
-			Expect(err).NotTo(HaveOccurred())
-
-			args.StdinData = confString
-
-			err = testutils.CmdCheckWithArgs(args, func() error {
-				return cmdCheck(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			err = testutils.CmdDel(originalNS.Path(),
-				args.ContainerID, "", func() error { return cmdDel(args) })
-			Expect(err).NotTo(HaveOccurred())
-
-			link, err = netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
-			Expect(link.Attrs().MTU).To(Equal(beforeConf.Mtu))
-			Expect(link.Attrs().Promisc != 0).To(Equal(*beforeConf.Promisc))
-
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-	})
-
 })
