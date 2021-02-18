@@ -27,7 +27,8 @@ import (
 )
 
 const (
-	DisableIPv6SysctlTemplate = "net.ipv6.conf.%s.disable_ipv6"
+	// Note: use slash as separator so we can have dots in interface name (VLANs)
+	DisableIPv6SysctlTemplate = "net/ipv6/conf/%s/disable_ipv6"
 )
 
 // ConfigureIface takes the result of IPAM plugin and
@@ -68,8 +69,11 @@ func ConfigureIface(ifName string, res *current.Result) error {
 
 				// Read current sysctl value
 				value, err := sysctl.Sysctl(ipv6SysctlValueName)
-				if err != nil || value == "0" {
-					// FIXME: log warning if unable to read sysctl value
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "ipam_linux: failed to read sysctl %q: %v\n", ipv6SysctlValueName, err)
+					continue
+				}
+				if value == "0" {
 					continue
 				}
 
