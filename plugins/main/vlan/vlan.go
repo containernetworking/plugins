@@ -189,7 +189,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		err = netns.Do(func(_ ns.NetNS) error {
-			err := ipam.ConfigureIface(args.IfName, ipamResult)
+			err := ipam.ConfigureIface(args.IfName, result)
 			if err != nil {
 				return err
 			}
