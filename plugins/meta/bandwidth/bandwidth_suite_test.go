@@ -106,7 +106,7 @@ func makeTcpClientInNS(netns string, address string, port int, numBytes int) {
 	Expect(string(out)).To(Equal(message))
 }
 
-func createVeth(hostNamespace string, hostVethIfName string, containerNamespace string, containerVethIfName string, hostIP []byte, containerIP []byte, hostIfaceMTU int) {
+func createVeth(hostNs ns.NetNS, hostVethIfName string, containerNs ns.NetNS, containerVethIfName string, hostIP []byte, containerIP []byte, hostIfaceMTU int) {
 	vethDeviceRequest := &netlink.Veth{
 		LinkAttrs: netlink.LinkAttrs{
 			Name:  hostVethIfName,
@@ -116,10 +116,7 @@ func createVeth(hostNamespace string, hostVethIfName string, containerNamespace 
 		PeerName: containerVethIfName,
 	}
 
-	hostNs, err := ns.GetNS(hostNamespace)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = hostNs.Do(func(_ ns.NetNS) error {
+	err := hostNs.Do(func(_ ns.NetNS) error {
 		if err := netlink.LinkAdd(vethDeviceRequest); err != nil {
 			return fmt.Errorf("creating veth pair: %s", err)
 		}
@@ -127,11 +124,6 @@ func createVeth(hostNamespace string, hostVethIfName string, containerNamespace 
 		containerVeth, err := netlink.LinkByName(containerVethIfName)
 		if err != nil {
 			return fmt.Errorf("failed to find newly-created veth device %q: %v", containerVethIfName, err)
-		}
-
-		containerNs, err := ns.GetNS(containerNamespace)
-		if err != nil {
-			return err
 		}
 
 		err = netlink.LinkSetNsFd(containerVeth, int(containerNs.Fd()))
@@ -169,8 +161,6 @@ func createVeth(hostNamespace string, hostVethIfName string, containerNamespace 
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	containerNs, err := ns.GetNS(containerNamespace)
-	Expect(err).NotTo(HaveOccurred())
 	err = containerNs.Do(func(_ ns.NetNS) error {
 		peerAddr := &net.IPNet{
 			IP:   hostIP,
@@ -203,7 +193,7 @@ func createVeth(hostNamespace string, hostVethIfName string, containerNamespace 
 	Expect(err).NotTo(HaveOccurred())
 }
 
-func createVethInOneNs(namespace, vethName, peerName string) {
+func createVethInOneNs(netNS ns.NetNS, vethName, peerName string) {
 	vethDeviceRequest := &netlink.Veth{
 		LinkAttrs: netlink.LinkAttrs{
 			Name:  vethName,
@@ -212,10 +202,7 @@ func createVethInOneNs(namespace, vethName, peerName string) {
 		PeerName: peerName,
 	}
 
-	netNS, err := ns.GetNS(namespace)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = netNS.Do(func(_ ns.NetNS) error {
+	err := netNS.Do(func(_ ns.NetNS) error {
 		if err := netlink.LinkAdd(vethDeviceRequest); err != nil {
 			return fmt.Errorf("failed to create veth pair: %v", err)
 		}
@@ -229,11 +216,8 @@ func createVethInOneNs(namespace, vethName, peerName string) {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-func createMacvlan(namespace, master, macvlanName string) {
-	netNS, err := ns.GetNS(namespace)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = netNS.Do(func(_ ns.NetNS) error {
+func createMacvlan(netNS ns.NetNS, master, macvlanName string) {
+	err := netNS.Do(func(_ ns.NetNS) error {
 		m, err := netlink.LinkByName(master)
 		if err != nil {
 			return fmt.Errorf("failed to lookup master %q: %v", master, err)

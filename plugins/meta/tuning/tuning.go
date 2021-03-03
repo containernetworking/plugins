@@ -32,7 +32,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -322,7 +322,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 
 			for _, ipc := range result.IPs {
-				if ipc.Version == "4" {
+				if ipc.Address.IP.To4() != nil {
 					_ = arping.GratuitousArpOverIfaceByName(ipc.Address.IP, args.IfName)
 				}
 			}

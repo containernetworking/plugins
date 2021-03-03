@@ -24,7 +24,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -34,30 +34,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const (
-	confTmpl = `{
-  "cniVersion": "0.3.1",
-  "name": "firewalld-test",
-  "type": "firewall",
-  "backend": "firewalld",
-  "zone": "trusted",
-  "prevResult": {
-    "cniVersion": "0.3.0",
-    "interfaces": [
-      {"name": "%s", "sandbox": "%s"}
-    ],
-    "ips": [
-      {
-        "version": "4",
-        "address": "10.0.0.2/24",
-        "gateway": "10.0.0.1",
-        "interface": 0
-      }
-    ]
-  }
-}`
-	ifname = "eth0"
-)
+const ifname = "eth0"
 
 type fakeFirewalld struct {
 	zone   string
@@ -125,6 +102,30 @@ func spawnSessionDbus(wg *sync.WaitGroup) (string, *exec.Cmd) {
 	return busAddr, cmd
 }
 
+func makeFirewalldConf(ver, ifname string, ns ns.NetNS) []byte {
+	return []byte(fmt.Sprintf(`{
+	  "cniVersion": "%s",
+	  "name": "firewalld-test",
+	  "type": "firewall",
+	  "backend": "firewalld",
+	  "zone": "trusted",
+	  "prevResult": {
+	    "cniVersion": "%s",
+	    "interfaces": [
+	      {"name": "%s", "sandbox": "%s"}
+	    ],
+	    "ips": [
+	      {
+		"version": "4",
+		"address": "10.0.0.2/24",
+		"gateway": "10.0.0.1",
+		"interface": 0
+	      }
+	    ]
+	  }
+	}`, ver, ver, ifname, ns.Path()))
+}
+
 var _ = Describe("firewalld test", func() {
 	var (
 		targetNs ns.NetNS
@@ -177,167 +178,119 @@ var _ = Describe("firewalld test", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		wg.Wait()
+
+		Expect(targetNs.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(targetNs)).To(Succeed())
 	})
 
-	It("works with a 0.3.1 config", func() {
-		Expect(isFirewalldRunning()).To(BeTrue())
+	// firewall plugin requires a prevResult and thus only supports 0.3.0
+	// and later CNI versions
+	for _, ver := range []string{"0.3.0", "0.3.1", "0.4.0", "1.0.0"} {
+		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
+		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
+		ver := ver
 
-		conf := fmt.Sprintf(confTmpl, ifname, targetNs.Path())
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNs.Path(),
-			IfName:      ifname,
-			StdinData:   []byte(conf),
-		}
-		_, _, err := testutils.CmdAdd(targetNs.Path(), args.ContainerID, ifname, []byte(conf), func() error {
-			return cmdAdd(args)
+		It(fmt.Sprintf("[%s] works with a config", ver), func() {
+			Expect(isFirewalldRunning()).To(BeTrue())
+
+			conf := makeFirewalldConf(ver, ifname, targetNs)
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNs.Path(),
+				IfName:      ifname,
+				StdinData:   []byte(conf),
+			}
+			_, _, err := testutils.CmdAdd(targetNs.Path(), args.ContainerID, ifname, []byte(conf), func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fwd.zone).To(Equal("trusted"))
+			Expect(fwd.source).To(Equal("10.0.0.2/32"))
+			fwd.clear()
+
+			err = testutils.CmdDel(targetNs.Path(), args.ContainerID, ifname, func() error {
+				return cmdDel(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fwd.zone).To(Equal("trusted"))
+			Expect(fwd.source).To(Equal("10.0.0.2/32"))
 		})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(fwd.zone).To(Equal("trusted"))
-		Expect(fwd.source).To(Equal("10.0.0.2/32"))
-		fwd.clear()
 
-		err = testutils.CmdDel(targetNs.Path(), args.ContainerID, ifname, func() error {
-			return cmdDel(args)
+		It(fmt.Sprintf("[%s] defaults to the firewalld backend", ver), func() {
+			Expect(isFirewalldRunning()).To(BeTrue())
+
+			conf := makeFirewalldConf(ver, ifname, targetNs)
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNs.Path(),
+				IfName:      ifname,
+				StdinData:   []byte(conf),
+			}
+			_, _, err := testutils.CmdAdd(targetNs.Path(), args.ContainerID, ifname, []byte(conf), func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fwd.zone).To(Equal("trusted"))
+			Expect(fwd.source).To(Equal("10.0.0.2/32"))
 		})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(fwd.zone).To(Equal("trusted"))
-		Expect(fwd.source).To(Equal("10.0.0.2/32"))
-	})
 
-	It("defaults to the firewalld backend", func() {
-		conf := `{
-		  "cniVersion": "0.3.1",
-		  "name": "firewalld-test",
-		  "type": "firewall",
-		  "zone": "trusted",
-		  "prevResult": {
-		    "cniVersion": "0.3.0",
-		    "interfaces": [
-		      {"name": "eth0", "sandbox": "/foobar"}
-		    ],
-		    "ips": [
-		      {
-			"version": "4",
-			"address": "10.0.0.2/24",
-			"gateway": "10.0.0.1",
-			"interface": 0
-		      }
-		    ]
-		  }
-		}`
+		It(fmt.Sprintf("[%s] passes through the prevResult", ver), func() {
+			Expect(isFirewalldRunning()).To(BeTrue())
 
-		Expect(isFirewalldRunning()).To(BeTrue())
+			conf := makeFirewalldConf(ver, ifname, targetNs)
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNs.Path(),
+				IfName:      ifname,
+				StdinData:   []byte(conf),
+			}
+			r, _, err := testutils.CmdAdd(targetNs.Path(), args.ContainerID, ifname, []byte(conf), func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
 
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNs.Path(),
-			IfName:      ifname,
-			StdinData:   []byte(conf),
-		}
-		_, _, err := testutils.CmdAdd(targetNs.Path(), args.ContainerID, ifname, []byte(conf), func() error {
-			return cmdAdd(args)
+			result, err := current.GetResult(r)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(result.Interfaces)).To(Equal(1))
+			Expect(result.Interfaces[0].Name).To(Equal("eth0"))
+			Expect(len(result.IPs)).To(Equal(1))
+			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 		})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(fwd.zone).To(Equal("trusted"))
-		Expect(fwd.source).To(Equal("10.0.0.2/32"))
-	})
 
-	It("passes through the prevResult", func() {
-		conf := `{
-		  "cniVersion": "0.3.1",
-		  "name": "firewalld-test",
-		  "type": "firewall",
-		  "zone": "trusted",
-		  "prevResult": {
-		    "cniVersion": "0.3.0",
-		    "interfaces": [
-		      {"name": "eth0", "sandbox": "/foobar"}
-		    ],
-		    "ips": [
-		      {
-			"version": "4",
-			"address": "10.0.0.2/24",
-			"gateway": "10.0.0.1",
-			"interface": 0
-		      }
-		    ]
-		  }
-		}`
+		It(fmt.Sprintf("[%s] works with Check", ver), func() {
+			Expect(isFirewalldRunning()).To(BeTrue())
 
-		Expect(isFirewalldRunning()).To(BeTrue())
+			conf := makeFirewalldConf(ver, ifname, targetNs)
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNs.Path(),
+				IfName:      ifname,
+				StdinData:   []byte(conf),
+			}
+			r, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fwd.zone).To(Equal("trusted"))
+			Expect(fwd.source).To(Equal("10.0.0.2/32"))
 
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNs.Path(),
-			IfName:      ifname,
-			StdinData:   []byte(conf),
-		}
-		r, _, err := testutils.CmdAdd(targetNs.Path(), args.ContainerID, ifname, []byte(conf), func() error {
-			return cmdAdd(args)
+			if testutils.SpecVersionHasCHECK(ver) {
+				_, err = current.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = testutils.CmdCheckWithArgs(args, func() error {
+					return cmdCheck(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			err = testutils.CmdDelWithArgs(args, func() error {
+				return cmdDel(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fwd.zone).To(Equal("trusted"))
+			Expect(fwd.source).To(Equal("10.0.0.2/32"))
 		})
-		Expect(err).NotTo(HaveOccurred())
-
-		result, err := current.GetResult(r)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(len(result.Interfaces)).To(Equal(1))
-		Expect(result.Interfaces[0].Name).To(Equal("eth0"))
-		Expect(len(result.IPs)).To(Equal(1))
-		Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
-	})
-
-	It("works with a 0.4.0 config, including Check", func() {
-		Expect(isFirewalldRunning()).To(BeTrue())
-
-		conf := `{
-			  "cniVersion": "0.4.0",
-			  "name": "firewalld-test",
-			  "type": "firewall",
-			  "backend": "firewalld",
-			  "zone": "trusted",
-			  "prevResult": {
-			    "cniVersion": "0.4.0",
-			    "interfaces": [
-			      {"name": "eth0", "sandbox": "/foobar"}
-			    ],
-			    "ips": [
-			      {
-				"version": "4",
-				"address": "10.0.0.2/24",
-				"gateway": "10.0.0.1",
-				"interface": 0
-			      }
-			    ]
-			  }
-			}`
-
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNs.Path(),
-			IfName:      ifname,
-			StdinData:   []byte(conf),
-		}
-		r, _, err := testutils.CmdAddWithArgs(args, func() error {
-			return cmdAdd(args)
-		})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(fwd.zone).To(Equal("trusted"))
-		Expect(fwd.source).To(Equal("10.0.0.2/32"))
-
-		_, err = current.GetResult(r)
-		Expect(err).NotTo(HaveOccurred())
-
-		err = testutils.CmdCheckWithArgs(args, func() error {
-			return cmdCheck(args)
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		err = testutils.CmdDelWithArgs(args, func() error {
-			return cmdDel(args)
-		})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(fwd.zone).To(Equal("trusted"))
-		Expect(fwd.source).To(Equal("10.0.0.2/32"))
-	})
+	}
 })

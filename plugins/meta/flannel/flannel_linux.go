@@ -72,7 +72,7 @@ func getDelegateIPAM(n *NetConf, fenv *subnetEnv) (map[string]interface{}, error
 	return ipam, nil
 }
 
-func doCmdAdd(args *skel.CmdArgs, n *NetConf, fenv *subnetEnv) error {
+func doCmdAdd(args *skel.CmdArgs, cniVersion string, n *NetConf, fenv *subnetEnv) error {
 	n.Delegate["name"] = n.Name
 
 	if !hasKey(n.Delegate, "type") {
@@ -105,7 +105,7 @@ func doCmdAdd(args *skel.CmdArgs, n *NetConf, fenv *subnetEnv) error {
 	}
 	n.Delegate["ipam"] = ipam
 
-	return delegateAdd(args.ContainerID, n.DataDir, n.Delegate)
+	return delegateAdd(args.ContainerID, n.DataDir, cniVersion, n.Delegate)
 }
 
 func doCmdDel(args *skel.CmdArgs, n *NetConf) (err error) {

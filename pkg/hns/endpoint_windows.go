@@ -23,7 +23,7 @@ import (
 	"github.com/Microsoft/hcsshim/hcn"
 
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/errors"
 )
 
@@ -286,28 +286,20 @@ func ConstructResult(hnsNetwork *hcsshim.HNSNetwork, hnsEndpoint *hcsshim.HNSEnd
 		return nil, errors.Annotatef(err, "failed to parse CIDR from %s", hnsNetwork.Subnets[0].AddressPrefix)
 	}
 
-	var ipVersion string
-	if ipv4 := hnsEndpoint.IPAddress.To4(); ipv4 != nil {
-		ipVersion = "4"
-	} else if ipv6 := hnsEndpoint.IPAddress.To16(); ipv6 != nil {
-		ipVersion = "6"
-	} else {
-		return nil, fmt.Errorf("IPAddress of HNSEndpoint %s isn't a valid ipv4 or ipv6 Address", hnsEndpoint.Name)
-	}
-
 	resultIPConfig := &current.IPConfig{
-		Version: ipVersion,
 		Address: net.IPNet{
 			IP:   hnsEndpoint.IPAddress,
 			Mask: ipSubnet.Mask},
 		Gateway: net.ParseIP(hnsEndpoint.GatewayAddress),
 	}
-	result := &current.Result{}
-	result.Interfaces = []*current.Interface{resultInterface}
-	result.IPs = []*current.IPConfig{resultIPConfig}
-	result.DNS = types.DNS{
-		Search:      strings.Split(hnsEndpoint.DNSSuffix, ","),
-		Nameservers: strings.Split(hnsEndpoint.DNSServerList, ","),
+	result := &current.Result{
+		CNIVersion: current.ImplementedSpecVersion,
+		Interfaces: []*current.Interface{resultInterface},
+		IPs:        []*current.IPConfig{resultIPConfig},
+		DNS:        types.DNS{
+			Search:      strings.Split(hnsEndpoint.DNSSuffix, ","),
+			Nameservers: strings.Split(hnsEndpoint.DNSServerList, ","),
+		},
 	}
 
 	return result, nil
@@ -341,29 +333,21 @@ func ConstructHcnResult(hcnNetwork *hcn.HostComputeNetwork, hcnEndpoint *hcn.Hos
 		return nil, err
 	}
 
-	var ipVersion string
 	ipAddress := net.ParseIP(hcnEndpoint.IpConfigurations[0].IpAddress)
-	if ipv4 := ipAddress.To4(); ipv4 != nil {
-		ipVersion = "4"
-	} else if ipv6 := ipAddress.To16(); ipv6 != nil {
-		ipVersion = "6"
-	} else {
-		return nil, fmt.Errorf("[win-cni] The IPAddress of hnsEndpoint isn't a valid ipv4 or ipv6 Address.")
-	}
-
 	resultIPConfig := &current.IPConfig{
-		Version: ipVersion,
 		Address: net.IPNet{
 			IP:   ipAddress,
 			Mask: ipSubnet.Mask},
 		Gateway: net.ParseIP(hcnEndpoint.Routes[0].NextHop),
 	}
-	result := &current.Result{}
-	result.Interfaces = []*current.Interface{resultInterface}
-	result.IPs = []*current.IPConfig{resultIPConfig}
-	result.DNS = types.DNS{
-		Search:      hcnEndpoint.Dns.Search,
-		Nameservers: hcnEndpoint.Dns.ServerList,
+	result := &current.Result{
+		CNIVersion: current.ImplementedSpecVersion,
+		Interfaces: []*current.Interface{resultInterface},
+		IPs:        []*current.IPConfig{resultIPConfig},
+		DNS:        types.DNS{
+			Search:      hcnEndpoint.Dns.Search,
+			Nameservers: hcnEndpoint.Dns.ServerList,
+		},
 	}
 
 	return result, nil

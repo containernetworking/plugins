@@ -24,7 +24,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -109,12 +109,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// loopback should pass it transparently
 		result = conf.PrevResult
 	} else {
-		loopbackInterface := &current.Interface{Name: args.IfName, Mac: "00:00:00:00:00:00", Sandbox: args.Netns}
-		r := &current.Result{CNIVersion: conf.CNIVersion, Interfaces: []*current.Interface{loopbackInterface}}
+		r := &current.Result{
+			CNIVersion: conf.CNIVersion,
+			Interfaces: []*current.Interface{
+				&current.Interface{
+					Name:    args.IfName,
+					Mac:     "00:00:00:00:00:00",
+					Sandbox: args.Netns,
+				},
+			},
+		}
 
 		if v4Addr != nil {
 			r.IPs = append(r.IPs, &current.IPConfig{
-				Version:   "4",
 				Interface: current.Int(0),
 				Address:   *v4Addr,
 			})
@@ -122,7 +129,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		if v6Addr != nil {
 			r.IPs = append(r.IPs, &current.IPConfig{
-				Version:   "6",
 				Interface: current.Int(0),
 				Address:   *v6Addr,
 			})

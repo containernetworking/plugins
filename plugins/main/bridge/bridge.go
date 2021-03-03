@@ -29,7 +29,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
@@ -412,7 +412,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	// Assume L2 interface only
-	result := &current.Result{CNIVersion: cniVersion, Interfaces: []*current.Interface{brInterface, hostInterface, containerInterface}}
+	result := &current.Result{
+		CNIVersion: current.ImplementedSpecVersion,
+		Interfaces: []*current.Interface{
+			brInterface,
+			hostInterface,
+			containerInterface,
+		},
+	}
 
 	if isLayer3 {
 		// run the IPAM plugin and get back the config to apply
@@ -453,7 +460,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// bridge. Hairpin mode causes echos of neighbor solicitation
 			// packets, which causes DAD failures.
 			for _, ipc := range result.IPs {
-				if ipc.Version == "6" && (n.HairpinMode || n.PromiscMode) {
+				if ipc.Address.IP.To4() == nil && (n.HairpinMode || n.PromiscMode) {
 					if err := disableIPV6DAD(args.IfName); err != nil {
 						return err
 					}
@@ -496,7 +503,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 
 			for _, ipc := range result.IPs {
-				if ipc.Version == "4" {
+				if ipc.Address.IP.To4() != nil {
 					_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
 				}
 			}

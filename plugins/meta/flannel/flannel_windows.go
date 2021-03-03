@@ -30,7 +30,7 @@ import (
 	"os"
 )
 
-func doCmdAdd(args *skel.CmdArgs, n *NetConf, fenv *subnetEnv) error {
+func doCmdAdd(args *skel.CmdArgs, cniVersion string, n *NetConf, fenv *subnetEnv) error {
 	n.Delegate["name"] = n.Name
 
 	if !hasKey(n.Delegate, "type") {
@@ -52,7 +52,8 @@ func doCmdAdd(args *skel.CmdArgs, n *NetConf, fenv *subnetEnv) error {
 		"subnet": fenv.sn.String(),
 	}
 
-	return delegateAdd(hns.GetSandboxContainerID(args.ContainerID, args.Netns), n.DataDir, n.Delegate)
+	sandboxID := hns.GetSandboxContainerID(args.ContainerID, args.Netns)
+	return delegateAdd(sandboxID, n.DataDir, cniVersion, n.Delegate)
 }
 
 func doCmdDel(args *skel.CmdArgs, n *NetConf) (err error) {

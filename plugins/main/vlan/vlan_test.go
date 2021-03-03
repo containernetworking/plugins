@@ -17,12 +17,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
+	"strings"
 	"syscall"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/containernetworking/cni/pkg/types/020"
+	"github.com/containernetworking/cni/pkg/types/040"
+	"github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -45,7 +50,7 @@ type Net struct {
 	IPAM          *allocator.IPAMConfig  `json:"ipam"`
 	DNS           types.DNS              `json:"dns"`
 	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
-	PrevResult    current.Result         `json:"-"`
+	PrevResult    types100.Result        `json:"-"`
 }
 
 func buildOneConfig(netName string, cniVersion string, orig *Net, prevResult types.Result) (*Net, error) {
@@ -91,13 +96,89 @@ func buildOneConfig(netName string, cniVersion string, orig *Net, prevResult typ
 
 }
 
+type tester interface {
+	// verifyResult minimally verifies the Result and returns the interface's MAC address
+	verifyResult(result types.Result, name string) string
+}
+
+type testerBase struct{}
+
+type testerV10x testerBase
+type testerV04x testerBase
+type testerV03x testerBase
+type testerV01xOr02x testerBase
+
+func newTesterByVersion(version string) tester {
+	switch {
+	case strings.HasPrefix(version, "1.0."):
+		return &testerV10x{}
+	case strings.HasPrefix(version, "0.4."):
+		return &testerV04x{}
+	case strings.HasPrefix(version, "0.3."):
+		return &testerV03x{}
+	default:
+		return &testerV01xOr02x{}
+	}
+}
+
+// verifyResult minimally verifies the Result and returns the interface's MAC address
+func (t *testerV10x) verifyResult(result types.Result, name string) string {
+	r, err := types100.GetResult(result)
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(len(r.Interfaces)).To(Equal(1))
+	Expect(r.Interfaces[0].Name).To(Equal(name))
+	Expect(len(r.IPs)).To(Equal(1))
+
+	return r.Interfaces[0].Mac
+}
+
+func verify0403(result types.Result, name string) string {
+	r, err := types040.GetResult(result)
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(len(r.Interfaces)).To(Equal(1))
+	Expect(r.Interfaces[0].Name).To(Equal(name))
+	Expect(len(r.IPs)).To(Equal(1))
+
+	return r.Interfaces[0].Mac
+}
+
+// verifyResult minimally verifies the Result and returns the interface's MAC address
+func (t *testerV04x) verifyResult(result types.Result, name string) string {
+	return verify0403(result, name)
+}
+
+// verifyResult minimally verifies the Result and returns the interface's MAC address
+func (t *testerV03x) verifyResult(result types.Result, name string) string {
+	return verify0403(result, name)
+}
+
+// verifyResult minimally verifies the Result and returns the interface's MAC address
+func (t *testerV01xOr02x) verifyResult(result types.Result, name string) string {
+	r, err := types020.GetResult(result)
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(r.IP4.IP.IP).NotTo(BeNil())
+	Expect(r.IP6).To(BeNil())
+
+	// 0.2 and earlier don't return MAC address
+	return ""
+}
+
 var _ = Describe("vlan Operations", func() {
-	var originalNS ns.NetNS
+	var originalNS, targetNS ns.NetNS
+	var dataDir string
 
 	BeforeEach(func() {
 		// Create a new NetNS so we don't modify the host
 		var err error
 		originalNS, err = testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+		targetNS, err = testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+
+		dataDir, err = ioutil.TempDir("", "vlan_test")
 		Expect(err).NotTo(HaveOccurred())
 
 		err = originalNS.Do(func(ns.NetNS) error {
@@ -120,376 +201,290 @@ var _ = Describe("vlan Operations", func() {
 	})
 
 	AfterEach(func() {
+		Expect(os.RemoveAll(dataDir)).To(Succeed())
 		Expect(originalNS.Close()).To(Succeed())
 		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
+		Expect(targetNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(targetNS)).To(Succeed())
 	})
 
-	It("creates an vlan link in a non-default namespace with given MTU", func() {
-		conf := &NetConf{
-			NetConf: types.NetConf{
-				CNIVersion: "0.3.0",
-				Name:       "testConfig",
-				Type:       "vlan",
-			},
-			Master: MASTER_NAME,
-			VlanId: 33,
-			MTU:    1500,
-		}
+	for _, ver := range testutils.AllSpecVersions {
+		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
+		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
+		ver := ver
 
-		// Create vlan in other namespace
-		targetNs, err := testutils.NewNS()
-		Expect(err).NotTo(HaveOccurred())
-		defer targetNs.Close()
+		It(fmt.Sprintf("[%s] creates an vlan link in a non-default namespace with given MTU", ver), func() {
+			conf := &NetConf{
+				NetConf: types.NetConf{
+					CNIVersion: ver,
+					Name:       "testConfig",
+					Type:       "vlan",
+				},
+				Master: MASTER_NAME,
+				VlanId: 33,
+				MTU:    1500,
+			}
 
-		err = originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+			// Create vlan in other namespace
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-			_, err := createVlan(conf, "foobar0", targetNs)
-			Expect(err).NotTo(HaveOccurred())
-			return nil
-		})
-
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make sure vlan link exists in the target namespace
-		err = targetNs.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			link, err := netlink.LinkByName("foobar0")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Name).To(Equal("foobar0"))
-			Expect(link.Attrs().MTU).To(Equal(1500))
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("creates an vlan link in a non-default namespace with master's MTU", func() {
-		conf := &NetConf{
-			NetConf: types.NetConf{
-				CNIVersion: "0.3.0",
-				Name:       "testConfig",
-				Type:       "vlan",
-			},
-			Master: MASTER_NAME,
-			VlanId: 33,
-		}
-
-		// Create vlan in other namespace
-		targetNs, err := testutils.NewNS()
-		Expect(err).NotTo(HaveOccurred())
-		defer targetNs.Close()
-
-		err = originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			m, err := netlink.LinkByName(MASTER_NAME)
-			Expect(err).NotTo(HaveOccurred())
-			err = netlink.LinkSetMTU(m, 1200)
-			Expect(err).NotTo(HaveOccurred())
-
-			_, err = createVlan(conf, "foobar0", targetNs)
-			Expect(err).NotTo(HaveOccurred())
-			return nil
-		})
-
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make sure vlan link exists in the target namespace
-		err = targetNs.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			link, err := netlink.LinkByName("foobar0")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Name).To(Equal("foobar0"))
-			Expect(link.Attrs().MTU).To(Equal(1200))
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("configures and deconfigures an vlan link with ADD/DEL", func() {
-		const IFNAME = "eth0"
-
-		conf := fmt.Sprintf(`{
-    "cniVersion": "0.3.0",
-    "name": "mynet",
-    "type": "vlan",
-    "master": "%s",
-    "ipam": {
-        "type": "host-local",
-        "subnet": "10.1.2.0/24"
-    }
-}`, MASTER_NAME)
-
-		targetNs, err := testutils.NewNS()
-		Expect(err).NotTo(HaveOccurred())
-		defer targetNs.Close()
-
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNs.Path(),
-			IfName:      IFNAME,
-			StdinData:   []byte(conf),
-		}
-
-		var result *current.Result
-		err = originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
+				_, err := createVlan(conf, "foobar0", targetNS)
+				Expect(err).NotTo(HaveOccurred())
+				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			result, err = current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
+			// Make sure vlan link exists in the target namespace
+			err = targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make sure vlan link exists in the target namespace
-		err = targetNs.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Name).To(Equal(IFNAME))
-
-			hwaddr, err := net.ParseMAC(result.Interfaces[0].Mac)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
-
-			addrs, err := netlink.AddrList(link, syscall.AF_INET)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(addrs)).To(Equal(1))
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		err = originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			err = testutils.CmdDelWithArgs(args, func() error {
-				return cmdDel(args)
+				link, err := netlink.LinkByName("foobar0")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().Name).To(Equal("foobar0"))
+				Expect(link.Attrs().MTU).To(Equal(1500))
+				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
 
-		// Make sure vlan link has been deleted
-		err = targetNs.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+		It(fmt.Sprintf("[%s] creates an vlan link in a non-default namespace with master's MTU", ver), func() {
+			conf := &NetConf{
+				NetConf: types.NetConf{
+					CNIVersion: ver,
+					Name:       "testConfig",
+					Type:       "vlan",
+				},
+				Master: MASTER_NAME,
+				VlanId: 33,
+			}
 
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).To(HaveOccurred())
-			Expect(link).To(BeNil())
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
+			// Create vlan in other namespace
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-		// DEL can be called multiple times, make sure no error is returned
-		// if the device is already removed.
-		err = originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+				m, err := netlink.LinkByName(MASTER_NAME)
+				Expect(err).NotTo(HaveOccurred())
+				err = netlink.LinkSetMTU(m, 1200)
+				Expect(err).NotTo(HaveOccurred())
 
-			err = testutils.CmdDelWithArgs(args, func() error {
-				return cmdDel(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("configures and deconfigures an CNI V4 vlan link with ADD/CHECK/DEL", func() {
-		const IFNAME = "eth0"
-
-		conf := fmt.Sprintf(`{
-    "cniVersion": "0.4.0",
-    "name": "vlanTestv4",
-    "type": "vlan",
-    "master": "%s",
-    "vlanId": 1234,
-    "ipam": {
-        "type": "host-local",
-        "subnet": "10.1.2.0/24"
-    }
-}`, MASTER_NAME)
-
-		targetNs, err := testutils.NewNS()
-		Expect(err).NotTo(HaveOccurred())
-		defer targetNs.Close()
-
-		args := &skel.CmdArgs{
-			ContainerID: "dummy",
-			Netns:       targetNs.Path(),
-			IfName:      IFNAME,
-			StdinData:   []byte(conf),
-		}
-
-		var result *current.Result
-		err = originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
+				_, err = createVlan(conf, "foobar0", targetNS)
+				Expect(err).NotTo(HaveOccurred())
+				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			result, err = current.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
+			// Make sure vlan link exists in the target namespace
+			err = targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-			Expect(len(result.Interfaces)).To(Equal(1))
-			Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-			Expect(len(result.IPs)).To(Equal(1))
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make sure vlan link exists in the target namespace
-		err = targetNs.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().Name).To(Equal(IFNAME))
-
-			hwaddr, err := net.ParseMAC(result.Interfaces[0].Mac)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
-
-			addrs, err := netlink.AddrList(link, syscall.AF_INET)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(addrs)).To(Equal(1))
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		// call CmdCheck
-		n := &Net{}
-		err = json.Unmarshal([]byte(conf), &n)
-		Expect(err).NotTo(HaveOccurred())
-
-		n.IPAM, _, err = allocator.LoadIPAMConfig([]byte(conf), "")
-		Expect(err).NotTo(HaveOccurred())
-
-		cniVersion := "0.4.0"
-		newConf, err := buildOneConfig("vlanTestv4", cniVersion, n, result)
-		Expect(err).NotTo(HaveOccurred())
-
-		confString, err := json.Marshal(newConf)
-		Expect(err).NotTo(HaveOccurred())
-
-		args.StdinData = confString
-
-		// CNI Check host-device in the target namespace
-		err = originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-			var err error
-			err = testutils.CmdCheckWithArgs(args, func() error { return cmdCheck(args) })
-			return err
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		args.StdinData = []byte(conf)
-
-		err = originalNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
-
-			err = testutils.CmdDelWithArgs(args, func() error {
-				return cmdDel(args)
+				link, err := netlink.LinkByName("foobar0")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().Name).To(Equal("foobar0"))
+				Expect(link.Attrs().MTU).To(Equal(1200))
+				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-			return nil
 		})
-		Expect(err).NotTo(HaveOccurred())
 
-		// Make sure vlan link has been deleted
-		err = targetNs.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+		It(fmt.Sprintf("[%s] configures and deconfigures a vlan link with ADD/CHECK/DEL", ver), func() {
+			const IFNAME = "eth0"
 
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).To(HaveOccurred())
-			Expect(link).To(BeNil())
-			return nil
-		})
-		Expect(err).NotTo(HaveOccurred())
-	})
+			conf := fmt.Sprintf(`{
+			    "cniVersion": "%s",
+			    "name": "vlanTestv4",
+			    "type": "vlan",
+			    "master": "%s",
+			    "vlanId": 1234,
+			    "ipam": {
+				"type": "host-local",
+				"subnet": "10.1.2.0/24",
+				"dataDir": "%s"
+			    }
+			}`, ver, MASTER_NAME, dataDir)
 
-	Describe("fails to create vlan link with invalid MTU", func() {
-		conf := `{
-    "cniVersion": "0.3.1",
-    "name": "mynet",
-    "type": "vlan",
-    "master": "%s",
-    "mtu": %d,
-    "ipam": {
-        "type": "host-local",
-        "subnet": "10.1.2.0/24"
-    }
-}`
-		BeforeEach(func() {
-			var err error
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   []byte(conf),
+			}
+
+			t := newTesterByVersion(ver)
+
+			var result types.Result
+			var macAddress string
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				var err error
+				result, _, err = testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				macAddress = t.verifyResult(result, IFNAME)
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Make sure vlan link exists in the target namespace
+			err = targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				link, err := netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().Name).To(Equal(IFNAME))
+
+				if macAddress != "" {
+					hwaddr, err := net.ParseMAC(macAddress)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
+				}
+
+				addrs, err := netlink.AddrList(link, syscall.AF_INET)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(addrs)).To(Equal(1))
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// call CmdCheck
+			n := &Net{}
+			err = json.Unmarshal([]byte(conf), &n)
+			Expect(err).NotTo(HaveOccurred())
+
+			n.IPAM, _, err = allocator.LoadIPAMConfig([]byte(conf), "")
+			Expect(err).NotTo(HaveOccurred())
+
+			newConf, err := buildOneConfig("vlanTestv4", ver, n, result)
+			Expect(err).NotTo(HaveOccurred())
+
+			confString, err := json.Marshal(newConf)
+			Expect(err).NotTo(HaveOccurred())
+
+			args.StdinData = confString
+
+			// CNI Check host-device in the target namespace
+			err = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				return testutils.CmdCheckWithArgs(args, func() error { return cmdCheck(args) })
+			})
+			if testutils.SpecVersionHasCHECK(ver) {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(MatchError("config version does not allow CHECK"))
+			}
+
+			args.StdinData = []byte(conf)
+
 			err = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
-				// set master link's MTU to 1500
-				link, err := netlink.LinkByName(MASTER_NAME)
+				err = testutils.CmdDelWithArgs(args, func() error {
+					return cmdDel(args)
+				})
 				Expect(err).NotTo(HaveOccurred())
-				err = netlink.LinkSetMTU(link, 1500)
-				Expect(err).NotTo(HaveOccurred())
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
 
+			// Make sure vlan link has been deleted
+			err = targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				link, err := netlink.LinkByName(IFNAME)
+				Expect(err).To(HaveOccurred())
+				Expect(link).To(BeNil())
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// DEL can be called multiple times, make sure no error is returned
+			// if the device is already removed.
+			err = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				err = testutils.CmdDelWithArgs(args, func() error {
+					return cmdDel(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("fails to create vlan link with greater MTU than master interface", func() {
-			var err error
+		Describe("fails to create vlan link with invalid MTU", func() {
+			const confFmt = `{
+			    "cniVersion": "%s",
+			    "name": "mynet",
+			    "type": "vlan",
+			    "master": "%s",
+			    "mtu": %d,
+			    "ipam": {
+				"type": "host-local",
+				"subnet": "10.1.2.0/24",
+				"dataDir": "%s"
+			    }
+			}`
 
-			args := &skel.CmdArgs{
-				ContainerID: "dummy",
-				Netns:       "/var/run/netns/test",
-				IfName:      "eth0",
-				StdinData:   []byte(fmt.Sprintf(conf, MASTER_NAME, 1600)),
-			}
+			BeforeEach(func() {
+				var err error
+				err = originalNS.Do(func(ns.NetNS) error {
+					defer GinkgoRecover()
 
-			_ = originalNS.Do(func(netNS ns.NetNS) error {
-				defer GinkgoRecover()
+					// set master link's MTU to 1500
+					link, err := netlink.LinkByName(MASTER_NAME)
+					Expect(err).NotTo(HaveOccurred())
+					err = netlink.LinkSetMTU(link, 1500)
+					Expect(err).NotTo(HaveOccurred())
 
-				_, _, err = testutils.CmdAddWithArgs(args, func() error {
-					return cmdAdd(args)
+					return nil
 				})
-				Expect(err).To(Equal(fmt.Errorf("invalid MTU 1600, must be [0, master MTU(1500)]")))
-				return nil
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It(fmt.Sprintf("[%s] fails to create vlan link with greater MTU than master interface", ver), func() {
+				var err error
+
+				args := &skel.CmdArgs{
+					ContainerID: "dummy",
+					Netns:       "/var/run/netns/test",
+					IfName:      "eth0",
+					StdinData:   []byte(fmt.Sprintf(confFmt, ver, MASTER_NAME, 1600, dataDir)),
+				}
+
+				_ = originalNS.Do(func(netNS ns.NetNS) error {
+					defer GinkgoRecover()
+
+					_, _, err = testutils.CmdAddWithArgs(args, func() error {
+						return cmdAdd(args)
+					})
+					Expect(err).To(Equal(fmt.Errorf("invalid MTU 1600, must be [0, master MTU(1500)]")))
+					return nil
+				})
+			})
+
+			It(fmt.Sprintf("[%s] fails to create vlan link with negative MTU", ver), func() {
+				var err error
+
+				args := &skel.CmdArgs{
+					ContainerID: "dummy",
+					Netns:       "/var/run/netns/test",
+					IfName:      "eth0",
+					StdinData:   []byte(fmt.Sprintf(confFmt, ver, MASTER_NAME, -100, dataDir)),
+				}
+
+				_ = originalNS.Do(func(netNS ns.NetNS) error {
+					defer GinkgoRecover()
+
+					_, _, err = testutils.CmdAddWithArgs(args, func() error {
+						return cmdAdd(args)
+					})
+					Expect(err).To(Equal(fmt.Errorf("invalid MTU -100, must be [0, master MTU(1500)]")))
+					return nil
+				})
 			})
 		})
-
-		It("fails to create vlan link with negative MTU", func() {
-			var err error
-
-			args := &skel.CmdArgs{
-				ContainerID: "dummy",
-				Netns:       "/var/run/netns/test",
-				IfName:      "eth0",
-				StdinData:   []byte(fmt.Sprintf(conf, MASTER_NAME, -100)),
-			}
-
-			_ = originalNS.Do(func(netNS ns.NetNS) error {
-				defer GinkgoRecover()
-
-				_, _, err = testutils.CmdAddWithArgs(args, func() error {
-					return cmdAdd(args)
-				})
-				Expect(err).To(Equal(fmt.Errorf("invalid MTU -100, must be [0, master MTU(1500)]")))
-				return nil
-			})
-		})
-	})
+	}
 })

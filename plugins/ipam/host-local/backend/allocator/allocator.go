@@ -21,7 +21,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend"
 )
@@ -108,13 +108,8 @@ func (a *IPAllocator) Get(id string, ifname string, requestedIP net.IP) (*curren
 	if reservedIP == nil {
 		return nil, fmt.Errorf("no IP addresses available in range set: %s", a.rangeset.String())
 	}
-	version := "4"
-	if reservedIP.IP.To4() == nil {
-		version = "6"
-	}
 
 	return &current.IPConfig{
-		Version: version,
 		Address: *reservedIP,
 		Gateway: gw,
 	}, nil

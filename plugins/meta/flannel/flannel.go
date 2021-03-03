@@ -189,7 +189,7 @@ func consumeScratchNetConf(containerID, dataDir string) (func(error), []byte, er
 	return cleanup, netConfBytes, err
 }
 
-func delegateAdd(cid, dataDir string, netconf map[string]interface{}) error {
+func delegateAdd(cid, dataDir, cniVersion string, netconf map[string]interface{}) error {
 	netconfBytes, err := json.Marshal(netconf)
 	if err != nil {
 		return fmt.Errorf("error serializing delegate netconf: %v", err)
@@ -205,7 +205,7 @@ func delegateAdd(cid, dataDir string, netconf map[string]interface{}) error {
 		return err
 	}
 
-	return result.Print()
+	return types.PrintResult(result, cniVersion)
 }
 
 func hasKey(m map[string]interface{}, k string) bool {
@@ -247,7 +247,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		n.Delegate["runtimeConfig"] = n.RuntimeConfig
 	}
 
-	return doCmdAdd(args, n, fenv)
+	// Delegate CNI config version must match flannel plugin config version
+	n.Delegate["cniVersion"] = n.CNIVersion
+
+	return doCmdAdd(args, n.CNIVersion, n, fenv)
 }
 
 func cmdDel(args *skel.CmdArgs) error {

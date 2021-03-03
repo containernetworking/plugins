@@ -20,7 +20,7 @@ import (
 	"os"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -31,6 +31,7 @@ import (
 var _ = Describe("Flannel", func() {
 	var (
 		originalNS          ns.NetNS
+		targetNS            ns.NetNS
 		onlyIpv4Input       string
 		onlyIpv6Input       string
 		dualStackInput      string
@@ -40,22 +41,12 @@ var _ = Describe("Flannel", func() {
 		dataDir             string
 	)
 
-	BeforeEach(func() {
-		var err error
-		originalNS, err = testutils.NewNS()
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	AfterEach(func() {
-		Expect(originalNS.Close()).To(Succeed())
-	})
-
-	const inputTemplate = `
-{
-    "name": "cni-flannel",
-    "type": "flannel",
-    "subnetFile": "%s",
-    "dataDir": "%s"%s
+	const inputTemplate = `{
+	"name": "cni-flannel",
+	"type": "flannel",
+	"cniVersion": "%s",
+	"subnetFile": "%s",
+	"dataDir": "%s"%s
 }`
 
 	const inputIPAMTemplate = `
@@ -95,6 +86,8 @@ FLANNEL_MTU=1472
 FLANNEL_IPMASQ=true
 `
 
+	const IFNAME = "eth0"
+
 	var writeSubnetEnv = func(contents string) string {
 		file, err := ioutil.TempFile("", "subnet.env")
 		Expect(err).NotTo(HaveOccurred())
@@ -114,17 +107,29 @@ FLANNEL_IPMASQ=true
 		return c
 	}
 
-	var makeInput = func(inputIPAM string, subnetFile string) string {
+	var makeInput = func(cniVersion, inputIPAM string, subnetFile string) string {
 		ipamPart := ""
 		if len(inputIPAM) > 0 {
 			ipamPart = ",\n  \"ipam\":\n" + inputIPAM
 		}
 
-		return fmt.Sprintf(inputTemplate, subnetFile, dataDir, ipamPart)
+		return fmt.Sprintf(inputTemplate, cniVersion, subnetFile, dataDir, ipamPart)
+	}
+
+	var makeHostLocalIPAM = func(dataDir string) string {
+		return fmt.Sprintf(`{
+			"type": "host-local",
+			"dataDir": "%s"
+		}`, dataDir)
 	}
 
 	BeforeEach(func() {
 		var err error
+		originalNS, err = testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+		targetNS, err = testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+
 		// flannel subnet.env
 		onlyIpv4SubnetFile = writeSubnetEnv(onlyIpv4FlannelSubnetEnv)
 		onlyIpv6SubnetFile = writeSubnetEnv(onlyIpv6FlannelSubnetEnv)
@@ -133,264 +138,274 @@ FLANNEL_IPMASQ=true
 		// flannel state dir
 		dataDir, err = ioutil.TempDir("", "dataDir")
 		Expect(err).NotTo(HaveOccurred())
-		onlyIpv4Input = makeInput("", onlyIpv4SubnetFile)
-		onlyIpv6Input = makeInput("", onlyIpv6SubnetFile)
-		dualStackInput = makeInput("", dualStackSubnetFile)
 	})
 
 	AfterEach(func() {
+		Expect(targetNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(targetNS)).To(Succeed())
+		Expect(originalNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
+
 		os.Remove(onlyIpv4SubnetFile)
 		os.Remove(onlyIpv6SubnetFile)
 		os.Remove(dualStackSubnetFile)
-		os.Remove(dataDir)
+		Expect(os.RemoveAll(dataDir)).To(Succeed())
 	})
 
 	Describe("CNI lifecycle", func() {
-		Context("when using only ipv4 stack", func() {
-			It("uses dataDir for storing network configuration with ipv4 stack", func() {
-				const IFNAME = "eth0"
+		for _, ver := range testutils.AllSpecVersions {
+			// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
+			// See Gingkgo's "Patterns for dynamically generating tests" documentation.
+			ver := ver
 
-				targetNs, err := testutils.NewNS()
-				Expect(err).NotTo(HaveOccurred())
-				defer targetNs.Close()
+			Context("when using only ipv4 stack", func() {
+				It(fmt.Sprintf("[%s] uses dataDir for storing network configuration with ipv4 stack", ver), func() {
+					inputIPAM := makeHostLocalIPAM(dataDir)
+					args := &skel.CmdArgs{
+						ContainerID: "some-container-id-ipv4",
+						Netns:       targetNS.Path(),
+						IfName:      IFNAME,
+						StdinData:   []byte(makeInput(ver, inputIPAM, onlyIpv4SubnetFile)),
+					}
 
-				args := &skel.CmdArgs{
-					ContainerID: "some-container-id-ipv4",
-					Netns:       targetNs.Path(),
-					IfName:      IFNAME,
-					StdinData:   []byte(onlyIpv4Input),
-				}
+					err := originalNS.Do(func(ns.NetNS) error {
+						defer GinkgoRecover()
 
-				err = originalNS.Do(func(ns.NetNS) error {
-					defer GinkgoRecover()
+						By("calling ADD with ipv4 stack")
+						GinkgoT().Logf("dataDir is %s", dataDir)
+						GinkgoT().Logf("conf is %s", args.StdinData)
+						resI, _, err := testutils.CmdAddWithArgs(args, func() error {
+							return cmdAdd(args)
+						})
+						Expect(err).NotTo(HaveOccurred())
 
-					By("calling ADD with ipv4 stack")
-					resI, _, err := testutils.CmdAddWithArgs(args, func() error {
-						return cmdAdd(args)
+						By("check that plugin writes the net config to dataDir with ipv4 stack")
+						path := fmt.Sprintf("%s/%s", dataDir, "some-container-id-ipv4")
+						Expect(path).Should(BeAnExistingFile())
+
+						netConfBytes, err := ioutil.ReadFile(path)
+						Expect(err).NotTo(HaveOccurred())
+						expected := fmt.Sprintf(`{
+						    "cniVersion": "%s",
+						    "ipMasq": false,
+						    "ipam": {
+							"routes": [
+							    {
+								"dst": "10.1.0.0/16"
+							    }
+							],
+							"ranges": [
+							    [{
+								"subnet": "10.1.17.0/24"
+							    }]
+							],
+							"type": "host-local",
+							"dataDir": "%s"
+						    },
+						    "isGateway": true,
+						    "mtu": 1472,
+						    "name": "cni-flannel",
+						    "type": "bridge"
+						}`, ver, dataDir)
+						Expect(netConfBytes).Should(MatchJSON(expected))
+
+						result, err := current.NewResultFromResult(resI)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(result.IPs).To(HaveLen(1))
+
+						By("calling DEL with ipv4 stack")
+						err = testutils.CmdDelWithArgs(args, func() error {
+							return cmdDel(args)
+						})
+						Expect(err).NotTo(HaveOccurred())
+
+						By("check that plugin removes net config from state dir with ipv4 stack")
+						Expect(path).ShouldNot(BeAnExistingFile())
+
+						By("calling DEL again with ipv4 stack")
+						err = testutils.CmdDelWithArgs(args, func() error {
+							return cmdDel(args)
+						})
+						By("check that plugin does not fail due to missing net config with ipv4 stack")
+						Expect(err).NotTo(HaveOccurred())
+
+						return nil
 					})
 					Expect(err).NotTo(HaveOccurred())
-
-					By("check that plugin writes the net config to dataDir with ipv4 stack")
-					path := fmt.Sprintf("%s/%s", dataDir, "some-container-id-ipv4")
-					Expect(path).Should(BeAnExistingFile())
-
-					netConfBytes, err := ioutil.ReadFile(path)
-					Expect(err).NotTo(HaveOccurred())
-					expected := `{
-    "ipMasq": false,
-    "ipam": {
-        "routes": [
-            {
-                "dst": "10.1.0.0/16"
-            }
-        ],
-        "ranges": [
-            [{
-                "subnet": "10.1.17.0/24"
-            }]
-        ],
-        "type": "host-local"
-    },
-    "isGateway": true,
-    "mtu": 1472,
-    "name": "cni-flannel",
-    "type": "bridge"
-}
-`
-					Expect(netConfBytes).Should(MatchJSON(expected))
-
-					result, err := current.NewResultFromResult(resI)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(result.IPs).To(HaveLen(1))
-
-					By("calling DEL with ipv4 stack")
-					err = testutils.CmdDelWithArgs(args, func() error {
-						return cmdDel(args)
-					})
-					Expect(err).NotTo(HaveOccurred())
-
-					By("check that plugin removes net config from state dir with ipv4 stack")
-					Expect(path).ShouldNot(BeAnExistingFile())
-
-					By("calling DEL again with ipv4 stack")
-					err = testutils.CmdDelWithArgs(args, func() error {
-						return cmdDel(args)
-					})
-					By("check that plugin does not fail due to missing net config with ipv4 stack")
-					Expect(err).NotTo(HaveOccurred())
-
-					return nil
 				})
-				Expect(err).NotTo(HaveOccurred())
 			})
-		})
 
-		Context("when using only ipv6 stack", func() {
-			It("uses dataDir for storing network configuration with ipv6 stack", func() {
-				const IFNAME = "eth0"
+			Context("when using only ipv6 stack", func() {
+				It(fmt.Sprintf("[%s] uses dataDir for storing network configuration with ipv6 stack", ver), func() {
+					inputIPAM := makeHostLocalIPAM(dataDir)
+					args := &skel.CmdArgs{
+						ContainerID: "some-container-id-ipv6",
+						Netns:       targetNS.Path(),
+						IfName:      IFNAME,
+						StdinData:   []byte(makeInput(ver, inputIPAM, onlyIpv6SubnetFile)),
+					}
 
-				targetNs, err := testutils.NewNS()
-				Expect(err).NotTo(HaveOccurred())
-				defer targetNs.Close()
+					err := originalNS.Do(func(ns.NetNS) error {
+						defer GinkgoRecover()
 
-				args := &skel.CmdArgs{
-					ContainerID: "some-container-id-ipv6",
-					Netns:       targetNs.Path(),
-					IfName:      IFNAME,
-					StdinData:   []byte(onlyIpv6Input),
-				}
+						By("calling ADD with ipv6 stack")
+						resI, _, err := testutils.CmdAddWithArgs(args, func() error {
+							return cmdAdd(args)
+						})
+						Expect(err).NotTo(HaveOccurred())
 
-				err = originalNS.Do(func(ns.NetNS) error {
-					defer GinkgoRecover()
+						By("check that plugin writes the net config to dataDir with ipv6 stack")
+						path := fmt.Sprintf("%s/%s", dataDir, "some-container-id-ipv6")
+						Expect(path).Should(BeAnExistingFile())
 
-					By("calling ADD with ipv6 stack")
-					resI, _, err := testutils.CmdAddWithArgs(args, func() error {
-						return cmdAdd(args)
+						netConfBytes, err := ioutil.ReadFile(path)
+						Expect(err).NotTo(HaveOccurred())
+						expected := fmt.Sprintf(`{
+						    "cniVersion": "%s",
+						    "ipMasq": false,
+						    "ipam": {
+							"routes": [
+							    {
+								"dst": "fc00::/48"
+							    }
+							],
+							"ranges": [
+							    [{
+								"subnet": "fc00::/64"
+							    }]
+							],
+							"type": "host-local",
+							"dataDir": "%s"
+						    },
+						    "isGateway": true,
+						    "mtu": 1472,
+						    "name": "cni-flannel",
+						    "type": "bridge"
+						}`, ver, dataDir)
+						Expect(netConfBytes).Should(MatchJSON(expected))
+
+						result, err := current.NewResultFromResult(resI)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(result.IPs).To(HaveLen(1))
+
+						By("calling DEL with ipv6 stack")
+						err = testutils.CmdDelWithArgs(args, func() error {
+							return cmdDel(args)
+						})
+						Expect(err).NotTo(HaveOccurred())
+
+						By("check that plugin removes net config from state dir with ipv6 stack")
+						Expect(path).ShouldNot(BeAnExistingFile())
+
+						By("calling DEL again with ipv6 stack")
+						err = testutils.CmdDelWithArgs(args, func() error {
+							return cmdDel(args)
+						})
+						By("check that plugin does not fail due to missing net config with ipv6 stack")
+						Expect(err).NotTo(HaveOccurred())
+
+						return nil
 					})
 					Expect(err).NotTo(HaveOccurred())
-
-					By("check that plugin writes the net config to dataDir with ipv6 stack")
-					path := fmt.Sprintf("%s/%s", dataDir, "some-container-id-ipv6")
-					Expect(path).Should(BeAnExistingFile())
-
-					netConfBytes, err := ioutil.ReadFile(path)
-					Expect(err).NotTo(HaveOccurred())
-					expected := `{
-    "ipMasq": false,
-    "ipam": {
-        "routes": [
-            {
-                "dst": "fc00::/48"
-            }
-        ],
-        "ranges": [
-            [{
-                "subnet": "fc00::/64"
-            }]
-        ],
-        "type": "host-local"
-    },
-    "isGateway": true,
-    "mtu": 1472,
-    "name": "cni-flannel",
-    "type": "bridge"
-}
-`
-					Expect(netConfBytes).Should(MatchJSON(expected))
-
-					result, err := current.NewResultFromResult(resI)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(result.IPs).To(HaveLen(1))
-
-					By("calling DEL with ipv6 stack")
-					err = testutils.CmdDelWithArgs(args, func() error {
-						return cmdDel(args)
-					})
-					Expect(err).NotTo(HaveOccurred())
-
-					By("check that plugin removes net config from state dir with ipv6 stack")
-					Expect(path).ShouldNot(BeAnExistingFile())
-
-					By("calling DEL again with ipv6 stack")
-					err = testutils.CmdDelWithArgs(args, func() error {
-						return cmdDel(args)
-					})
-					By("check that plugin does not fail due to missing net config with ipv6 stack")
-					Expect(err).NotTo(HaveOccurred())
-
-					return nil
 				})
-				Expect(err).NotTo(HaveOccurred())
 			})
-		})
 
-		Context("when using dual stack", func() {
-			It("uses dataDir for storing network configuration with dual stack", func() {
-				const IFNAME = "eth0"
+			Context("when using dual stack", func() {
+				It(fmt.Sprintf("[%s] uses dataDir for storing network configuration with dual stack", ver), func() {
+					inputIPAM := makeHostLocalIPAM(dataDir)
+					args := &skel.CmdArgs{
+						ContainerID: "some-container-id-dual-stack",
+						Netns:       targetNS.Path(),
+						IfName:      IFNAME,
+						StdinData:   []byte(makeInput(ver, inputIPAM, dualStackSubnetFile)),
+					}
 
-				targetNs, err := testutils.NewNS()
-				Expect(err).NotTo(HaveOccurred())
-				defer targetNs.Close()
+					err := originalNS.Do(func(ns.NetNS) error {
+						defer GinkgoRecover()
 
-				args := &skel.CmdArgs{
-					ContainerID: "some-container-id-dual-stack",
-					Netns:       targetNs.Path(),
-					IfName:      IFNAME,
-					StdinData:   []byte(dualStackInput),
-				}
+						By("calling ADD with dual stack")
+						resI, _, err := testutils.CmdAddWithArgs(args, func() error {
+							return cmdAdd(args)
+						})
+						Expect(err).NotTo(HaveOccurred())
 
-				err = originalNS.Do(func(ns.NetNS) error {
-					defer GinkgoRecover()
+						By("check that plugin writes the net config to dataDir with dual stack")
+						path := fmt.Sprintf("%s/%s", dataDir, "some-container-id-dual-stack")
+						Expect(path).Should(BeAnExistingFile())
 
-					By("calling ADD with dual stack")
-					resI, _, err := testutils.CmdAddWithArgs(args, func() error {
-						return cmdAdd(args)
+						netConfBytes, err := ioutil.ReadFile(path)
+						Expect(err).NotTo(HaveOccurred())
+						expected := fmt.Sprintf(`{
+						    "cniVersion": "%s",
+						    "ipMasq": false,
+						    "ipam": {
+							"routes": [
+							    {
+								"dst": "10.1.0.0/16"
+							    },
+							    {
+								"dst": "fc00::/48"
+							    }
+							],
+							"ranges": [
+							    [{
+								"subnet": "10.1.17.0/24"
+							    }],
+							    [{
+								"subnet": "fc00::/64"
+							    }]
+							],
+							"type": "host-local",
+							"dataDir": "%s"
+						    },
+						    "isGateway": true,
+						    "mtu": 1472,
+						    "name": "cni-flannel",
+						    "type": "bridge"
+						}`, ver, dataDir)
+						Expect(netConfBytes).Should(MatchJSON(expected))
+
+						result, err := current.NewResultFromResult(resI)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(result.IPs).To(HaveLen(2))
+
+						By("calling DEL with dual stack")
+						err = testutils.CmdDelWithArgs(args, func() error {
+							return cmdDel(args)
+						})
+						Expect(err).NotTo(HaveOccurred())
+
+						By("check that plugin removes net config from state dir with dual stack")
+						Expect(path).ShouldNot(BeAnExistingFile())
+
+						By("calling DEL again with dual stack")
+						err = testutils.CmdDelWithArgs(args, func() error {
+							return cmdDel(args)
+						})
+						By("check that plugin does not fail due to missing net config with dual stack")
+						Expect(err).NotTo(HaveOccurred())
+
+						return nil
 					})
 					Expect(err).NotTo(HaveOccurred())
-
-					By("check that plugin writes the net config to dataDir with dual stack")
-					path := fmt.Sprintf("%s/%s", dataDir, "some-container-id-dual-stack")
-					Expect(path).Should(BeAnExistingFile())
-
-					netConfBytes, err := ioutil.ReadFile(path)
-					Expect(err).NotTo(HaveOccurred())
-					expected := `{
-    "ipMasq": false,
-    "ipam": {
-        "routes": [
-            {
-                "dst": "10.1.0.0/16"
-            },
-            {
-                "dst": "fc00::/48"
-            }
-        ],
-        "ranges": [
-            [{
-                "subnet": "10.1.17.0/24"
-            }],
-            [{
-                "subnet": "fc00::/64"
-            }]
-        ],
-        "type": "host-local"
-    },
-    "isGateway": true,
-    "mtu": 1472,
-    "name": "cni-flannel",
-    "type": "bridge"
-}
-`
-					Expect(netConfBytes).Should(MatchJSON(expected))
-
-					result, err := current.NewResultFromResult(resI)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(result.IPs).To(HaveLen(2))
-
-					By("calling DEL with dual stack")
-					err = testutils.CmdDelWithArgs(args, func() error {
-						return cmdDel(args)
-					})
-					Expect(err).NotTo(HaveOccurred())
-
-					By("check that plugin removes net config from state dir with dual stack")
-					Expect(path).ShouldNot(BeAnExistingFile())
-
-					By("calling DEL again with dual stack")
-					err = testutils.CmdDelWithArgs(args, func() error {
-						return cmdDel(args)
-					})
-					By("check that plugin does not fail due to missing net config with dual stack")
-					Expect(err).NotTo(HaveOccurred())
-
-					return nil
 				})
-				Expect(err).NotTo(HaveOccurred())
 			})
-		})
+		}
 	})
 
 	Describe("loadFlannelNetConf", func() {
+		var (
+			onlyIpv4Input  string
+			onlyIpv6Input  string
+			dualStackInput string
+		)
+
+		BeforeEach(func() {
+			onlyIpv4Input = makeInput(current.ImplementedSpecVersion, "", onlyIpv4SubnetFile)
+			onlyIpv6Input = makeInput(current.ImplementedSpecVersion, "", onlyIpv6SubnetFile)
+			dualStackInput = makeInput(current.ImplementedSpecVersion, "", dualStackSubnetFile)
+		})
+
 		Context("when subnetFile and dataDir are specified with ipv4 stack", func() {
 			It("loads flannel network config with ipv4 stack", func() {
 				conf, err := loadFlannelNetConf([]byte(onlyIpv4Input))
@@ -553,7 +568,7 @@ FLANNEL_IPMASQ=true
 		Context("when input IPAM is provided with ipv4 stack", func() {
 			BeforeEach(func() {
 				inputIPAM := makeInputIPAM(inputIPAMType, inputIPAMRoutes, "")
-				onlyIpv4Input = makeInput(inputIPAM, onlyIpv4SubnetFile)
+				onlyIpv4Input = makeInput(current.ImplementedSpecVersion, inputIPAM, onlyIpv4SubnetFile)
 			})
 			It("configures Delegate IPAM accordingly with ipv4 stack", func() {
 				conf, err := loadFlannelNetConf([]byte(onlyIpv4Input))
@@ -575,7 +590,7 @@ FLANNEL_IPMASQ=true
 		Context("when input IPAM is provided with ipv6 stack", func() {
 			BeforeEach(func() {
 				inputIPAM := makeInputIPAM(inputIPAMType, inputIPAMRoutes, "")
-				onlyIpv6Input = makeInput(inputIPAM, onlyIpv6SubnetFile)
+				onlyIpv6Input = makeInput(current.ImplementedSpecVersion, inputIPAM, onlyIpv6SubnetFile)
 			})
 			It("configures Delegate IPAM accordingly with ipv6 stack", func() {
 				conf, err := loadFlannelNetConf([]byte(onlyIpv6Input))
@@ -597,7 +612,7 @@ FLANNEL_IPMASQ=true
 		Context("when input IPAM is provided with dual stack", func() {
 			BeforeEach(func() {
 				inputIPAM := makeInputIPAM(inputIPAMType, inputIPAMRoutes, "")
-				dualStackInput = makeInput(inputIPAM, dualStackSubnetFile)
+				dualStackInput = makeInput(current.ImplementedSpecVersion, inputIPAM, dualStackSubnetFile)
 			})
 			It("configures Delegate IPAM accordingly with dual stack", func() {
 				conf, err := loadFlannelNetConf([]byte(dualStackInput))
@@ -619,7 +634,7 @@ FLANNEL_IPMASQ=true
 		Context("when input IPAM is provided without 'type' with ipv4 stack", func() {
 			BeforeEach(func() {
 				inputIPAM := makeInputIPAM("", inputIPAMRoutes, "")
-				onlyIpv4Input = makeInput(inputIPAM, onlyIpv4SubnetFile)
+				onlyIpv4Input = makeInput(current.ImplementedSpecVersion, inputIPAM, onlyIpv4SubnetFile)
 			})
 			It("configures Delegate IPAM with 'host-local' ipam with ipv4 stack", func() {
 				conf, err := loadFlannelNetConf([]byte(onlyIpv4Input))
@@ -640,7 +655,7 @@ FLANNEL_IPMASQ=true
 		Context("when input IPAM is provided without 'type' with ipv6 stack", func() {
 			BeforeEach(func() {
 				inputIPAM := makeInputIPAM("", inputIPAMRoutes, "")
-				onlyIpv6Input = makeInput(inputIPAM, onlyIpv6SubnetFile)
+				onlyIpv6Input = makeInput(current.ImplementedSpecVersion, inputIPAM, onlyIpv6SubnetFile)
 			})
 			It("configures Delegate IPAM with 'host-local' ipam with ipv6 stack", func() {
 				conf, err := loadFlannelNetConf([]byte(onlyIpv6Input))
@@ -661,7 +676,7 @@ FLANNEL_IPMASQ=true
 		Context("when input IPAM is provided without 'type' with dual stack", func() {
 			BeforeEach(func() {
 				inputIPAM := makeInputIPAM("", inputIPAMRoutes, "")
-				dualStackInput = makeInput(inputIPAM, dualStackSubnetFile)
+				dualStackInput = makeInput(current.ImplementedSpecVersion, inputIPAM, dualStackSubnetFile)
 			})
 			It("configures Delegate IPAM with 'host-local' ipam with dual stack", func() {
 				conf, err := loadFlannelNetConf([]byte(dualStackInput))

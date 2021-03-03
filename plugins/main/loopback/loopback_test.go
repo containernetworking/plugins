@@ -28,6 +28,10 @@ import (
 	"github.com/onsi/gomega/gexec"
 )
 
+func generateConfig(cniVersion string) *strings.Reader {
+	return strings.NewReader(fmt.Sprintf(`{ "name": "loopback-test", "cniVersion": "%s" }`, cniVersion))
+}
+
 var _ = Describe("Loopback", func() {
 	var (
 		networkNS ns.NetNS
@@ -49,7 +53,6 @@ var _ = Describe("Loopback", func() {
 			fmt.Sprintf("CNI_ARGS=%s", "none"),
 			fmt.Sprintf("CNI_PATH=%s", "/some/test/path"),
 		}
-		command.Stdin = strings.NewReader(`{ "name": "loopback-test", "cniVersion": "0.1.0" }`)
 	})
 
 	AfterEach(func() {
@@ -57,45 +60,53 @@ var _ = Describe("Loopback", func() {
 		Expect(testutils.UnmountNS(networkNS)).To(Succeed())
 	})
 
-	Context("when given a network namespace", func() {
-		It("sets the lo device to UP", func() {
-			command.Env = append(environ, fmt.Sprintf("CNI_COMMAND=%s", "ADD"))
+	for _, ver := range testutils.AllSpecVersions {
+		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
+		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
+		ver := ver
 
-			session, err := gexec.Start(command, GinkgoWriter, GinkgoWriter)
-			Expect(err).NotTo(HaveOccurred())
+		Context("when given a network namespace", func() {
+			It(fmt.Sprintf("[%s] sets the lo device to UP", ver), func() {
+				command.Stdin = generateConfig(ver)
+				command.Env = append(environ, fmt.Sprintf("CNI_COMMAND=%s", "ADD"))
 
-			Eventually(session).Should(gbytes.Say(`{.*}`))
-			Eventually(session).Should(gexec.Exit(0))
+				session, err := gexec.Start(command, GinkgoWriter, GinkgoWriter)
+				Expect(err).NotTo(HaveOccurred())
 
-			var lo *net.Interface
-			err = networkNS.Do(func(ns.NetNS) error {
-				var err error
-				lo, err = net.InterfaceByName("lo")
-				return err
+				Eventually(session).Should(gbytes.Say(`{.*}`))
+				Eventually(session).Should(gexec.Exit(0))
+
+				var lo *net.Interface
+				err = networkNS.Do(func(ns.NetNS) error {
+					var err error
+					lo, err = net.InterfaceByName("lo")
+					return err
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(lo.Flags & net.FlagUp).To(Equal(net.FlagUp))
 			})
-			Expect(err).NotTo(HaveOccurred())
 
-			Expect(lo.Flags & net.FlagUp).To(Equal(net.FlagUp))
-		})
+			It(fmt.Sprintf("[%s] sets the lo device to DOWN", ver), func() {
+				command.Stdin = generateConfig(ver)
+				command.Env = append(environ, fmt.Sprintf("CNI_COMMAND=%s", "DEL"))
 
-		It("sets the lo device to DOWN", func() {
-			command.Env = append(environ, fmt.Sprintf("CNI_COMMAND=%s", "DEL"))
+				session, err := gexec.Start(command, GinkgoWriter, GinkgoWriter)
+				Expect(err).NotTo(HaveOccurred())
 
-			session, err := gexec.Start(command, GinkgoWriter, GinkgoWriter)
-			Expect(err).NotTo(HaveOccurred())
+				Eventually(session).Should(gbytes.Say(``))
+				Eventually(session).Should(gexec.Exit(0))
 
-			Eventually(session).Should(gbytes.Say(``))
-			Eventually(session).Should(gexec.Exit(0))
+				var lo *net.Interface
+				err = networkNS.Do(func(ns.NetNS) error {
+					var err error
+					lo, err = net.InterfaceByName("lo")
+					return err
+				})
+				Expect(err).NotTo(HaveOccurred())
 
-			var lo *net.Interface
-			err = networkNS.Do(func(ns.NetNS) error {
-				var err error
-				lo, err = net.InterfaceByName("lo")
-				return err
+				Expect(lo.Flags & net.FlagUp).NotTo(Equal(net.FlagUp))
 			})
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(lo.Flags & net.FlagUp).NotTo(Equal(net.FlagUp))
 		})
-	})
+	}
 })

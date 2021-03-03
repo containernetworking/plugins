@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 
 	"github.com/containernetworking/cni/libcni"
-	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/coreos/go-iptables/iptables"
@@ -37,9 +37,36 @@ import (
 
 const TIMEOUT = 90
 
+func makeConfig(ver string) *libcni.NetworkConfigList {
+	configList, err := libcni.ConfListFromBytes([]byte(fmt.Sprintf(`{
+		"cniVersion": "%s",
+		"name": "cni-portmap-unit-test",
+		"plugins": [
+			{
+				"type": "ptp",
+				"ipMasq": true,
+				"ipam": {
+					"type": "host-local",
+					"subnet": "172.16.31.0/24",
+					"routes": [
+						{"dst": "0.0.0.0/0"}
+					]
+				}
+			},
+			{
+				"type": "portmap",
+				"capabilities": {
+					"portMappings": true
+				}
+			}
+		]
+	}`, ver)))
+	Expect(err).NotTo(HaveOccurred())
+	return configList
+}
+
 var _ = Describe("portmap integration tests", func() {
 	var (
-		configList    *libcni.NetworkConfigList
 		cniConf       *libcni.CNIConfig
 		targetNS      ns.NetNS
 		containerPort int
@@ -47,38 +74,11 @@ var _ = Describe("portmap integration tests", func() {
 	)
 
 	BeforeEach(func() {
-		var err error
-		rawConfig := `{
-	"cniVersion": "0.3.0",
-	"name": "cni-portmap-unit-test",
-	"plugins": [
-		{
-			"type": "ptp",
-			"ipMasq": true,
-			"ipam": {
-				"type": "host-local",
-				"subnet": "172.16.31.0/24",
-				"routes": [
-					{"dst": "0.0.0.0/0"}
-				]
-			}
-		},
-		{
-			"type": "portmap",
-			"capabilities": {
-				"portMappings": true
-			}
-		}
-	]
-}`
-
-		configList, err = libcni.ConfListFromBytes([]byte(rawConfig))
-		Expect(err).NotTo(HaveOccurred())
-
 		// turn PATH in to CNI_PATH
 		dirs := filepath.SplitList(os.Getenv("PATH"))
 		cniConf = &libcni.CNIConfig{Path: dirs}
 
+		var err error
 		targetNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 		fmt.Fprintln(GinkgoWriter, "namespace:", targetNS.Path())
@@ -90,333 +90,340 @@ var _ = Describe("portmap integration tests", func() {
 
 	AfterEach(func() {
 		session.Terminate().Wait()
-		if targetNS != nil {
-			targetNS.Close()
-		}
+		targetNS.Close()
+		testutils.UnmountNS(targetNS)
 	})
 
-	Describe("Creating an interface in a namespace with the ptp plugin", func() {
-		// This needs to be done using Ginkgo's asynchronous testing mode.
-		It("forwards a TCP port on ipv4", func(done Done) {
-			var err error
-			hostPort := rand.Intn(10000) + 1025
-			runtimeConfig := libcni.RuntimeConf{
-				ContainerID: fmt.Sprintf("unit-test-%d", hostPort),
-				NetNS:       targetNS.Path(),
-				IfName:      "eth0",
-				CapabilityArgs: map[string]interface{}{
-					"portMappings": []map[string]interface{}{
-						{
-							"hostPort":      hostPort,
-							"containerPort": containerPort,
-							"protocol":      "tcp",
+	for _, ver := range []string{"0.3.0", "0.3.1", "0.4.0", "1.0.0"} {
+		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
+		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
+		ver := ver
+
+		Describe("Creating an interface in a namespace with the ptp plugin", func() {
+			// This needs to be done using Ginkgo's asynchronous testing mode.
+			It(fmt.Sprintf("[%s] forwards a TCP port on ipv4", ver), func(done Done) {
+				var err error
+				hostPort := rand.Intn(10000) + 1025
+				runtimeConfig := libcni.RuntimeConf{
+					ContainerID: fmt.Sprintf("unit-test-%d", hostPort),
+					NetNS:       targetNS.Path(),
+					IfName:      "eth0",
+					CapabilityArgs: map[string]interface{}{
+						"portMappings": []map[string]interface{}{
+							{
+								"hostPort":      hostPort,
+								"containerPort": containerPort,
+								"protocol":      "tcp",
+							},
 						},
 					},
-				},
-			}
-
-			// Make delete idempotent, so we can clean up on failure
-			netDeleted := false
-			deleteNetwork := func() error {
-				if netDeleted {
-					return nil
 				}
-				netDeleted = true
-				return cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig)
-			}
+				configList := makeConfig(ver)
 
-			// we'll also manually check the iptables chains
-			ipt, err := iptables.NewWithProtocol(iptables.ProtocolIPv4)
-			Expect(err).NotTo(HaveOccurred())
-			dnatChainName := genDnatChain("cni-portmap-unit-test", runtimeConfig.ContainerID).name
-
-			// Create the network
-			resI, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig)
-			Expect(err).NotTo(HaveOccurred())
-			defer deleteNetwork()
-
-			// Undo Docker's forwarding policy
-			cmd := exec.Command("iptables", "-t", "filter",
-				"-P", "FORWARD", "ACCEPT")
-			cmd.Stderr = GinkgoWriter
-			err = cmd.Run()
-			Expect(err).NotTo(HaveOccurred())
-
-			// Check the chain exists
-			_, err = ipt.List("nat", dnatChainName)
-			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(resI)
-			Expect(err).NotTo(HaveOccurred())
-			var contIP net.IP
-
-			for _, ip := range result.IPs {
-				intfIndex := *ip.Interface
-				if result.Interfaces[intfIndex].Sandbox == "" {
-					continue
+				// Make delete idempotent, so we can clean up on failure
+				netDeleted := false
+				deleteNetwork := func() error {
+					if netDeleted {
+						return nil
+					}
+					netDeleted = true
+					return cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig)
 				}
-				contIP = ip.Address.IP
-			}
-			if contIP == nil {
-				Fail("could not determine container IP")
-			}
 
-			hostIP := getLocalIP()
-			fmt.Fprintf(GinkgoWriter, "hostIP: %s:%d, contIP: %s:%d\n",
-				hostIP, hostPort, contIP, containerPort)
+				// we'll also manually check the iptables chains
+				ipt, err := iptables.NewWithProtocol(iptables.ProtocolIPv4)
+				Expect(err).NotTo(HaveOccurred())
+				dnatChainName := genDnatChain("cni-portmap-unit-test", runtimeConfig.ContainerID).name
 
-			// dump iptables-save output for debugging
-			cmd = exec.Command("iptables-save")
-			cmd.Stderr = GinkgoWriter
-			cmd.Stdout = GinkgoWriter
-			Expect(cmd.Run()).To(Succeed())
+				// Create the network
+				resI, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig)
+				Expect(err).NotTo(HaveOccurred())
+				defer deleteNetwork()
 
-			// dump ip routes output for debugging
-			cmd = exec.Command("ip", "route")
-			cmd.Stderr = GinkgoWriter
-			cmd.Stdout = GinkgoWriter
-			Expect(cmd.Run()).To(Succeed())
+				// Undo Docker's forwarding policy
+				cmd := exec.Command("iptables", "-t", "filter",
+					"-P", "FORWARD", "ACCEPT")
+				cmd.Stderr = GinkgoWriter
+				err = cmd.Run()
+				Expect(err).NotTo(HaveOccurred())
 
-			// dump ip addresses output for debugging
-			cmd = exec.Command("ip", "addr")
-			cmd.Stderr = GinkgoWriter
-			cmd.Stdout = GinkgoWriter
-			Expect(cmd.Run()).To(Succeed())
+				// Check the chain exists
+				_, err = ipt.List("nat", dnatChainName)
+				Expect(err).NotTo(HaveOccurred())
 
-			// Sanity check: verify that the container is reachable directly
-			contOK := testEchoServer(contIP.String(), "tcp", containerPort, "")
+				result, err := types100.GetResult(resI)
+				Expect(err).NotTo(HaveOccurred())
+				var contIP net.IP
 
-			// Verify that a connection to the forwarded port works
-			dnatOK := testEchoServer(hostIP, "tcp", hostPort, "")
+				for _, ip := range result.IPs {
+					intfIndex := *ip.Interface
+					if result.Interfaces[intfIndex].Sandbox == "" {
+						continue
+					}
+					contIP = ip.Address.IP
+				}
+				if contIP == nil {
+					Fail("could not determine container IP")
+				}
 
-			// Verify that a connection to localhost works
-			snatOK := testEchoServer("127.0.0.1", "tcp", hostPort, "")
+				hostIP := getLocalIP()
+				fmt.Fprintf(GinkgoWriter, "hostIP: %s:%d, contIP: %s:%d\n",
+					hostIP, hostPort, contIP, containerPort)
 
-			// verify that hairpin works
-			hairpinOK := testEchoServer(hostIP, "tcp", hostPort, targetNS.Path())
+				// dump iptables-save output for debugging
+				cmd = exec.Command("iptables-save")
+				cmd.Stderr = GinkgoWriter
+				cmd.Stdout = GinkgoWriter
+				Expect(cmd.Run()).To(Succeed())
 
-			// Cleanup
-			session.Terminate()
-			err = deleteNetwork()
-			Expect(err).NotTo(HaveOccurred())
+				// dump ip routes output for debugging
+				cmd = exec.Command("ip", "route")
+				cmd.Stderr = GinkgoWriter
+				cmd.Stdout = GinkgoWriter
+				Expect(cmd.Run()).To(Succeed())
 
-			// Verify iptables rules are gone
-			_, err = ipt.List("nat", dnatChainName)
-			Expect(err).To(MatchError(ContainSubstring("iptables: No chain/target/match by that name.")))
+				// dump ip addresses output for debugging
+				cmd = exec.Command("ip", "addr")
+				cmd.Stderr = GinkgoWriter
+				cmd.Stdout = GinkgoWriter
+				Expect(cmd.Run()).To(Succeed())
 
-			// Check that everything succeeded *after* we clean up the network
-			if !contOK {
-				Fail("connection direct to " + contIP.String() + " failed")
-			}
-			if !dnatOK {
-				Fail("Connection to " + hostIP + " was not forwarded")
-			}
-			if !snatOK {
-				Fail("connection to 127.0.0.1 was not forwarded")
-			}
-			if !hairpinOK {
-				Fail("Hairpin connection failed")
-			}
+				// Sanity check: verify that the container is reachable directly
+				contOK := testEchoServer(contIP.String(), "tcp", containerPort, "")
 
-			close(done)
-		}, TIMEOUT*9)
+				// Verify that a connection to the forwarded port works
+				dnatOK := testEchoServer(hostIP, "tcp", hostPort, "")
 
-		It("forwards a UDP port on ipv4 and keep working after creating a second container with the same HostPort", func(done Done) {
-			var err error
-			hostPort := rand.Intn(10000) + 1025
-			runtimeConfig := libcni.RuntimeConf{
-				ContainerID: fmt.Sprintf("unit-test-%d", hostPort),
-				NetNS:       targetNS.Path(),
-				IfName:      "eth0",
-				CapabilityArgs: map[string]interface{}{
-					"portMappings": []map[string]interface{}{
-						{
-							"hostPort":      hostPort,
-							"containerPort": containerPort,
-							"protocol":      "udp",
+				// Verify that a connection to localhost works
+				snatOK := testEchoServer("127.0.0.1", "tcp", hostPort, "")
+
+				// verify that hairpin works
+				hairpinOK := testEchoServer(hostIP, "tcp", hostPort, targetNS.Path())
+
+				// Cleanup
+				session.Terminate()
+				err = deleteNetwork()
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify iptables rules are gone
+				_, err = ipt.List("nat", dnatChainName)
+				Expect(err).To(MatchError(ContainSubstring("iptables: No chain/target/match by that name.")))
+
+				// Check that everything succeeded *after* we clean up the network
+				if !contOK {
+					Fail("connection direct to " + contIP.String() + " failed")
+				}
+				if !dnatOK {
+					Fail("Connection to " + hostIP + " was not forwarded")
+				}
+				if !snatOK {
+					Fail("connection to 127.0.0.1 was not forwarded")
+				}
+				if !hairpinOK {
+					Fail("Hairpin connection failed")
+				}
+
+				close(done)
+			}, TIMEOUT*9)
+
+			It(fmt.Sprintf("[%s] forwards a UDP port on ipv4 and keep working after creating a second container with the same HostPort", ver), func(done Done) {
+				var err error
+				hostPort := rand.Intn(10000) + 1025
+				runtimeConfig := libcni.RuntimeConf{
+					ContainerID: fmt.Sprintf("unit-test-%d", hostPort),
+					NetNS:       targetNS.Path(),
+					IfName:      "eth0",
+					CapabilityArgs: map[string]interface{}{
+						"portMappings": []map[string]interface{}{
+							{
+								"hostPort":      hostPort,
+								"containerPort": containerPort,
+								"protocol":      "udp",
+							},
 						},
 					},
-				},
-			}
-
-			// Make delete idempotent, so we can clean up on failure
-			netDeleted := false
-			deleteNetwork := func() error {
-				if netDeleted {
-					return nil
 				}
-				netDeleted = true
-				return cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig)
-			}
+				configList := makeConfig(ver)
 
-			// Create the network
-			resI, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig)
-			Expect(err).NotTo(HaveOccurred())
-			defer deleteNetwork()
-
-			// Undo Docker's forwarding policy
-			cmd := exec.Command("iptables", "-t", "filter",
-				"-P", "FORWARD", "ACCEPT")
-			cmd.Stderr = GinkgoWriter
-			err = cmd.Run()
-			Expect(err).NotTo(HaveOccurred())
-
-			result, err := current.GetResult(resI)
-			Expect(err).NotTo(HaveOccurred())
-			var contIP net.IP
-
-			for _, ip := range result.IPs {
-				intfIndex := *ip.Interface
-				if result.Interfaces[intfIndex].Sandbox == "" {
-					continue
+				// Make delete idempotent, so we can clean up on failure
+				netDeleted := false
+				deleteNetwork := func() error {
+					if netDeleted {
+						return nil
+					}
+					netDeleted = true
+					return cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig)
 				}
-				contIP = ip.Address.IP
-			}
-			if contIP == nil {
-				Fail("could not determine container IP")
-			}
 
-			hostIP := getLocalIP()
-			fmt.Fprintf(GinkgoWriter, "First container hostIP: %s:%d, contIP: %s:%d\n",
-				hostIP, hostPort, contIP, containerPort)
+				// Create the network
+				resI, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig)
+				Expect(err).NotTo(HaveOccurred())
+				defer deleteNetwork()
 
-			// dump iptables-save output for debugging
-			cmd = exec.Command("iptables-save")
-			cmd.Stderr = GinkgoWriter
-			cmd.Stdout = GinkgoWriter
-			Expect(cmd.Run()).To(Succeed())
+				// Undo Docker's forwarding policy
+				cmd := exec.Command("iptables", "-t", "filter",
+					"-P", "FORWARD", "ACCEPT")
+				cmd.Stderr = GinkgoWriter
+				err = cmd.Run()
+				Expect(err).NotTo(HaveOccurred())
 
-			// dump ip routes output for debugging
-			cmd = exec.Command("ip", "route")
-			cmd.Stderr = GinkgoWriter
-			cmd.Stdout = GinkgoWriter
-			Expect(cmd.Run()).To(Succeed())
+				result, err := types100.GetResult(resI)
+				Expect(err).NotTo(HaveOccurred())
+				var contIP net.IP
 
-			// dump ip addresses output for debugging
-			cmd = exec.Command("ip", "addr")
-			cmd.Stderr = GinkgoWriter
-			cmd.Stdout = GinkgoWriter
-			Expect(cmd.Run()).To(Succeed())
+				for _, ip := range result.IPs {
+					intfIndex := *ip.Interface
+					if result.Interfaces[intfIndex].Sandbox == "" {
+						continue
+					}
+					contIP = ip.Address.IP
+				}
+				if contIP == nil {
+					Fail("could not determine container IP")
+				}
 
-			// Sanity check: verify that the container is reachable directly
-			fmt.Fprintln(GinkgoWriter, "Connect to container:", contIP.String(), containerPort)
-			contOK := testEchoServer(contIP.String(), "udp", containerPort, "")
+				hostIP := getLocalIP()
+				fmt.Fprintf(GinkgoWriter, "First container hostIP: %s:%d, contIP: %s:%d\n",
+					hostIP, hostPort, contIP, containerPort)
 
-			// Verify that a connection to the forwarded port works
-			fmt.Fprintln(GinkgoWriter, "Connect to host:", hostIP, hostPort)
-			dnatOK := testEchoServer(hostIP, "udp", hostPort, "")
+				// dump iptables-save output for debugging
+				cmd = exec.Command("iptables-save")
+				cmd.Stderr = GinkgoWriter
+				cmd.Stdout = GinkgoWriter
+				Expect(cmd.Run()).To(Succeed())
 
-			// Cleanup
-			session.Terminate()
-			err = deleteNetwork()
-			Expect(err).NotTo(HaveOccurred())
+				// dump ip routes output for debugging
+				cmd = exec.Command("ip", "route")
+				cmd.Stderr = GinkgoWriter
+				cmd.Stdout = GinkgoWriter
+				Expect(cmd.Run()).To(Succeed())
 
-			// Check that everything succeeded *after* we clean up the network
-			if !contOK {
-				Fail("connection direct to " + contIP.String() + " failed")
-			}
-			if !dnatOK {
-				Fail("Connection to " + hostIP + " was not forwarded")
-			}
-			// Create a second container
-			targetNS2, err := testutils.NewNS()
-			Expect(err).NotTo(HaveOccurred())
-			fmt.Fprintln(GinkgoWriter, "namespace:", targetNS2.Path())
+				// dump ip addresses output for debugging
+				cmd = exec.Command("ip", "addr")
+				cmd.Stderr = GinkgoWriter
+				cmd.Stdout = GinkgoWriter
+				Expect(cmd.Run()).To(Succeed())
 
-			// Start an echo server and get the port
-			containerPort, session2, err := StartEchoServerInNamespace(targetNS2)
-			Expect(err).NotTo(HaveOccurred())
+				// Sanity check: verify that the container is reachable directly
+				fmt.Fprintln(GinkgoWriter, "Connect to container:", contIP.String(), containerPort)
+				contOK := testEchoServer(contIP.String(), "udp", containerPort, "")
 
-			runtimeConfig2 := libcni.RuntimeConf{
-				ContainerID: fmt.Sprintf("unit-test2-%d", hostPort),
-				NetNS:       targetNS2.Path(),
-				IfName:      "eth0",
-				CapabilityArgs: map[string]interface{}{
-					"portMappings": []map[string]interface{}{
-						{
-							"hostPort":      hostPort,
-							"containerPort": containerPort,
-							"protocol":      "udp",
+				// Verify that a connection to the forwarded port works
+				fmt.Fprintln(GinkgoWriter, "Connect to host:", hostIP, hostPort)
+				dnatOK := testEchoServer(hostIP, "udp", hostPort, "")
+
+				// Cleanup
+				session.Terminate()
+				err = deleteNetwork()
+				Expect(err).NotTo(HaveOccurred())
+
+				// Check that everything succeeded *after* we clean up the network
+				if !contOK {
+					Fail("connection direct to " + contIP.String() + " failed")
+				}
+				if !dnatOK {
+					Fail("Connection to " + hostIP + " was not forwarded")
+				}
+				// Create a second container
+				targetNS2, err := testutils.NewNS()
+				Expect(err).NotTo(HaveOccurred())
+				fmt.Fprintln(GinkgoWriter, "namespace:", targetNS2.Path())
+
+				// Start an echo server and get the port
+				containerPort, session2, err := StartEchoServerInNamespace(targetNS2)
+				Expect(err).NotTo(HaveOccurred())
+
+				runtimeConfig2 := libcni.RuntimeConf{
+					ContainerID: fmt.Sprintf("unit-test2-%d", hostPort),
+					NetNS:       targetNS2.Path(),
+					IfName:      "eth0",
+					CapabilityArgs: map[string]interface{}{
+						"portMappings": []map[string]interface{}{
+							{
+								"hostPort":      hostPort,
+								"containerPort": containerPort,
+								"protocol":      "udp",
+							},
 						},
 					},
-				},
-			}
-
-			// Make delete idempotent, so we can clean up on failure
-			net2Deleted := false
-			deleteNetwork2 := func() error {
-				if net2Deleted {
-					return nil
 				}
-				net2Deleted = true
-				return cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig2)
-			}
 
-			// Create the network
-			resI2, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig2)
-			Expect(err).NotTo(HaveOccurred())
-			defer deleteNetwork2()
-
-			result2, err := current.GetResult(resI2)
-			Expect(err).NotTo(HaveOccurred())
-			var contIP2 net.IP
-
-			for _, ip := range result2.IPs {
-				intfIndex := *ip.Interface
-				if result2.Interfaces[intfIndex].Sandbox == "" {
-					continue
+				// Make delete idempotent, so we can clean up on failure
+				net2Deleted := false
+				deleteNetwork2 := func() error {
+					if net2Deleted {
+						return nil
+					}
+					net2Deleted = true
+					return cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig2)
 				}
-				contIP2 = ip.Address.IP
-			}
-			if contIP2 == nil {
-				Fail("could not determine container IP")
-			}
 
-			fmt.Fprintf(GinkgoWriter, "Second container: hostIP: %s:%d, contIP: %s:%d\n",
-				hostIP, hostPort, contIP2, containerPort)
+				// Create the network
+				resI2, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig2)
+				Expect(err).NotTo(HaveOccurred())
+				defer deleteNetwork2()
 
-			// dump iptables-save output for debugging
-			cmd = exec.Command("iptables-save")
-			cmd.Stderr = GinkgoWriter
-			cmd.Stdout = GinkgoWriter
-			Expect(cmd.Run()).To(Succeed())
+				result2, err := types100.GetResult(resI2)
+				Expect(err).NotTo(HaveOccurred())
+				var contIP2 net.IP
 
-			// dump ip routes output for debugging
-			cmd = exec.Command("ip", "route")
-			cmd.Stderr = GinkgoWriter
-			cmd.Stdout = GinkgoWriter
-			Expect(cmd.Run()).To(Succeed())
+				for _, ip := range result2.IPs {
+					intfIndex := *ip.Interface
+					if result2.Interfaces[intfIndex].Sandbox == "" {
+						continue
+					}
+					contIP2 = ip.Address.IP
+				}
+				if contIP2 == nil {
+					Fail("could not determine container IP")
+				}
 
-			// dump ip addresses output for debugging
-			cmd = exec.Command("ip", "addr")
-			cmd.Stderr = GinkgoWriter
-			cmd.Stdout = GinkgoWriter
-			Expect(cmd.Run()).To(Succeed())
+				fmt.Fprintf(GinkgoWriter, "Second container: hostIP: %s:%d, contIP: %s:%d\n",
+					hostIP, hostPort, contIP2, containerPort)
 
-			// Sanity check: verify that the container is reachable directly
-			fmt.Fprintln(GinkgoWriter, "Connect to container:", contIP2.String(), containerPort)
-			cont2OK := testEchoServer(contIP2.String(), "udp", containerPort, "")
+				// dump iptables-save output for debugging
+				cmd = exec.Command("iptables-save")
+				cmd.Stderr = GinkgoWriter
+				cmd.Stdout = GinkgoWriter
+				Expect(cmd.Run()).To(Succeed())
 
-			// Verify that a connection to the forwarded port works
-			fmt.Fprintln(GinkgoWriter, "Connect to host:", hostIP, hostPort)
-			dnat2OK := testEchoServer(hostIP, "udp", hostPort, "")
+				// dump ip routes output for debugging
+				cmd = exec.Command("ip", "route")
+				cmd.Stderr = GinkgoWriter
+				cmd.Stdout = GinkgoWriter
+				Expect(cmd.Run()).To(Succeed())
 
-			// Cleanup
-			session2.Terminate()
-			err = deleteNetwork2()
-			Expect(err).NotTo(HaveOccurred())
+				// dump ip addresses output for debugging
+				cmd = exec.Command("ip", "addr")
+				cmd.Stderr = GinkgoWriter
+				cmd.Stdout = GinkgoWriter
+				Expect(cmd.Run()).To(Succeed())
 
-			// Check that everything succeeded *after* we clean up the network
-			if !cont2OK {
-				Fail("connection direct to " + contIP2.String() + " failed")
-			}
-			if !dnat2OK {
-				Fail("Connection to " + hostIP + " was not forwarded")
-			}
+				// Sanity check: verify that the container is reachable directly
+				fmt.Fprintln(GinkgoWriter, "Connect to container:", contIP2.String(), containerPort)
+				cont2OK := testEchoServer(contIP2.String(), "udp", containerPort, "")
 
-			close(done)
-		}, TIMEOUT*9)
-	})
+				// Verify that a connection to the forwarded port works
+				fmt.Fprintln(GinkgoWriter, "Connect to host:", hostIP, hostPort)
+				dnat2OK := testEchoServer(hostIP, "udp", hostPort, "")
+
+				// Cleanup
+				session2.Terminate()
+				err = deleteNetwork2()
+				Expect(err).NotTo(HaveOccurred())
+
+				// Check that everything succeeded *after* we clean up the network
+				if !cont2OK {
+					Fail("connection direct to " + contIP2.String() + " failed")
+				}
+				if !dnat2OK {
+					Fail("Connection to " + hostIP + " was not forwarded")
+				}
+
+				close(done)
+			}, TIMEOUT*9)
+		})
+	}
 })
 
 // testEchoServer returns true if we found an echo server on the port

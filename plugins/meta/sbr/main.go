@@ -26,7 +26,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -234,7 +234,7 @@ func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface strin
 		// Source must be restricted to a single IP, not a full subnet
 		var src net.IPNet
 		src.IP = ipCfg.Address.IP
-		if ipCfg.Version == "4" {
+		if src.IP.To4() != nil {
 			src.Mask = net.CIDRMask(32, 32)
 		} else {
 			src.Mask = net.CIDRMask(128, 128)
@@ -253,7 +253,7 @@ func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface strin
 			log.Printf("Adding default route to gateway %s", ipCfg.Gateway.String())
 
 			var dest net.IPNet
-			if ipCfg.Version == "4" {
+			if ipCfg.Address.IP.To4() != nil {
 				dest.IP = net.IPv4zero
 				dest.Mask = net.CIDRMask(0, 32)
 			} else {
