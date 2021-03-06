@@ -143,6 +143,9 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	if err := json.Unmarshal(bytes, &n); err != nil {
 		return nil, "", err
 	}
+	if n.IPAM == nil {
+		return nil, "", fmt.Errorf("IPAM config missing 'ipam' key")
+	}
 
 	// load IP from CNI_ARGS
 	if envArgs != "" {
@@ -201,10 +204,6 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		for _, addr := range n.RuntimeConfig.IPs {
 			n.IPAM.Addresses = append(n.IPAM.Addresses, Address{AddressStr: addr})
 		}
-	}
-
-	if n.IPAM == nil {
-		return nil, "", fmt.Errorf("IPAM config missing 'ipam' key")
 	}
 
 	// Validate all ranges
