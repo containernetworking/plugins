@@ -128,6 +128,7 @@ type Result struct {
 	IPs        []*IPConfig    `json:"ips,omitempty"`
 	Routes     []*types.Route `json:"routes,omitempty"`
 	DNS        types.DNS      `json:"dns,omitempty"`
+	Vlan 	   int             `json:"vlan,omitempty"`
 }
 
 // Convert to the older 0.2.0 CNI spec Result type

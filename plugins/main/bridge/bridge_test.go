@@ -42,7 +42,7 @@ import (
 const (
 	BRNAME     = "bridge0"
 	BRNAMEVLAN = "bridge0.100"
-	IFNAME     = "eth0"
+	IFNAME     = "veth123"
 )
 
 type Net struct {
@@ -1132,7 +1132,7 @@ var _ = Describe("bridge Operations", func() {
 		err := originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			bridge, _, err := setupBridge(conf)
+			bridge, _, err := setupBridge(conf, vlanid)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(bridge.Attrs().Name).To(Equal(BRNAME))
 

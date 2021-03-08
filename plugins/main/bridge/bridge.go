@@ -215,7 +215,13 @@ func bridgeByName(name string) (*netlink.Bridge, error) {
 	return br, nil
 }
 
-func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*netlink.Bridge, error) {
+func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool, vlanid int) (*netlink.Bridge, error) {
+	var master string
+	master = getInterfacceMaster()
+	masterLink, err := getVlanLink(master, mtu, vlanid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to lookup master %q: %v", master, err)
+	}
 	br := &netlink.Bridge{
 		LinkAttrs: netlink.LinkAttrs{
 			Name: brName,
@@ -231,8 +237,7 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 		br.VlanFiltering = &vlanFiltering
 	}
 
-	err := netlink.LinkAdd(br)
-	if err != nil && err != syscall.EEXIST {
+	if 	err := netlink.LinkAdd(br); err != nil && err != syscall.EEXIST {
 		return nil, fmt.Errorf("could not add %q: %v", brName, err)
 	}
 
@@ -255,7 +260,9 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 	if err := netlink.LinkSetUp(br); err != nil {
 		return nil, err
 	}
-
+	if err := netlink.LinkSetMaster(masterLink, br); err != nil {
+		return nil, err
+	}
 	return br, nil
 }
 
@@ -339,13 +346,17 @@ func calcGatewayIP(ipn *net.IPNet) net.IP {
 	return ip.NextIP(nid)
 }
 
-func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
+func setupBridge(n *NetConf, vlanid int) (*netlink.Bridge, *current.Interface, error) {
 	vlanFiltering := false
 	if n.Vlan != 0 {
 		vlanFiltering = true
 	}
+	if vlanid == 0 {
+		return nil, nil, fmt.Errorf("the master vlan is miss")
+	}
+
 	// create bridge if necessary
-	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, vlanFiltering)
+	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, vlanFiltering, vlanid)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create bridge %q: %v", n.BrName, err)
 	}
@@ -394,8 +405,26 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if n.HairpinMode && n.PromiscMode {
 		return fmt.Errorf("cannot set hairpin mode and promiscous mode at the same time.")
 	}
-
-	br, brInterface, err := setupBridge(n)
+	// run the IPAM plugin and get back the config to apply
+	// get ipam
+	r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
+	if err != nil {
+		return err
+	}
+	// release IP in case of failure
+	defer func() {
+		if !success {
+			ipam.ExecDel(n.IPAM.Type, args.StdinData)
+		}
+	}()
+	// Convert whatever the IPAM result was into the current Result type
+	//ipamResult, err := current.NewResultFromResult(r)
+	ipamResult, err := current.NewResultFromResult(r)
+	if err != nil {
+		return err
+	}
+	n.BrName = fmt.Sprintf("vlan%d", 315)
+	br, brInterface, err := setupBridge(n, 315)
 	if err != nil {
 		return err
 	}
@@ -415,25 +444,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	result := &current.Result{CNIVersion: cniVersion, Interfaces: []*current.Interface{brInterface, hostInterface, containerInterface}}
 
 	if isLayer3 {
-		// run the IPAM plugin and get back the config to apply
-		r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
-		if err != nil {
-			return err
-		}
-
-		// release IP in case of failure
-		defer func() {
-			if !success {
-				ipam.ExecDel(n.IPAM.Type, args.StdinData)
-			}
-		}()
-
-		// Convert whatever the IPAM result was into the current Result type
-		ipamResult, err := current.NewResultFromResult(r)
-		if err != nil {
-			return err
-		}
-
 		result.IPs = ipamResult.IPs
 		result.Routes = ipamResult.Routes
 
@@ -573,7 +583,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	success = true
-
+	result.Vlan = 315
 	return types.PrintResult(result, cniVersion)
 }
 
@@ -891,4 +901,89 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 
 	return nil
+}
+func getInterfacceMaster() string {
+	rs, err := netlink.RouteListFiltered(4, nil, 0)
+	if err != nil {
+		return ""
+	}
+	for _, v := range rs {
+		if v.Gw != nil {
+			link, _ := netlink.LinkByIndex(v.LinkIndex)
+			masterName := link.Attrs().Name
+			return masterName
+		}
+	}
+	return ""
+
+}
+func getVlanLink(masterinterface string, mtu int, vlanid int) (netlink.Link, error) {
+
+	ifName := fmt.Sprintf("%s-%d", masterinterface, vlanid)
+
+	var result netlink.Link
+
+	result, err := netlink.LinkByName(ifName)
+	if err == nil && result != nil && vlanid != 0 {
+		v := result.(*netlink.Vlan)
+		if v != nil && v.VlanId == vlanid {
+
+			err = netlink.LinkSetUp(result)
+			if err != nil {
+				return nil, fmt.Errorf("failed to set vlan %q  up: %v", ifName, err)
+			}
+			return result, nil
+		}
+
+	}
+
+	maskerLink, err := netlink.LinkByName(masterinterface)
+	if err != nil {
+		return nil, fmt.Errorf("failed to lookup master %q: %v", masterinterface, err)
+	}
+	if vlanid == 0 {
+		return maskerLink, nil
+	}
+	// due to kernel bug we have to create with tmpname or it might
+	// collide with the name on the host and error out
+	tmpName, err := ip.RandomVethName()
+	if err != nil {
+		return nil, err
+	}
+
+	if mtu<= 0 {
+		mtu = maskerLink.Attrs().MTU
+	}
+
+	v := &netlink.Vlan{
+		LinkAttrs: netlink.LinkAttrs{
+			MTU:         mtu,
+			Name:        tmpName,
+			ParentIndex: maskerLink.Attrs().Index,
+		},
+		VlanId: vlanid,
+	}
+
+	if err := netlink.LinkAdd(v); err != nil {
+		return nil, fmt.Errorf("failed to create vlan: %v", err)
+	}
+
+	err = ip.RenameLink(tmpName, ifName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to rename vlan to %q: %v", ifName, err)
+	}
+
+	// Re-fetch interface to get all properties/attributes
+	result, err = netlink.LinkByName(ifName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to refetch vlan %q: %v", ifName, err)
+	}
+	err = netlink.LinkSetUp(result)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to set vlan %q  up: %v", ifName, err)
+	}
+
+	return result, nil
+
 }
