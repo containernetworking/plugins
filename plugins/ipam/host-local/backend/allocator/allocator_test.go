@@ -49,6 +49,23 @@ func mkalloc() IPAllocator {
 	return alloc
 }
 
+func newAllocatorWithMultiRanges() IPAllocator {
+	p := RangeSet{
+		Range{RangeStart: net.IP{192, 168, 1, 0}, RangeEnd: net.IP{192, 168, 1, 3}, Subnet: mustSubnet("192.168.1.1/30")},
+		Range{RangeStart: net.IP{192, 168, 2, 0}, RangeEnd: net.IP{192, 168, 2, 3}, Subnet: mustSubnet("192.168.2.1/30")},
+	}
+	_ = p.Canonicalize()
+	store := fakestore.NewFakeStore(map[string]string{}, map[string]net.IP{})
+
+	alloc := IPAllocator{
+		rangeset: &p,
+		store:    store,
+		rangeID:  "rangeid",
+	}
+
+	return alloc
+}
+
 func (t AllocatorTestCase) run(idx int) (*current.IPConfig, error) {
 	fmt.Fprintln(GinkgoWriter, "Index:", idx)
 	p := RangeSet{}
@@ -318,6 +335,39 @@ var _ = Describe("host-local ip allocator", func() {
 				Expect(err).NotTo(BeNil())
 				Expect(err.Error()).To(HavePrefix("no IP addresses available in range set"))
 			}
+		})
+	})
+
+	Context("when lastReservedIP is at the end of one of multi ranges", func() {
+		It("should use the first IP of next range as startIP after Next", func() {
+			a := newAllocatorWithMultiRanges()
+
+			// reserve the last IP of the first range
+			reserved, err := a.store.Reserve("ID", "eth0", net.IP{192, 168, 1, 3}, a.rangeID)
+			Expect(reserved).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
+
+			// get range iterator and do the first Next
+			r, err := a.GetIter()
+			Expect(err).NotTo(HaveOccurred())
+			ip := r.nextip()
+			Expect(ip).NotTo(BeNil())
+
+			Expect(r.startIP).To(Equal(net.IP{192, 168, 2, 0}))
+		})
+	})
+
+	Context("when no lastReservedIP", func() {
+		It("should use the first IP of the first range as startIP after Next", func() {
+			a := newAllocatorWithMultiRanges()
+
+			// get range iterator and do the first Next
+			r, err := a.GetIter()
+			Expect(err).NotTo(HaveOccurred())
+			ip := r.nextip()
+			Expect(ip).NotTo(BeNil())
+
+			Expect(r.startIP).To(Equal(net.IP{192, 168, 1, 0}))
 		})
 	})
 })
