@@ -265,8 +265,7 @@ func AddHcnEndpoint(epName string, expectedNetworkId string, namespace string,
 
 	err = hcn.AddNamespaceEndpoint(namespace, hcnEndpoint.Id)
 	if err != nil {
-		err := RemoveHcnEndpoint(epName)
-		if err != nil {
+		if err := RemoveHcnEndpoint(epName); err != nil {
 			return nil, errors.Annotatef(err, "failed to Remove Endpoint after AddNamespaceEndpoint failure")
 		}
 		return nil, errors.Annotate(err, "failed to Add endpoint to namespace")
