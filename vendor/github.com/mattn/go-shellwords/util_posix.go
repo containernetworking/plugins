@@ -3,17 +3,27 @@
 package shellwords
 
 import (
-	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 )
 
-func shellRun(line string) (string, error) {
-	shell := os.Getenv("SHELL")
-	b, err := exec.Command(shell, "-c", line).Output()
+func shellRun(line, dir string) (string, error) {
+	var shell string
+	if shell = os.Getenv("SHELL"); shell == "" {
+		shell = "/bin/sh"
+	}
+	cmd := exec.Command(shell, "-c", line)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	b, err := cmd.Output()
 	if err != nil {
-		return "", errors.New(err.Error() + ":" + string(b))
+		if eerr, ok := err.(*exec.ExitError); ok {
+			b = eerr.Stderr
+		}
+		return "", fmt.Errorf("%s: %w", string(b), err)
 	}
 	return strings.TrimSpace(string(b)), nil
 }

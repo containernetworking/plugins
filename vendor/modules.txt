@@ -68,7 +68,7 @@ github.com/godbus/dbus
 # github.com/j-keck/arping v0.0.0-20160618110441-2cf9dc699c56
 ## explicit
 github.com/j-keck/arping
-# github.com/mattn/go-shellwords v1.0.3
+# github.com/mattn/go-shellwords v1.0.11
 ## explicit
 github.com/mattn/go-shellwords
 # github.com/nxadm/tail v1.4.4

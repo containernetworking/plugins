@@ -16,7 +16,7 @@ require (
 	github.com/d2g/hardwareaddr v0.0.0-20190221164911-e7d9fbe030e4 // indirect
 	github.com/godbus/dbus v0.0.0-20180201030542-885f9cc04c9c
 	github.com/j-keck/arping v0.0.0-20160618110441-2cf9dc699c56
-	github.com/mattn/go-shellwords v1.0.3
+	github.com/mattn/go-shellwords v1.0.11
 	github.com/onsi/ginkgo v1.13.0
 	github.com/onsi/gomega v1.10.3
 	github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
