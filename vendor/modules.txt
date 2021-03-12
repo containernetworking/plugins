@@ -44,9 +44,9 @@ github.com/containernetworking/cni/pkg/version
 # github.com/coreos/go-iptables v0.5.0
 ## explicit
 github.com/coreos/go-iptables/iptables
-# github.com/coreos/go-systemd v0.0.0-20180511133405-39ca1b05acc7
+# github.com/coreos/go-systemd/v22 v22.2.0
 ## explicit
-github.com/coreos/go-systemd/activation
+github.com/coreos/go-systemd/v22/activation
 # github.com/d2g/dhcp4 v0.0.0-20170904100407-a1d1b6c41b1c
 ## explicit
 github.com/d2g/dhcp4
@@ -62,9 +62,9 @@ github.com/d2g/dhcp4server/leasepool/memorypool
 ## explicit
 # github.com/fsnotify/fsnotify v1.4.9
 github.com/fsnotify/fsnotify
-# github.com/godbus/dbus v0.0.0-20180201030542-885f9cc04c9c
+# github.com/godbus/dbus/v5 v5.0.3
 ## explicit
-github.com/godbus/dbus
+github.com/godbus/dbus/v5
 # github.com/j-keck/arping v0.0.0-20160618110441-2cf9dc699c56
 ## explicit
 github.com/j-keck/arping

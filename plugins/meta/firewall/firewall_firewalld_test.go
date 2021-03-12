@@ -28,7 +28,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
-	"github.com/godbus/dbus"
+	"github.com/godbus/dbus/v5"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
