@@ -3,11 +3,10 @@
 package hcn
 
 import (
-	"encoding/json"
 	"fmt"
 	"syscall"
 
-	"github.com/Microsoft/hcsshim/internal/guid"
+	"github.com/Microsoft/go-winio/pkg/guid"
 )
 
 //go:generate go run ../mksyscall_windows.go -output zsyscall_windows.go hcn.go
@@ -55,11 +54,14 @@ import (
 //sys hcnDeleteLoadBalancer(id *_guid, result **uint16) (hr error) = computenetwork.HcnDeleteLoadBalancer?
 //sys hcnCloseLoadBalancer(loadBalancer hcnLoadBalancer) (hr error) = computenetwork.HcnCloseLoadBalancer?
 
-// Service
-//sys hcnOpenService(service *hcnService, result **uint16) (hr error) = computenetwork.HcnOpenService?
-//sys hcnRegisterServiceCallback(service hcnService, callback int32, context int32, callbackHandle *hcnCallbackHandle) (hr error) = computenetwork.HcnRegisterServiceCallback?
-//sys hcnUnregisterServiceCallback(callbackHandle hcnCallbackHandle) (hr error) = computenetwork.HcnUnregisterServiceCallback?
-//sys hcnCloseService(service hcnService) (hr error) = computenetwork.HcnCloseService?
+// SDN Routes
+//sys hcnEnumerateRoutes(query string, routes **uint16, result **uint16) (hr error) = computenetwork.HcnEnumerateSdnRoutes?
+//sys hcnCreateRoute(id *_guid, settings string, route *hcnRoute, result **uint16) (hr error) = computenetwork.HcnCreateSdnRoute?
+//sys hcnOpenRoute(id *_guid, route *hcnRoute, result **uint16) (hr error) = computenetwork.HcnOpenSdnRoute?
+//sys hcnModifyRoute(route hcnRoute, settings string, result **uint16) (hr error) = computenetwork.HcnModifySdnRoute?
+//sys hcnQueryRouteProperties(route hcnRoute, query string, properties **uint16, result **uint16) (hr error) = computenetwork.HcnQuerySdnRouteProperties?
+//sys hcnDeleteRoute(id *_guid, result **uint16) (hr error) = computenetwork.HcnDeleteSdnRoute?
+//sys hcnCloseRoute(route hcnRoute) (hr error) = computenetwork.HcnCloseSdnRoute?
 
 type _guid = guid.GUID
 
@@ -67,8 +69,7 @@ type hcnNetwork syscall.Handle
 type hcnEndpoint syscall.Handle
 type hcnNamespace syscall.Handle
 type hcnLoadBalancer syscall.Handle
-type hcnService syscall.Handle
-type hcnCallbackHandle syscall.Handle
+type hcnRoute syscall.Handle
 
 // SchemaVersion for HCN Objects/Queries.
 type SchemaVersion = Version // hcnglobals.go
@@ -91,6 +92,20 @@ type HostComputeQuery struct {
 	Filter        string                `json:",omitempty"`
 }
 
+type ExtraParams struct {
+	Resources        interface{} `json:",omitempty"`
+	SharedContainers interface{} `json:",omitempty"`
+	LayeredOn        string      `json:",omitempty"`
+	SwitchGuid       string      `json:",omitempty"`
+	UtilityVM        string      `json:",omitempty"`
+	VirtualMachine   string      `json:",omitempty"`
+}
+
+type Health struct {
+	Data  interface{} `json:",omitempty"`
+	Extra ExtraParams `json:",omitempty"`
+}
+
 // defaultQuery generates HCN Query.
 // Passed into get/enumerate calls to filter results.
 func defaultQuery() HostComputeQuery {
@@ -102,15 +117,6 @@ func defaultQuery() HostComputeQuery {
 		Flags: HostComputeQueryFlagsNone,
 	}
 	return query
-}
-
-func defaultQueryJson() string {
-	query := defaultQuery()
-	queryJson, err := json.Marshal(query)
-	if err != nil {
-		return ""
-	}
-	return string(queryJson)
 }
 
 // PlatformDoesNotSupportError happens when users are attempting to use a newer shim on an older OS
@@ -159,6 +165,78 @@ func DSRSupported() error {
 		return nil
 	}
 	return platformDoesNotSupportError("Direct Server Return (DSR)")
+}
+
+// Slash32EndpointPrefixesSupported returns an error if the HCN version does not support configuring endpoints with /32 prefixes.
+func Slash32EndpointPrefixesSupported() error {
+	supported := GetSupportedFeatures()
+	if supported.Slash32EndpointPrefixes {
+		return nil
+	}
+	return platformDoesNotSupportError("Slash 32 Endpoint prefixes")
+}
+
+// AclSupportForProtocol252Supported returns an error if the HCN version does not support HNS ACL Policies to support protocol 252 for VXLAN.
+func AclSupportForProtocol252Supported() error {
+	supported := GetSupportedFeatures()
+	if supported.AclSupportForProtocol252 {
+		return nil
+	}
+	return platformDoesNotSupportError("HNS ACL Policies to support protocol 252 for VXLAN")
+}
+
+// SessionAffinitySupported returns an error if the HCN version does not support Session Affinity.
+func SessionAffinitySupported() error {
+	supported := GetSupportedFeatures()
+	if supported.SessionAffinity {
+		return nil
+	}
+	return platformDoesNotSupportError("Session Affinity")
+}
+
+// IPv6DualStackSupported returns an error if the HCN version does not support IPv6DualStack.
+func IPv6DualStackSupported() error {
+	supported := GetSupportedFeatures()
+	if supported.IPv6DualStack {
+		return nil
+	}
+	return platformDoesNotSupportError("IPv6 DualStack")
+}
+
+//L4proxySupported returns an error if the HCN verison does not support L4Proxy
+func L4proxyPolicySupported() error {
+	supported := GetSupportedFeatures()
+	if supported.L4Proxy {
+		return nil
+	}
+	return platformDoesNotSupportError("L4ProxyPolicy")
+}
+
+// L4WfpProxySupported returns an error if the HCN verison does not support L4WfpProxy
+func L4WfpProxyPolicySupported() error {
+	supported := GetSupportedFeatures()
+	if supported.L4WfpProxy {
+		return nil
+	}
+	return platformDoesNotSupportError("L4WfpProxyPolicy")
+}
+
+// SetPolicySupported returns an error if the HCN version does not support SetPolicy.
+func SetPolicySupported() error {
+	supported := GetSupportedFeatures()
+	if supported.SetPolicy {
+		return nil
+	}
+	return platformDoesNotSupportError("SetPolicy")
+}
+
+// VxlanPortSupported returns an error if the HCN version does not support configuring the VXLAN TCP port.
+func VxlanPortSupported() error {
+	supported := GetSupportedFeatures()
+	if supported.VxlanPort {
+		return nil
+	}
+	return platformDoesNotSupportError("VXLAN port configuration")
 }
 
 // RequestType are the different operations performed to settings.
