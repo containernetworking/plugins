@@ -16,7 +16,8 @@ var (
 )
 
 const (
-	lockfileExclusiveLock = 2
+	lockfileFailImmediately = 1
+	lockfileExclusiveLock   = 2
 )
 
 func lockFileEx(h syscall.Handle, flags, reserved, locklow, lockhigh uint32, ol *syscall.Overlapped) (err error) {
@@ -58,6 +59,19 @@ func New(filename string) (*FileMutex, error) {
 	return &FileMutex{fd: fd}, nil
 }
 
+func (m *FileMutex) TryLock() error {
+	var ol syscall.Overlapped
+	if err := lockFileEx(m.fd, lockfileFailImmediately|lockfileExclusiveLock, 0, 1, 0, &ol); err != nil {
+		if errno, ok := err.(syscall.Errno); ok {
+			if errno == syscall.Errno(0x21) {
+				return AlreadyLocked
+			}
+		}
+		return err
+	}
+	return nil
+}
+
 func (m *FileMutex) Lock() error {
 	var ol syscall.Overlapped
 	if err := lockFileEx(m.fd, lockfileExclusiveLock, 0, 1, 0, &ol); err != nil {
@@ -90,9 +104,7 @@ func (m *FileMutex) RUnlock() error {
 	return nil
 }
 
-// Close does an Unlock() combined with closing and unlinking the associated
-// lock file. You should create a New() FileMutex for every Lock() attempt if
-// using Close().
+// Close unlocks the lock and closes the underlying file descriptor.
 func (m *FileMutex) Close() error {
 	var ol syscall.Overlapped
 	if err := unlockFileEx(m.fd, 0, 1, 0, &ol); err != nil {

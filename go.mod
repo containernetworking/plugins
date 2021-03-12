@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/Microsoft/hcsshim v0.8.16
-	github.com/alexflint/go-filemutex v0.0.0-20171022225611-72bdc8eae2ae
+	github.com/alexflint/go-filemutex v1.1.0
 	github.com/buger/jsonparser v0.0.0-20180808090653-f4dd9f5a6b44
 	github.com/containernetworking/cni v0.8.1-0.20201216164644-62e54113f44a
 	github.com/coreos/go-iptables v0.5.0
