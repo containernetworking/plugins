@@ -13,7 +13,7 @@ require (
 	github.com/d2g/dhcp4client v1.0.0
 	github.com/d2g/dhcp4server v0.0.0-20181031114812-7d4a0a7f59a5
 	github.com/godbus/dbus/v5 v5.0.3
-	github.com/j-keck/arping v0.0.0-20160618110441-2cf9dc699c56
+	github.com/j-keck/arping v1.0.1
 	github.com/mattn/go-shellwords v1.0.11
 	github.com/onsi/ginkgo v1.13.0
 	github.com/onsi/gomega v1.10.3
