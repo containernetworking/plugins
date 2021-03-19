@@ -21,9 +21,13 @@ $DOCKER run -ti -v ${SRC_DIR}:/go/src/github.com/containernetworking/plugins --r
     apk --no-cache add bash tar;
     cd /go/src/github.com/containernetworking/plugins; umask 0022;
 
+    # Even if we don't end up using it, install makebb now so that it
+    # gets built as a host binary rather than for the target arch.
+    go install github.com/u-root/gobusybox/src/cmd/makebb
+
     for arch in amd64 arm arm64 ppc64le s390x mips64le; do \
         rm -f ${OUTPUT_DIR}/*; \
-        CGO_ENABLED=0 GOARCH=\$arch ./build_linux.sh ${BUILDFLAGS}; \
+        BUNDLE=${BUNDLE:-N} MAKEBB=\$GOPATH/bin/makebb CGO_ENABLED=0 GOARCH=\$arch ./build_linux.sh ${BUILDFLAGS}; \
         for format in tgz; do \
             FILENAME=cni-plugins-linux-\$arch-${TAG}.\$format; \
             FILEPATH=${RELEASE_DIR}/\$FILENAME; \

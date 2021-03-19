@@ -22,6 +22,7 @@ require (
 	github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
 	github.com/sirupsen/logrus v1.0.6 // indirect
 	github.com/stretchr/testify v1.3.0 // indirect
+	github.com/u-root/gobusybox/src v0.0.0-20200923191651-a55b339949b0
 	github.com/vishvananda/netlink v1.1.1-0.20201029203352-d40f9887b852
 	golang.org/x/sys v0.0.0-20201117170446-d9b008d0a637
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect

@@ -1,0 +1,18 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "makebb_lib",
+    srcs = ["makebb.go"],
+    importpath = "github.com/u-root/gobusybox/src/cmd/makebb",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//src/pkg/bb",
+        "//src/pkg/golang",
+    ],
+)
+
+go_binary(
+    name = "makebb",
+    embed = [":makebb_lib"],
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,22 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "bbinternal",
+    srcs = ["bb.go"],
+    importpath = "github.com/u-root/gobusybox/src/pkg/bb/bbinternal",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//src/pkg/golang",
+        "@com_github_u_root_u_root//pkg/cp",
+        "@org_golang_x_sys//unix",
+        "@org_golang_x_tools//go/ast/astutil",
+        "@org_golang_x_tools//go/packages",
+        "@org_golang_x_tools//imports",
+    ],
+)
+
+go_test(
+    name = "bbinternal_test",
+    srcs = ["bb_test.go"],
+    embed = [":bbinternal"],
+)
