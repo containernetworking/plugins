@@ -260,7 +260,7 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 	return br, nil
 }
 
-func ensureVlanInterface(br *netlink.Bridge, vlanId int) (netlink.Link, error) {
+func ensureVlanInterface(hostNS ns.NetNS, bridgeNS ns.NetNS, br *netlink.Bridge, vlanId int) (netlink.Link, error) {
 	name := fmt.Sprintf("%s.%d", br.Name, vlanId)
 
 	brGatewayVeth, err := netlink.LinkByName(name)
@@ -269,14 +269,9 @@ func ensureVlanInterface(br *netlink.Bridge, vlanId int) (netlink.Link, error) {
 			return nil, fmt.Errorf("failed to find interface %q: %v", name, err)
 		}
 
-		hostNS, err := ns.GetCurrentNS()
+		_, brGatewayIface, err := setupVeth(hostNS, bridgeNS, br, name, br.MTU, false, vlanId)
 		if err != nil {
-			return nil, fmt.Errorf("faild to find host namespace: %v", err)
-		}
-
-		_, brGatewayIface, err := setupVeth(hostNS, hostNS, br, name, br.MTU, false, vlanId)
-		if err != nil {
-			return nil, fmt.Errorf("faild to create vlan gateway %q: %v", name, err)
+			return nil, fmt.Errorf("failed to create vlan gateway %q: %v", name, err)
 		}
 
 		brGatewayVeth, err = netlink.LinkByName(brGatewayIface.Name)
@@ -405,8 +400,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("cannot set hairpin mode and promiscous mode at the same time.")
 	}
 
-	// Get the NS which will be worked on, either a separate namespace of the bridge
-	// or the host net ns
+	// We need the HostNS later for the gateway setup
+	// but can also use it as a bridgeNS
+	hostNS, err := ns.GetCurrentNS()
+
+	if err != nil {
+		return fmt.Errorf("failed to get current (host) netns: %v", err)
+	}
+
+	defer hostNS.Close()
+
 	var bridgeNS ns.NetNS
 
 	if n.BrNamespace != "" {
@@ -419,13 +422,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		defer bridgeNS.Close()
 	} else {
-		bridgeNS, err = ns.GetCurrentNS()
-
-		if err != nil {
-			return fmt.Errorf("failed to get current netns: %v", err)
-		}
-
-		defer bridgeNS.Close()
+		// reuse the hostNS as bridgeNS, if the bridge stays in the hostNS
+		bridgeNS = hostNS
 	}
 
 	var br *netlink.Bridge
@@ -564,6 +562,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err
 		}
 
+		// Introduction of the bridge NS makes the following a bit more complex:
+		// with bridgeNS a veth pair is always created between the bridge and the host
+		// this is also used for the vlan, the ip is always set on this veth
+		//
+		// without the bridgeNS the previous behaviour is kept, so that only a
+		// vlan requires a veth pair
 		if n.IsGW {
 			var firstV4Addr net.IP
 			var vlanInterface *current.Interface
@@ -573,8 +577,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 					if gw.IP.To4() != nil && firstV4Addr == nil {
 						firstV4Addr = gw.IP
 					}
-					if n.Vlan != 0 {
-						vlanIface, err := ensureVlanInterface(br, n.Vlan)
+
+					if n.Vlan != 0 || n.BrNamespace != "" {
+						vlanIface, err := ensureVlanInterface(hostNS, bridgeNS, br, n.Vlan)
 						if err != nil {
 							return fmt.Errorf("failed to create vlan interface: %v", err)
 						}
@@ -587,7 +592,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 						err = ensureAddr(vlanIface, gws.family, &gw, n.ForceAddress)
 						if err != nil {
-							return fmt.Errorf("failed to set vlan interface for bridge with addr: %v", err)
+							return fmt.Errorf("failed to set vlan (%d) interface for bridge with addr: %v", n.Vlan, err)
 						}
 					} else {
 						err = ensureAddr(br, gws.family, &gw, n.ForceAddress)
