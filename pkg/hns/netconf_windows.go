@@ -73,6 +73,9 @@ func GetDefaultDestinationPrefix(ip *net.IP) string {
 }
 
 func (n *NetConf) ApplyLoopbackDSR(ip *net.IP) {
+	if err := hcn.DSRSupported(); err != nil {
+		return
+	}
 	value := fmt.Sprintf(`"Destinations" : ["%s"]`, ip.String())
 	if n.ApiVersion == 2 {
 		hcnLoopbackRoute := hcn.EndpointPolicy{
