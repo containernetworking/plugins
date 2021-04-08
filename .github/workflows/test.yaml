@@ -31,6 +31,10 @@ jobs:
     name: Run tests on Linux amd64
     runs-on: ubuntu-latest
     steps:
+      - name: Install kernel module
+        run: |
+          sudo apt-get update
+          sudo apt-get install linux-modules-extra-$(uname -r)
       - name: setup go
         uses: actions/setup-go@v2
         with:
