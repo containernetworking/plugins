@@ -21,7 +21,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/100"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
 	. "github.com/onsi/ginkgo"
@@ -493,6 +493,58 @@ var _ = Describe("static Operations", func() {
 				return cmdDel(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It(fmt.Sprintf("[%s] is returning an error on missing ipam key when args are set", ver), func() {
+			const ifname string = "eth0"
+			const nspath string = "/some/where"
+			conf := fmt.Sprintf(`{
+				"cniVersion": "%s",
+				"name": "mynet",
+				"type": "ipvlan",
+				"master": "foo0"
+			}`, ver)
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       nspath,
+				IfName:      ifname,
+				StdinData:   []byte(conf),
+				Args:        "IP=10.10.0.1/24;GATEWAY=10.10.0.254",
+			}
+
+			// Allocate the IP
+			_, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).Should(MatchError("IPAM config missing 'ipam' key"))
+		})
+
+		It(fmt.Sprintf("[%s] is returning an error on missing ipam key when runtimeConfig is set", ver), func() {
+			const ifname string = "eth0"
+			const nspath string = "/some/where"
+			conf := fmt.Sprintf(`{
+				"cniVersion": "%s",
+				"name": "mynet",
+				"type": "ipvlan",
+				"master": "foo0",
+				"runtimeConfig": {
+					"ips": ["10.10.0.1/24"]
+				}
+			}`, ver)
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       nspath,
+				IfName:      ifname,
+				StdinData:   []byte(conf),
+			}
+
+			// Allocate the IP
+			_, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).Should(MatchError("IPAM config missing 'ipam' key"))
 		})
 	}
 })
