@@ -113,11 +113,14 @@ func ConfigureIface(ifName string, res *current.Result) error {
 				gw = v6gw
 			}
 		}
-		if err = ip.AddRoute(&r.Dst, gw, link); err != nil {
-			// we skip over duplicate routes as we assume the first one wins
-			if !os.IsExist(err) {
-				return fmt.Errorf("failed to add route '%v via %v dev %v': %v", r.Dst, gw, ifName, err)
-			}
+		route := netlink.Route{
+			Dst:       &r.Dst,
+			LinkIndex: link.Attrs().Index,
+			Gw:        gw,
+		}
+
+		if err = netlink.RouteAddEcmp(&route); err != nil {
+			return fmt.Errorf("failed to add route '%v via %v dev %v': %v", r.Dst, gw, ifName, err)
 		}
 	}
 
