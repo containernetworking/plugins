@@ -225,58 +225,53 @@ func GenerateHcnEndpoint(epInfo *EndpointInfo, n *NetConf) (*hcn.HostComputeEndp
 	// run the IPAM plugin and get back the config to apply
 	hcnEndpoint, err := hcn.GetEndpointByName(epInfo.EndpointName)
 	if err != nil && !hcn.IsNotFoundError(err) {
-		return nil, errors.Annotatef(err, "failed to get endpoint %q", epInfo.EndpointName)
+		return nil, errors.Annotatef(err, "failed to get HostComputeEndpoint %s", epInfo.EndpointName)
 	}
 
+	// verify the existing endpoint is corrupted or not
 	if hcnEndpoint != nil {
-		// If the endpont already exists, then we should return error unless
-		// the endpoint is based on a different network then delete
-		// should that fail return error
-		if !strings.EqualFold(hcnEndpoint.HostComputeNetwork, epInfo.NetworkId) {
-			err = hcnEndpoint.Delete()
-			if err != nil {
-				return nil, errors.Annotatef(err, "failed to delete endpoint %s", epInfo.EndpointName)
-			}
-		} else {
-			return nil, fmt.Errorf("endpoint %q already exits", epInfo.EndpointName)
+		if strings.EqualFold(hcnEndpoint.HostComputeNetwork, epInfo.NetworkId) {
+			return nil, fmt.Errorf("HostComputeNetwork %s is already existed", epInfo.EndpointName)
+		}
+		// remove endpoint if corrupted
+		if err := hcnEndpoint.Delete(); err != nil {
+			return nil, errors.Annotatef(err, "failed to delete corrupted HostComputeEndpoint %s", epInfo.EndpointName)
 		}
 	}
 
-	if hcnEndpoint == nil {
-		routes := []hcn.Route{
+	if n.LoopbackDSR {
+		n.ApplyLoopbackDSR(&epInfo.IpAddress)
+	}
+	hcnEndpoint = &hcn.HostComputeEndpoint{
+		SchemaVersion: hcn.SchemaVersion{
+			Major: 2,
+			Minor: 0,
+		},
+		Name:               epInfo.EndpointName,
+		HostComputeNetwork: epInfo.NetworkId,
+		Dns: hcn.Dns{
+			Domain:     epInfo.DNS.Domain,
+			Search:     epInfo.DNS.Search,
+			ServerList: epInfo.DNS.Nameservers,
+			Options:    epInfo.DNS.Options,
+		},
+		Routes: []hcn.Route{
 			{
 				NextHop:           GetIpString(&epInfo.Gateway),
 				DestinationPrefix: GetDefaultDestinationPrefix(&epInfo.Gateway),
 			},
-		}
-
-		hcnDns := hcn.Dns{
-			Search:     epInfo.DNS.Search,
-			ServerList: epInfo.DNS.Nameservers,
-		}
-
-		hcnIpConfig := hcn.IpConfig{
-			IpAddress: GetIpString(&epInfo.IpAddress),
-		}
-		ipConfigs := []hcn.IpConfig{hcnIpConfig}
-
-		if n.LoopbackDSR {
-			n.ApplyLoopbackDSR(&epInfo.IpAddress)
-		}
-		hcnEndpoint = &hcn.HostComputeEndpoint{
-			SchemaVersion:      hcn.Version{Major: 2},
-			Name:               epInfo.EndpointName,
-			HostComputeNetwork: epInfo.NetworkId,
-			Dns:                hcnDns,
-			Routes:             routes,
-			IpConfigurations:   ipConfigs,
-			Policies: func() []hcn.EndpointPolicy {
-				if n.HcnPolicyArgs == nil {
-					n.HcnPolicyArgs = []hcn.EndpointPolicy{}
-				}
-				return n.HcnPolicyArgs
-			}(),
-		}
+		},
+		IpConfigurations: []hcn.IpConfig{
+			{
+				IpAddress: GetIpString(&epInfo.IpAddress),
+			},
+		},
+		Policies: func() []hcn.EndpointPolicy {
+			if n.HcnPolicyArgs == nil {
+				n.HcnPolicyArgs = []hcn.EndpointPolicy{}
+			}
+			return n.HcnPolicyArgs
+		}(),
 	}
 	return hcnEndpoint, nil
 }
@@ -284,17 +279,16 @@ func GenerateHcnEndpoint(epInfo *EndpointInfo, n *NetConf) (*hcn.HostComputeEndp
 // RemoveHcnEndpoint removes the given name endpoint from namespace.
 func RemoveHcnEndpoint(epName string) error {
 	hcnEndpoint, err := hcn.GetEndpointByName(epName)
-	if hcn.IsNotFoundError(err) {
-		return nil
-	} else if err != nil {
-		_ = fmt.Errorf("[win-cni] Failed to find endpoint %v, err:%v", epName, err)
-		return err
-	}
-	if hcnEndpoint != nil {
-		err = hcnEndpoint.Delete()
-		if err != nil {
-			return fmt.Errorf("[win-cni] Failed to delete endpoint %v, err:%v", epName, err)
+	if err != nil {
+		if hcn.IsNotFoundError(err) {
+			return nil
 		}
+		return errors.Annotatef(err, "failed to find HostComputeEndpoint %s", epName)
+	}
+
+	err = hcnEndpoint.Delete()
+	if err != nil {
+		return errors.Annotatef(err, "failed to remove HostComputeEndpoint %s", epName)
 	}
 	return nil
 }
@@ -303,20 +297,42 @@ type HcnEndpointMakerFunc func() (*hcn.HostComputeEndpoint, error)
 
 // AddHcnEndpoint attaches a HostComputeEndpoint to the given namespace.
 func AddHcnEndpoint(epName string, expectedNetworkId string, namespace string, makeEndpoint HcnEndpointMakerFunc) (*hcn.HostComputeEndpoint, error) {
-	hcnEndpoint, err := makeEndpoint()
+	hcnEndpoint, err := hcn.GetEndpointByName(epName)
 	if err != nil {
-		return nil, errors.Annotate(err, "failed to make a new HostComputeEndpoint")
+		if !hcn.IsNotFoundError(err) {
+			return nil, errors.Annotatef(err, "failed to find HostComputeEndpoint %s", epName)
+		}
 	}
 
-	if hcnEndpoint, err = hcnEndpoint.Create(); err != nil {
-		return nil, errors.Annotate(err, "failed to create the new HostComputeEndpoint")
+	// verify the existing endpoint is corrupted or not
+	if hcnEndpoint != nil {
+		if !strings.EqualFold(hcnEndpoint.HostComputeNetwork, expectedNetworkId) {
+			if err := hcnEndpoint.Delete(); err != nil {
+				return nil, errors.Annotatef(err, "failed to delete corrupted HostComputeEndpoint %s", epName)
+			}
+			hcnEndpoint = nil
+		}
 	}
 
+	// create endpoint if not found
+	var isNewEndpoint bool
+	if hcnEndpoint == nil {
+		if hcnEndpoint, err = makeEndpoint(); err != nil {
+			return nil, errors.Annotate(err, "failed to make a new HostComputeEndpoint")
+		}
+		if hcnEndpoint, err = hcnEndpoint.Create(); err != nil {
+			return nil, errors.Annotate(err, "failed to create the new HostComputeEndpoint")
+		}
+		isNewEndpoint = true
+	}
+
+	// add to namespace
 	err = hcn.AddNamespaceEndpoint(namespace, hcnEndpoint.Id)
 	if err != nil {
-		err := RemoveHcnEndpoint(epName)
-		if err != nil {
-			return nil, errors.Annotatef(err, "failed to remote the new HostComputeEndpoint %s after adding HostComputeNamespace %s failure", epName, namespace)
+		if isNewEndpoint {
+			if err := RemoveHcnEndpoint(epName); err != nil {
+				return nil, errors.Annotatef(err, "failed to remove the new HostComputeEndpoint %s after adding HostComputeNamespace %s failure", epName, namespace)
+			}
 		}
 		return nil, errors.Annotatef(err, "failed to add HostComputeEndpoint %s to HostComputeNamespace %s", epName, namespace)
 	}
@@ -348,6 +364,8 @@ func ConstructHcnResult(hcnNetwork *hcn.HostComputeNetwork, hcnEndpoint *hcn.Hos
 		DNS: types.DNS{
 			Search:      hcnEndpoint.Dns.Search,
 			Nameservers: hcnEndpoint.Dns.ServerList,
+			Options:     hcnEndpoint.Dns.Options,
+			Domain:      hcnEndpoint.Dns.Domain,
 		},
 	}
 
