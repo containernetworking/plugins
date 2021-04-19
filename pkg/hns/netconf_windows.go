@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-
 	"strings"
 
 	"github.com/Microsoft/hcsshim/hcn"
@@ -72,6 +71,7 @@ func GetDefaultDestinationPrefix(ip *net.IP) string {
 	return destinationPrefix
 }
 
+// ApplyLoopbackDSR configures the given IP to support loopback DSR.
 func (n *NetConf) ApplyLoopbackDSR(ip *net.IP) {
 	value := fmt.Sprintf(`"Destinations" : ["%s"]`, ip.String())
 	if n.ApiVersion == 2 {
@@ -89,7 +89,7 @@ func (n *NetConf) ApplyLoopbackDSR(ip *net.IP) {
 	}
 }
 
-// If runtime dns values are there use that else use cni conf supplied dns
+// GetDNS returns the DNS values if they are there use that else use netconf supplied DNS.
 func (n *NetConf) GetDNS() types.DNS {
 	dnsResult := n.DNS
 	if len(n.RuntimeConfig.DNS.Nameservers) > 0 {
@@ -101,8 +101,8 @@ func (n *NetConf) GetDNS() types.DNS {
 	return dnsResult
 }
 
-// MarshalPolicies converts the Endpoint policies in Policies
-// to HNS specific policies as Json raw bytes
+// MarshalPolicies converts the HNSEndpoint policies in Policies
+// to HNS specific policies as Json raw bytes.
 func (n *NetConf) MarshalPolicies() []json.RawMessage {
 	if n.Policies == nil {
 		n.Policies = make([]policy, 0)
@@ -120,8 +120,7 @@ func (n *NetConf) MarshalPolicies() []json.RawMessage {
 	return result
 }
 
-// ApplyOutboundNatPolicy applies NAT Policy in VFP using HNS
-// Simultaneously an exception is added for the network that has to be Nat'd
+// ApplyOutboundNatPolicy applies the sNAT policy in HNS/HCN and configures the given CIDR as an exception.
 func (n *NetConf) ApplyOutboundNatPolicy(nwToNat string) {
 	if n.Policies == nil {
 		n.Policies = make([]policy, 0)
@@ -183,7 +182,7 @@ func (n *NetConf) ApplyOutboundNatPolicy(nwToNat string) {
 	})
 }
 
-// ApplyDefaultPAPolicy is used to configure a endpoint PA policy in HNS
+// ApplyDefaultPAPolicy applies an endpoint PA policy in HNS/HCN.
 func (n *NetConf) ApplyDefaultPAPolicy(paAddress string) {
 	if n.Policies == nil {
 		n.Policies = make([]policy, 0)
@@ -217,7 +216,7 @@ func (n *NetConf) ApplyDefaultPAPolicy(paAddress string) {
 	})
 }
 
-// ApplyPortMappingPolicy is used to configure HostPort<>ContainerPort mapping in HNS
+// ApplyPortMappingPolicy applies the host/container port mapping policies in HNS/HCN.
 func (n *NetConf) ApplyPortMappingPolicy(portMappings []PortMapEntry) {
 	if portMappings == nil {
 		return
