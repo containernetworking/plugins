@@ -84,9 +84,7 @@ func processEndpointArgs(args *skel.CmdArgs, n *NetConf) (*hns.EndpointInfo, err
 	}
 
 	// configure sNAT exception
-	if len(n.IPMasqNetwork) != 0 {
-		n.ApplyOutboundNatPolicy(n.IPMasqNetwork)
-	}
+	n.ApplyOutboundNatPolicy(n.IPMasqNetwork)
 
 	// add port mapping if any present
 	n.ApplyPortMappingPolicy(n.RuntimeConfig.PortMaps)

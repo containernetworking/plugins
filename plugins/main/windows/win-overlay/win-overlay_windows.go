@@ -119,7 +119,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		result.DNS = n.GetDNS()
 		if n.LoopbackDSR {
-			n.ApplyLoopbackDSR(&ipAddr)
+			n.ApplyLoopbackDSRPolicy(&ipAddr)
 		}
 		hnsEndpoint := &hcsshim.HNSEndpoint{
 			Name:           epName,
@@ -129,7 +129,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			GatewayAddress: gw,
 			IPAddress:      ipAddr,
 			MacAddress:     macAddr,
-			Policies:       n.MarshalPolicies(),
+			Policies:       n.GetHNSEndpointPolicies(),
 		}
 
 		return hnsEndpoint, nil
