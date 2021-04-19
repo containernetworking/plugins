@@ -63,12 +63,35 @@ type policy struct {
 	Value json.RawMessage `json:"value"`
 }
 
-func GetDefaultDestinationPrefix(ip *net.IP) string {
-	destinationPrefix := "0.0.0.0/0"
-	if ipv6 := ip.To4(); ipv6 == nil {
-		destinationPrefix = "::/0"
+// MarshalPolicies converts the HNSEndpoint policies in Policies
+// to HNS specific policies as Json raw bytes.
+func (n *NetConf) MarshalPolicies() []json.RawMessage {
+	if n.Policies == nil {
+		n.Policies = make([]policy, 0)
 	}
-	return destinationPrefix
+
+	result := make([]json.RawMessage, 0, len(n.Policies))
+	for _, p := range n.Policies {
+		if !strings.EqualFold(p.Name, "EndpointPolicy") {
+			continue
+		}
+
+		result = append(result, p.Value)
+	}
+
+	return result
+}
+
+// GetDNS returns the DNS values if they are there use that else use netconf supplied DNS.
+func (n *NetConf) GetDNS() types.DNS {
+	dnsResult := n.DNS
+	if len(n.RuntimeConfig.DNS.Nameservers) > 0 {
+		dnsResult.Nameservers = n.RuntimeConfig.DNS.Nameservers
+	}
+	if len(n.RuntimeConfig.DNS.Search) > 0 {
+		dnsResult.Search = n.RuntimeConfig.DNS.Search
+	}
+	return dnsResult
 }
 
 // ApplyLoopbackDSR configures the given IP to support loopback DSR.
@@ -87,37 +110,6 @@ func (n *NetConf) ApplyLoopbackDSR(ip *net.IP) {
 		}
 		n.Policies = append(n.Policies, hnsLoopbackRoute)
 	}
-}
-
-// GetDNS returns the DNS values if they are there use that else use netconf supplied DNS.
-func (n *NetConf) GetDNS() types.DNS {
-	dnsResult := n.DNS
-	if len(n.RuntimeConfig.DNS.Nameservers) > 0 {
-		dnsResult.Nameservers = n.RuntimeConfig.DNS.Nameservers
-	}
-	if len(n.RuntimeConfig.DNS.Search) > 0 {
-		dnsResult.Search = n.RuntimeConfig.DNS.Search
-	}
-	return dnsResult
-}
-
-// MarshalPolicies converts the HNSEndpoint policies in Policies
-// to HNS specific policies as Json raw bytes.
-func (n *NetConf) MarshalPolicies() []json.RawMessage {
-	if n.Policies == nil {
-		n.Policies = make([]policy, 0)
-	}
-
-	result := make([]json.RawMessage, 0, len(n.Policies))
-	for _, p := range n.Policies {
-		if !strings.EqualFold(p.Name, "EndpointPolicy") {
-			continue
-		}
-
-		result = append(result, p.Value)
-	}
-
-	return result
 }
 
 // ApplyOutboundNatPolicy applies the sNAT policy in HNS/HCN and configures the given CIDR as an exception.
