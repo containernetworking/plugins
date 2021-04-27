@@ -401,6 +401,122 @@ var _ = Describe("sbr test", func() {
 		Expect(equalRoutes(expNet1.Routes, devNet1.Routes)).To(BeTrue())
 	})
 
+	It("Works with multiple IPs", func() {
+		ifname := "net1"
+		conf := `{
+	"cniVersion": "0.3.0",
+	"name": "cni-plugin-sbr-test",
+	"type": "sbr",
+	"prevResult": {
+		"cniVersion": "0.3.0",
+		"interfaces": [
+			{
+				"name": "%s",
+				"sandbox": "%s"
+			}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "192.168.1.209/24",
+				"gateway": "192.168.1.1",
+				"interface": 0
+			},
+			{
+				"version": "4",
+				"address": "192.168.101.209/24",
+				"gateway": "192.168.101.1",
+				"interface": 1
+			}
+		],
+		"routes": []
+	}
+}`
+		conf = fmt.Sprintf(conf, ifname, targetNs.Path())
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNs.Path(),
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+		
+		preStatus := createDefaultStatus()
+		
+		// Add the second IP on net1 interface
+		preStatus.Devices[1].Addrs = append(preStatus.Devices[1].Addrs,
+			net.IPNet{
+				IP: net.IPv4(192, 168, 101, 209),
+				Mask: net.IPv4Mask(255, 255, 255, 0),
+			})
+		
+		err := setup(targetNs, preStatus)
+		Expect(err).NotTo(HaveOccurred())
+		
+		oldStatus, err := readback(targetNs, []string{"net1", "eth0"})
+		Expect(err).NotTo(HaveOccurred())
+		
+		_, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+		Expect(err).NotTo(HaveOccurred())
+		
+		newStatus, err := readback(targetNs, []string{"net1", "eth0"})
+		Expect(err).NotTo(HaveOccurred())
+		
+		// Check results. We expect all the routes on net1 to have moved to
+		// table 100 except for local routes (table 255); a new default gateway
+		// route to have been created; and 2 rules to exist.
+		expNet1 := oldStatus.Devices[0]
+		expEth0 := oldStatus.Devices[1]
+		
+		for i := range expNet1.Routes {
+			if expNet1.Routes[i].Table != 255 {
+				if expNet1.Routes[i].Src.String() == "192.168.101.209" {
+					// All 192.168.101.x routes expected in table 101
+					expNet1.Routes[i].Table = 101
+				} else if (expNet1.Routes[i].Src == nil && expNet1.Routes[i].Gw == nil) {
+					// Generic Link Local Addresses assigned. They should exist in all
+					// route tables
+					expNet1.Routes[i].Table = 100
+					expNet1.Routes = append(expNet1.Routes,
+						netlink.Route{
+							Dst: expNet1.Routes[i].Dst,
+							Table:     101,
+							LinkIndex: expNet1.Routes[i].LinkIndex})
+				} else {
+					// All 192.168.1.x routes expected in tabele 100
+					expNet1.Routes[i].Table = 100
+				}
+			}
+		}
+		expNet1.Routes = append(expNet1.Routes,
+			netlink.Route{
+				Gw:        net.IPv4(192, 168, 1, 1),
+				Table:     100,
+				LinkIndex: expNet1.Routes[0].LinkIndex})
+		
+		expNet1.Routes = append(expNet1.Routes,
+			netlink.Route{
+				Gw:        net.IPv4(192, 168, 101, 1),
+				Table:     101,
+				LinkIndex: expNet1.Routes[0].LinkIndex})
+		
+		// 2 Rules will ve created for each IP address. (100, 101)
+		Expect(len(newStatus.Rules)).To(Equal(2))
+				
+		// First entry corresponds to last table
+		Expect(newStatus.Rules[0].Table).To(Equal(101))
+		Expect(newStatus.Rules[0].Src.String()).To(Equal("192.168.101.209/32"))
+		
+		// Second entry corresponds to first table (100)
+		Expect(newStatus.Rules[1].Table).To(Equal(100))
+		Expect(newStatus.Rules[1].Src.String()).To(Equal("192.168.1.209/32"))
+		
+		devNet1 := newStatus.Devices[0]
+		devEth0 := newStatus.Devices[1]
+		Expect(equalRoutes(expNet1.Routes, devNet1.Routes)).To(BeTrue())
+		Expect(equalRoutes(expEth0.Routes, devEth0.Routes)).To(BeTrue())
+		
+	})	
+
 	It("fails with CNI spec versions that don't support plugin chaining", func() {
 		conf := `{
 	"cniVersion": "0.2.0",
