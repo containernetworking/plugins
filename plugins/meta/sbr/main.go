@@ -225,6 +225,12 @@ func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface strin
 
 	linkIndex := link.Attrs().Index
 
+	// Get all routes for the interface in the default routing table
+	routes, err = netlink.RouteList(link, netlink.FAMILY_ALL)
+	if err != nil {
+		return fmt.Errorf("Unable to list routes: %v", err)
+	}
+
 	// Loop through setting up source based rules and default routes.
 	for _, ipCfg := range ipCfgs {
 		log.Printf("Set rule for source %s", ipCfg.String())
@@ -274,37 +280,46 @@ func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface strin
 					err)
 			}
 		}
-	}
 
-	// Move all routes into the correct table. We are taking a shortcut; all
-	// the routes have been added to the interface anyway but in the wrong
-	// table, so instead of removing them we just move them to the table we
-	// want them in.
-	routes, err = netlink.RouteList(link, netlink.FAMILY_ALL)
-	if err != nil {
-		return fmt.Errorf("Unable to list routes: %v", err)
-	}
+		// Copy the previously added routes for the interface to the correct
+		// table; all the routes have been added to the interface anyway but
+		// in the wrong table, so instead of removing them we just move them
+		// to the table we want them in.
+		for _, r := range routes {
+			if ipCfg.Address.Contains(r.Src) || ipCfg.Address.Contains(r.Gw) ||
+					(r.Src == nil && r.Gw == nil) {
+				// (r.Src == nil && r.Gw == nil) is inferred as a generic route
+				log.Printf("Copying route %s from table %d to %d",
+					r.String(), r.Table, table)
 
+				r.Table = table
+		
+				// Reset the route flags since if it is dynamically created,
+				// adding it to the new table will fail with "invalid argument"
+				r.Flags = 0
+		
+				// We use route replace in case the route already exists, which
+				// is possible for the default gateway we added above.
+				err = netlink.RouteReplace(&r)
+				if err != nil {
+					return fmt.Errorf("Failed to readd route: %v", err)
+				}
+			}
+		}
+
+		// Use a different table for each ipCfg
+		table++
+	}
+	
+	// Delete all the interface routes in the default routing table, which were
+	// copied to source based routing tables.
+	// Not deleting them while copying to accommodate for multiple ipCfgs from
+	// the same subnet. Else, (error for network is unreachable while adding gateway)
 	for _, route := range routes {
-		log.Printf("Moving route %s from table %d to %d",
-			route.String(), route.Table, table)
-
+		log.Printf("Deleting route %s from table %d", route.String(), route.Table)
 		err := netlink.RouteDel(&route)
 		if err != nil {
 			return fmt.Errorf("Failed to delete route: %v", err)
-		}
-
-		route.Table = table
-
-		// Reset the route flags since if it is dynamically created,
-		// adding it to the new table will fail with "invalid argument"
-		route.Flags = 0
-
-		// We use route replace in case the route already exists, which
-		// is possible for the default gateway we added above.
-		err = netlink.RouteReplace(&route)
-		if err != nil {
-			return fmt.Errorf("Failed to readd route: %v", err)
 		}
 	}
 
