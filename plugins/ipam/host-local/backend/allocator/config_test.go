@@ -379,4 +379,29 @@ var _ = Describe("IPAM config", func() {
 		_, _, err := LoadIPAMConfig([]byte(input), "")
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	It("Should parse custom IPs from runtime configuration", func() {
+		input := `{
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"runtimeConfig": {
+				"ips": ["192.168.0.1", "192.168.0.5/24", "2001:db8::1/64"]
+			},
+			"ipam": {
+				"type": "host-local",
+				"subnet": "10.1.2.0/24"
+			}
+		}`
+		conf, version, err := LoadIPAMConfig([]byte(input), "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(version).Should(Equal("0.3.1"))
+
+		Expect(conf.IPArgs).To(Equal([]net.IP{
+			net.IPv4(192, 168, 0, 1).To4(),
+			net.IPv4(192, 168, 0, 5).To4(),
+			net.ParseIP("2001:db8::1"),
+		}))
+	})
 })
