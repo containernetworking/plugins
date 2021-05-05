@@ -29,6 +29,7 @@ import (
 
 	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -44,11 +45,12 @@ const defaultDataDir = "/run/cni/tuning"
 // TuningConf represents the network tuning configuration.
 type TuningConf struct {
 	types.NetConf
-	DataDir string            `json:"dataDir,omitempty"`
-	SysCtl  map[string]string `json:"sysctl"`
-	Mac     string            `json:"mac,omitempty"`
-	Promisc bool              `json:"promisc,omitempty"`
-	Mtu     int               `json:"mtu,omitempty"`
+	DataDir  string            `json:"dataDir,omitempty"`
+	SysCtl   map[string]string `json:"sysctl"`
+	Mac      string            `json:"mac,omitempty"`
+	Promisc  bool              `json:"promisc,omitempty"`
+	Mtu      int               `json:"mtu,omitempty"`
+	Allmulti *bool             `json:"allmulti,omitempty"`
 
 	RuntimeConfig struct {
 		Mac string `json:"mac,omitempty"`
@@ -59,17 +61,19 @@ type TuningConf struct {
 }
 
 type IPAMArgs struct {
-	SysCtl  *map[string]string `json:"sysctl"`
-	Mac     *string            `json:"mac,omitempty"`
-	Promisc *bool              `json:"promisc,omitempty"`
-	Mtu     *int               `json:"mtu,omitempty"`
+	SysCtl   *map[string]string `json:"sysctl"`
+	Mac      *string            `json:"mac,omitempty"`
+	Promisc  *bool              `json:"promisc,omitempty"`
+	Mtu      *int               `json:"mtu,omitempty"`
+	Allmulti *bool              `json:"allmulti,omitempty"`
 }
 
 // configToRestore will contain interface attributes that should be restored on cmdDel
 type configToRestore struct {
-	Mac     string `json:"mac,omitempty"`
-	Promisc *bool  `json:"promisc,omitempty"`
-	Mtu     int    `json:"mtu,omitempty"`
+	Mac      string `json:"mac,omitempty"`
+	Promisc  *bool  `json:"promisc,omitempty"`
+	Mtu      int    `json:"mtu,omitempty"`
+	Allmulti *bool  `json:"allmulti,omitempty"`
 }
 
 // MacEnvArgs represents CNI_ARG
@@ -126,6 +130,9 @@ func parseConf(data []byte, envArgs string) (*TuningConf, error) {
 			conf.Mtu = *conf.Args.A.Mtu
 		}
 
+		if conf.Args.A.Allmulti != nil {
+			conf.Allmulti = conf.Args.A.Allmulti
+		}
 	}
 
 	return &conf, nil
@@ -181,6 +188,18 @@ func changeMtu(ifName string, mtu int) error {
 	return netlink.LinkSetMTU(link, mtu)
 }
 
+func changeAllmulti(ifName string, val bool) error {
+	link, err := netlink.LinkByName(ifName)
+	if err != nil {
+		return fmt.Errorf("failed to get %q: %v", ifName, err)
+	}
+
+	if val {
+		return netlink.LinkSetAllmulticastOn(link)
+	}
+	return netlink.LinkSetAllmulticastOff(link)
+}
+
 func createBackup(ifName, containerID, backupPath string, tuningConf *TuningConf) error {
 	config := configToRestore{}
 	link, err := netlink.LinkByName(ifName)
@@ -196,6 +215,10 @@ func createBackup(ifName, containerID, backupPath string, tuningConf *TuningConf
 	}
 	if tuningConf.Mtu != 0 {
 		config.Mtu = link.Attrs().MTU
+	}
+	if tuningConf.Allmulti != nil {
+		config.Allmulti = new(bool)
+		*config.Allmulti = (link.Attrs().RawFlags&unix.IFF_ALLMULTI != 0)
 	}
 
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
@@ -258,6 +281,12 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 			errStr = append(errStr, err.Error())
 		}
 	}
+	if config.Allmulti != nil {
+		if err = changeAllmulti(ifName, *config.Allmulti); err != nil {
+			err = fmt.Errorf("failed to restore all-multicast mode: %v", err)
+			errStr = append(errStr, err.Error())
+		}
+	}
 
 	if len(errStr) > 0 {
 		return fmt.Errorf(strings.Join(errStr, "; "))
@@ -310,7 +339,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 
-		if tuningConf.Mac != "" || tuningConf.Mtu != 0 || tuningConf.Promisc {
+		if tuningConf.Mac != "" || tuningConf.Mtu != 0 || tuningConf.Promisc || tuningConf.Allmulti != nil {
 			if err = createBackup(args.IfName, args.ContainerID, tuningConf.DataDir, tuningConf); err != nil {
 				return err
 			}
@@ -341,6 +370,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return err
 			}
 		}
+
+		if tuningConf.Allmulti != nil {
+			if err = changeAllmulti(args.IfName, *tuningConf.Allmulti); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -358,7 +393,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
-		// MAC address, MTU and promiscuous mode settings will be restored
+		// MAC address, MTU, promiscuous and all-multicast mode settings will be restored
 		return restoreBackup(args.IfName, args.ContainerID, tuningConf.DataDir)
 	})
 	return nil
@@ -432,6 +467,14 @@ func cmdCheck(args *skel.CmdArgs) error {
 			if tuningConf.Mtu != link.Attrs().MTU {
 				return fmt.Errorf("Error: Tuning configured MTU of %s is %d, current value is %d",
 					args.IfName, tuningConf.Mtu, link.Attrs().MTU)
+			}
+		}
+
+		if tuningConf.Allmulti != nil {
+			allmulti := (link.Attrs().RawFlags&unix.IFF_ALLMULTI != 0)
+			if allmulti != *tuningConf.Allmulti {
+				return fmt.Errorf("Error: Tuning configured all-multicast mode of %s is %v, current value is %v",
+					args.IfName, tuningConf.Allmulti, allmulti)
 			}
 		}
 		return nil
