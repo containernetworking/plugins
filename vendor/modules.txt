@@ -37,7 +37,7 @@ github.com/alexflint/go-filemutex
 github.com/buger/jsonparser
 # github.com/containerd/cgroups v0.0.0-20210114181951-8a68de567b68
 github.com/containerd/cgroups/stats/v1
-# github.com/containernetworking/cni v0.8.1-0.20201216164644-62e54113f44a
+# github.com/containernetworking/cni v1.0.0-rc1
 ## explicit
 github.com/containernetworking/cni/libcni
 github.com/containernetworking/cni/pkg/invoke
