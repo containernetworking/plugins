@@ -465,11 +465,12 @@ var _ = Describe("tuning plugin", func() {
 		})
 
 		It(fmt.Sprintf("[%s] configures and deconfigures mac address (from conf file) with ADD/DEL", ver), func() {
+			mac := "c2:11:22:33:44:55"
 			conf := []byte(fmt.Sprintf(`{
 				"name": "test",
 				"type": "iplink",
 				"cniVersion": "%s",
-				"mac": "c2:11:22:33:44:55",
+				"mac": "%s",
 				"prevResult": {
 					"interfaces": [
 						{"name": "dummy0", "sandbox":"netns"}
@@ -483,7 +484,7 @@ var _ = Describe("tuning plugin", func() {
 						}
 					]
 				}
-			}`, ver))
+			}`, ver, mac))
 
 			args := &skel.CmdArgs{
 				ContainerID: "dummy",
@@ -508,9 +509,10 @@ var _ = Describe("tuning plugin", func() {
 				Expect(len(result.IPs)).To(Equal(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
+				Expect(result.Interfaces[0].Mac).To(Equal(mac))
 				link, err := netlink.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
-				hw, err := net.ParseMAC("c2:11:22:33:44:55")
+				hw, err := net.ParseMAC(mac)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(hw))
 

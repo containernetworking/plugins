@@ -145,7 +145,7 @@ func changeMacAddr(ifName string, newMacAddr string) error {
 	return netlink.LinkSetHardwareAddr(link, addr)
 }
 
-func updateResultsMacAddr(config TuningConf, ifName string, newMacAddr string) {
+func updateResultsMacAddr(config *TuningConf, ifName string, newMacAddr string) {
 	// Parse previous result.
 	if config.PrevResult == nil {
 		return
@@ -159,6 +159,7 @@ func updateResultsMacAddr(config TuningConf, ifName string, newMacAddr string) {
 			i.Mac = newMacAddr
 		}
 	}
+	config.PrevResult = result
 }
 
 func changePromisc(ifName string, val bool) error {
@@ -327,7 +328,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				}
 			}
 
-			updateResultsMacAddr(*tuningConf, args.IfName, tuningConf.Mac)
+			updateResultsMacAddr(tuningConf, args.IfName, tuningConf.Mac)
 		}
 
 		if tuningConf.Promisc != false {
