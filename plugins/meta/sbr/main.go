@@ -176,23 +176,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 	return types.PrintResult(conf.PrevResult, conf.CNIVersion)
 }
 
-// doRoutes does all the work to set up routes and rules during an add.
-func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface string) error {
-	// Get a list of rules and routes ready.
-	rules, err := netlink.RuleList(netlink.FAMILY_ALL)
-	if err != nil {
-		return fmt.Errorf("Failed to list all rules: %v", err)
-	}
-
-	routes, err := netlink.RouteList(nil, netlink.FAMILY_ALL)
-	if err != nil {
-		return fmt.Errorf("Failed to list all routes: %v", err)
-	}
-
-	// Pick a table ID to use. We pick the first table ID from firstTableID
-	// on that has no existing rules mapping to it and no existing routes in
-	// it.
-	table := firstTableID
+// getNextTableID picks the first free table id from a giveen candidate id
+func getNextTableID(rules []netlink.Rule, routes []netlink.Route, candidateID int) int {
+	table := candidateID
 	for {
 		foundExisting := false
 		for _, rule := range rules {
@@ -215,7 +201,26 @@ func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface strin
 			break
 		}
 	}
+	return table
+}
 
+// doRoutes does all the work to set up routes and rules during an add.
+func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface string) error {
+	// Get a list of rules and routes ready.
+	rules, err := netlink.RuleList(netlink.FAMILY_ALL)
+	if err != nil {
+		return fmt.Errorf("Failed to list all rules: %v", err)
+	}
+
+	routes, err := netlink.RouteList(nil, netlink.FAMILY_ALL)
+	if err != nil {
+		return fmt.Errorf("Failed to list all routes: %v", err)
+	}
+
+	// Pick a table ID to use. We pick the first table ID from firstTableID
+	// on that has no existing rules mapping to it and no existing routes in
+	// it.
+	table := getNextTableID(rules, routes, firstTableID)
 	log.Printf("First unreferenced table: %d", table)
 
 	link, err := netlink.LinkByName(iface)
@@ -287,17 +292,17 @@ func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface strin
 		// to the table we want them in.
 		for _, r := range routes {
 			if ipCfg.Address.Contains(r.Src) || ipCfg.Address.Contains(r.Gw) ||
-					(r.Src == nil && r.Gw == nil) {
+				(r.Src == nil && r.Gw == nil) {
 				// (r.Src == nil && r.Gw == nil) is inferred as a generic route
 				log.Printf("Copying route %s from table %d to %d",
 					r.String(), r.Table, table)
 
 				r.Table = table
-		
+
 				// Reset the route flags since if it is dynamically created,
 				// adding it to the new table will fail with "invalid argument"
 				r.Flags = 0
-		
+
 				// We use route replace in case the route already exists, which
 				// is possible for the default gateway we added above.
 				err = netlink.RouteReplace(&r)
@@ -309,8 +314,9 @@ func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface strin
 
 		// Use a different table for each ipCfg
 		table++
+		table = getNextTableID(rules, routes, table)
 	}
-	
+
 	// Delete all the interface routes in the default routing table, which were
 	// copied to source based routing tables.
 	// Not deleting them while copying to accommodate for multiple ipCfgs from
