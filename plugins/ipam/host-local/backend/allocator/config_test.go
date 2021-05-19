@@ -205,8 +205,9 @@ var _ = Describe("IPAM config", func() {
 		}))
 	})
 
-	It("Should parse CNI_ARGS env", func() {
-		input := `{
+	Context("Should parse CNI_ARGS env", func() {
+		It("without prefix", func() {
+			input := `{
 			"cniVersion": "0.3.1",
 			"name": "mynet",
 			"type": "ipvlan",
@@ -224,16 +225,43 @@ var _ = Describe("IPAM config", func() {
 			}
 		}`
 
-		envArgs := "IP=10.1.2.10"
+			envArgs := "IP=10.1.2.10"
 
-		conf, _, err := LoadIPAMConfig([]byte(input), envArgs)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(conf.IPArgs).To(Equal([]net.IP{{10, 1, 2, 10}}))
+			conf, _, err := LoadIPAMConfig([]byte(input), envArgs)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(conf.IPArgs).To(Equal([]net.IP{{10, 1, 2, 10}}))
+		})
 
+		It("with prefix", func() {
+			input := `{
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"ranges": [[
+					{
+						"subnet": "10.1.2.0/24",
+						"rangeStart": "10.1.2.9",
+						"rangeEnd": "10.1.2.20",
+						"gateway": "10.1.2.30"
+					}
+				]]
+			}
+		}`
+
+			envArgs := "IP=10.1.2.11/24"
+
+			conf, _, err := LoadIPAMConfig([]byte(input), envArgs)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(conf.IPArgs).To(Equal([]net.IP{{10, 1, 2, 11}}))
+		})
 	})
 
-	It("Should parse config args", func() {
-		input := `{
+	Context("Should parse config args", func() {
+		It("without prefix", func() {
+			input := `{
 			"cniVersion": "0.3.1",
 			"name": "mynet",
 			"type": "ipvlan",
@@ -265,16 +293,62 @@ var _ = Describe("IPAM config", func() {
 			}
 		}`
 
-		envArgs := "IP=10.1.2.10"
+			envArgs := "IP=10.1.2.10"
 
-		conf, _, err := LoadIPAMConfig([]byte(input), envArgs)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(conf.IPArgs).To(Equal([]net.IP{
-			{10, 1, 2, 10},
-			{10, 1, 2, 11},
-			{11, 11, 11, 11},
-			net.ParseIP("2001:db8:1::11"),
-		}))
+			conf, _, err := LoadIPAMConfig([]byte(input), envArgs)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(conf.IPArgs).To(Equal([]net.IP{
+				{10, 1, 2, 10},
+				{10, 1, 2, 11},
+				{11, 11, 11, 11},
+				net.ParseIP("2001:db8:1::11"),
+			}))
+		})
+
+		It("with prefix", func() {
+			input := `{
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "ipvlan",
+			"master": "foo0",
+			"args": {
+				"cni": {
+					"ips": [ "10.1.2.11/24", "11.11.11.11/24", "2001:db8:1::11/64"]
+				}
+			},
+			"ipam": {
+				"type": "host-local",
+				"ranges": [
+					[{
+						"subnet": "10.1.2.0/24",
+						"rangeStart": "10.1.2.9",
+						"rangeEnd": "10.1.2.20",
+						"gateway": "10.1.2.30"
+					}],
+					[{
+						"subnet": "11.1.2.0/24",
+						"rangeStart": "11.1.2.9",
+						"rangeEnd": "11.1.2.20",
+						"gateway": "11.1.2.30"
+					}],
+					[{
+						"subnet": "2001:db8:1::/64"
+					}]
+				]
+			}
+		}`
+
+			envArgs := "IP=10.1.2.10/24"
+
+			conf, _, err := LoadIPAMConfig([]byte(input), envArgs)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(conf.IPArgs).To(Equal([]net.IP{
+				{10, 1, 2, 10},
+				{10, 1, 2, 11},
+				{11, 11, 11, 11},
+				net.ParseIP("2001:db8:1::11"),
+			}))
+		})
 	})
 
 	It("Should detect overlap between rangesets", func() {
