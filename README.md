@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.org/containernetworking/plugins.svg?branch=master)](https://travis-ci.org/containernetworking/plugins)
 
-# plugins
+# Plugins
 Some CNI network plugins, maintained by the containernetworking team. For more information, see the [CNI website](https://www.cni.dev).
 
 Read [CONTRIBUTING](CONTRIBUTING.md) for build and test instructions.
@@ -14,7 +14,7 @@ Read [CONTRIBUTING](CONTRIBUTING.md) for build and test instructions.
 * `ptp`: Creates a veth pair.
 * `vlan`: Allocates a vlan device.
 * `host-device`: Move an already-existing device into a container.
-#### Windows: windows specific
+#### Windows: Windows specific
 * `win-bridge`: Creates a bridge, adds the host and the container to it.
 * `win-overlay`: Creates an overlay interface to the container.
 ### IPAM: IP address allocation
