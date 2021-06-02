@@ -20,7 +20,7 @@ import (
 	"testing"
 )
 
-func TestHns(t *testing.T) {
+func TestNetConf(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "HNS NetConf Suite")
+	RunSpecs(t, "NetConf Suite")
 }

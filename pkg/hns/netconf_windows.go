@@ -17,9 +17,10 @@ package hns
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
-
+	"strconv"
 	"strings"
 
 	"github.com/Microsoft/hcsshim/hcn"
@@ -30,16 +31,16 @@ import (
 // NetConf is the CNI spec
 type NetConf struct {
 	types.NetConf
-	// ApiVersion is either 1 or 2, which specifies which hns APIs to call
-	ApiVersion int `json:"ApiVersion"`
-	// V2 Api Policies
-	HcnPolicyArgs []hcn.EndpointPolicy `json:"HcnPolicyArgs,omitempty"`
-	// V1 Api Policies
-	Policies []policy `json:"policies,omitempty"`
-	// Options to be passed in by the runtime
+	// ApiVersion specifies the policies type of HNS or HCN, select one of [1, 2].
+	// HNS is the v1 API, which is the default version and applies to dockershim.
+	// HCN is the v2 API, which can leverage HostComputeNamespace and use in containerd.
+	ApiVersion int `json:"apiVersion,omitempty"`
+	// Policies specifies the policy list for HNSEndpoint or HostComputeEndpoint.
+	Policies []Policy `json:"policies,omitempty"`
+	// RuntimeConfig represents the options to be passed in by the runtime.
 	RuntimeConfig RuntimeConfig `json:"runtimeConfig"`
-	// If true, adds a policy to endpoints to support loopback direct server return
-	LoopbackDSR bool `json:"loopbackDSR"`
+	// LoopbackDSR specifies whether to support loopback direct server return.
+	LoopbackDSR bool `json:"loopbackDSR,omitempty"`
 }
 
 type RuntimeDNS struct {
@@ -54,42 +55,67 @@ type PortMapEntry struct {
 	HostIP        string `json:"hostIP,omitempty"`
 }
 
+// constants of the supported Windows Socket protocol,
+// ref to https://docs.microsoft.com/en-us/dotnet/api/system.net.sockets.protocoltype.
+var protocolEnums = map[string]uint32{
+	"icmpv4": 1,
+	"igmp":   2,
+	"tcp":    6,
+	"udp":    17,
+	"icmpv6": 58,
+}
+
+func (p *PortMapEntry) GetProtocolEnum() (uint32, error) {
+	var u, err = strconv.ParseUint(p.Protocol, 0, 10)
+	if err != nil {
+		var pe, exist = protocolEnums[strings.ToLower(p.Protocol)]
+		if !exist {
+			return 0, errors.New("invalid protocol supplied to port mapping policy")
+		}
+		return pe, nil
+	}
+	return uint32(u), nil
+}
+
 type RuntimeConfig struct {
 	DNS      RuntimeDNS     `json:"dns"`
 	PortMaps []PortMapEntry `json:"portMappings,omitempty"`
 }
 
-type policy struct {
+type Policy struct {
 	Name  string          `json:"name"`
 	Value json.RawMessage `json:"value"`
 }
 
-func GetDefaultDestinationPrefix(ip *net.IP) string {
-	destinationPrefix := "0.0.0.0/0"
-	if ipv6 := ip.To4(); ipv6 == nil {
-		destinationPrefix = "::/0"
+// GetHNSEndpointPolicies converts the configuration policies to HNSEndpoint policies.
+func (n *NetConf) GetHNSEndpointPolicies() []json.RawMessage {
+	result := make([]json.RawMessage, 0, len(n.Policies))
+	for _, p := range n.Policies {
+		if !strings.EqualFold(p.Name, "EndpointPolicy") {
+			continue
+		}
+		result = append(result, p.Value)
 	}
-	return destinationPrefix
+	return result
 }
 
-func (n *NetConf) ApplyLoopbackDSR(ip *net.IP) {
-	value := fmt.Sprintf(`"Destinations" : ["%s"]`, ip.String())
-	if n.ApiVersion == 2 {
-		hcnLoopbackRoute := hcn.EndpointPolicy{
-			Type:     "OutBoundNAT",
-			Settings: []byte(fmt.Sprintf("{%s}", value)),
+// GetHostComputeEndpointPolicies converts the configuration policies to HostComputeEndpoint policies.
+func (n *NetConf) GetHostComputeEndpointPolicies() []hcn.EndpointPolicy {
+	result := make([]hcn.EndpointPolicy, 0, len(n.Policies))
+	for _, p := range n.Policies {
+		if !strings.EqualFold(p.Name, "EndpointPolicy") {
+			continue
 		}
-		n.HcnPolicyArgs = append(n.HcnPolicyArgs, hcnLoopbackRoute)
-	} else {
-		hnsLoopbackRoute := policy{
-			Name:  "EndpointPolicy",
-			Value: []byte(fmt.Sprintf(`{"Type": "OutBoundNAT", %s}`, value)),
+		var policy hcn.EndpointPolicy
+		if err := json.Unmarshal(p.Value, &policy); err != nil {
+			continue
 		}
-		n.Policies = append(n.Policies, hnsLoopbackRoute)
+		result = append(result, policy)
 	}
+	return result
 }
 
-// If runtime dns values are there use that else use cni conf supplied dns
+// GetDNS returns the DNS values if they are there use that else use netconf supplied DNS.
 func (n *NetConf) GetDNS() types.DNS {
 	dnsResult := n.DNS
 	if len(n.RuntimeConfig.DNS.Nameservers) > 0 {
@@ -101,136 +127,222 @@ func (n *NetConf) GetDNS() types.DNS {
 	return dnsResult
 }
 
-// MarshalPolicies converts the Endpoint policies in Policies
-// to HNS specific policies as Json raw bytes
-func (n *NetConf) MarshalPolicies() []json.RawMessage {
-	if n.Policies == nil {
-		n.Policies = make([]policy, 0)
+// ApplyLoopbackDSRPolicy configures the given IP to support loopback DSR.
+func (n *NetConf) ApplyLoopbackDSRPolicy(ip *net.IP) {
+	if err := hcn.DSRSupported(); err != nil || ip == nil {
+		return
 	}
 
-	result := make([]json.RawMessage, 0, len(n.Policies))
-	for _, p := range n.Policies {
+	toPolicyValue := func(addr string) json.RawMessage {
+		if n.ApiVersion == 2 {
+			return bprintf(`{"Type": "OutBoundNAT", "Settings": {"Destinations": ["%s"]}}`, addr)
+		}
+		return bprintf(`{"Type": "OutBoundNAT", "Destinations": ["%s"]}`, addr)
+	}
+	ipBytes := []byte(ip.String())
+
+	// find OutBoundNAT policy
+	for i := range n.Policies {
+		p := &n.Policies[i]
 		if !strings.EqualFold(p.Name, "EndpointPolicy") {
 			continue
 		}
 
-		result = append(result, p.Value)
-	}
-
-	return result
-}
-
-// ApplyOutboundNatPolicy applies NAT Policy in VFP using HNS
-// Simultaneously an exception is added for the network that has to be Nat'd
-func (n *NetConf) ApplyOutboundNatPolicy(nwToNat string) {
-	if n.Policies == nil {
-		n.Policies = make([]policy, 0)
-	}
-
-	nwToNatBytes := []byte(nwToNat)
-
-	for i, p := range n.Policies {
-		if !strings.EqualFold(p.Name, "EndpointPolicy") {
+		// filter OutBoundNAT policy
+		typeValue, _ := jsonparser.GetUnsafeString(p.Value, "Type")
+		if typeValue != "OutBoundNAT" {
 			continue
 		}
 
-		typeValue, err := jsonparser.GetUnsafeString(p.Value, "Type")
-		if err != nil || len(typeValue) == 0 {
+		// parse destination address list
+		var (
+			destinationsValue []byte
+			dt                jsonparser.ValueType
+		)
+		if n.ApiVersion == 2 {
+			destinationsValue, dt, _, _ = jsonparser.Get(p.Value, "Settings", "Destinations")
+		} else {
+			destinationsValue, dt, _, _ = jsonparser.Get(p.Value, "Destinations")
+		}
+
+		// skip if Destinations/DestinationList field is not found
+		if dt == jsonparser.NotExist {
 			continue
 		}
 
-		if !strings.EqualFold(typeValue, "OutBoundNAT") {
-			continue
-		}
-
-		exceptionListValue, dt, _, _ := jsonparser.Get(p.Value, "ExceptionList")
-		// OutBoundNAT must with ExceptionList, so don't need to judge jsonparser.NotExist
+		// return if found the given address
 		if dt == jsonparser.Array {
-			buf := bytes.Buffer{}
-			buf.WriteString(`{"Type": "OutBoundNAT", "ExceptionList": [`)
-
-			jsonparser.ArrayEach(exceptionListValue, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+			var found bool
+			_, _ = jsonparser.ArrayEach(destinationsValue, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
 				if dataType == jsonparser.String && len(value) != 0 {
-					if bytes.Compare(value, nwToNatBytes) != 0 {
-						buf.WriteByte('"')
-						buf.Write(value)
-						buf.WriteByte('"')
-						buf.WriteByte(',')
+					if bytes.Compare(value, ipBytes) == 0 {
+						found = true
 					}
 				}
 			})
-
-			buf.WriteString(`"` + nwToNat + `"]}`)
-
-			n.Policies[i] = policy{
-				Name:  "EndpointPolicy",
-				Value: buf.Bytes(),
-			}
-		} else {
-			n.Policies[i] = policy{
-				Name:  "EndpointPolicy",
-				Value: []byte(`{"Type": "OutBoundNAT", "ExceptionList": ["` + nwToNat + `"]}`),
+			if found {
+				return
 			}
 		}
-
-		return
 	}
 
-	// didn't find the policyArg, add it
-	n.Policies = append(n.Policies, policy{
+	// or add a new OutBoundNAT if not found
+	n.Policies = append(n.Policies, Policy{
 		Name:  "EndpointPolicy",
-		Value: []byte(`{"Type": "OutBoundNAT", "ExceptionList": ["` + nwToNat + `"]}`),
+		Value: toPolicyValue(ip.String()),
 	})
 }
 
-// ApplyDefaultPAPolicy is used to configure a endpoint PA policy in HNS
-func (n *NetConf) ApplyDefaultPAPolicy(paAddress string) {
-	if n.Policies == nil {
-		n.Policies = make([]policy, 0)
+// ApplyOutboundNatPolicy applies the sNAT policy in HNS/HCN and configures the given CIDR as an exception.
+func (n *NetConf) ApplyOutboundNatPolicy(exceptionCIDR string) {
+	if exceptionCIDR == "" {
+		return
 	}
 
-	// if its already present, leave untouched
-	for i, p := range n.Policies {
+	toPolicyValue := func(cidr ...string) json.RawMessage {
+		if n.ApiVersion == 2 {
+			return bprintf(`{"Type": "OutBoundNAT", "Settings": {"Exceptions": ["%s"]}}`, strings.Join(cidr, `","`))
+		}
+		return bprintf(`{"Type": "OutBoundNAT", "ExceptionList": ["%s"]}`, strings.Join(cidr, `","`))
+	}
+	exceptionCIDRBytes := []byte(exceptionCIDR)
+
+	// find OutBoundNAT policy
+	for i := range n.Policies {
+		p := &n.Policies[i]
 		if !strings.EqualFold(p.Name, "EndpointPolicy") {
 			continue
 		}
 
-		paValue, dt, _, _ := jsonparser.Get(p.Value, "PA")
+		// filter OutBoundNAT policy
+		typeValue, _ := jsonparser.GetUnsafeString(p.Value, "Type")
+		if typeValue != "OutBoundNAT" {
+			continue
+		}
+
+		// parse exception CIDR list
+		var (
+			exceptionsValue []byte
+			dt              jsonparser.ValueType
+		)
+		if n.ApiVersion == 2 {
+			exceptionsValue, dt, _, _ = jsonparser.Get(p.Value, "Settings", "Exceptions")
+		} else {
+			exceptionsValue, dt, _, _ = jsonparser.Get(p.Value, "ExceptionList")
+		}
+
+		// skip if Exceptions/ExceptionList field is not found
 		if dt == jsonparser.NotExist {
 			continue
-		} else if dt == jsonparser.String && len(paValue) != 0 {
-			// found it, don't override
-			return
 		}
 
-		n.Policies[i] = policy{
-			Name:  "EndpointPolicy",
-			Value: []byte(`{"Type": "PA", "PA": "` + paAddress + `"}`),
+		// return if found the given CIDR
+		if dt == jsonparser.Array {
+			var found bool
+			_, _ = jsonparser.ArrayEach(exceptionsValue, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+				if dataType == jsonparser.String && len(value) != 0 {
+					if bytes.Compare(value, exceptionCIDRBytes) == 0 {
+						found = true
+					}
+				}
+			})
+			if found {
+				return
+			}
 		}
-		return
 	}
 
-	// didn't find the policyArg, add it
-	n.Policies = append(n.Policies, policy{
+	// or add a new OutBoundNAT if not found
+	n.Policies = append(n.Policies, Policy{
 		Name:  "EndpointPolicy",
-		Value: []byte(`{"Type": "PA", "PA": "` + paAddress + `"}`),
+		Value: toPolicyValue(exceptionCIDR),
 	})
 }
 
-// ApplyPortMappingPolicy is used to configure HostPort<>ContainerPort mapping in HNS
-func (n *NetConf) ApplyPortMappingPolicy(portMappings []PortMapEntry) {
-	if portMappings == nil {
+// ApplyDefaultPAPolicy applies an endpoint PA policy in HNS/HCN.
+func (n *NetConf) ApplyDefaultPAPolicy(address string) {
+	if address == "" {
 		return
 	}
 
-	if n.Policies == nil {
-		n.Policies = make([]policy, 0)
+	toPolicyValue := func(addr string) json.RawMessage {
+		if n.ApiVersion == 2 {
+			return bprintf(`{"Type": "ProviderAddress", "Settings": {"ProviderAddress": "%s"}}`, addr)
+		}
+		return bprintf(`{"Type": "PA", "PA": "%s"}`, addr)
+	}
+	addressBytes := []byte(address)
+
+	// find ProviderAddress policy
+	for i := range n.Policies {
+		p := &n.Policies[i]
+		if !strings.EqualFold(p.Name, "EndpointPolicy") {
+			continue
+		}
+
+		// filter ProviderAddress policy
+		typeValue, _ := jsonparser.GetUnsafeString(p.Value, "Type")
+		if typeValue != "PA" && typeValue != "ProviderAddress" {
+			continue
+		}
+
+		// parse provider address
+		var (
+			paValue []byte
+			dt      jsonparser.ValueType
+		)
+		if n.ApiVersion == 2 {
+			paValue, dt, _, _ = jsonparser.Get(p.Value, "Settings", "ProviderAddress")
+		} else {
+			paValue, dt, _, _ = jsonparser.Get(p.Value, "PA")
+		}
+
+		// skip if ProviderAddress/PA field is not found
+		if dt == jsonparser.NotExist {
+			continue
+		}
+
+		// return if found the given address
+		if dt == jsonparser.String && bytes.Compare(paValue, addressBytes) == 0 {
+			return
+		}
 	}
 
-	for _, portMapping := range portMappings {
-		n.Policies = append(n.Policies, policy{
+	// or add a new ProviderAddress if not found
+	n.Policies = append(n.Policies, Policy{
+		Name:  "EndpointPolicy",
+		Value: toPolicyValue(address),
+	})
+}
+
+// ApplyPortMappingPolicy applies the host/container port mapping policies in HNS/HCN.
+func (n *NetConf) ApplyPortMappingPolicy(portMappings []PortMapEntry) {
+	if len(portMappings) == 0 {
+		return
+	}
+
+	toPolicyValue := func(p *PortMapEntry) json.RawMessage {
+		if n.ApiVersion == 2 {
+			var protocolEnum, _ = p.GetProtocolEnum()
+			return bprintf(`{"Type": "PortMapping", "Settings": {"InternalPort": %d, "ExternalPort": %d, "Protocol": %d, "VIP": "%s"}}`, p.ContainerPort, p.HostPort, protocolEnum, p.HostIP)
+		}
+		return bprintf(`{"Type": "NAT", "InternalPort": %d, "ExternalPort": %d, "Protocol": "%s"}`, p.ContainerPort, p.HostPort, p.Protocol)
+	}
+
+	for i := range portMappings {
+		p := &portMappings[i]
+		// skip the invalid protocol mapping
+		if _, err := p.GetProtocolEnum(); err != nil {
+			continue
+		}
+		n.Policies = append(n.Policies, Policy{
 			Name:  "EndpointPolicy",
-			Value: []byte(fmt.Sprintf(`{"Type": "NAT", "InternalPort": %d, "ExternalPort": %d, "Protocol": "%s"}`, portMapping.ContainerPort, portMapping.HostPort, portMapping.Protocol)),
+			Value: toPolicyValue(p),
 		})
 	}
+}
+
+// bprintf is similar to fmt.Sprintf and returns a byte array as result.
+func bprintf(format string, a ...interface{}) []byte {
+	return []byte(fmt.Sprintf(format, a...))
 }
