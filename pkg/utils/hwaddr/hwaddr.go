@@ -15,49 +15,29 @@
 package hwaddr
 
 import (
-	"fmt"
+	"crypto/rand"
 	"net"
 )
 
-const (
-	ipRelevantByteLen      = 4
-	PrivateMACPrefixString = "0a:58"
-)
+// The first 24 bits of the MAC represent the Organizationally Unique Identifier (OUI),
+// and the first byte of the MAC address has two special bits.
+// 1. The least-significant bit: 0 for unicast and 1 for multicast
+// 2. The second-least-significant bit: 0 for globally unique and 1 for locally administered
+// Since MAC address for container interfaces is locally administered and unicast, so we can
+// fix the two LSb of MSB to 10 and use any values for other bits. This will avoid any conflicts
+// with public OUIs.
+// We use 02:58:00 for CNI official OUI here.
+var cniOUI = []byte{0x02, 0x58, 0x00}
 
-var (
-	// private mac prefix safe to use
-	PrivateMACPrefix = []byte{0x0a, 0x58}
-)
-
-type SupportIp4OnlyErr struct{ msg string }
-
-func (e SupportIp4OnlyErr) Error() string { return e.msg }
-
-type MacParseErr struct{ msg string }
-
-func (e MacParseErr) Error() string { return e.msg }
-
-type InvalidPrefixLengthErr struct{ msg string }
-
-func (e InvalidPrefixLengthErr) Error() string { return e.msg }
-
-// GenerateHardwareAddr4 generates 48 bit virtual mac addresses based on the IP4 input.
-func GenerateHardwareAddr4(ip net.IP, prefix []byte) (net.HardwareAddr, error) {
-	switch {
-
-	case ip.To4() == nil:
-		return nil, SupportIp4OnlyErr{msg: "GenerateHardwareAddr4 only supports valid IPv4 address as input"}
-
-	case len(prefix) != len(PrivateMACPrefix):
-		return nil, InvalidPrefixLengthErr{msg: fmt.Sprintf(
-			"Prefix has length %d instead  of %d", len(prefix), len(PrivateMACPrefix)),
-		}
-	}
-
-	ipByteLen := len(ip)
-	return (net.HardwareAddr)(
-		append(
-			prefix,
-			ip[ipByteLen-ipRelevantByteLen:ipByteLen]...),
-	), nil
+// GenerateMAC will generate MAC addresses with fixed first 24 bits (CNI OUI), and the last 24 bits
+// will be random, so there are at most 16777216(2^24) different addresses.
+// To avoid MAC address collision as much as possible, this function is suggested to be used within
+// the limitation that each subnet should contain no more 1024(2^10) using IP addresses.
+// For example, a subnet whose prefix is greater or equal than 22 is safe to use this function
+// as MAC address generator.
+func GenerateMAC() (net.HardwareAddr, error) {
+	hw := make(net.HardwareAddr, 6)
+	copy(hw[:3], cniOUI)
+	_, err := rand.Read(hw[3:])
+	return hw, err
 }
