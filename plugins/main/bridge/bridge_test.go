@@ -78,6 +78,21 @@ type testCase struct {
 	DelErr020  string
 	AddErr010  string
 	DelErr010  string
+
+	envArgs       string // CNI_ARGS
+	runtimeConfig struct {
+		mac string
+	}
+	args struct {
+		cni struct {
+			mac string
+		}
+	}
+
+	// Unlike the parameters above, the following parameters
+	// are expected values to be checked against.
+	// e.g. the mac address has several sources: CNI_ARGS, Args and RuntimeConfig.
+	expectedMac string
 }
 
 // Range definition for each entry in the ranges list
@@ -148,6 +163,18 @@ const (
 
 	ipamEndStr = `
     }`
+
+	argsFormat = `,
+    "args": {
+        "cni": {
+            "mac": %q
+        }
+    }`
+
+	runtimeConfig = `,
+    "RuntimeConfig": {
+        "mac": %q
+    }`
 )
 
 // netConfJSON() generates a JSON network configuration string
@@ -159,6 +186,12 @@ func (tc testCase) netConfJSON(dataDir string) string {
 	}
 	if tc.ipMasq {
 		conf += tc.ipMasqConfig()
+	}
+	if tc.args.cni.mac != "" {
+		conf += fmt.Sprintf(argsFormat, tc.args.cni.mac)
+	}
+	if tc.runtimeConfig.mac != "" {
+		conf += fmt.Sprintf(runtimeConfig, tc.runtimeConfig.mac)
 	}
 
 	if !tc.isLayer2 {
@@ -223,6 +256,7 @@ func (tc testCase) createCmdArgs(targetNS ns.NetNS, dataDir string) *skel.CmdArg
 		Netns:       targetNS.Path(),
 		IfName:      IFNAME,
 		StdinData:   []byte(conf),
+		Args:        tc.envArgs,
 	}
 }
 
@@ -428,7 +462,10 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		Expect(result.Interfaces[1].Mac).To(HaveLen(17))
 
 		Expect(result.Interfaces[2].Name).To(Equal(IFNAME))
-		Expect(result.Interfaces[2].Mac).To(HaveLen(17)) //mac is random
+		Expect(result.Interfaces[2].Mac).To(HaveLen(17))
+		if tc.expectedMac != "" {
+			Expect(result.Interfaces[2].Mac).To(Equal(tc.expectedMac))
+		}
 		Expect(result.Interfaces[2].Sandbox).To(Equal(tester.targetNS.Path()))
 
 		// Make sure bridge link exists
@@ -725,7 +762,10 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		Expect(result.Interfaces[1].Mac).To(HaveLen(17))
 
 		Expect(result.Interfaces[2].Name).To(Equal(IFNAME))
-		Expect(result.Interfaces[2].Mac).To(HaveLen(17)) //mac is random
+		Expect(result.Interfaces[2].Mac).To(HaveLen(17))
+		if tc.expectedMac != "" {
+			Expect(result.Interfaces[2].Mac).To(Equal(tc.expectedMac))
+		}
 		Expect(result.Interfaces[2].Sandbox).To(Equal(tester.targetNS.Path()))
 
 		// Make sure bridge link exists
@@ -1022,7 +1062,10 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		Expect(result.Interfaces[1].Mac).To(HaveLen(17))
 
 		Expect(result.Interfaces[2].Name).To(Equal(IFNAME))
-		Expect(result.Interfaces[2].Mac).To(HaveLen(17)) //mac is random
+		Expect(result.Interfaces[2].Mac).To(HaveLen(17))
+		if tc.expectedMac != "" {
+			Expect(result.Interfaces[2].Mac).To(Equal(tc.expectedMac))
+		}
 		Expect(result.Interfaces[2].Sandbox).To(Equal(tester.targetNS.Path()))
 
 		// Make sure bridge link exists
@@ -1967,6 +2010,66 @@ var _ = Describe("bridge Operations", func() {
 			})
 		}
 
+		It(fmt.Sprintf("[%s] uses an explicit MAC addresses for the container iface (from CNI_ARGS)", ver), func() {
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				const expectedMac = "02:00:00:00:00:00"
+				tc := testCase{
+					cniVersion: ver,
+					subnet:     "10.1.2.0/24",
+					envArgs:    "MAC=" + expectedMac,
+
+					expectedMac: expectedMac,
+				}
+				cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It(fmt.Sprintf("[%s] uses an explicit MAC addresses for the container iface (from Args)", ver), func() {
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				const expectedMac = "02:00:00:00:00:00"
+				tc := testCase{
+					cniVersion: ver,
+					subnet:     "10.1.2.0/24",
+					envArgs:    "MAC=" + "02:00:00:00:04:56",
+
+					expectedMac: expectedMac,
+				}
+				tc.args.cni.mac = expectedMac
+				cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It(fmt.Sprintf("[%s] uses an explicit MAC addresses for the container iface (from RuntimeConfig)", ver), func() {
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				const expectedMac = "02:00:00:00:00:00"
+				tc := testCase{
+					cniVersion: ver,
+					subnet:     "10.1.2.0/24",
+					envArgs:    "MAC=" + "02:00:00:00:04:56",
+
+					expectedMac: expectedMac,
+				}
+				tc.args.cni.mac = "02:00:00:00:07:89"
+				tc.runtimeConfig.mac = expectedMac
+				cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 		It(fmt.Sprintf("[%s] checks ip release in case of error", ver), func() {
 			err := originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
@@ -2099,7 +2202,7 @@ var _ = Describe("bridge Operations", func() {
 		tests = append(tests, createCaseFn("0.4.0", 5000, fmt.Errorf("invalid VLAN ID 5000 (must be between 0 and 4094)")))
 
 		for _, test := range tests {
-			_, _, err := loadNetConf([]byte(test.netConfJSON("")))
+			_, _, err := loadNetConf([]byte(test.netConfJSON("")), "")
 			if test.err == nil {
 				Expect(err).To(BeNil())
 			} else {
