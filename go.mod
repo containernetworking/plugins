@@ -15,6 +15,7 @@ require (
 	github.com/godbus/dbus/v5 v5.0.4
 	github.com/j-keck/arping v1.0.2
 	github.com/mattn/go-shellwords v1.0.12
+	github.com/networkplumbing/go-nft v0.2.0
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.15.0
 	github.com/safchain/ethtool v0.0.0-20210803160452-9aa261dae9b1

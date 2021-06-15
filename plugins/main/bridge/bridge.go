@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
 	"runtime"
 	"syscall"
 	"time"
@@ -33,6 +34,7 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
+	"github.com/containernetworking/plugins/pkg/link"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/utils"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
@@ -55,6 +57,7 @@ type NetConf struct {
 	HairpinMode  bool   `json:"hairpinMode"`
 	PromiscMode  bool   `json:"promiscMode"`
 	Vlan         int    `json:"vlan"`
+	MacSpoofChk  bool   `json:"macspoofchk,omitempty"`
 
 	Args struct {
 		Cni BridgeArgs `json:"cni,omitempty"`
@@ -460,6 +463,20 @@ func cmdAdd(args *skel.CmdArgs) error {
 		},
 	}
 
+	if n.MacSpoofChk {
+		sc := link.NewSpoofChecker(hostInterface.Name, containerInterface.Mac, uniqueID(args.ContainerID, args.IfName))
+		if err := sc.Setup(); err != nil {
+			return err
+		}
+		defer func() {
+			if !success {
+				if err := sc.Teardown(); err != nil {
+					fmt.Fprintf(os.Stderr, "%v", err)
+				}
+			}
+		}()
+	}
+
 	if isLayer3 {
 		// run the IPAM plugin and get back the config to apply
 		r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
@@ -656,6 +673,13 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	if err != nil {
 		return err
+	}
+
+	if n.MacSpoofChk {
+		sc := link.NewSpoofChecker("", "", uniqueID(args.ContainerID, args.IfName))
+		if err := sc.Teardown(); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+		}
 	}
 
 	if isLayer3 && n.IPMasq {
@@ -937,4 +961,8 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 
 	return nil
+}
+
+func uniqueID(containerID, cniIface string) string {
+	return containerID + "-" + cniIface
 }
