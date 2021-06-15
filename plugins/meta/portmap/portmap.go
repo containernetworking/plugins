@@ -291,7 +291,7 @@ func fillDnatRules(c *chain, config *PortMapConf, containerNet net.IPNet) {
 
 // genSetMarkChain creates the SETMARK chain - the chain that sets the
 // "to-be-masqueraded" mark and returns.
-// Chains are idempotent, so we'll always create this.
+// chains are idempotent, so we'll always create this.
 func genSetMarkChain(markBit int) chain {
 	markValue := 1 << uint(markBit)
 	markDef := fmt.Sprintf("%#x/%#x", markValue, markValue)

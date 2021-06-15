@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/coreos/go-iptables/iptables"
+	"github.com/networkplumbing/go-nft/nft"
 	"github.com/vishvananda/netlink/nl"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -65,19 +66,20 @@ type Net struct {
 // testCase defines the CNI network configuration and the expected
 // bridge addresses for a test case.
 type testCase struct {
-	cniVersion string      // CNI Version
-	subnet     string      // Single subnet config: Subnet CIDR
-	gateway    string      // Single subnet config: Gateway
-	ranges     []rangeInfo // Ranges list (multiple subnets config)
-	isGW       bool
-	isLayer2   bool
-	expGWCIDRs []string // Expected gateway addresses in CIDR form
-	vlan       int
-	ipMasq     bool
-	AddErr020  string
-	DelErr020  string
-	AddErr010  string
-	DelErr010  string
+	cniVersion  string      // CNI Version
+	subnet      string      // Single subnet config: Subnet CIDR
+	gateway     string      // Single subnet config: Gateway
+	ranges      []rangeInfo // Ranges list (multiple subnets config)
+	isGW        bool
+	isLayer2    bool
+	expGWCIDRs  []string // Expected gateway addresses in CIDR form
+	vlan        int
+	ipMasq      bool
+	macspoofchk bool
+	AddErr020   string
+	DelErr020   string
+	AddErr010   string
+	DelErr010   string
 
 	envArgs       string // CNI_ARGS
 	runtimeConfig struct {
@@ -164,6 +166,9 @@ const (
 	ipamEndStr = `
     }`
 
+	macspoofchkFormat = `,
+        "macspoofchk": %t`
+
 	argsFormat = `,
     "args": {
         "cni": {
@@ -192,6 +197,9 @@ func (tc testCase) netConfJSON(dataDir string) string {
 	}
 	if tc.runtimeConfig.mac != "" {
 		conf += fmt.Sprintf(runtimeConfig, tc.runtimeConfig.mac)
+	}
+	if tc.macspoofchk {
+		conf += fmt.Sprintf(macspoofchkFormat, tc.macspoofchk)
 	}
 
 	if !tc.isLayer2 {
@@ -2175,6 +2183,35 @@ var _ = Describe("bridge Operations", func() {
 				})
 			}
 		}
+
+		It(fmt.Sprintf("[%s] configures mac spoof-check (no mac spoofing)", ver), func() {
+			Expect(originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				tc := testCase{
+					cniVersion:  ver,
+					subnet:      "10.1.2.0/24",
+					macspoofchk: true,
+				}
+				args := tc.createCmdArgs(originalNS, dataDir)
+				_, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				assertMacSpoofCheckRulesExist()
+
+				Expect(testutils.CmdDelWithArgs(args, func() error {
+					if err := cmdDel(args); err != nil {
+						return err
+					}
+					assertMacSpoofCheckRulesMissing()
+					return nil
+				})).To(Succeed())
+
+				return nil
+			})).To(Succeed())
+		})
 	}
 
 	It("check vlan id when loading net conf", func() {
@@ -2211,3 +2248,50 @@ var _ = Describe("bridge Operations", func() {
 		}
 	})
 })
+
+func assertMacSpoofCheckRulesExist() {
+	assertMacSpoofCheckRules(
+		func(actual interface{}, expectedLen int) {
+			ExpectWithOffset(3, actual).To(HaveLen(expectedLen))
+		})
+}
+
+func assertMacSpoofCheckRulesMissing() {
+	assertMacSpoofCheckRules(
+		func(actual interface{}, _ int) {
+			ExpectWithOffset(3, actual).To(BeEmpty())
+		})
+}
+
+func assertMacSpoofCheckRules(assert func(actual interface{}, expectedLen int)) {
+	c, err := nft.ReadConfig()
+	ExpectWithOffset(2, err).NotTo(HaveOccurred())
+
+	expectedTable := nft.NewTable("nat", "bridge")
+	filter := nft.TypeFilter
+	hook := nft.HookPreRouting
+	prio := -300
+	policy := nft.PolicyAccept
+	expectedBaseChain := nft.NewChain(expectedTable, "PREROUTING", &filter, &hook, &prio, &policy)
+
+	assert(c.LookupRule(nft.NewRule(
+		expectedTable,
+		expectedBaseChain,
+		nil, nil, nil,
+		"macspoofchk-dummy-0-eth0",
+	)), 1)
+
+	assert(c.LookupRule(nft.NewRule(
+		expectedTable,
+		nft.NewRegularChain(expectedTable, "cni-br-iface-dummy-0-eth0"),
+		nil, nil, nil,
+		"macspoofchk-dummy-0-eth0",
+	)), 1)
+
+	assert(c.LookupRule(nft.NewRule(
+		expectedTable,
+		nft.NewRegularChain(expectedTable, "cni-br-iface-dummy-0-eth0-mac"),
+		nil, nil, nil,
+		"macspoofchk-dummy-0-eth0",
+	)), 2)
+}
