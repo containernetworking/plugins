@@ -55,6 +55,7 @@ type NetConf struct {
 	HairpinMode  bool   `json:"hairpinMode"`
 	PromiscMode  bool   `json:"promiscMode"`
 	Vlan         int    `json:"vlan"`
+	BrNamespace  string `json:"bridgeNamespace"`
 }
 
 type gwInfo struct {
@@ -259,7 +260,7 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 	return br, nil
 }
 
-func ensureVlanInterface(br *netlink.Bridge, vlanId int) (netlink.Link, error) {
+func ensureVlanInterface(hostNS ns.NetNS, bridgeNS ns.NetNS, br *netlink.Bridge, vlanId int) (netlink.Link, error) {
 	name := fmt.Sprintf("%s.%d", br.Name, vlanId)
 
 	brGatewayVeth, err := netlink.LinkByName(name)
@@ -268,14 +269,9 @@ func ensureVlanInterface(br *netlink.Bridge, vlanId int) (netlink.Link, error) {
 			return nil, fmt.Errorf("failed to find interface %q: %v", name, err)
 		}
 
-		hostNS, err := ns.GetCurrentNS()
+		_, brGatewayIface, err := setupVeth(hostNS, bridgeNS, br, name, br.MTU, false, vlanId)
 		if err != nil {
-			return nil, fmt.Errorf("faild to find host namespace: %v", err)
-		}
-
-		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanId)
-		if err != nil {
-			return nil, fmt.Errorf("faild to create vlan gateway %q: %v", name, err)
+			return nil, fmt.Errorf("failed to create vlan gateway %q: %v", name, err)
 		}
 
 		brGatewayVeth, err = netlink.LinkByName(brGatewayIface.Name)
@@ -287,13 +283,13 @@ func ensureVlanInterface(br *netlink.Bridge, vlanId int) (netlink.Link, error) {
 	return brGatewayVeth, nil
 }
 
-func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairpinMode bool, vlanID int) (*current.Interface, *current.Interface, error) {
+func setupVeth(netns ns.NetNS, bridgeNS ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairpinMode bool, vlanID int) (*current.Interface, *current.Interface, error) {
 	contIface := &current.Interface{}
 	hostIface := &current.Interface{}
 
-	err := netns.Do(func(hostNS ns.NetNS) error {
+	err := netns.Do(func(_ ns.NetNS) error {
 		// create the veth pair in the container and move host end into host netns
-		hostVeth, containerVeth, err := ip.SetupVeth(ifName, mtu, hostNS)
+		hostVeth, containerVeth, err := ip.SetupVeth(ifName, mtu, bridgeNS)
 		if err != nil {
 			return err
 		}
@@ -303,32 +299,41 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 		hostIface.Name = hostVeth.Name
 		return nil
 	})
+
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// need to lookup hostVeth again as its index has changed during ns move
-	hostVeth, err := netlink.LinkByName(hostIface.Name)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to lookup %q: %v", hostIface.Name, err)
-	}
-	hostIface.Mac = hostVeth.Attrs().HardwareAddr.String()
-
-	// connect host veth end to the bridge
-	if err := netlink.LinkSetMaster(hostVeth, br); err != nil {
-		return nil, nil, fmt.Errorf("failed to connect %q to bridge %v: %v", hostVeth.Attrs().Name, br.Attrs().Name, err)
-	}
-
-	// set hairpin mode
-	if err = netlink.LinkSetHairpin(hostVeth, hairpinMode); err != nil {
-		return nil, nil, fmt.Errorf("failed to setup hairpin mode for %v: %v", hostVeth.Attrs().Name, err)
-	}
-
-	if vlanID != 0 {
-		err = netlink.BridgeVlanAdd(hostVeth, uint16(vlanID), true, true, false, true)
+	err = bridgeNS.Do(func (_ ns.NetNS) error {
+		// need to lookup hostVeth again as its index has changed during ns move
+		hostVeth, err := netlink.LinkByName(hostIface.Name)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to setup vlan tag on interface %q: %v", hostIface.Name, err)
+			return fmt.Errorf("failed to lookup %q: %v", hostIface.Name, err)
 		}
+		hostIface.Mac = hostVeth.Attrs().HardwareAddr.String()
+
+		// connect host veth end to the bridge
+		if err := netlink.LinkSetMaster(hostVeth, br); err != nil {
+			return fmt.Errorf("failed to connect %q to bridge %v: %v", hostVeth.Attrs().Name, br.Attrs().Name, err)
+		}
+
+		// set hairpin mode
+		if err = netlink.LinkSetHairpin(hostVeth, hairpinMode); err != nil {
+			return fmt.Errorf("failed to setup hairpin mode for %v: %v", hostVeth.Attrs().Name, err)
+		}
+
+		if vlanID != 0 {
+			err = netlink.BridgeVlanAdd(hostVeth, uint16(vlanID), true, true, false, true)
+			if err != nil {
+				return fmt.Errorf("failed to setup vlan tag on interface %q: %v", hostIface.Name, err)
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return hostIface, contIface, nil
@@ -395,9 +400,42 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("cannot set hairpin mode and promiscous mode at the same time.")
 	}
 
-	br, brInterface, err := setupBridge(n)
+	// We need the HostNS later for the gateway setup
+	// but can also use it as a bridgeNS
+	hostNS, err := ns.GetCurrentNS()
+
 	if err != nil {
+		return fmt.Errorf("failed to get current (host) netns: %v", err)
+	}
+
+	defer hostNS.Close()
+
+	var bridgeNS ns.NetNS
+
+	if n.BrNamespace != "" {
+		// TODO: Create BrNS ?
+		bridgeNS, err = ns.GetNS(n.BrNamespace)
+
+		if err != nil {
+			return fmt.Errorf("failed to open bridge netns %q: %v", n.BrNamespace, err)
+		}
+
+		defer bridgeNS.Close()
+	} else {
+		// reuse the hostNS as bridgeNS, if the bridge stays in the hostNS
+		bridgeNS = hostNS
+	}
+
+	var br *netlink.Bridge
+	var brInterface *current.Interface
+
+	err = bridgeNS.Do(func (_ ns.NetNS) error {
+		br, brInterface, err = setupBridge(n)
 		return err
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to setup bridge: %v", err)
 	}
 
 	netns, err := ns.GetNS(args.Netns)
@@ -406,9 +444,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan)
+	hostInterface, containerInterface, err := setupVeth(netns, bridgeNS, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to setup veth: %v", err)
 	}
 
 	// Assume L2 interface only
@@ -425,7 +463,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// run the IPAM plugin and get back the config to apply
 		r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to exec ipam: %v", err)
 		}
 
 		// release IP in case of failure
@@ -438,7 +476,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// Convert whatever the IPAM result was into the current Result type
 		ipamResult, err := current.NewResultFromResult(r)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to convert results: %v", err)
 		}
 
 		result.IPs = ipamResult.IPs
@@ -451,7 +489,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// Gather gateway information for each IP family
 		gwsV4, gwsV6, err := calcGateways(result, n)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to calc gateways: %v", err)
 		}
 
 		// Configure the container hardware address and IP address(es)
@@ -474,7 +512,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 			return nil
 		}); err != nil {
-			return err
+			return fmt.Errorf("failed to disable DAD: %v", err)
 		}
 
 		// check bridge port state
@@ -482,10 +520,22 @@ func cmdAdd(args *skel.CmdArgs) error {
 		for idx, sleep := range retries {
 			time.Sleep(time.Duration(sleep) * time.Millisecond)
 
-			hostVeth, err := netlink.LinkByName(hostInterface.Name)
+			var hostVeth netlink.Link
+
+			err := bridgeNS.Do(func (_ ns.NetNS) error {
+				hostVeth, err = netlink.LinkByName(hostInterface.Name)
+
+				if err != nil {
+					return fmt.Errorf("failed to retrieve host interface: %v", err)
+				}
+
+				return nil
+			})
+
 			if err != nil {
 				return err
 			}
+
 			if hostVeth.Attrs().OperState == netlink.OperUp {
 				break
 			}
@@ -499,7 +549,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if err := netns.Do(func(_ ns.NetNS) error {
 			contVeth, err := net.InterfaceByName(args.IfName)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to retrieve pod interface: %v", err)
 			}
 
 			for _, ipc := range result.IPs {
@@ -512,6 +562,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err
 		}
 
+		// Introduction of the bridge NS makes the following a bit more complex:
+		// with bridgeNS a veth pair is always created between the bridge and the host
+		// this is also used for the vlan, the ip is always set on this veth
+		//
+		// without the bridgeNS the previous behaviour is kept, so that only a
+		// vlan requires a veth pair
 		if n.IsGW {
 			var firstV4Addr net.IP
 			var vlanInterface *current.Interface
@@ -521,8 +577,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 					if gw.IP.To4() != nil && firstV4Addr == nil {
 						firstV4Addr = gw.IP
 					}
-					if n.Vlan != 0 {
-						vlanIface, err := ensureVlanInterface(br, n.Vlan)
+
+					if n.Vlan != 0 || n.BrNamespace != "" {
+						vlanIface, err := ensureVlanInterface(hostNS, bridgeNS, br, n.Vlan)
 						if err != nil {
 							return fmt.Errorf("failed to create vlan interface: %v", err)
 						}
@@ -535,7 +592,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 						err = ensureAddr(vlanIface, gws.family, &gw, n.ForceAddress)
 						if err != nil {
-							return fmt.Errorf("failed to set vlan interface for bridge with addr: %v", err)
+							return fmt.Errorf("failed to set vlan (%d) interface for bridge with addr: %v", n.Vlan, err)
 						}
 					} else {
 						err = ensureAddr(br, gws.family, &gw, n.ForceAddress)
@@ -564,12 +621,22 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	}
 
-	// Refetch the bridge since its MAC address may change when the first
-	// veth is added or after its IP address is set
-	br, err = bridgeByName(n.BrName)
+	err = bridgeNS.Do(func (_ ns.NetNS) error {
+		// Refetch the bridge since its MAC address may change when the first
+		// veth is added or after its IP address is set
+		br, err = bridgeByName(n.BrName)
+
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to refetch bridge: %v", err)
 	}
+
 	brInterface.Mac = br.Attrs().HardwareAddr.String()
 
 	result.DNS = n.DNS
