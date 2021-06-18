@@ -46,15 +46,16 @@ const defaultBrName = "cni0"
 
 type NetConf struct {
 	types.NetConf
-	BrName       string `json:"bridge"`
-	IsGW         bool   `json:"isGateway"`
-	IsDefaultGW  bool   `json:"isDefaultGateway"`
-	ForceAddress bool   `json:"forceAddress"`
-	IPMasq       bool   `json:"ipMasq"`
-	MTU          int    `json:"mtu"`
-	HairpinMode  bool   `json:"hairpinMode"`
-	PromiscMode  bool   `json:"promiscMode"`
-	Vlan         int    `json:"vlan"`
+	BrName       string   `json:"bridge"`
+	Ports        []string `json:"ports"`
+	IsGW         bool     `json:"isGateway"`
+	IsDefaultGW  bool     `json:"isDefaultGateway"`
+	ForceAddress bool     `json:"forceAddress"`
+	IPMasq       bool     `json:"ipMasq"`
+	MTU          int      `json:"mtu"`
+	HairpinMode  bool     `json:"hairpinMode"`
+	PromiscMode  bool     `json:"promiscMode"`
+	Vlan         int      `json:"vlan"`
 }
 
 type gwInfo struct {
@@ -215,7 +216,7 @@ func bridgeByName(name string) (*netlink.Bridge, error) {
 	return br, nil
 }
 
-func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*netlink.Bridge, error) {
+func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool, ports []string) (*netlink.Bridge, error) {
 	br := &netlink.Bridge{
 		LinkAttrs: netlink.LinkAttrs{
 			Name: brName,
@@ -227,6 +228,7 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 			TxQLen: -1,
 		},
 	}
+
 	if vlanFiltering {
 		br.VlanFiltering = &vlanFiltering
 	}
@@ -236,8 +238,24 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 		return nil, fmt.Errorf("could not add %q: %v", brName, err)
 	}
 
+	// add ports that are specified for the bridge
+	if len(ports) > 0 {
+		for _, port := range ports {
+			p, err := netlink.LinkByName(port)
+			if err != nil {
+				// remove bridge
+				netlink.LinkDel(br)
+				return nil, fmt.Errorf("failed to lookup interface %q to set up as a port of the bridge: %v", port, err)
+			} else {
+				// sets this interface as a port of bridge
+				netlink.LinkSetMaster(p, br)
+			}
+		}
+	}
+
 	if promiscMode {
 		if err := netlink.SetPromiscOn(br); err != nil {
+			netlink.LinkDel(br)
 			return nil, fmt.Errorf("could not set promiscuous mode on %q: %v", brName, err)
 		}
 	}
@@ -246,6 +264,7 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 	// ensure it's really a bridge with similar configuration
 	br, err = bridgeByName(brName)
 	if err != nil {
+		netlink.LinkDel(br)
 		return nil, err
 	}
 
@@ -253,6 +272,7 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 	_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv6/conf/%s/accept_ra", brName), "0")
 
 	if err := netlink.LinkSetUp(br); err != nil {
+		netlink.LinkDel(br)
 		return nil, err
 	}
 
@@ -345,7 +365,7 @@ func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
 		vlanFiltering = true
 	}
 	// create bridge if necessary
-	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, vlanFiltering)
+	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, vlanFiltering, n.Ports)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create bridge %q: %v", n.BrName, err)
 	}
