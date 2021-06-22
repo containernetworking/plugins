@@ -576,7 +576,7 @@ var _ = Describe("static Operations", func() {
 				return cmdAdd(args)
 			})
 			Expect(err).Should(
-				MatchError(fmt.Sprintf("invalid CIDR %s: invalid CIDR address: %s", ipStr, ipStr)))
+				MatchError(fmt.Sprintf("invalid CIDR address: %s", ipStr)))
 		})
 	}
 })
