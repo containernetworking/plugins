@@ -546,6 +546,38 @@ var _ = Describe("static Operations", func() {
 			})
 			Expect(err).Should(MatchError("IPAM config missing 'ipam' key"))
 		})
+
+		It(fmt.Sprintf("[%s] errors when passed an invalid CIDR", ver), func() {
+			const ifname string = "eth0"
+			const nspath string = "/some/where"
+			const ipStr string = "10.10.0.1"
+
+			conf := fmt.Sprintf(`{
+				"cniVersion": "%s",
+				"name": "mynet",
+				"type": "bridge",
+				"ipam": {
+					"type": "static",
+					"addresses": [ {
+						"address": "%s"
+					}]
+				}
+			}`, ver, ipStr)
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       nspath,
+				IfName:      ifname,
+				StdinData:   []byte(conf),
+			}
+
+			// Allocate the IP
+			_, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).Should(
+				MatchError(fmt.Sprintf("invalid CIDR %s: invalid CIDR address: %s", ipStr, ipStr)))
+		})
 	}
 })
 
