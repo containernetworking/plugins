@@ -575,8 +575,8 @@ var _ = Describe("static Operations", func() {
 			_, _, err := testutils.CmdAddWithArgs(args, func() error {
 				return cmdAdd(args)
 			})
-			Expect(err).Should(
-				MatchError(fmt.Sprintf("invalid CIDR address: %s", ipStr)))
+			Expect(err).Should(MatchError(
+				fmt.Sprintf("the 'address' field is expected to be in CIDR notation, got: '%s'", ipStr)))
 		})
 	}
 })
