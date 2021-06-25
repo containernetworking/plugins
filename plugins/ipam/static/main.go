@@ -193,6 +193,10 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		// args IP overwrites IP, so clear IPAM Config
 		n.IPAM.Addresses = make([]Address, 0, len(n.Args.A.IPs))
 		for _, addr := range n.Args.A.IPs {
+			_, _, err := net.ParseCIDR(addr)
+			if err != nil {
+				return nil, "", fmt.Errorf("an entry in the 'ips' field is NOT in CIDR notation, got: '%s'", addr)
+			}
 			n.IPAM.Addresses = append(n.IPAM.Addresses, Address{AddressStr: addr})
 		}
 	}
@@ -202,6 +206,10 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		// runtimeConfig IP overwrites IP, so clear IPAM Config
 		n.IPAM.Addresses = make([]Address, 0, len(n.RuntimeConfig.IPs))
 		for _, addr := range n.RuntimeConfig.IPs {
+			_, _, err := net.ParseCIDR(addr)
+			if err != nil {
+				return nil, "", fmt.Errorf("an entry in the 'ips' field is NOT in CIDR notation, got: '%s'", addr)
+			}
 			n.IPAM.Addresses = append(n.IPAM.Addresses, Address{AddressStr: addr})
 		}
 	}
