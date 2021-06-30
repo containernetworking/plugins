@@ -23,7 +23,6 @@ Read [CONTRIBUTING](CONTRIBUTING.md) for build and test instructions.
 * `static`:  Allocate a static IPv4/IPv6 addresses to container and it's useful in debugging purpose.
 
 ### Meta: other plugins
-* `flannel`: Generates an interface corresponding to a flannel config file
 * `tuning`: Tweaks sysctl parameters of an existing interface
 * `portmap`: An iptables-based portmapping plugin. Maps ports from the host's address space to the container.
 * `bandwidth`: Allows bandwidth-limiting through use of traffic control tbf (ingress/egress).
