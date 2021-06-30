@@ -84,6 +84,10 @@ github.com/j-keck/arping
 # github.com/mattn/go-shellwords v1.0.11
 ## explicit
 github.com/mattn/go-shellwords
+# github.com/networkplumbing/go-nft v0.1.1
+## explicit
+github.com/networkplumbing/go-nft/nft
+github.com/networkplumbing/go-nft/nft/schema
 # github.com/nxadm/tail v1.4.4
 github.com/nxadm/tail
 github.com/nxadm/tail/ratelimiter
@@ -149,7 +153,7 @@ go.opencensus.io/internal
 go.opencensus.io/trace
 go.opencensus.io/trace/internal
 go.opencensus.io/trace/tracestate
-# golang.org/x/net v0.0.0-20201224014010-6772e930b67b
+# golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
 golang.org/x/net/bpf
 golang.org/x/net/html
 golang.org/x/net/html/atom
@@ -157,7 +161,7 @@ golang.org/x/net/html/charset
 golang.org/x/net/internal/iana
 golang.org/x/net/internal/socket
 golang.org/x/net/ipv4
-# golang.org/x/sys v0.0.0-20210414055047-fe65e336abe0
+# golang.org/x/sys v0.0.0-20210510120138-977fb7262007
 ## explicit
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix

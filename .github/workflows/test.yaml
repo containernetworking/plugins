@@ -35,6 +35,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install linux-modules-extra-$(uname -r)
+      - name: Install nftables
+        run: sudo apt-get install nftables
+
       - name: setup go
         uses: actions/setup-go@v2
         with:
