@@ -135,7 +135,7 @@ func createIpvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interf
 		return nil, err
 	}
 
-	mv := &netlink.IPVlan{
+	iv := &netlink.IPVlan{
 		LinkAttrs: netlink.LinkAttrs{
 			MTU:         conf.MTU,
 			Name:        tmpName,
@@ -145,13 +145,14 @@ func createIpvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interf
 		Mode: mode,
 	}
 
-	if err := netlink.LinkAdd(mv); err != nil {
+	if err := netlink.LinkAdd(iv); err != nil {
 		return nil, fmt.Errorf("failed to create ipvlan: %v", err)
 	}
 
 	err = netns.Do(func(_ ns.NetNS) error {
 		err := ip.RenameLink(tmpName, ifName)
 		if err != nil {
+			_ = netlink.LinkDel(iv)
 			return fmt.Errorf("failed to rename ipvlan to %q: %v", ifName, err)
 		}
 		ipvlan.Name = ifName
@@ -208,6 +209,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
+
+	// Delete link if err to avoid link leak in this ns
+	defer func() {
+		if err != nil {
+			netns.Do(func(_ ns.NetNS) error {
+				return ip.DelLinkByName(args.IfName)
+			})
+		}
+	}()
 
 	var result *current.Result
 	// Configure iface from PrevResult if we have IPs and an IPAM
