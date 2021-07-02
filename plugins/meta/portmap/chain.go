@@ -44,7 +44,7 @@ func (c *chain) setup(ipt *iptables.IPTables) error {
 
 	// Add the rules to the chain
 	for _, rule := range c.rules {
-		if err := insertUnique(ipt, c.table, c.name, false, rule); err != nil {
+		if err := utils.InsertUnique(ipt, c.table, c.name, false, rule); err != nil {
 			return err
 		}
 	}
@@ -55,7 +55,7 @@ func (c *chain) setup(ipt *iptables.IPTables) error {
 			r := []string{}
 			r = append(r, rule...)
 			r = append(r, "-j", c.name)
-			if err := insertUnique(ipt, c.table, entryChain, c.prependEntry, r); err != nil {
+			if err := utils.InsertUnique(ipt, c.table, entryChain, c.prependEntry, r); err != nil {
 				return err
 			}
 		}
@@ -99,24 +99,6 @@ func (c *chain) teardown(ipt *iptables.IPTables) error {
 	}
 
 	return utils.DeleteChain(ipt, c.table, c.name)
-}
-
-// insertUnique will add a rule to a chain if it does not already exist.
-// By default the rule is appended, unless prepend is true.
-func insertUnique(ipt *iptables.IPTables, table, chain string, prepend bool, rule []string) error {
-	exists, err := ipt.Exists(table, chain, rule...)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return nil
-	}
-
-	if prepend {
-		return ipt.Insert(table, chain, 1, rule...)
-	} else {
-		return ipt.Append(table, chain, rule...)
-	}
 }
 
 // check the chain.

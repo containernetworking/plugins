@@ -119,3 +119,21 @@ func ClearChain(ipt *iptables.IPTables, table, chain string) error {
 		return err
 	}
 }
+
+// InsertUnique will add a rule to a chain if it does not already exist.
+// By default the rule is appended, unless prepend is true.
+func InsertUnique(ipt *iptables.IPTables, table, chain string, prepend bool, rule []string) error {
+	exists, err := ipt.Exists(table, chain, rule...)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+
+	if prepend {
+		return ipt.Insert(table, chain, 1, rule...)
+	} else {
+		return ipt.Append(table, chain, rule...)
+	}
+}

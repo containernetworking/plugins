@@ -46,7 +46,26 @@ type FirewallNetConf struct {
 	// the firewalld backend is used but the zone is not given, it defaults
 	// to 'trusted'
 	FirewalldZone string `json:"firewalldZone,omitempty"`
+
+	// IngressPolicy is an optional ingress policy.
+	// Defaults to "open".
+	IngressPolicy IngressPolicy `json:"ingressPolicy,omitempty"`
 }
+
+// IngressPolicy is an ingress policy string.
+type IngressPolicy = string
+
+const (
+	// IngressPolicyOpen ("open"): all inbound connections to the container are accepted.
+	// IngressPolicyOpen is the default ingress policy.
+	IngressPolicyOpen IngressPolicy = "open"
+
+	// IngressPolicySameNetwork ("same-network"): connections from the same network are accepted, others are blocked.
+	// This is similar to how Docker libnetwork works.
+	// IngressPolicySameNetwork executes `iptables` regardless to the value of `Backend`.
+	// IngressPolicySameNetwork may not work as expected for non-bridge networks.
+	IngressPolicySameNetwork IngressPolicy = "same-network"
+)
 
 type FirewallBackend interface {
 	Add(*FirewallNetConf, *current.Result) error
@@ -129,6 +148,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	if err := setupIngressPolicy(conf, result); err != nil {
+		return err
+	}
+
 	if result == nil {
 		result = &current.Result{
 			CNIVersion: current.ImplementedSpecVersion,
@@ -150,6 +173,10 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	// Runtime errors are ignored
 	if err := backend.Del(conf, result); err != nil {
+		return err
+	}
+
+	if err := teardownIngressPolicy(conf, result); err != nil {
 		return err
 	}
 
