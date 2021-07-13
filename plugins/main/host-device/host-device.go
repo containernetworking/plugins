@@ -49,8 +49,9 @@ var userspaceDrivers = []string{"vfio-pci", "uio_pci_generic", "igb_uio"}
 //NetConf for host-device config, look the README to learn how to use those parameters
 type NetConf struct {
 	types.NetConf
-	Device        string `json:"device"`     // Device-Name, something like eth0 or can0 etc.
-	HWAddr        string `json:"hwaddr"`     // MAC Address of target network interface
+	Device        string `json:"device"` // Device-Name, something like eth0 or can0 etc.
+	HWAddr        string `json:"hwaddr"` // MAC Address of target network interface
+	DPDKMode      bool
 	KernelPath    string `json:"kernelpath"` // Kernelpath of the device
 	PCIAddr       string `json:"pciBusID"`   // PCI Address of target network device
 	RuntimeConfig struct {
@@ -67,7 +68,8 @@ func init() {
 
 func loadConf(bytes []byte) (*NetConf, error) {
 	n := &NetConf{}
-	if err := json.Unmarshal(bytes, n); err != nil {
+	var err error
+	if err = json.Unmarshal(bytes, n); err != nil {
 		return nil, fmt.Errorf("failed to load netconf: %v", err)
 	}
 
@@ -78,6 +80,13 @@ func loadConf(bytes []byte) (*NetConf, error) {
 
 	if n.Device == "" && n.HWAddr == "" && n.KernelPath == "" && n.PCIAddr == "" {
 		return nil, fmt.Errorf(`specify either "device", "hwaddr", "kernelpath" or "pciBusID"`)
+	}
+
+	if len(n.PCIAddr) > 0 {
+		n.DPDKMode, err = hasDpdkDriver(n.PCIAddr)
+		if err != nil {
+			return nil, fmt.Errorf("error with host device: %v", err)
+		}
 	}
 
 	return n, nil
@@ -94,49 +103,17 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer containerNs.Close()
 
-	if len(cfg.PCIAddr) > 0 {
-		isDpdkMode, err := hasDpdkDriver(cfg.PCIAddr)
+	result := &current.Result{}
+	var contDev netlink.Link
+	if !cfg.DPDKMode {
+		hostDev, err := getLink(cfg.Device, cfg.HWAddr, cfg.KernelPath, cfg.PCIAddr)
 		if err != nil {
-			return fmt.Errorf("error with host device: %v", err)
+			return fmt.Errorf("failed to find host device: %v", err)
 		}
-		if isDpdkMode {
-			return types.PrintResult(&current.Result{}, cfg.CNIVersion)
-		}
-	}
 
-	hostDev, err := getLink(cfg.Device, cfg.HWAddr, cfg.KernelPath, cfg.PCIAddr)
-	if err != nil {
-		return fmt.Errorf("failed to find host device: %v", err)
-	}
-
-	contDev, err := moveLinkIn(hostDev, containerNs, args.IfName)
-	if err != nil {
-		return fmt.Errorf("failed to move link %v", err)
-	}
-
-	var result *current.Result
-	// run the IPAM plugin and get back the config to apply
-	if cfg.IPAM.Type != "" {
-		r, err := ipam.ExecAdd(cfg.IPAM.Type, args.StdinData)
+		contDev, err = moveLinkIn(hostDev, containerNs, args.IfName)
 		if err != nil {
-			return err
-		}
-
-		// Invoke ipam del if err to avoid ip leak
-		defer func() {
-			if err != nil {
-				ipam.ExecDel(cfg.IPAM.Type, args.StdinData)
-			}
-		}()
-
-		// Convert whatever the IPAM result was into the current Result type
-		result, err = current.NewResultFromResult(r)
-		if err != nil {
-			return err
-		}
-
-		if len(result.IPs) == 0 {
-			return errors.New("IPAM plugin returned missing IP config")
+			return fmt.Errorf("failed to move link %v", err)
 		}
 
 		result.Interfaces = []*current.Interface{{
@@ -144,13 +121,48 @@ func cmdAdd(args *skel.CmdArgs) error {
 			Mac:     contDev.Attrs().HardwareAddr.String(),
 			Sandbox: containerNs.Path(),
 		}}
-		for _, ipc := range result.IPs {
-			// All addresses apply to the container interface (move from host)
-			ipc.Interface = current.Int(0)
-		}
+	}
 
+	if cfg.IPAM.Type == "" {
+		if cfg.DPDKMode {
+			return types.PrintResult(result, cfg.CNIVersion)
+		}
+		return printLink(contDev, cfg.CNIVersion, containerNs)
+	}
+
+	// run the IPAM plugin and get back the config to apply
+	r, err := ipam.ExecAdd(cfg.IPAM.Type, args.StdinData)
+	if err != nil {
+		return err
+	}
+
+	// Invoke ipam del if err to avoid ip leak
+	defer func() {
+		if err != nil {
+			ipam.ExecDel(cfg.IPAM.Type, args.StdinData)
+		}
+	}()
+
+	// Convert whatever the IPAM result was into the current Result type
+	newResult, err := current.NewResultFromResult(r)
+	if err != nil {
+		return err
+	}
+
+	if len(newResult.IPs) == 0 {
+		return errors.New("IPAM plugin returned missing IP config")
+	}
+
+	for _, ipc := range newResult.IPs {
+		// All addresses apply to the container interface (move from host)
+		ipc.Interface = current.Int(0)
+	}
+
+	newResult.Interfaces = result.Interfaces
+
+	if !cfg.DPDKMode {
 		err = containerNs.Do(func(_ ns.NetNS) error {
-			if err := ipam.ConfigureIface(args.IfName, result); err != nil {
+			if err := ipam.ConfigureIface(args.IfName, newResult); err != nil {
 				return err
 			}
 			return nil
@@ -158,13 +170,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if err != nil {
 			return err
 		}
-
-		result.DNS = cfg.DNS
-
-		return types.PrintResult(result, cfg.CNIVersion)
 	}
 
-	return printLink(contDev, cfg.CNIVersion, containerNs)
+	newResult.DNS = cfg.DNS
+
+	return types.PrintResult(newResult, cfg.CNIVersion)
 }
 
 func cmdDel(args *skel.CmdArgs) error {
@@ -181,22 +191,14 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 	defer containerNs.Close()
 
-	if len(cfg.PCIAddr) > 0 {
-		isDpdkMode, err := hasDpdkDriver(cfg.PCIAddr)
-		if err != nil {
-			return fmt.Errorf("error with host device: %v", err)
-		}
-		if isDpdkMode {
-			return nil
-		}
-	}
-
-	if err := moveLinkOut(containerNs, args.IfName); err != nil {
-		return err
-	}
-
 	if cfg.IPAM.Type != "" {
 		if err := ipam.ExecDel(cfg.IPAM.Type, args.StdinData); err != nil {
+			return err
+		}
+	}
+
+	if !cfg.DPDKMode {
+		if err := moveLinkOut(containerNs, args.IfName); err != nil {
 			return err
 		}
 	}
@@ -408,6 +410,10 @@ func cmdCheck(args *skel.CmdArgs) error {
 	result, err := current.NewResultFromResult(cfg.PrevResult)
 	if err != nil {
 		return err
+	}
+
+	if cfg.DPDKMode {
+		return nil
 	}
 
 	var contMap current.Interface
