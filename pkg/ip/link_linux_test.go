@@ -188,8 +188,8 @@ var _ = Describe("Link", func() {
 			_ = containerNetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 				_, _, err := ip.SetupVeth(containerVethName, mtu, "", hostNetNS)
-				Expect(err.Error()).To(HavePrefix("failed to move veth to host netns: "))
-
+				Expect(err.Error()).To(HavePrefix("container veth name provided"))
+				Expect(err.Error()).To(HaveSuffix("already exists"))
 				return nil
 			})
 		})
