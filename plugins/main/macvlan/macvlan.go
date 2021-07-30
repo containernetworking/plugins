@@ -308,6 +308,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 					_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
 				}
 			}
+            		// add a gateway route
+            		link, err := netlink.LinkByName(args.IfName)
+            		route := netlink.Route{LinkIndex: link.Attrs().Index, Gw:ipamResult.IPs[0].Gateway, Flags: 0x10}
+            		if err := netlink.RouteAdd(&route); err != nil {
+				fmt.Errorf("failed to add route")
+            		}
 			return nil
 		})
 		if err != nil {
@@ -364,6 +370,18 @@ func cmdDel(args *skel.CmdArgs) error {
 				return err
 			}
 		}
+
+        	routeToDstIP, err := netlink.RouteList(nil, netlink.FAMILY_ALL)
+        	if err == nil {
+            	    for _, v := range routeToDstIP {
+                	if v.Dst == nil {
+                    	    if err := netlink.RouteDel(&v); err != nil {
+                                fmt.Errorf("Failed to delete the default route")
+                        	return nil
+                    	    }
+                       }
+                    }
+                }
 		return nil
 	})
 
