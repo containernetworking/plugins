@@ -371,17 +371,6 @@ func cmdDel(args *skel.CmdArgs) error {
 			}
 		}
 
-        	routeToDstIP, err := netlink.RouteList(nil, netlink.FAMILY_ALL)
-        	if err == nil {
-            	    for _, v := range routeToDstIP {
-                	if v.Dst == nil {
-                    	    if err := netlink.RouteDel(&v); err != nil {
-                                fmt.Errorf("Failed to delete the default route")
-                        	return nil
-                    	    }
-                       }
-                    }
-                }
 		return nil
 	})
 
