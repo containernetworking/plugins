@@ -6,26 +6,31 @@ import (
 	"time"
 )
 
-var sock int
-var toSockaddr syscall.SockaddrLinklayer
+type LinuxSocket struct {
+	sock       int
+	toSockaddr syscall.SockaddrLinklayer
+}
 
-func initialize(iface net.Interface) error {
-	toSockaddr = syscall.SockaddrLinklayer{Ifindex: iface.Index}
+func initialize(iface net.Interface) (s *LinuxSocket, err error) {
+	s = &LinuxSocket{}
+	s.toSockaddr = syscall.SockaddrLinklayer{Ifindex: iface.Index}
 
 	// 1544 = htons(ETH_P_ARP)
 	const proto = 1544
-	var err error
-	sock, err = syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, proto)
-	return err
+	s.sock, err = syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, proto)
+	return s, err
 }
 
-func send(request arpDatagram) (time.Time, error) {
-	return time.Now(), syscall.Sendto(sock, request.MarshalWithEthernetHeader(), 0, &toSockaddr)
+func (s *LinuxSocket) send(request arpDatagram) (time.Time, error) {
+	return time.Now(), syscall.Sendto(s.sock, request.MarshalWithEthernetHeader(), 0, &s.toSockaddr)
 }
 
-func receive() (arpDatagram, time.Time, error) {
+func (s *LinuxSocket) receive() (arpDatagram, time.Time, error) {
 	buffer := make([]byte, 128)
-	n, _, err := syscall.Recvfrom(sock, buffer, 0)
+	socketTimeout := timeout.Nanoseconds() * 2
+	t := syscall.NsecToTimeval(socketTimeout)
+	syscall.SetsockoptTimeval(s.sock, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &t)
+	n, _, err := syscall.Recvfrom(s.sock, buffer, 0)
 	if err != nil {
 		return arpDatagram{}, time.Now(), err
 	}
@@ -33,6 +38,6 @@ func receive() (arpDatagram, time.Time, error) {
 	return parseArpDatagram(buffer[14:n]), time.Now(), nil
 }
 
-func deinitialize() error {
-	return syscall.Close(sock)
+func (s *LinuxSocket) deinitialize() error {
+	return syscall.Close(s.sock)
 }

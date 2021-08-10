@@ -12,9 +12,11 @@ import (
 	"time"
 )
 
-var bpf *os.File
-var bpfFd int
-var buflen int
+type BsdSocket struct {
+	bpf    *os.File
+	bpfFd  int
+	buflen int
+}
 
 var bpfArpFilter = []syscall.BpfInsn{
 	// make sure this is an arp packet
@@ -26,11 +28,12 @@ var bpfArpFilter = []syscall.BpfInsn{
 	*syscall.BpfStmt(syscall.BPF_RET+syscall.BPF_K, 0),
 }
 
-func initialize(iface net.Interface) (err error) {
+func initialize(iface net.Interface) (s *BsdSocket, err error) {
+	s = &BsdSocket{}
 	verboseLog.Println("search available /dev/bpfX")
 	for i := 0; i <= 10; i++ {
 		bpfPath := fmt.Sprintf("/dev/bpf%d", i)
-		bpf, err = os.OpenFile(bpfPath, os.O_RDWR, 0666)
+		s.bpf, err = os.OpenFile(bpfPath, os.O_RDWR, 0666)
 		if err != nil {
 			verboseLog.Printf("  open failed: %s - %s\n", bpfPath, err.Error())
 		} else {
@@ -38,43 +41,43 @@ func initialize(iface net.Interface) (err error) {
 			break
 		}
 	}
-	bpfFd = int(bpf.Fd())
-	if bpfFd == -1 {
-		return errors.New("unable to open /dev/bpfX")
+	s.bpfFd = int(s.bpf.Fd())
+	if s.bpfFd == -1 {
+		return s, errors.New("unable to open /dev/bpfX")
 	}
 
-	if err := syscall.SetBpfInterface(bpfFd, iface.Name); err != nil {
-		return err
+	if err := syscall.SetBpfInterface(s.bpfFd, iface.Name); err != nil {
+		return s, err
 	}
 
-	if err := syscall.SetBpfImmediate(bpfFd, 1); err != nil {
-		return err
+	if err := syscall.SetBpfImmediate(s.bpfFd, 1); err != nil {
+		return s, err
 	}
 
-	buflen, err = syscall.BpfBuflen(bpfFd)
+	s.buflen, err = syscall.BpfBuflen(s.bpfFd)
 	if err != nil {
-		return err
+		return s, err
 	}
 
-	if err := syscall.SetBpf(bpfFd, bpfArpFilter); err != nil {
-		return err
+	if err := syscall.SetBpf(s.bpfFd, bpfArpFilter); err != nil {
+		return s, err
 	}
 
-	if err := syscall.FlushBpf(bpfFd); err != nil {
-		return err
+	if err := syscall.FlushBpf(s.bpfFd); err != nil {
+		return s, err
 	}
 
-	return nil
+	return s, nil
 }
 
-func send(request arpDatagram) (time.Time, error) {
-	_, err := syscall.Write(bpfFd, request.MarshalWithEthernetHeader())
+func (s *BsdSocket) send(request arpDatagram) (time.Time, error) {
+	_, err := syscall.Write(s.bpfFd, request.MarshalWithEthernetHeader())
 	return time.Now(), err
 }
 
-func receive() (arpDatagram, time.Time, error) {
-	buffer := make([]byte, buflen)
-	n, err := syscall.Read(bpfFd, buffer)
+func (s *BsdSocket) receive() (arpDatagram, time.Time, error) {
+	buffer := make([]byte, s.buflen)
+	n, err := syscall.Read(s.bpfFd, buffer)
 	if err != nil {
 		return arpDatagram{}, time.Now(), err
 	}
@@ -96,6 +99,6 @@ func receive() (arpDatagram, time.Time, error) {
 	return parseArpDatagram(buffer[hdrLength:n]), time.Now(), nil
 }
 
-func deinitialize() error {
-	return bpf.Close()
+func (s *BsdSocket) deinitialize() error {
+	return s.bpf.Close()
 }
