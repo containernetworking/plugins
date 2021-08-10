@@ -431,7 +431,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	if n.HairpinMode && n.PromiscMode {
-		return fmt.Errorf("cannot set hairpin mode and promiscous mode at the same time.")
+		return fmt.Errorf("cannot set hairpin mode and promiscuous mode at the same time.")
 	}
 
 	br, brInterface, err := setupBridge(n)
