@@ -40,7 +40,7 @@ type VRFNetConf struct {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.PluginSupports("0.3.1", "0.4.0"), bv.BuildString("vrf"))
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("vrf"))
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
