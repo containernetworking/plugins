@@ -192,12 +192,13 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	if n.Args != nil && n.Args.A != nil && len(n.Args.A.IPs) != 0 {
 		// args IP overwrites IP, so clear IPAM Config
 		n.IPAM.Addresses = make([]Address, 0, len(n.Args.A.IPs))
-		for _, addr := range n.Args.A.IPs {
-			_, _, err := net.ParseCIDR(addr)
+		for _, addrStr := range n.Args.A.IPs {
+			ip, addr, err := net.ParseCIDR(addrStr)
 			if err != nil {
-				return nil, "", fmt.Errorf("an entry in the 'ips' field is NOT in CIDR notation, got: '%s'", addr)
+				return nil, "", fmt.Errorf("an entry in the 'ips' field is NOT in CIDR notation, got: '%s'", addrStr)
 			}
-			n.IPAM.Addresses = append(n.IPAM.Addresses, Address{AddressStr: addr})
+			addr.IP = ip
+			n.IPAM.Addresses = append(n.IPAM.Addresses, Address{AddressStr: addrStr, Address: *addr})
 		}
 	}
 
@@ -205,12 +206,13 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	if len(n.RuntimeConfig.IPs) != 0 {
 		// runtimeConfig IP overwrites IP, so clear IPAM Config
 		n.IPAM.Addresses = make([]Address, 0, len(n.RuntimeConfig.IPs))
-		for _, addr := range n.RuntimeConfig.IPs {
-			_, _, err := net.ParseCIDR(addr)
+		for _, addrStr := range n.RuntimeConfig.IPs {
+			ip, addr, err := net.ParseCIDR(addrStr)
 			if err != nil {
-				return nil, "", fmt.Errorf("an entry in the 'ips' field is NOT in CIDR notation, got: '%s'", addr)
+				return nil, "", fmt.Errorf("an entry in the 'ips' field is NOT in CIDR notation, got: '%s'", addrStr)
 			}
-			n.IPAM.Addresses = append(n.IPAM.Addresses, Address{AddressStr: addr})
+			addr.IP = ip
+			n.IPAM.Addresses = append(n.IPAM.Addresses, Address{AddressStr: addrStr, Address: *addr})
 		}
 	}
 
@@ -219,13 +221,15 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	numV6 := 0
 
 	for i := range n.IPAM.Addresses {
-		ip, addr, err := net.ParseCIDR(n.IPAM.Addresses[i].AddressStr)
-		if err != nil {
-			return nil, "", fmt.Errorf(
-				"the 'address' field is expected to be in CIDR notation, got: '%s'", n.IPAM.Addresses[i].AddressStr)
+		if n.IPAM.Addresses[i].Address.IP == nil {
+			ip, addr, err := net.ParseCIDR(n.IPAM.Addresses[i].AddressStr)
+			if err != nil {
+				return nil, "", fmt.Errorf(
+					"the 'address' field is expected to be in CIDR notation, got: '%s'", n.IPAM.Addresses[i].AddressStr)
+			}
+			n.IPAM.Addresses[i].Address = *addr
+			n.IPAM.Addresses[i].Address.IP = ip
 		}
-		n.IPAM.Addresses[i].Address = *addr
-		n.IPAM.Addresses[i].Address.IP = ip
 
 		if err := canonicalizeIP(&n.IPAM.Addresses[i].Address.IP); err != nil {
 			return nil, "", fmt.Errorf("invalid address %d: %s", i, err)
