@@ -103,21 +103,21 @@ func ConfigureIface(ifName string, res *current.Result) error {
 		ip.SettleAddresses(ifName, 10)
 	}
 
-	if v4gw != nil {
-        	route := netlink.Route{LinkIndex: link.Attrs().Index, Gw:v4gw, Flags: 0x10}
-			if err = netlink.RouteAddEcmp(&route); err != nil {
-				return fmt.Errorf("failed to add default route via %v dev %v': %v", v4gw, ifName, err)
-			}
-    	}
+    if v4gw != nil {
+        route := netlink.Route{LinkIndex: link.Attrs().Index, Gw:v4gw, Flags: 0x10}
+		if err = netlink.RouteAddEcmp(&route); err != nil {
+			return fmt.Errorf("failed to add default route via %v dev %v': %v", v4gw, ifName, err)
+		}
+    }
 
-    	if v6gw != nil {
-        	route := netlink.Route{LinkIndex: link.Attrs().Index, Gw:v6gw, Flags: 0x10}
-			if err = netlink.RouteAddEcmp(&route); err != nil {
-				return fmt.Errorf("failed to add default route via %v dev %v': %v", v6gw, ifName, err)
-			}
-    	}
+    if v6gw != nil {
+        route := netlink.Route{LinkIndex: link.Attrs().Index, Gw:v6gw, Flags: 0x10}
+		if err = netlink.RouteAddEcmp(&route); err != nil {
+			return fmt.Errorf("failed to add default route via %v dev %v': %v", v6gw, ifName, err)
+		}
+    }
 	
-	for _, r := range res.Routes {
+    for _, r := range res.Routes {
 		routeIsV4 := r.Dst.IP.To4() != nil
 		gw := r.GW
 		if gw == nil {
