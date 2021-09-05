@@ -88,8 +88,6 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
-	// TODO: implement
-	//return fmt.Errorf("not implemented")
 	// Plugin must return result in same version as specified in netconf
 	versionDecoder := &version.ConfigDecoder{}
 	//confVersion, err := versionDecoder.Decode(args.StdinData)
