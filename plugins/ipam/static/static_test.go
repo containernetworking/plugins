@@ -546,6 +546,137 @@ var _ = Describe("static Operations", func() {
 			})
 			Expect(err).Should(MatchError("IPAM config missing 'ipam' key"))
 		})
+
+		It(fmt.Sprintf("[%s] errors when passed an invalid CIDR via ipam config", ver), func() {
+			const ifname string = "eth0"
+			const nspath string = "/some/where"
+			const ipStr string = "10.10.0.1"
+
+			conf := fmt.Sprintf(`{
+				"cniVersion": "%s",
+				"name": "mynet",
+				"type": "bridge",
+				"ipam": {
+					"type": "static",
+					"addresses": [ {
+						"address": "%s"
+					}]
+				}
+			}`, ver, ipStr)
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       nspath,
+				IfName:      ifname,
+				StdinData:   []byte(conf),
+			}
+
+			// Allocate the IP
+			_, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).Should(MatchError(
+				fmt.Sprintf("the 'address' field is expected to be in CIDR notation, got: '%s'", ipStr)))
+		})
+
+		It(fmt.Sprintf("[%s] errors when passed an invalid CIDR via Args", ver), func() {
+			const ifname string = "eth0"
+			const nspath string = "/some/where"
+			const ipStr string = "10.10.0.1"
+
+			conf := fmt.Sprintf(`{
+				"cniVersion": "%s",
+				"name": "mynet",
+				"type": "bridge",
+				"ipam": {
+					"type": "static",
+					"routes": [{ "dst": "0.0.0.0/0" }]
+				}
+			}`, ver)
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       nspath,
+				IfName:      ifname,
+				StdinData:   []byte(conf),
+				Args:        fmt.Sprintf("IP=%s", ipStr),
+			}
+
+			// Allocate the IP
+			_, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).Should(MatchError(
+				fmt.Sprintf("the 'ip' field is expected to be in CIDR notation, got: '%s'", ipStr)))
+		})
+
+		It(fmt.Sprintf("[%s] errors when passed an invalid CIDR via CNI_ARGS", ver), func() {
+			const ifname string = "eth0"
+			const nspath string = "/some/where"
+			const ipStr string = "10.10.0.1"
+
+			conf := fmt.Sprintf(`{
+				"cniVersion": "%s",
+				"name": "mynet",
+				"type": "bridge",
+				"ipam": {
+					"type": "static",
+					"routes": [{ "dst": "0.0.0.0/0" }]
+				},
+				"args": {
+					"cni": {
+						"ips" : ["%s"]
+					}
+				}
+			}`, ver, ipStr)
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       nspath,
+				IfName:      ifname,
+				StdinData:   []byte(conf),
+			}
+
+			// Allocate the IP
+			_, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).Should(MatchError(
+				fmt.Sprintf("an entry in the 'ips' field is NOT in CIDR notation, got: '%s'", ipStr)))
+		})
+
+		It(fmt.Sprintf("[%s] errors when passed an invalid CIDR via RuntimeConfig", ver), func() {
+			const ifname string = "eth0"
+			const nspath string = "/some/where"
+			const ipStr string = "10.10.0.1"
+
+			conf := fmt.Sprintf(`{
+				"cniVersion": "%s",
+				"name": "mynet",
+				"type": "bridge",
+				"ipam": {
+					"type": "static",
+					"routes": [{ "dst": "0.0.0.0/0" }]
+				},
+				"RuntimeConfig": {
+					"ips" : ["%s"]
+				}
+			}`, ver, ipStr)
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       nspath,
+				IfName:      ifname,
+				StdinData:   []byte(conf),
+			}
+
+			// Allocate the IP
+			_, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).Should(MatchError(
+				fmt.Sprintf("an entry in the 'ips' field is NOT in CIDR notation, got: '%s'", ipStr)))
+		})
 	}
 })
 
