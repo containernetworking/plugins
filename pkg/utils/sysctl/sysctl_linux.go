@@ -36,7 +36,6 @@ func Sysctl(name string, params ...string) (string, error) {
 
 func getSysctl(name string) (string, error) {
 	fullName := filepath.Join("/proc/sys", toNormalName(name))
-	fullName = filepath.Clean(fullName)
 	data, err := ioutil.ReadFile(fullName)
 	if err != nil {
 		return "", err
@@ -47,7 +46,6 @@ func getSysctl(name string) (string, error) {
 
 func setSysctl(name, value string) (string, error) {
 	fullName := filepath.Join("/proc/sys", toNormalName(name))
-	fullName = filepath.Clean(fullName)
 	if err := ioutil.WriteFile(fullName, []byte(value), 0644); err != nil {
 		return "", err
 	}
