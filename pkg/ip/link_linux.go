@@ -107,7 +107,7 @@ func makeVeth(name, vethPeerName string, mtu int, mac string, hostNS ns.NetNS) (
 // RandomVethName returns string "veth" with random prefix (hashed from entropy)
 func RandomVethName() (string, error) {
 	entropy := make([]byte, 4)
-	_, err := rand.Reader.Read(entropy)
+	_, err := rand.Read(entropy)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate random veth name: %v", err)
 	}
