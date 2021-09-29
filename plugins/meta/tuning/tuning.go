@@ -326,7 +326,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		for key, value := range tuningConf.SysCtl {
 			fileName := filepath.Join("/proc/sys", strings.Replace(key, ".", "/", -1))
-			fileName = filepath.Clean(fileName)
 
 			// Refuse to modify sysctl parameters that don't belong
 			// to the network subsystem.
@@ -428,7 +427,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 		// Check each configured value vs what's currently in the container
 		for key, confValue := range tuningConf.SysCtl {
 			fileName := filepath.Join("/proc/sys", strings.Replace(key, ".", "/", -1))
-			fileName = filepath.Clean(fileName)
 
 			contents, err := ioutil.ReadFile(fileName)
 			if err != nil {
