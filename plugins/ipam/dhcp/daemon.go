@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/coreos/go-systemd/v22/activation"
 )
@@ -62,7 +61,7 @@ func generateClientID(containerID string, netName string, ifName string) string 
 // Allocate acquires an IP from a DHCP server for a specified container.
 // The acquired lease will be maintained until Release() is called.
 func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
-	conf := types.NetConf{}
+	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("error parsing netconf: %v", err)
 	}
@@ -94,7 +93,7 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 // Release stops maintenance of the lease acquired in Allocate()
 // and sends a release msg to the DHCP server.
 func (d *DHCP) Release(args *skel.CmdArgs, reply *struct{}) error {
-	conf := types.NetConf{}
+	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("error parsing netconf: %v", err)
 	}
