@@ -33,6 +33,18 @@ import (
 
 const defaultSocketPath = "/run/cni/dhcp.sock"
 
+// The top-level network config - IPAM plugins are passed the full configuration
+// of the calling plugin, not just the IPAM section.
+type NetConf struct {
+	types.NetConf
+	IPAM *IPAMConfig `json:"ipam"`
+}
+
+type IPAMConfig struct {
+	types.IPAM
+	DaemonSocketPath string `json:"daemonSocketPath,omitempty"`
+}
+
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "daemon" {
 		var pidfilePath string
@@ -104,16 +116,8 @@ func cmdCheck(args *skel.CmdArgs) error {
 	return nil
 }
 
-type SocketPathConf struct {
-	DaemonSocketPath string `json:"daemonSocketPath,omitempty"`
-}
-
-type TempNetConf struct {
-	IPAM SocketPathConf `json:"ipam,omitempty"`
-}
-
 func getSocketPath(stdinData []byte) (string, error) {
-	conf := TempNetConf{}
+	conf := NetConf{}
 	if err := json.Unmarshal(stdinData, &conf); err != nil {
 		return "", fmt.Errorf("error parsing socket path conf: %v", err)
 	}
