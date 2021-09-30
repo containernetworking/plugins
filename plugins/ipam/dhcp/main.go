@@ -67,7 +67,7 @@ func main() {
 		}
 
 		if err := runDaemon(pidfilePath, hostPrefix, socketPath, timeout, resendMax, broadcast); err != nil {
-			log.Printf(err.Error())
+			log.Print(err.Error())
 			os.Exit(1)
 		}
 	} else {
