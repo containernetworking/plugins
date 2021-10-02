@@ -16,6 +16,7 @@ package main
 
 import (
 	"net"
+	"reflect"
 	"testing"
 
 	"github.com/containernetworking/cni/pkg/types"
@@ -72,4 +73,35 @@ func TestParseCIDRRoutes(t *testing.T) {
 	routes := parseCIDRRoutes(opts)
 
 	validateRoutes(t, routes)
+}
+
+func TestParseOptionName(t *testing.T) {
+	tests := []struct {
+		name    string
+		option  string
+		want    dhcp4.OptionCode
+		wantErr bool
+	}{
+		{
+			"hostname", "host-name", dhcp4.OptionHostName, false,
+		},
+		{
+			"hostname in number", "12", dhcp4.OptionHostName, false,
+		},
+		{
+			"random string", "doNotparseMe", 0, true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseOptionName(tt.option)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseOptionName() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("parseOptionName() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

@@ -42,7 +42,32 @@ type NetConf struct {
 
 type IPAMConfig struct {
 	types.IPAM
-	DaemonSocketPath string `json:"daemonSocketPath,omitempty"`
+	DaemonSocketPath string `json:"daemonSocketPath"`
+	// When requesting IP from DHCP server, carry these options for management purpose.
+	// Some fields have default values, and can be override by setting a new option with the same name at here.
+	ProvideOptions []ProvideOption `json:"provide"`
+	// When requesting IP from DHCP server, claiming these options are necessary. Options are necessary unless `optional`
+	// is set to `false`.
+	// To override default required fields, set `skipDefault` to `false`.
+	// If an field is not optional, but the server failed to provide it, error will be raised.
+	RequireOptions []RequireOption `json:"require"`
+}
+
+// DHCPOption represents a DHCP option. It can be a number, or a string defined in manual dhcp-options(5).
+// Note that not all DHCP options are supported at all time. Error will be raised if unsupported options are used.
+type DHCPOption string
+
+type ProvideOption struct {
+	Option DHCPOption `json:"option"`
+
+	Value           string `json:"value"`
+	ValueFromCNIArg string `json:"fromArg"`
+}
+
+type RequireOption struct {
+	SkipDefault bool `json:"skipDefault"`
+
+	Option DHCPOption `json:"option"`
 }
 
 func main() {
