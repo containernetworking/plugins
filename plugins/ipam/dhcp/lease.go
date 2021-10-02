@@ -218,6 +218,10 @@ func (l *DHCPLease) acquire() error {
 	for k, v := range l.optsProviding {
 		opts[k] = v
 	}
+	// client identifier's first byte is "type"
+	newClientID := []byte{0}
+	newClientID = append(newClientID, opts[dhcp4.OptionClientIdentifier]...)
+	opts[dhcp4.OptionClientIdentifier] = newClientID
 
 	pkt, err := backoffRetry(l.resendMax, func() (*dhcp4.Packet, error) {
 		ok, ack, err := DhcpRequest(c, opts)
