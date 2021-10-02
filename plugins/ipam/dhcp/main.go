@@ -48,9 +48,9 @@ type IPAMConfig struct {
 	ProvideOptions []ProvideOption `json:"provide"`
 	// When requesting IP from DHCP server, claiming these options are necessary. Options are necessary unless `optional`
 	// is set to `false`.
-	// To override default required fields, set `skipDefault` to `false`.
+	// To override default requesting fields, set `skipDefault` to `false`.
 	// If an field is not optional, but the server failed to provide it, error will be raised.
-	RequireOptions []RequireOption `json:"require"`
+	RequestOptions []RequestOption `json:"request"`
 }
 
 // DHCPOption represents a DHCP option. It can be a number, or a string defined in manual dhcp-options(5).
@@ -64,7 +64,7 @@ type ProvideOption struct {
 	ValueFromCNIArg string `json:"fromArg"`
 }
 
-type RequireOption struct {
+type RequestOption struct {
 	SkipDefault bool `json:"skipDefault"`
 
 	Option DHCPOption `json:"option"`

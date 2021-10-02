@@ -68,12 +68,12 @@ type DHCPLease struct {
 	optsProviding  map[dhcp4.OptionCode][]byte
 }
 
-var acquireOptionsDefault = map[dhcp4.OptionCode]bool{
+var requestOptionsDefault = map[dhcp4.OptionCode]bool{
 	dhcp4.OptionRouter:     true,
 	dhcp4.OptionSubnetMask: true,
 }
 
-func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequireOptions []RequireOption) (
+func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequestOptions []RequestOption) (
 	optsRequesting map[dhcp4.OptionCode]bool, optsProviding map[dhcp4.OptionCode][]byte, err error) {
 
 	// parse CNI args
@@ -113,7 +113,7 @@ func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequireOptio
 	// parse necessary options map
 	optsRequesting = make(map[dhcp4.OptionCode]bool)
 	skipRequireDefault := false
-	for _, opt := range RequireOptions {
+	for _, opt := range RequestOptions {
 		if opt.SkipDefault {
 			skipRequireDefault = true
 		}
@@ -124,7 +124,7 @@ func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequireOptio
 		}
 		optsRequesting[optParsed] = true
 	}
-	for k, v := range acquireOptionsDefault {
+	for k, v := range requestOptionsDefault {
 		// only set if not skipping default and this value does not exists
 		if _, ok := optsRequesting[k]; !ok && !skipRequireDefault {
 			optsRequesting[k] = v
