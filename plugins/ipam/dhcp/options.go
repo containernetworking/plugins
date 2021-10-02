@@ -26,10 +26,12 @@ import (
 )
 
 var optionNameToID = map[string]dhcp4.OptionCode{
-	"dhcp-client-identifier": dhcp4.OptionClientIdentifier,
-	"subnet-mask":            dhcp4.OptionSubnetMask,
-	"routers":                dhcp4.OptionRouter,
-	"host-name":              dhcp4.OptionHostName,
+	"dhcp-client-identifier":  dhcp4.OptionClientIdentifier,
+	"subnet-mask":             dhcp4.OptionSubnetMask,
+	"routers":                 dhcp4.OptionRouter,
+	"host-name":               dhcp4.OptionHostName,
+	"user-class":              dhcp4.OptionUserClass,
+	"vendor-class-identifier": dhcp4.OptionVendorClassIdentifier,
 }
 
 func parseOptionName(option string) (dhcp4.OptionCode, error) {
