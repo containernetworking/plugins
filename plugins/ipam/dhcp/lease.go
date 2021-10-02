@@ -423,6 +423,7 @@ func jitter(span time.Duration) time.Duration {
 func backoffRetry(resendMax time.Duration, f func() (*dhcp4.Packet, error)) (*dhcp4.Packet, error) {
 	var baseDelay time.Duration = resendDelay0
 	var sleepTime time.Duration
+	var fastRetryLimit = 3 // fast retry for 3 times to speed up
 
 	for {
 		pkt, err := f()
@@ -432,7 +433,12 @@ func backoffRetry(resendMax time.Duration, f func() (*dhcp4.Packet, error)) (*dh
 
 		log.Print(err)
 
-		sleepTime = baseDelay + jitter(time.Second)
+		if fastRetryLimit == 0 {
+			sleepTime = baseDelay + jitter(time.Second)
+		} else {
+			sleepTime = jitter(time.Second)
+			fastRetryLimit--
+		}
 
 		log.Printf("retrying in %f seconds", sleepTime.Seconds())
 
