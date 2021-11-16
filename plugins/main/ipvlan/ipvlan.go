@@ -18,8 +18,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"runtime"
 
+	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -254,7 +256,21 @@ func cmdAdd(args *skel.CmdArgs) error {
 	result.Interfaces = []*current.Interface{ipvlanInterface}
 
 	err = netns.Do(func(_ ns.NetNS) error {
-		return ipam.ConfigureIface(args.IfName, result)
+		if err := ipam.ConfigureIface(args.IfName, result); err != nil {
+			return err
+		}
+
+		contVeth, err := net.InterfaceByName(args.IfName)
+		if err != nil {
+			return fmt.Errorf("failed to look up %q: %v", args.IfName, err)
+		}
+
+		for _, ipc := range result.IPs {
+			if ipc.Address.IP.To4() != nil {
+				_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return err
