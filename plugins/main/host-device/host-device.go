@@ -39,7 +39,7 @@ import (
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
-const (
+var (
 	sysBusPCI = "/sys/bus/pci/devices"
 )
 
