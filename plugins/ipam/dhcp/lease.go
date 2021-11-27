@@ -37,6 +37,11 @@ import (
 const resendDelay0 = 4 * time.Second
 const resendDelayMax = 62 * time.Second
 
+// To speed up the retry for first few failures, we retry without
+// backoff for a few times
+const resendFastDelay = 2 * time.Second
+const resendFastMax = 4
+
 const (
 	leaseStateBound = iota
 	leaseStateRenewing
@@ -427,8 +432,7 @@ func jitter(span time.Duration) time.Duration {
 func backoffRetry(resendMax time.Duration, f func() (*dhcp4.Packet, error)) (*dhcp4.Packet, error) {
 	var baseDelay time.Duration = resendDelay0
 	var sleepTime time.Duration
-	var fastRetryLimit = 3 // fast retry for 3 times to speed up
-
+	var fastRetryLimit = resendFastMax
 	for {
 		pkt, err := f()
 		if err == nil {
@@ -440,7 +444,7 @@ func backoffRetry(resendMax time.Duration, f func() (*dhcp4.Packet, error)) (*dh
 		if fastRetryLimit == 0 {
 			sleepTime = baseDelay + jitter(time.Second)
 		} else {
-			sleepTime = jitter(time.Second)
+			sleepTime = resendFastDelay + jitter(time.Second)
 			fastRetryLimit--
 		}
 
@@ -448,7 +452,8 @@ func backoffRetry(resendMax time.Duration, f func() (*dhcp4.Packet, error)) (*dh
 
 		time.Sleep(sleepTime)
 
-		if baseDelay < resendMax {
+		// only adjust delay time if we are in normal backoff stage
+		if baseDelay < resendMax && fastRetryLimit == 0 {
 			baseDelay *= 2
 		} else {
 			break
