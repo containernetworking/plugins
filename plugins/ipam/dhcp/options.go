@@ -18,11 +18,32 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/d2g/dhcp4"
 )
+
+var optionNameToID = map[string]dhcp4.OptionCode{
+	"dhcp-client-identifier":  dhcp4.OptionClientIdentifier,
+	"subnet-mask":             dhcp4.OptionSubnetMask,
+	"routers":                 dhcp4.OptionRouter,
+	"host-name":               dhcp4.OptionHostName,
+	"user-class":              dhcp4.OptionUserClass,
+	"vendor-class-identifier": dhcp4.OptionVendorClassIdentifier,
+}
+
+func parseOptionName(option string) (dhcp4.OptionCode, error) {
+	if val, ok := optionNameToID[option]; ok {
+		return val, nil
+	}
+	i, err := strconv.ParseUint(option, 10, 8)
+	if err != nil {
+		return 0, fmt.Errorf("Can not parse option: %w", err)
+	}
+	return dhcp4.OptionCode(i), nil
+}
 
 func parseRouter(opts dhcp4.Options) net.IP {
 	if opts, ok := opts[dhcp4.OptionRouter]; ok {

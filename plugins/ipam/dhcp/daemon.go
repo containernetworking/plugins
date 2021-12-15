@@ -29,12 +29,9 @@ import (
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/coreos/go-systemd/v22/activation"
 )
-
-const listenFdsStart = 3
 
 var errNoMoreTries = errors.New("no more tries")
 
@@ -55,21 +52,35 @@ func newDHCP(clientTimeout, clientResendMax time.Duration) *DHCP {
 	}
 }
 
+// TODO: current client ID is too long. At least the container ID should not be used directly.
+// A seperate issue is necessary to ensure no breaking change is affecting other users.
 func generateClientID(containerID string, netName string, ifName string) string {
-	return containerID + "/" + netName + "/" + ifName
+	clientID := containerID + "/" + netName + "/" + ifName
+	// defined in RFC 2132, length size can not be larger than 1 octet. So we truncate 254 to make everyone happy.
+	if len(clientID) > 254 {
+		clientID = clientID[0:254]
+	}
+	return clientID
 }
 
 // Allocate acquires an IP from a DHCP server for a specified container.
 // The acquired lease will be maintained until Release() is called.
 func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
-	conf := types.NetConf{}
+	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("error parsing netconf: %v", err)
 	}
 
+	optsRequesting, optsProviding, err := prepareOptions(args.Args, conf.IPAM.ProvideOptions, conf.IPAM.RequestOptions)
+	if err != nil {
+		return err
+	}
+
 	clientID := generateClientID(args.ContainerID, conf.Name, args.IfName)
 	hostNetns := d.hostNetnsPrefix + args.Netns
-	l, err := AcquireLease(clientID, hostNetns, args.IfName, d.clientTimeout, d.clientResendMax, d.broadcast)
+	l, err := AcquireLease(clientID, hostNetns, args.IfName,
+		optsRequesting, optsProviding,
+		d.clientTimeout, d.clientResendMax, d.broadcast)
 	if err != nil {
 		return err
 	}
@@ -94,7 +105,7 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 // Release stops maintenance of the lease acquired in Allocate()
 // and sends a release msg to the DHCP server.
 func (d *DHCP) Release(args *skel.CmdArgs, reply *struct{}) error {
-	conf := types.NetConf{}
+	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("error parsing netconf: %v", err)
 	}

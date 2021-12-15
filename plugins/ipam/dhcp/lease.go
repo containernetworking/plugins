@@ -19,6 +19,7 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,6 +36,11 @@ import (
 // and randomized to +/- 1sec
 const resendDelay0 = 4 * time.Second
 const resendDelayMax = 62 * time.Second
+
+// To speed up the retry for first few failures, we retry without
+// backoff for a few times
+const resendFastDelay = 2 * time.Second
+const resendFastMax = 4
 
 const (
 	leaseStateBound = iota
@@ -62,6 +68,74 @@ type DHCPLease struct {
 	stopping      uint32
 	stop          chan struct{}
 	wg            sync.WaitGroup
+	// list of requesting and providing options and if they are necessary / their value
+	optsRequesting map[dhcp4.OptionCode]bool
+	optsProviding  map[dhcp4.OptionCode][]byte
+}
+
+var requestOptionsDefault = map[dhcp4.OptionCode]bool{
+	dhcp4.OptionRouter:     true,
+	dhcp4.OptionSubnetMask: true,
+}
+
+func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequestOptions []RequestOption) (
+	optsRequesting map[dhcp4.OptionCode]bool, optsProviding map[dhcp4.OptionCode][]byte, err error) {
+
+	// parse CNI args
+	cniArgsParsed := map[string]string{}
+	for _, argPair := range strings.Split(cniArgs, ";") {
+		args := strings.SplitN(argPair, "=", 2)
+		if len(args) > 1 {
+			cniArgsParsed[args[0]] = args[1]
+		}
+	}
+
+	// parse providing options map
+	var optParsed dhcp4.OptionCode
+	optsProviding = make(map[dhcp4.OptionCode][]byte)
+	for _, opt := range ProvideOptions {
+		optParsed, err = parseOptionName(string(opt.Option))
+		if err != nil {
+			err = fmt.Errorf("Can not parse option %q: %w", opt.Option, err)
+			return
+		}
+		if len(opt.Value) > 0 {
+			if len(opt.Value) > 255 {
+				err = fmt.Errorf("value too long for option %q: %q", opt.Option, opt.Value)
+				return
+			}
+			optsProviding[optParsed] = []byte(opt.Value)
+		}
+		if value, ok := cniArgsParsed[opt.ValueFromCNIArg]; ok {
+			if len(value) > 255 {
+				err = fmt.Errorf("value too long for option %q from CNI_ARGS %q: %q", opt.Option, opt.ValueFromCNIArg, opt.Value)
+				return
+			}
+			optsProviding[optParsed] = []byte(value)
+		}
+	}
+
+	// parse necessary options map
+	optsRequesting = make(map[dhcp4.OptionCode]bool)
+	skipRequireDefault := false
+	for _, opt := range RequestOptions {
+		if opt.SkipDefault {
+			skipRequireDefault = true
+		}
+		optParsed, err = parseOptionName(string(opt.Option))
+		if err != nil {
+			err = fmt.Errorf("Can not parse option %q: %w", opt.Option, err)
+			return
+		}
+		optsRequesting[optParsed] = true
+	}
+	for k, v := range requestOptionsDefault {
+		// only set if not skipping default and this value does not exists
+		if _, ok := optsRequesting[k]; !ok && !skipRequireDefault {
+			optsRequesting[k] = v
+		}
+	}
+	return
 }
 
 // AcquireLease gets an DHCP lease and then maintains it in the background
@@ -69,15 +143,18 @@ type DHCPLease struct {
 // calling DHCPLease.Stop()
 func AcquireLease(
 	clientID, netns, ifName string,
+	optsRequesting map[dhcp4.OptionCode]bool, optsProviding map[dhcp4.OptionCode][]byte,
 	timeout, resendMax time.Duration, broadcast bool,
 ) (*DHCPLease, error) {
 	errCh := make(chan error, 1)
 	l := &DHCPLease{
-		clientID:  clientID,
-		stop:      make(chan struct{}),
-		timeout:   timeout,
-		resendMax: resendMax,
-		broadcast: broadcast,
+		clientID:       clientID,
+		stop:           make(chan struct{}),
+		timeout:        timeout,
+		resendMax:      resendMax,
+		broadcast:      broadcast,
+		optsRequesting: optsRequesting,
+		optsProviding:  optsProviding,
 	}
 
 	log.Printf("%v: acquiring lease", clientID)
@@ -139,7 +216,17 @@ func (l *DHCPLease) acquire() error {
 
 	opts := make(dhcp4.Options)
 	opts[dhcp4.OptionClientIdentifier] = []byte(l.clientID)
-	opts[dhcp4.OptionParameterRequestList] = []byte{byte(dhcp4.OptionRouter), byte(dhcp4.OptionSubnetMask)}
+	opts[dhcp4.OptionParameterRequestList] = []byte{}
+	for k := range l.optsRequesting {
+		opts[dhcp4.OptionParameterRequestList] = append(opts[dhcp4.OptionParameterRequestList], byte(k))
+	}
+	for k, v := range l.optsProviding {
+		opts[k] = v
+	}
+	// client identifier's first byte is "type"
+	newClientID := []byte{0}
+	newClientID = append(newClientID, opts[dhcp4.OptionClientIdentifier]...)
+	opts[dhcp4.OptionClientIdentifier] = newClientID
 
 	pkt, err := backoffRetry(l.resendMax, func() (*dhcp4.Packet, error) {
 		ok, ack, err := DhcpRequest(c, opts)
@@ -345,7 +432,7 @@ func jitter(span time.Duration) time.Duration {
 func backoffRetry(resendMax time.Duration, f func() (*dhcp4.Packet, error)) (*dhcp4.Packet, error) {
 	var baseDelay time.Duration = resendDelay0
 	var sleepTime time.Duration
-
+	var fastRetryLimit = resendFastMax
 	for {
 		pkt, err := f()
 		if err == nil {
@@ -354,13 +441,19 @@ func backoffRetry(resendMax time.Duration, f func() (*dhcp4.Packet, error)) (*dh
 
 		log.Print(err)
 
-		sleepTime = baseDelay + jitter(time.Second)
+		if fastRetryLimit == 0 {
+			sleepTime = baseDelay + jitter(time.Second)
+		} else {
+			sleepTime = resendFastDelay + jitter(time.Second)
+			fastRetryLimit--
+		}
 
 		log.Printf("retrying in %f seconds", sleepTime.Seconds())
 
 		time.Sleep(sleepTime)
 
-		if baseDelay < resendMax {
+		// only adjust delay time if we are in normal backoff stage
+		if baseDelay < resendMax && fastRetryLimit == 0 {
 			baseDelay *= 2
 		} else {
 			break
