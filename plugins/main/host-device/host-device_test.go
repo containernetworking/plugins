@@ -17,14 +17,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net"
+	"os"
+	"path"
 	"strings"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/040"
-	"github.com/containernetworking/cni/pkg/types/100"
+	types040 "github.com/containernetworking/cni/pkg/types/040"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
@@ -217,6 +220,7 @@ func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result)
 
 type tester interface {
 	expectInterfaces(result types.Result, name, mac, sandbox string)
+	expectDpdkInterfaceIP(result types.Result, ipAddress string)
 }
 
 type testerBase struct{}
@@ -252,6 +256,15 @@ func (t *testerV10x) expectInterfaces(result types.Result, name, mac, sandbox st
 	}))
 }
 
+func (t *testerV10x) expectDpdkInterfaceIP(result types.Result, ipAddress string) {
+	// check that the result was sane
+	res, err := types100.NewResultFromResult(result)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(res.Interfaces)).To(Equal(0))
+	Expect(len(res.IPs)).To(Equal(1))
+	Expect(res.IPs[0].Address.String()).To(Equal(ipAddress))
+}
+
 func (t *testerV04x) expectInterfaces(result types.Result, name, mac, sandbox string) {
 	// check that the result was sane
 	res, err := types040.NewResultFromResult(result)
@@ -265,6 +278,15 @@ func (t *testerV04x) expectInterfaces(result types.Result, name, mac, sandbox st
 	}))
 }
 
+func (t *testerV04x) expectDpdkInterfaceIP(result types.Result, ipAddress string) {
+	// check that the result was sane
+	res, err := types040.NewResultFromResult(result)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(res.Interfaces)).To(Equal(0))
+	Expect(len(res.IPs)).To(Equal(1))
+	Expect(res.IPs[0].Address.String()).To(Equal(ipAddress))
+}
+
 func (t *testerV03x) expectInterfaces(result types.Result, name, mac, sandbox string) {
 	// check that the result was sane
 	res, err := types040.NewResultFromResult(result)
@@ -276,6 +298,15 @@ func (t *testerV03x) expectInterfaces(result types.Result, name, mac, sandbox st
 			Sandbox: sandbox,
 		},
 	}))
+}
+
+func (t *testerV03x) expectDpdkInterfaceIP(result types.Result, ipAddress string) {
+	// check that the result was sane
+	res, err := types040.NewResultFromResult(result)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(res.Interfaces)).To(Equal(0))
+	Expect(len(res.IPs)).To(Equal(1))
+	Expect(res.IPs[0].Address.String()).To(Equal(ipAddress))
 }
 
 var _ = Describe("base functionality", func() {
@@ -509,6 +540,65 @@ var _ = Describe("base functionality", func() {
 			})
 		})
 
+		It(fmt.Sprintf("Works with a valid %s config on a DPDK device with IPAM", ver), func() {
+			fs := &fakeFilesystem{
+				dirs: []string{
+					"sys/bus/pci/devices/0000:00:00.1",
+					"sys/bus/pci/drivers/vfio-pci",
+				},
+				symlinks: map[string]string{
+					"sys/bus/pci/devices/0000:00:00.1/driver": "../../../../bus/pci/drivers/vfio-pci",
+				},
+			}
+			defer fs.use()()
+
+			// call CmdAdd
+			targetIP := "10.10.0.1/24"
+			cniName := "eth0"
+			conf := fmt.Sprintf(`{
+							"cniVersion": "%s",
+							"name": "cni-plugin-host-device-test",
+							"type": "host-device",
+							"ipam": {
+								"type": "static",
+								"addresses": [
+									{
+									"address":"`+targetIP+`",
+									"gateway": "10.10.0.254"
+								}]
+							},
+							"pciBusID": %q
+						}`, ver, "0000:00:00.1")
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				IfName:      cniName,
+				Netns:       targetNS.Path(),
+				StdinData:   []byte(conf),
+			}
+			var resI types.Result
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				var err error
+				resI, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+				return err
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// check that the result was sane
+			t := newTesterByVersion(ver)
+			t.expectDpdkInterfaceIP(resI, targetIP)
+
+			// call CmdDel
+			_ = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				err = testutils.CmdDelWithArgs(args, func() error {
+					return cmdDel(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+				return nil
+			})
+		})
+
 		It(fmt.Sprintf("Works with a valid %s config with IPAM", ver), func() {
 			var origLink netlink.Link
 
@@ -716,6 +806,89 @@ var _ = Describe("base functionality", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				_, err := netlink.LinkByName(ifname)
+				Expect(err).NotTo(HaveOccurred())
+				return nil
+			})
+		})
+
+		It(fmt.Sprintf("Works with a valid %s config on a DPDK device with IPAM", ver), func() {
+			fs := &fakeFilesystem{
+				dirs: []string{
+					"sys/bus/pci/devices/0000:00:00.1",
+					"sys/bus/pci/drivers/vfio-pci",
+				},
+				symlinks: map[string]string{
+					"sys/bus/pci/devices/0000:00:00.1/driver": "../../../../bus/pci/drivers/vfio-pci",
+				},
+			}
+			defer fs.use()()
+
+			// call CmdAdd
+			targetIP := "10.10.0.1/24"
+			cniName := "eth0"
+			conf := fmt.Sprintf(`{
+							"cniVersion": "%s",
+							"name": "cni-plugin-host-device-test",
+							"type": "host-device",
+							"ipam": {
+								"type": "static",
+								"addresses": [
+									{
+									"address":"`+targetIP+`",
+									"gateway": "10.10.0.254"
+								}]
+							},
+							"pciBusID": %q
+						}`, ver, "0000:00:00.1")
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNS.Path(),
+				IfName:      cniName,
+				StdinData:   []byte(conf),
+			}
+			var resI types.Result
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				var err error
+				resI, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+				return err
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// check that the result was sane
+			t := newTesterByVersion(ver)
+			t.expectDpdkInterfaceIP(resI, targetIP)
+
+			// call CmdCheck
+			n := &Net{}
+			err = json.Unmarshal([]byte(conf), &n)
+			Expect(err).NotTo(HaveOccurred())
+
+			n.IPAM, _, err = LoadIPAMConfig([]byte(conf), "")
+			Expect(err).NotTo(HaveOccurred())
+
+			if testutils.SpecVersionHasCHECK(ver) {
+				newConf, err := buildOneConfig("testConfig", ver, n, resI)
+				Expect(err).NotTo(HaveOccurred())
+
+				confString, err := json.Marshal(newConf)
+				Expect(err).NotTo(HaveOccurred())
+
+				args.StdinData = confString
+
+				err = originalNS.Do(func(ns.NetNS) error {
+					defer GinkgoRecover()
+					return testutils.CmdCheckWithArgs(args, func() error { return cmdCheck(args) })
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// call CmdDel
+			_ = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				err = testutils.CmdDelWithArgs(args, func() error {
+					return cmdDel(args)
+				})
 				Expect(err).NotTo(HaveOccurred())
 				return nil
 			})
@@ -971,3 +1144,42 @@ var _ = Describe("base functionality", func() {
 		})
 	}
 })
+
+type fakeFilesystem struct {
+	rootDir  string
+	dirs     []string
+	symlinks map[string]string
+}
+
+func (fs *fakeFilesystem) use() func() {
+	// create the new fake fs root dir in /tmp/sriov...
+	tmpDir, err := ioutil.TempDir("", "sriov")
+	if err != nil {
+		panic(fmt.Errorf("error creating fake root dir: %s", err.Error()))
+	}
+	fs.rootDir = tmpDir
+
+	for _, dir := range fs.dirs {
+		err := os.MkdirAll(path.Join(fs.rootDir, dir), 0755)
+		if err != nil {
+			panic(fmt.Errorf("error creating fake directory: %s", err.Error()))
+		}
+	}
+
+	for link, target := range fs.symlinks {
+		err = os.Symlink(target, path.Join(fs.rootDir, link))
+		if err != nil {
+			panic(fmt.Errorf("error creating fake symlink: %s", err.Error()))
+		}
+	}
+
+	sysBusPCI = path.Join(fs.rootDir, "/sys/bus/pci/devices")
+
+	return func() {
+		// remove temporary fake fs
+		err := os.RemoveAll(fs.rootDir)
+		if err != nil {
+			panic(fmt.Errorf("error tearing down fake filesystem: %s", err.Error()))
+		}
+	}
+}
