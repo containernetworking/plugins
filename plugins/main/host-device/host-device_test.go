@@ -381,12 +381,13 @@ var _ = Describe("base functionality", func() {
 			t := newTesterByVersion(ver)
 			t.expectInterfaces(resI, cniName, origLink.Attrs().HardwareAddr.String(), targetNS.Path())
 
-			// assert that dummy0 is now in the target namespace
+			// assert that dummy0 is now in the target namespace and is up
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 				link, err := netlink.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
+				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 				return nil
 			})
 
@@ -461,12 +462,13 @@ var _ = Describe("base functionality", func() {
 			t := newTesterByVersion(ver)
 			t.expectInterfaces(resI, cniName, origLink.Attrs().HardwareAddr.String(), targetNS.Path())
 
-			// assert that dummy0 is now in the target namespace
+			// assert that dummy0 is now in the target namespace and is up
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 				link, err := netlink.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
+				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 				return nil
 			})
 
@@ -504,12 +506,13 @@ var _ = Describe("base functionality", func() {
 				return nil
 			})
 
-			// assert container interface "eth0" still exists in target namespace
+			// assert container interface "eth0" still exists in target namespace and is up
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 				link, err := netlink.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
+				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 				return nil
 			})
 
@@ -654,12 +657,13 @@ var _ = Describe("base functionality", func() {
 			t := newTesterByVersion(ver)
 			t.expectInterfaces(resI, cniName, origLink.Attrs().HardwareAddr.String(), targetNS.Path())
 
-			// assert that dummy0 is now in the target namespace
+			// assert that dummy0 is now in the target namespace and is up
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 				link, err := netlink.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
+				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 
 				//get the IP address of the interface in the target namespace
 				addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
@@ -757,12 +761,13 @@ var _ = Describe("base functionality", func() {
 			t := newTesterByVersion(ver)
 			t.expectInterfaces(resI, cniName, origLink.Attrs().HardwareAddr.String(), targetNS.Path())
 
-			// assert that dummy0 is now in the target namespace
+			// assert that dummy0 is now in the target namespace and is up
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 				link, err := netlink.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
+				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 				return nil
 			})
 
@@ -949,12 +954,13 @@ var _ = Describe("base functionality", func() {
 			t := newTesterByVersion(ver)
 			t.expectInterfaces(resI, cniName, origLink.Attrs().HardwareAddr.String(), targetNS.Path())
 
-			// assert that dummy0 is now in the target namespace
+			// assert that dummy0 is now in the target namespace and is up
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 				link, err := netlink.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
+				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 
 				//get the IP address of the interface in the target namespace
 				addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
@@ -1063,12 +1069,13 @@ var _ = Describe("base functionality", func() {
 			t := newTesterByVersion(ver)
 			t.expectInterfaces(resI, cniName, origLink.Attrs().HardwareAddr.String(), targetNS.Path())
 
-			// assert that dummy0 is now in the target namespace
+			// assert that dummy0 is now in the target namespace and is up
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 				link, err := netlink.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
+				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 				return nil
 			})
 
@@ -1106,12 +1113,13 @@ var _ = Describe("base functionality", func() {
 				return nil
 			})
 
-			// assert container interface "eth0" still exists in target namespace
+			// assert container interface "eth0" still exists in target namespace and is up
 			err = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 				link, err := netlink.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
+				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
