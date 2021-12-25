@@ -27,7 +27,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
@@ -315,11 +314,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	result, err := current.NewResultFromResult(tuningConf.PrevResult)
-	if err != nil {
-		return err
-	}
-
 	// The directory /proc/sys/net is per network namespace. Enter in the
 	// network namespace before writing on it.
 
@@ -353,12 +347,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if tuningConf.Mac != "" {
 			if err = changeMacAddr(args.IfName, tuningConf.Mac); err != nil {
 				return err
-			}
-
-			for _, ipc := range result.IPs {
-				if ipc.Address.IP.To4() != nil {
-					_ = arping.GratuitousArpOverIfaceByName(ipc.Address.IP, args.IfName)
-				}
 			}
 
 			updateResultsMacAddr(tuningConf, args.IfName, tuningConf.Mac)
