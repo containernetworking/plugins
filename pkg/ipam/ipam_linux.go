@@ -43,10 +43,6 @@ func ConfigureIface(ifName string, res *current.Result) error {
 		return fmt.Errorf("failed to lookup %q: %v", ifName, err)
 	}
 
-	if err := netlink.LinkSetUp(link); err != nil {
-		return fmt.Errorf("failed to set %q UP: %v", ifName, err)
-	}
-
 	var v4gw, v6gw net.IP
 	var has_enabled_ipv6 bool = false
 	for _, ipc := range res.IPs {
@@ -97,6 +93,10 @@ func ConfigureIface(ifName string, res *current.Result) error {
 		} else if !gwIsV4 && v6gw == nil {
 			v6gw = ipc.Gateway
 		}
+	}
+
+	if err := netlink.LinkSetUp(link); err != nil {
+		return fmt.Errorf("failed to set %q UP: %v", ifName, err)
 	}
 
 	if v6gw != nil {
