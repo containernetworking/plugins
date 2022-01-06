@@ -74,6 +74,7 @@ type testCase struct {
 	isLayer2    bool
 	expGWCIDRs  []string // Expected gateway addresses in CIDR form
 	vlan        int
+	vlanTrunk   []*VlanTrunk
 	ipMasq      bool
 	macspoofchk bool
 	AddErr020   string
@@ -128,6 +129,23 @@ const (
 
 	vlan = `,
 	"vlan": %d`
+
+	vlanTrunkStartStr = `,
+	"vlanTrunk": [`
+
+	vlanTrunk = `
+	{
+		"id": %d
+	}`
+
+	vlanTrunkRange = `
+	{
+		"minID": %d,
+		"maxID": %d
+	}`
+
+	vlanTrunkEndStr = `
+	]`
 
 	netDefault = `,
 	"isDefaultGateway": true`
@@ -189,6 +207,23 @@ func (tc testCase) netConfJSON(dataDir string) string {
 	if tc.vlan != 0 {
 		conf += fmt.Sprintf(vlan, tc.vlan)
 	}
+
+	if tc.isLayer2 && tc.vlanTrunk != nil {
+		conf += vlanTrunkStartStr
+		for i, vlan := range tc.vlanTrunk {
+			if i > 0 {
+				conf += ","
+			}
+			if vlan.ID != nil {
+				conf += fmt.Sprintf(vlanTrunk, *vlan.ID)
+			}
+			if vlan.MinID != nil && vlan.MaxID != nil {
+				conf += fmt.Sprintf(vlanTrunkRange, *vlan.MinID, *vlan.MaxID)
+			}
+		}
+		conf += vlanTrunkEndStr
+	}
+
 	if tc.ipMasq {
 		conf += tc.ipMasqConfig()
 	}
@@ -503,7 +538,7 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		}
 
 		// Check the bridge vlan filtering equals true
-		if tc.vlan != 0 {
+		if tc.vlan != 0 || tc.vlanTrunk != nil {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(true))
 		} else {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(false))
@@ -555,6 +590,25 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+		}
+
+		// check VlanTrunks exist on the veth interface
+		if tc.vlanTrunk != nil {
+			interfaceMap, err := netlink.BridgeVlanList()
+			Expect(err).NotTo(HaveOccurred())
+			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
+			Expect(isExist).To(BeTrue())
+
+			for _, vlan_entry := range tc.vlanTrunk {
+				if vlan_entry.ID != nil {
+					Expect(checkVlan(*vlan_entry.ID, vlans)).To(BeTrue())
+				}
+				if vlan_entry.MinID != nil && vlan_entry.MaxID != nil {
+					for vid := *vlan_entry.MinID; vid <= *vlan_entry.MaxID; vid++ {
+						Expect(checkVlan(vid, vlans)).To(BeTrue())
+					}
+				}
+			}
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -803,7 +857,7 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		}
 
 		// Check the bridge vlan filtering equals true
-		if tc.vlan != 0 {
+		if tc.vlan != 0 || tc.vlanTrunk != nil {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(true))
 		} else {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(false))
@@ -855,6 +909,25 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+		}
+
+		// check VlanTrunks exist on the veth interface
+		if tc.vlanTrunk != nil {
+			interfaceMap, err := netlink.BridgeVlanList()
+			Expect(err).NotTo(HaveOccurred())
+			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
+			Expect(isExist).To(BeTrue())
+
+			for _, vlan_entry := range tc.vlanTrunk {
+				if vlan_entry.ID != nil {
+					Expect(checkVlan(*vlan_entry.ID, vlans)).To(BeTrue())
+				}
+				if vlan_entry.MinID != nil && vlan_entry.MaxID != nil {
+					for vid := *vlan_entry.MinID; vid <= *vlan_entry.MaxID; vid++ {
+						Expect(checkVlan(vid, vlans)).To(BeTrue())
+					}
+				}
+			}
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -1103,7 +1176,7 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		}
 
 		// Check the bridge vlan filtering equals true
-		if tc.vlan != 0 {
+		if tc.vlan != 0 || tc.vlanTrunk != nil {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(true))
 		} else {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(false))
@@ -1155,6 +1228,25 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+		}
+
+		// check VlanTrunks exist on the veth interface
+		if tc.vlanTrunk != nil {
+			interfaceMap, err := netlink.BridgeVlanList()
+			Expect(err).NotTo(HaveOccurred())
+			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
+			Expect(isExist).To(BeTrue())
+
+			for _, vlan_entry := range tc.vlanTrunk {
+				if vlan_entry.ID != nil {
+					Expect(checkVlan(*vlan_entry.ID, vlans)).To(BeTrue())
+				}
+				if vlan_entry.MinID != nil && vlan_entry.MaxID != nil {
+					for vid := *vlan_entry.MinID; vid <= *vlan_entry.MaxID; vid++ {
+						Expect(checkVlan(vid, vlans)).To(BeTrue())
+					}
+				}
+			}
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -1732,6 +1824,26 @@ var _ = Describe("bridge Operations", func() {
 				vlan:       100,
 				AddErr020:  "cannot convert: no valid IP addresses",
 				AddErr010:  "cannot convert: no valid IP addresses",
+			}
+			cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+		})
+
+		// TODO find some way to put pointer
+		It(fmt.Sprintf("[%s] configures and deconfigures a l2 bridge with vlan id 100, vlanTrunk 101,200~210 using ADD/DEL", ver), func() {
+			id, minID, maxID := 101, 200, 210
+			tc := testCase{
+				cniVersion: ver,
+				isLayer2:   true,
+				vlan:       100,
+				vlanTrunk: []*VlanTrunk{
+					{ID: &id},
+					{
+						MinID: &minID,
+						MaxID: &maxID,
+					},
+				},
+				AddErr020: "cannot convert: no valid IP addresses",
+				AddErr010: "cannot convert: no valid IP addresses",
 			}
 			cmdAddDelTest(originalNS, targetNS, tc, dataDir)
 		})
