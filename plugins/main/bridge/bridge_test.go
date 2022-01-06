@@ -74,6 +74,7 @@ type testCase struct {
 	isLayer2          bool
 	expGWCIDRs        []string // Expected gateway addresses in CIDR form
 	vlan              int
+	vlanTrunk         []*VlanTrunk
 	removeDefaultVlan bool
 	ipMasq            bool
 	macspoofchk       bool
@@ -129,6 +130,23 @@ const (
 
 	vlan = `,
 	"vlan": %d`
+
+	vlanTrunkStartStr = `,
+	"vlanTrunk": [`
+
+	vlanTrunk = `
+	{
+		"id": %d
+	}`
+
+	vlanTrunkRange = `
+	{
+		"minID": %d,
+		"maxID": %d
+	}`
+
+	vlanTrunkEndStr = `
+	]`
 
 	preserveDefaultVlan = `,
 	"preserveDefaultVlan": false`
@@ -200,6 +218,23 @@ func (tc testCase) netConfJSON(dataDir string) string {
 			conf += preserveDefaultVlan
 		}
 	}
+
+	if tc.isLayer2 && tc.vlanTrunk != nil {
+		conf += vlanTrunkStartStr
+		for i, vlan := range tc.vlanTrunk {
+			if i > 0 {
+				conf += ","
+			}
+			if vlan.ID != nil {
+				conf += fmt.Sprintf(vlanTrunk, *vlan.ID)
+			}
+			if vlan.MinID != nil && vlan.MaxID != nil {
+				conf += fmt.Sprintf(vlanTrunkRange, *vlan.MinID, *vlan.MaxID)
+			}
+		}
+		conf += vlanTrunkEndStr
+	}
+
 	if tc.ipMasq {
 		conf += tc.ipMasqConfig()
 	}
@@ -541,7 +576,7 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		}
 
 		// Check the bridge vlan filtering equals true
-		if tc.vlan != 0 {
+		if tc.vlan != 0 || tc.vlanTrunk != nil {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(BeTrue())
 		} else {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(BeFalse())
@@ -595,6 +630,25 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
 			if tc.removeDefaultVlan {
 				Expect(vlans).To(HaveLen(1))
+			}
+		}
+
+		// check VlanTrunks exist on the veth interface
+		if tc.vlanTrunk != nil {
+			interfaceMap, err := netlink.BridgeVlanList()
+			Expect(err).NotTo(HaveOccurred())
+			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
+			Expect(isExist).To(BeTrue())
+
+			for _, vlanEntry := range tc.vlanTrunk {
+				if vlanEntry.ID != nil {
+					Expect(checkVlan(*vlanEntry.ID, vlans)).To(BeTrue())
+				}
+				if vlanEntry.MinID != nil && vlanEntry.MaxID != nil {
+					for vid := *vlanEntry.MinID; vid <= *vlanEntry.MaxID; vid++ {
+						Expect(checkVlan(vid, vlans)).To(BeTrue())
+					}
+				}
 			}
 		}
 
@@ -852,7 +906,7 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		}
 
 		// Check the bridge vlan filtering equals true
-		if tc.vlan != 0 {
+		if tc.vlan != 0 || tc.vlanTrunk != nil {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(BeTrue())
 		} else {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(BeFalse())
@@ -906,6 +960,25 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
 			if tc.removeDefaultVlan {
 				Expect(vlans).To(HaveLen(1))
+			}
+		}
+
+		// check VlanTrunks exist on the veth interface
+		if tc.vlanTrunk != nil {
+			interfaceMap, err := netlink.BridgeVlanList()
+			Expect(err).NotTo(HaveOccurred())
+			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
+			Expect(isExist).To(BeTrue())
+
+			for _, vlanEntry := range tc.vlanTrunk {
+				if vlanEntry.ID != nil {
+					Expect(checkVlan(*vlanEntry.ID, vlans)).To(BeTrue())
+				}
+				if vlanEntry.MinID != nil && vlanEntry.MaxID != nil {
+					for vid := *vlanEntry.MinID; vid <= *vlanEntry.MaxID; vid++ {
+						Expect(checkVlan(vid, vlans)).To(BeTrue())
+					}
+				}
 			}
 		}
 
@@ -1158,7 +1231,7 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		}
 
 		// Check the bridge vlan filtering equals true
-		if tc.vlan != 0 {
+		if tc.vlan != 0 || tc.vlanTrunk != nil {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(BeTrue())
 		} else {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(BeFalse())
@@ -1212,6 +1285,25 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
 			if tc.removeDefaultVlan {
 				Expect(vlans).To(HaveLen(1))
+			}
+		}
+
+		// check VlanTrunks exist on the veth interface
+		if tc.vlanTrunk != nil {
+			interfaceMap, err := netlink.BridgeVlanList()
+			Expect(err).NotTo(HaveOccurred())
+			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
+			Expect(isExist).To(BeTrue())
+
+			for _, vlanEntry := range tc.vlanTrunk {
+				if vlanEntry.ID != nil {
+					Expect(checkVlan(*vlanEntry.ID, vlans)).To(BeTrue())
+				}
+				if vlanEntry.MinID != nil && vlanEntry.MaxID != nil {
+					for vid := *vlanEntry.MinID; vid <= *vlanEntry.MaxID; vid++ {
+						Expect(checkVlan(vid, vlans)).To(BeTrue())
+					}
+				}
 			}
 		}
 
@@ -1672,6 +1764,61 @@ var _ = Describe("bridge Operations", func() {
 		Expect(testutils.UnmountNS(targetNS)).To(Succeed())
 	})
 
+	var (
+		correctID      int = 10
+		correctMinID   int = 100
+		correctMaxID   int = 105
+		incorrectMinID int = 1000
+		incorrectMaxID int = 100
+		overID         int = 5000
+		negativeID     int = -1
+	)
+
+	DescribeTable(
+		"collectVlanTrunk succeeds",
+		func(vlanTrunks []*VlanTrunk, expectedVIDs []int) {
+			Expect(collectVlanTrunk(vlanTrunks)).To(ConsistOf(expectedVIDs))
+		},
+		Entry("when provided an empty VLAN trunk configuration", []*VlanTrunk{}, nil),
+		Entry("when provided a VLAN trunk configuration with both min / max range", []*VlanTrunk{
+			{
+				MinID: &correctMinID,
+				MaxID: &correctMaxID,
+			},
+		}, []int{100, 101, 102, 103, 104, 105}),
+		Entry("when provided a VLAN trunk configuration with id only", []*VlanTrunk{
+			{
+				ID: &correctID,
+			},
+		}, []int{10}),
+		Entry("when provided a VLAN trunk configuration with id and range", []*VlanTrunk{
+			{
+				ID: &correctID,
+			},
+			{
+				MinID: &correctMinID,
+				MaxID: &correctMaxID,
+			},
+		}, []int{10, 100, 101, 102, 103, 104, 105}),
+	)
+
+	DescribeTable(
+		"collectVlanTrunk failed",
+		func(vlanTrunks []*VlanTrunk, expectedError error) {
+			_, err := collectVlanTrunk(vlanTrunks)
+			Expect(err).To(MatchError(expectedError))
+		},
+		Entry("when not passed the maxID", []*VlanTrunk{{MinID: &correctMinID}}, fmt.Errorf("minID and maxID should be configured simultaneously, maxID is missing")),
+		Entry("when not passed the minID", []*VlanTrunk{{MaxID: &correctMaxID}}, fmt.Errorf("minID and maxID should be configured simultaneously, minID is missing")),
+		Entry("when the minID is negative", []*VlanTrunk{{MinID: &negativeID, MaxID: &correctMaxID}}, fmt.Errorf("incorrect trunk minID parameter")),
+		Entry("when the minID is larger than 4094", []*VlanTrunk{{MinID: &overID, MaxID: &correctMaxID}}, fmt.Errorf("incorrect trunk minID parameter")),
+		Entry("when the maxID is larger than 4094", []*VlanTrunk{{MinID: &correctMinID, MaxID: &overID}}, fmt.Errorf("incorrect trunk maxID parameter")),
+		Entry("when the maxID is negative", []*VlanTrunk{{MinID: &correctMinID, MaxID: &overID}}, fmt.Errorf("incorrect trunk maxID parameter")),
+		Entry("when the ID is larger than 4094", []*VlanTrunk{{ID: &overID}}, fmt.Errorf("incorrect trunk id parameter")),
+		Entry("when the ID is negative", []*VlanTrunk{{ID: &negativeID}}, fmt.Errorf("incorrect trunk id parameter")),
+		Entry("when the maxID is smaller than minID", []*VlanTrunk{{MinID: &incorrectMinID, MaxID: &incorrectMaxID}}, fmt.Errorf("minID is greater than maxID in trunk parameter")),
+	)
+
 	for _, ver := range testutils.AllSpecVersions {
 		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
 		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
@@ -1800,6 +1947,25 @@ var _ = Describe("bridge Operations", func() {
 				vlan:       100,
 				AddErr020:  "cannot convert: no valid IP addresses",
 				AddErr010:  "cannot convert: no valid IP addresses",
+			}
+			cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+		})
+
+		// TODO find some way to put pointer
+		It(fmt.Sprintf("[%s] configures and deconfigures a l2 bridge with vlan id 100, vlanTrunk 101,200~210 using ADD/DEL", ver), func() {
+			id, minID, maxID := 101, 200, 210
+			tc := testCase{
+				cniVersion: ver,
+				isLayer2:   true,
+				vlanTrunk: []*VlanTrunk{
+					{ID: &id},
+					{
+						MinID: &minID,
+						MaxID: &maxID,
+					},
+				},
+				AddErr020: "cannot convert: no valid IP addresses",
+				AddErr010: "cannot convert: no valid IP addresses",
 			}
 			cmdAddDelTest(originalNS, targetNS, tc, dataDir)
 		})
