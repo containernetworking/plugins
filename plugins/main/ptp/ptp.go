@@ -66,7 +66,7 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 	containerInterface := &current.Interface{}
 
 	err := netns.Do(func(hostNS ns.NetNS) error {
-		hostVeth, contVeth0, err := ip.SetupVeth(ifName, mtu, "", hostNS)
+		hostVeth, contVeth0, err := ip.SetupVeth(ifName, mtu, "", hostNS, false)
 		if err != nil {
 			return err
 		}

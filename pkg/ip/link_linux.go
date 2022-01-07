@@ -140,10 +140,14 @@ func ifaceFromNetlinkLink(l netlink.Link) net.Interface {
 // devices and move the host-side veth into the provided hostNS namespace.
 // hostVethName: If hostVethName is not specified, the host-side veth name will use a random string.
 // On success, SetupVethWithName returns (hostVeth, containerVeth, nil)
-func SetupVethWithName(contVethName, hostVethName string, mtu int, contVethMac string, hostNS ns.NetNS) (net.Interface, net.Interface, error) {
+func SetupVethWithName(contVethName, hostVethName string, mtu int, contVethMac string, hostNS ns.NetNS, disabledad bool) (net.Interface, net.Interface, error) {
 	hostVethName, contVeth, err := makeVeth(contVethName, hostVethName, mtu, contVethMac, hostNS)
 	if err != nil {
 		return net.Interface{}, net.Interface{}, err
+	}
+
+	if disabledad {
+		_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv6/conf/%s/accept_dad", contVethName), "0")
 	}
 
 	if err = netlink.LinkSetUp(contVeth); err != nil {
@@ -175,8 +179,8 @@ func SetupVethWithName(contVethName, hostVethName string, mtu int, contVethMac s
 // Call SetupVeth from inside the container netns.  It will create both veth
 // devices and move the host-side veth into the provided hostNS namespace.
 // On success, SetupVeth returns (hostVeth, containerVeth, nil)
-func SetupVeth(contVethName string, mtu int, contVethMac string, hostNS ns.NetNS) (net.Interface, net.Interface, error) {
-	return SetupVethWithName(contVethName, "", mtu, contVethMac, hostNS)
+func SetupVeth(contVethName string, mtu int, contVethMac string, hostNS ns.NetNS, disabledad bool) (net.Interface, net.Interface, error) {
+	return SetupVethWithName(contVethName, "", mtu, contVethMac, hostNS, disabledad)
 }
 
 // DelLinkByName removes an interface link.

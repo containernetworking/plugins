@@ -63,10 +63,12 @@ type NetConf struct {
 		Cni BridgeArgs `json:"cni,omitempty"`
 	} `json:"args,omitempty"`
 	RuntimeConfig struct {
-		Mac string `json:"mac,omitempty"`
+		Mac            string `json:"mac,omitempty"`
+		DisableIPV6DAD bool   `json:"disableipv6dad,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
 
-	mac string
+	mac            string
+	disableipv6dad bool
 }
 
 type BridgeArgs struct {
@@ -121,6 +123,8 @@ func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 	if mac := n.RuntimeConfig.Mac; mac != "" {
 		n.mac = mac
 	}
+
+	n.disableipv6dad = n.RuntimeConfig.DisableIPV6DAD
 
 	return n, n.CNIVersion, nil
 }
@@ -301,7 +305,7 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 	return br, nil
 }
 
-func ensureVlanInterface(br *netlink.Bridge, vlanId int) (netlink.Link, error) {
+func ensureVlanInterface(br *netlink.Bridge, vlanId int, disabledad bool) (netlink.Link, error) {
 	name := fmt.Sprintf("%s.%d", br.Name, vlanId)
 
 	brGatewayVeth, err := netlink.LinkByName(name)
@@ -315,7 +319,7 @@ func ensureVlanInterface(br *netlink.Bridge, vlanId int) (netlink.Link, error) {
 			return nil, fmt.Errorf("faild to find host namespace: %v", err)
 		}
 
-		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanId, "")
+		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanId, "", disabledad)
 		if err != nil {
 			return nil, fmt.Errorf("faild to create vlan gateway %q: %v", name, err)
 		}
@@ -329,13 +333,13 @@ func ensureVlanInterface(br *netlink.Bridge, vlanId int) (netlink.Link, error) {
 	return brGatewayVeth, nil
 }
 
-func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairpinMode bool, vlanID int, mac string) (*current.Interface, *current.Interface, error) {
+func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairpinMode bool, vlanID int, mac string, disabledad bool) (*current.Interface, *current.Interface, error) {
 	contIface := &current.Interface{}
 	hostIface := &current.Interface{}
 
 	err := netns.Do(func(hostNS ns.NetNS) error {
 		// create the veth pair in the container and move host end into host netns
-		hostVeth, containerVeth, err := ip.SetupVeth(ifName, mtu, mac, hostNS)
+		hostVeth, containerVeth, err := ip.SetupVeth(ifName, mtu, mac, hostNS, disabledad)
 		if err != nil {
 			return err
 		}
@@ -448,7 +452,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan, n.mac)
+	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan, n.mac, n.disableipv6dad)
 	if err != nil {
 		return err
 	}
@@ -578,7 +582,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 						firstV4Addr = gw.IP
 					}
 					if n.Vlan != 0 {
-						vlanIface, err := ensureVlanInterface(br, n.Vlan)
+						vlanIface, err := ensureVlanInterface(br, n.Vlan, n.disableipv6dad)
 						if err != nil {
 							return fmt.Errorf("failed to create vlan interface: %v", err)
 						}
