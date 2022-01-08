@@ -34,7 +34,6 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/utils"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
-	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 )
 
 func init() {
@@ -87,8 +86,6 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 		if err != nil {
 			return fmt.Errorf("failed to look up %q: %v", ifName, err)
 		}
-
-		_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv4/conf/%s/arp_notify", ifName), "1")
 
 		if err = ipam.ConfigureIface(ifName, pr); err != nil {
 			return err
