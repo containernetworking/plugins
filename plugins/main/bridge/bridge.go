@@ -58,17 +58,17 @@ type NetConf struct {
 	PromiscMode  bool   `json:"promiscMode"`
 	Vlan         int    `json:"vlan"`
 	MacSpoofChk  bool   `json:"macspoofchk,omitempty"`
+	OmitDad      bool   `json:"omitdad,omitempty"`
 
 	Args struct {
 		Cni BridgeArgs `json:"cni,omitempty"`
 	} `json:"args,omitempty"`
 	RuntimeConfig struct {
-		Mac            string `json:"mac,omitempty"`
-		DisableIPV6DAD bool   `json:"disableipv6dad,omitempty"`
+		Mac     string `json:"mac,omitempty"`
+		OmitDad bool   `json:"omitdad,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
 
-	mac            string
-	disableipv6dad bool
+	mac string
 }
 
 type BridgeArgs struct {
@@ -124,7 +124,9 @@ func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 		n.mac = mac
 	}
 
-	n.disableipv6dad = n.RuntimeConfig.DisableIPV6DAD
+	if dad := n.RuntimeConfig.OmitDad; dad {
+		n.OmitDad = dad
+	}
 
 	return n, n.CNIVersion, nil
 }
@@ -452,7 +454,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan, n.mac, n.disableipv6dad)
+	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan, n.mac, n.OmitDad)
 	if err != nil {
 		return err
 	}
@@ -582,7 +584,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 						firstV4Addr = gw.IP
 					}
 					if n.Vlan != 0 {
-						vlanIface, err := ensureVlanInterface(br, n.Vlan, n.disableipv6dad)
+						vlanIface, err := ensureVlanInterface(br, n.Vlan, n.OmitDad)
 						if err != nil {
 							return fmt.Errorf("failed to create vlan interface: %v", err)
 						}
