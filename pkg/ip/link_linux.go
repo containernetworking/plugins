@@ -36,9 +36,8 @@ var (
 func makeVethPair(name, peer string, mtu int, mac string, hostNS ns.NetNS) (netlink.Link, error) {
 	veth := &netlink.Veth{
 		LinkAttrs: netlink.LinkAttrs{
-			Name:  name,
-			Flags: net.FlagUp,
-			MTU:   mtu,
+			Name: name,
+			MTU:  mtu,
 		},
 		PeerName:      peer,
 		PeerNamespace: netlink.NsFd(int(hostNS.Fd())),
@@ -144,10 +143,6 @@ func SetupVethWithName(contVethName, hostVethName string, mtu int, contVethMac s
 	hostVethName, contVeth, err := makeVeth(contVethName, hostVethName, mtu, contVethMac, hostNS)
 	if err != nil {
 		return net.Interface{}, net.Interface{}, err
-	}
-
-	if err = netlink.LinkSetUp(contVeth); err != nil {
-		return net.Interface{}, net.Interface{}, fmt.Errorf("failed to set %q up: %v", contVethName, err)
 	}
 
 	var hostVeth netlink.Link

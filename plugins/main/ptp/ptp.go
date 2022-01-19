@@ -22,7 +22,6 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -83,13 +82,13 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 
 		pr.Interfaces = []*current.Interface{hostInterface, containerInterface}
 
-		if err = ipam.ConfigureIface(ifName, pr); err != nil {
-			return err
-		}
-
 		contVeth, err := net.InterfaceByName(ifName)
 		if err != nil {
 			return fmt.Errorf("failed to look up %q: %v", ifName, err)
+		}
+
+		if err = ipam.ConfigureIface(ifName, pr); err != nil {
+			return err
 		}
 
 		for _, ipc := range pr.IPs {
@@ -136,13 +135,6 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 				if err := netlink.RouteAdd(&r); err != nil {
 					return fmt.Errorf("failed to add route %v: %v", r, err)
 				}
-			}
-		}
-
-		// Send a gratuitous arp for all v4 addresses
-		for _, ipc := range pr.IPs {
-			if ipc.Address.IP.To4() != nil {
-				_ = arping.GratuitousArpOverIface(ipc.Address.IP, *contVeth)
 			}
 		}
 
