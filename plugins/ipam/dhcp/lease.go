@@ -455,7 +455,7 @@ func backoffRetry(resendMax time.Duration, f func() (*dhcp4.Packet, error)) (*dh
 		// only adjust delay time if we are in normal backoff stage
 		if baseDelay < resendMax && fastRetryLimit == 0 {
 			baseDelay *= 2
-		} else {
+		} else if fastRetryLimit == 0 { // only break if we are at normal delay
 			break
 		}
 	}
