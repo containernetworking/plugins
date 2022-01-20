@@ -18,6 +18,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -75,6 +77,24 @@ func buildOneConfig(name, cniVersion string, orig *TuningConf, prevResult types.
 
 }
 
+func createSysctlAllowFile(sysctls []string) error {
+	err := os.MkdirAll(defaultAllowlistDir, 0755)
+	if err != nil {
+		return err
+	}
+	f, err := os.Create(filepath.Join(defaultAllowlistDir, defaultAllowlistFile))
+	if err != nil {
+		return err
+	}
+	for _, sysctl := range sysctls {
+		_, err = f.WriteString(fmt.Sprintf("%s\n", sysctl))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 var _ = Describe("tuning plugin", func() {
 	var originalNS, targetNS ns.NetNS
 	const IFNAME string = "dummy0"
@@ -117,6 +137,7 @@ var _ = Describe("tuning plugin", func() {
 		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
 		Expect(targetNS.Close()).To(Succeed())
 		Expect(testutils.UnmountNS(targetNS)).To(Succeed())
+		os.RemoveAll(defaultAllowlistDir)
 	})
 
 	for _, ver := range []string{"0.3.0", "0.3.1", "0.4.0", "1.0.0"} {
@@ -984,6 +1005,118 @@ var _ = Describe("tuning plugin", func() {
 				link, err = netlink.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().RawFlags&unix.IFF_ALLMULTI != 0).To(Equal(*beforeConf.Allmulti))
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It(fmt.Sprintf("[%s] passes prevResult through unchanged", ver), func() {
+			conf := []byte(fmt.Sprintf(`{
+				"name": "test",
+				"type": "tuning",
+				"cniVersion": "%s",
+				"sysctl": {
+					"net.ipv4.conf.all.log_martians": "1"
+				},
+				"prevResult": {
+					"interfaces": [
+						{"name": "dummy0", "sandbox":"netns"}
+					],
+					"ips": [
+						{
+							"version": "4",
+							"address": "10.0.0.2/24",
+							"gateway": "10.0.0.1",
+							"interface": 0
+						}
+					]
+				}
+			}`, ver))
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   conf,
+			}
+
+			beforeConf = configToRestore{}
+
+			err := createSysctlAllowFile([]string{"^net\\.ipv4\\.conf\\.other\\.[a-z_]*$"})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				_, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).To(HaveOccurred())
+
+				err = testutils.CmdDel(originalNS.Path(),
+					args.ContainerID, "", func() error { return cmdDel(args) })
+				Expect(err).NotTo(HaveOccurred())
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It(fmt.Sprintf("[%s] passes prevResult through unchanged", ver), func() {
+			conf := []byte(fmt.Sprintf(`{
+				"name": "test",
+				"type": "tuning",
+				"cniVersion": "%s",
+				"sysctl": {
+					"net.ipv4.conf.all.log_martians": "1"
+				},
+				"prevResult": {
+					"interfaces": [
+						{"name": "dummy0", "sandbox":"netns"}
+					],
+					"ips": [
+						{
+							"version": "4",
+							"address": "10.0.0.2/24",
+							"gateway": "10.0.0.1",
+							"interface": 0
+						}
+					]
+				}
+			}`, ver))
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   conf,
+			}
+
+			err := createSysctlAllowFile([]string{"^net\\.ipv4\\.conf\\.all\\.[a-z_]*$"})
+			Expect(err).NotTo(HaveOccurred())
+
+			beforeConf = configToRestore{}
+
+			err = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				result, err := types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+				err = testutils.CmdDel(originalNS.Path(),
+					args.ContainerID, "", func() error { return cmdDel(args) })
+				Expect(err).NotTo(HaveOccurred())
 
 				return nil
 			})
