@@ -270,7 +270,7 @@ func moveLinkOut(containerNs ns.NetNS, ifName string) error {
 			// function can be retried. Also bring the device back up, unless it was already down before.
 			if err != nil {
 				_ = netlink.LinkSetName(dev, ifName)
-				if dev.Attrs().Flags & net.FlagUp == net.FlagUp {
+				if dev.Attrs().Flags&net.FlagUp == net.FlagUp {
 					_ = netlink.LinkSetUp(dev)
 				}
 			}
