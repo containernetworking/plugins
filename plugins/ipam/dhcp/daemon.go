@@ -97,7 +97,10 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 		Address: *ipn,
 		Gateway: l.Gateway(),
 	}}
-	result.Routes = l.Routes()
+
+	if !conf.IPAM.DiscardDhcpRoutes {
+		result.Routes = l.Routes()
+	}
 
 	return nil
 }

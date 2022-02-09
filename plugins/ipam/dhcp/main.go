@@ -50,7 +50,8 @@ type IPAMConfig struct {
 	// is set to `false`.
 	// To override default requesting fields, set `skipDefault` to `false`.
 	// If an field is not optional, but the server failed to provide it, error will be raised.
-	RequestOptions []RequestOption `json:"request"`
+	RequestOptions    []RequestOption `json:"request"`
+	DiscardDhcpRoutes bool            `json:"discardDhcpRoutes"`
 }
 
 // DHCPOption represents a DHCP option. It can be a number, or a string defined in manual dhcp-options(5).
