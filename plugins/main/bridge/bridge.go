@@ -56,6 +56,7 @@ type NetConf struct {
 	PromiscMode  bool   `json:"promiscMode"`
 	Vlan         int    `json:"vlan"`
 	MacSpoofChk  bool   `json:"macspoofchk,omitempty"`
+	EnableDad    bool   `json:"enabledad,omitempty"`
 
 	Args struct {
 		Cni BridgeArgs `json:"cni,omitempty"`
@@ -501,7 +502,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		// Configure the container hardware address and IP address(es)
 		if err := netns.Do(func(_ ns.NetNS) error {
-			_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv6/conf/%s/accept_dad", args.IfName), "0")
+			if n.EnableDad {
+				_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv6/conf/%s/accept_dad", args.IfName), "1")
+			} else {
+				_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv6/conf/%s/accept_dad", args.IfName), "0")
+			}
 			_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv4/conf/%s/arp_notify", args.IfName), "1")
 
 			// Add the IP to the interface
