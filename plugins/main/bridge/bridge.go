@@ -503,6 +503,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// Configure the container hardware address and IP address(es)
 		if err := netns.Do(func(_ ns.NetNS) error {
 			if n.EnableDad {
+				_, _ = sysctl.Sysctl(fmt.Sprintf("/net/ipv6/conf/%s/enhanced_dad", args.IfName), "1")
 				_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv6/conf/%s/accept_dad", args.IfName), "1")
 			} else {
 				_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv6/conf/%s/accept_dad", args.IfName), "0")
