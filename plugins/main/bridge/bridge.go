@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"runtime"
@@ -57,6 +56,7 @@ type NetConf struct {
 	PromiscMode  bool   `json:"promiscMode"`
 	Vlan         int    `json:"vlan"`
 	MacSpoofChk  bool   `json:"macspoofchk,omitempty"`
+	EnableDad    bool   `json:"enabledad,omitempty"`
 
 	Args struct {
 		Cni BridgeArgs `json:"cni,omitempty"`
@@ -402,20 +402,6 @@ func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
 	}, nil
 }
 
-// disableIPV6DAD disables IPv6 Duplicate Address Detection (DAD)
-// for an interface, if the interface does not support enhanced_dad.
-// We do this because interfaces with hairpin mode will see their own DAD packets
-func disableIPV6DAD(ifName string) error {
-	// ehanced_dad sends a nonce with the DAD packets, so that we can safely
-	// ignore ourselves
-	enh, err := ioutil.ReadFile(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/enhanced_dad", ifName))
-	if err == nil && string(enh) == "1\n" {
-		return nil
-	}
-	f := fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_dad", ifName)
-	return ioutil.WriteFile(f, []byte("0"), 0644)
-}
-
 func enableIPForward(family int) error {
 	if family == netlink.FAMILY_V4 {
 		return ip.EnableIP4Forward()
@@ -516,18 +502,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		// Configure the container hardware address and IP address(es)
 		if err := netns.Do(func(_ ns.NetNS) error {
-			// Disable IPv6 DAD just in case hairpin mode is enabled on the
-			// bridge. Hairpin mode causes echos of neighbor solicitation
-			// packets, which causes DAD failures.
-			for _, ipc := range result.IPs {
-				if ipc.Address.IP.To4() == nil && (n.HairpinMode || n.PromiscMode) {
-					if err := disableIPV6DAD(args.IfName); err != nil {
-						return err
-					}
-					break
-				}
+			if n.EnableDad {
+				_, _ = sysctl.Sysctl(fmt.Sprintf("/net/ipv6/conf/%s/enhanced_dad", args.IfName), "1")
+				_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv6/conf/%s/accept_dad", args.IfName), "1")
+			} else {
+				_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv6/conf/%s/accept_dad", args.IfName), "0")
 			}
-
 			_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv4/conf/%s/arp_notify", args.IfName), "1")
 
 			// Add the IP to the interface
