@@ -631,14 +631,17 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	isLayer3 := n.IPAM.Type != ""
 
-	if isLayer3 {
-		if err := ipam.ExecDel(n.IPAM.Type, args.StdinData); err != nil {
-			return err
+	ipamDel := func() error {
+		if isLayer3 {
+			if err := ipam.ExecDel(n.IPAM.Type, args.StdinData); err != nil {
+				return err
+			}
 		}
+		return nil
 	}
 
 	if args.Netns == "" {
-		return nil
+		return ipamDel()
 	}
 
 	// There is a netns so try to clean up. Delete can be called multiple times
@@ -660,8 +663,13 @@ func cmdDel(args *skel.CmdArgs) error {
 		// https://github.com/kubernetes/kubernetes/issues/43014#issuecomment-287164444
 		_, ok := err.(ns.NSPathNotExistErr)
 		if ok {
-			return nil
+			return ipamDel()
 		}
+		return err
+	}
+
+	// call ipam.ExecDel after clean up device in netns
+	if err := ipamDel(); err != nil {
 		return err
 	}
 
