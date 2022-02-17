@@ -358,11 +358,16 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to lookup %q: %v", hostIface.Name, err)
 	}
-	hostIface.Mac = hostVeth.Attrs().HardwareAddr.String()
 
 	// connect host veth end to the bridge
 	if err := netlink.LinkSetMaster(hostVeth, br); err != nil {
 		return nil, nil, fmt.Errorf("failed to connect %q to bridge %v: %v", hostVeth.Attrs().Name, br.Attrs().Name, err)
+	}
+
+	// need to lookup hostVeth again as its index has changed during ns move
+	hostVeth, err = netlink.LinkByName(hostIface.Name)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to lookup %q: %v", hostIface.Name, err)
 	}
 
 	// set hairpin mode
@@ -611,6 +616,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	brInterface.Mac = br.Attrs().HardwareAddr.String()
 
+	hostveth, err := netlink.LinkByName(hostInterface.Name)
+
+	if err != nil {
+		return err
+	}
+
+	hostInterface.Mac = hostveth.Attrs().HardwareAddr.String()
+
 	result.DNS = n.DNS
 
 	// Return an error requested by testcases, if any
@@ -788,7 +801,7 @@ func validateCniVethInterface(intf *current.Interface, brIf cniBridgeIf, contIf 
 
 	if intf.Mac != "" {
 		if intf.Mac != link.Attrs().HardwareAddr.String() {
-			return vethFound, fmt.Errorf("Interface %s Mac doesn't match: %s not found", intf.Name, intf.Mac)
+			return vethFound, fmt.Errorf("Interface %s has mac of %s and doesn't match: %s not found", intf.Name, link.Attrs().HardwareAddr.String(), intf.Mac)
 		}
 	}
 
