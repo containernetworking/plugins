@@ -611,6 +611,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	brInterface.Mac = br.Attrs().HardwareAddr.String()
 
+	hostveth, err := netlink.LinkByName(hostInterface.Name)
+
+	if err != nil {
+		return err
+	}
+
+	hostInterface.Mac = hostveth.Attrs().HardwareAddr.String()
+
 	result.DNS = n.DNS
 
 	// Return an error requested by testcases, if any
