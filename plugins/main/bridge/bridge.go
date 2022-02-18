@@ -358,7 +358,6 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to lookup %q: %v", hostIface.Name, err)
 	}
-	hostIface.Mac = hostVeth.Attrs().HardwareAddr.String()
 
 	// connect host veth end to the bridge
 	if err := netlink.LinkSetMaster(hostVeth, br); err != nil {
@@ -610,6 +609,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 	brInterface.Mac = br.Attrs().HardwareAddr.String()
+
+	hostveth, err := netlink.LinkByName(hostInterface.Name)
+
+	if err != nil {
+		return err
+	}
+
+	hostInterface.Mac = hostveth.Attrs().HardwareAddr.String()
 
 	result.DNS = n.DNS
 
