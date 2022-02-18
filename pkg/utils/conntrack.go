@@ -62,8 +62,8 @@ func DeleteConntrackEntriesForDstIP(dstIP string, protocol uint8) error {
 // by the given destination port, protocol and IP family
 func DeleteConntrackEntriesForDstPort(port uint16, protocol uint8, family netlink.InetFamily) error {
 	filter := &netlink.ConntrackFilter{}
-	filter.AddPort(netlink.ConntrackOrigDstPort, port)
 	filter.AddProtocol(protocol)
+	filter.AddPort(netlink.ConntrackOrigDstPort, port)
 
 	_, err := netlink.ConntrackDeleteFilter(netlink.ConntrackTable, family, filter)
 	if err != nil {
