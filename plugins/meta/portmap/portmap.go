@@ -127,26 +127,12 @@ func checkPorts(config *PortMapConf, containerNet net.IPNet) error {
 	}
 
 	if ip4t != nil {
-		exists, err := utils.ChainExists(ip4t, dnatChain.table, dnatChain.name)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return err
-		}
 		if err := dnatChain.check(ip4t); err != nil {
 			return fmt.Errorf("could not check ipv4 dnat: %v", err)
 		}
 	}
 
 	if ip6t != nil {
-		exists, err := utils.ChainExists(ip6t, dnatChain.table, dnatChain.name)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return err
-		}
 		if err := dnatChain.check(ip6t); err != nil {
 			return fmt.Errorf("could not check ipv6 dnat: %v", err)
 		}
