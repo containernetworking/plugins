@@ -200,6 +200,30 @@ func (l *DHCPLease) Stop() {
 	l.wg.Wait()
 }
 
+func (l *DHCPLease) getOptionsWithClientId() dhcp4.Options {
+	opts := make(dhcp4.Options)
+	opts[dhcp4.OptionClientIdentifier] = []byte(l.clientID)
+	// client identifier's first byte is "type"
+	newClientID := []byte{0}
+	newClientID = append(newClientID, opts[dhcp4.OptionClientIdentifier]...)
+	opts[dhcp4.OptionClientIdentifier] = newClientID
+	return opts
+}
+
+func (l *DHCPLease) getAllOptions() dhcp4.Options {
+	opts := l.getOptionsWithClientId()
+
+	for k, v := range l.optsProviding {
+		opts[k] = v
+	}
+
+	opts[dhcp4.OptionParameterRequestList] = []byte{}
+	for k := range l.optsRequesting {
+		opts[dhcp4.OptionParameterRequestList] = append(opts[dhcp4.OptionParameterRequestList], byte(k))
+	}
+	return opts
+}
+
 func (l *DHCPLease) acquire() error {
 	c, err := newDHCPClient(l.link, l.clientID, l.timeout, l.broadcast)
 	if err != nil {
@@ -214,19 +238,7 @@ func (l *DHCPLease) acquire() error {
 		}
 	}
 
-	opts := make(dhcp4.Options)
-	opts[dhcp4.OptionClientIdentifier] = []byte(l.clientID)
-	opts[dhcp4.OptionParameterRequestList] = []byte{}
-	for k := range l.optsRequesting {
-		opts[dhcp4.OptionParameterRequestList] = append(opts[dhcp4.OptionParameterRequestList], byte(k))
-	}
-	for k, v := range l.optsProviding {
-		opts[k] = v
-	}
-	// client identifier's first byte is "type"
-	newClientID := []byte{0}
-	newClientID = append(newClientID, opts[dhcp4.OptionClientIdentifier]...)
-	opts[dhcp4.OptionClientIdentifier] = newClientID
+	opts := l.getAllOptions()
 
 	pkt, err := backoffRetry(l.resendMax, func() (*dhcp4.Packet, error) {
 		ok, ack, err := DhcpRequest(c, opts)
@@ -344,9 +356,7 @@ func (l *DHCPLease) renew() error {
 	}
 	defer c.Close()
 
-	opts := make(dhcp4.Options)
-	opts[dhcp4.OptionClientIdentifier] = []byte(l.clientID)
-
+	opts := l.getOptionsWithClientId()
 	pkt, err := backoffRetry(l.resendMax, func() (*dhcp4.Packet, error) {
 		ok, ack, err := DhcpRenew(c, *l.ack, opts)
 		switch {
@@ -375,8 +385,7 @@ func (l *DHCPLease) release() error {
 	}
 	defer c.Close()
 
-	opts := make(dhcp4.Options)
-	opts[dhcp4.OptionClientIdentifier] = []byte(l.clientID)
+	opts := l.getOptionsWithClientId()
 
 	if err = DhcpRelease(c, *l.ack, opts); err != nil {
 		return fmt.Errorf("failed to send DHCPRELEASE")
