@@ -21,6 +21,7 @@ import (
 	"net"
 
 	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netns"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -47,6 +48,26 @@ func parseNetConf(bytes []byte) (*types.NetConf, error) {
 	}
 
 	return conf, nil
+}
+
+func GetRootNetNS() (netns.NsHandle, error) {
+	return netns.GetFromPid(1)
+}
+
+func IsRootNetNS(nsPath string) (bool, error) {
+	ns, err := netns.GetFromPath(nsPath)
+	if err != nil {
+		return false, err
+	}
+	defer ns.Close()
+
+	rootNS, err := GetRootNetNS()
+	if err != nil {
+		return false, err
+	}
+	defer rootNS.Close()
+
+	return rootNS.Equal(ns), nil
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
@@ -144,8 +165,16 @@ func cmdDel(args *skel.CmdArgs) error {
 	if args.Netns == "" {
 		return nil
 	}
+
+	// if NetNs has already gone or NetNs has already been occupied by other host processes,
+	// treat this as a successful delete and directly return
+	isRoot, err := IsRootNetNS(args.Netns)
+	if err != nil || isRoot {
+		return nil
+	}
+
 	args.IfName = "lo" // ignore config, this only works for loopback
-	err := ns.WithNetNSPath(args.Netns, func(ns.NetNS) error {
+	err = ns.WithNetNSPath(args.Netns, func(ns.NetNS) error {
 		link, err := netlink.LinkByName(args.IfName)
 		if err != nil {
 			return err // not tested
