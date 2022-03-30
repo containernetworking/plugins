@@ -20,7 +20,7 @@ Read [CONTRIBUTING](CONTRIBUTING.md) for build and test instructions.
 ### IPAM: IP address allocation
 * `dhcp`: Runs a daemon on the host to make DHCP requests on behalf of the container
 * `host-local`: Maintains a local database of allocated IPs
-* `static`:  Allocate a static IPv4/IPv6 addresses to container and it's useful in debugging purpose.
+* `static`:  Allocate a single static IPv4/IPv6 address to container. It's useful in debugging purpose.
 
 ### Meta: other plugins
 * `tuning`: Tweaks sysctl parameters of an existing interface
