@@ -18,15 +18,15 @@ import (
 	"math/rand"
 	"runtime"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"testing"
 )
 
 func TestNs(t *testing.T) {
-	rand.Seed(config.GinkgoConfig.RandomSeed)
+	suite, _ := GinkgoConfiguration()
+	rand.Seed(suite.RandomSeed)
 	runtime.LockOSThread()
 
 	RegisterFailHandler(Fail)

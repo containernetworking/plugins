@@ -18,7 +18,7 @@ import (
 	"net"
 
 	"github.com/containernetworking/cni/pkg/types"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

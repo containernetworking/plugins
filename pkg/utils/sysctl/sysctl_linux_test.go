@@ -23,7 +23,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 )
@@ -37,7 +37,7 @@ var _ = Describe("Sysctl tests", func() {
 	var testIfaceName string
 	var cleanup func()
 
-	BeforeEach(func() {
+	beforeEach := func() {
 
 		// Save a reference to the original namespace,
 		// Add a new NS
@@ -67,7 +67,7 @@ var _ = Describe("Sysctl tests", func() {
 			currNs.Set()
 		}
 
-	})
+	}
 
 	AfterEach(func() {
 		cleanup()
@@ -75,6 +75,7 @@ var _ = Describe("Sysctl tests", func() {
 
 	Describe("Sysctl", func() {
 		It("reads keys with dot separators", func() {
+			beforeEach()
 			sysctlIfaceName := strings.Replace(testIfaceName, ".", "/", -1)
 			sysctlKey := fmt.Sprintf(sysctlDotKeyTemplate, sysctlIfaceName)
 
@@ -85,6 +86,7 @@ var _ = Describe("Sysctl tests", func() {
 
 	Describe("Sysctl", func() {
 		It("reads keys with slash separators", func() {
+			beforeEach()
 			sysctlKey := fmt.Sprintf(sysctlSlashKeyTemplate, testIfaceName)
 
 			_, err := sysctl.Sysctl(sysctlKey)
@@ -94,6 +96,7 @@ var _ = Describe("Sysctl tests", func() {
 
 	Describe("Sysctl", func() {
 		It("writes keys with dot separators", func() {
+			beforeEach()
 			sysctlIfaceName := strings.Replace(testIfaceName, ".", "/", -1)
 			sysctlKey := fmt.Sprintf(sysctlDotKeyTemplate, sysctlIfaceName)
 
@@ -104,6 +107,7 @@ var _ = Describe("Sysctl tests", func() {
 
 	Describe("Sysctl", func() {
 		It("writes keys with slash separators", func() {
+			beforeEach()
 			sysctlKey := fmt.Sprintf(sysctlSlashKeyTemplate, testIfaceName)
 
 			_, err := sysctl.Sysctl(sysctlKey, "1")

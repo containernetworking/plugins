@@ -24,8 +24,7 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
@@ -34,7 +33,8 @@ import (
 )
 
 func TestPortmap(t *testing.T) {
-	rand.Seed(config.GinkgoConfig.RandomSeed)
+	suite, _ := GinkgoConfiguration()
+	rand.Seed(suite.RandomSeed)
 
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "plugins/meta/portmap")

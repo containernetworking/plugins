@@ -28,7 +28,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/testutils"
 
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/disk"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
