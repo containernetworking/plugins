@@ -10,3 +10,4 @@ jobs:
       - uses: actions/stale@v4
         with:
           stale-pr-message: 'This PR has been untouched for too long without an update. It will be closed in 7 days.'
+          exempt-issue-labels: 'keep'
