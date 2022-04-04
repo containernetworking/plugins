@@ -38,6 +38,17 @@ const defaultSocketPath = "/run/cni/dhcp.sock"
 type NetConf struct {
 	types.NetConf
 	IPAM *IPAMConfig `json:"ipam"`
+	Args *struct {
+		A GenericIPAMArgs `json:"cni"`
+	} `json:"args"`
+}
+
+// type GenericIPAMArgs map[string]interface{}
+type GenericIPAMArgs map[string]interface{}
+
+// type IPAMArgs contains the ClientID used for the option 61
+type IPAMArgs struct {
+	ClientID string `json:"client-id"`
 }
 
 type IPAMConfig struct {

@@ -63,6 +63,17 @@ func generateClientID(containerID string, netName string, ifName string) string 
 	return clientID
 }
 
+func combineCNIArgs(envCNIArgs string, genericIpamArgs GenericIPAMArgs) string {
+	cniArgs := envCNIArgs
+
+	for ipamArg, value := range genericIpamArgs {
+		if stringVal, ok := value.(string); ok {
+			cniArgs += fmt.Sprintf(";%s=%s", ipamArg, stringVal)
+		}
+	}
+	return cniArgs
+}
+
 // Allocate acquires an IP from a DHCP server for a specified container.
 // The acquired lease will be maintained until Release() is called.
 func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
@@ -71,12 +82,24 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 		return fmt.Errorf("error parsing netconf: %v", err)
 	}
 
-	optsRequesting, optsProviding, err := prepareOptions(args.Args, conf.IPAM.ProvideOptions, conf.IPAM.RequestOptions)
+	cniArgs := combineCNIArgs(args.Args, conf.Args.A)
+
+	optsRequesting, optsProviding, err := prepareOptions(cniArgs, conf.IPAM.ProvideOptions, conf.IPAM.RequestOptions)
 	if err != nil {
 		return err
 	}
 
+	ipamArgs := IPAMArgs{}
+	ipamArgsJson, _ := json.Marshal(conf.Args.A)
+	if err := json.Unmarshal(ipamArgsJson, &ipamArgs); err != nil {
+		return fmt.Errorf("error parsing ipamArgs: %v", err)
+	}
+
 	clientID := generateClientID(args.ContainerID, conf.Name, args.IfName)
+	leaseKey := clientID
+	if ipamArgs.ClientID != "" {
+		clientID = ipamArgs.ClientID
+	}
 	hostNetns := d.hostNetnsPrefix + args.Netns
 	l, err := AcquireLease(clientID, hostNetns, args.IfName,
 		optsRequesting, optsProviding,
@@ -91,7 +114,7 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 		return err
 	}
 
-	d.setLease(clientID, l)
+	d.setLease(leaseKey, l)
 
 	result.IPs = []*current.IPConfig{{
 		Address: *ipn,
@@ -110,10 +133,21 @@ func (d *DHCP) Release(args *skel.CmdArgs, reply *struct{}) error {
 		return fmt.Errorf("error parsing netconf: %v", err)
 	}
 
+	ipamArgs := IPAMArgs{}
+	ipamArgsJson, _ := json.Marshal(conf.Args.A)
+	if err := json.Unmarshal(ipamArgsJson, &ipamArgs); err != nil {
+		return fmt.Errorf("error parsing ipamArgs: %v", err)
+	}
+
 	clientID := generateClientID(args.ContainerID, conf.Name, args.IfName)
-	if l := d.getLease(clientID); l != nil {
+	leaseKey := clientID
+
+	if ipamArgs.ClientID != "" {
+		clientID = ipamArgs.ClientID
+	}
+	if l := d.getLease(leaseKey); l != nil {
 		l.Stop()
-		d.clearLease(clientID)
+		d.clearLease(leaseKey)
 	}
 
 	return nil
