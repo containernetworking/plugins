@@ -18,9 +18,11 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend"
 )
@@ -39,6 +41,30 @@ type Store struct {
 
 // Store implements the Store interface
 var _ backend.Store = &Store{}
+
+func GetStartUpTime() (time.Time, error) {
+	startup, err := exec.Command("who", "-b").Output()
+
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	boot_time := strings.TrimSpace(string(startup))
+	boot_time = strings.TrimPrefix(boot_time, "system boot")
+	boot_time = strings.TrimSpace(boot_time)
+
+	time_zone, err := exec.Command("date", "+%Z").Output()
+
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	tz := strings.TrimSpace(string(time_zone))
+	res := boot_time + tz
+
+	//Using my own layout while parsing since 'res' is of form 'yyyy-mm-dd hh:mmGMT'
+	return time.Parse(`2006-01-02 15:04MST`, res)
+}
 
 func New(network, dataDir string) (*Store, error) {
 	if dataDir == "" {
@@ -61,7 +87,30 @@ func (s *Store) Reserve(id string, ifname string, ip net.IP, rangeID string) (bo
 
 	f, err := os.OpenFile(fname, os.O_RDWR|os.O_EXCL|os.O_CREATE, 0644)
 	if os.IsExist(err) {
-		return false, nil
+		t, err1 := GetStartUpTime()
+
+		if err1 != nil {
+			return false, nil
+		}
+
+		fileInfo, err2 := os.Stat(fname)
+
+		if err2 != nil {
+			return false, nil
+		}
+
+		modifiedtime := fileInfo.ModTime()
+
+		if modifiedtime.Before(t) {
+			os.Remove(fname)
+			// Retry reserving the file
+			f, err = os.OpenFile(fname, os.O_RDWR|os.O_EXCL|os.O_CREATE, 0644)
+			if os.IsExist(err) {
+				return false, nil
+			}
+		} else {
+			return false, nil
+		}
 	}
 	if err != nil {
 		return false, err
