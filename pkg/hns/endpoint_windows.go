@@ -39,6 +39,7 @@ type EndpointInfo struct {
 	NetworkId    string
 	Gateway      net.IP
 	IpAddress    net.IP
+	MacAddress  string
 }
 
 // GetSandboxContainerID returns the sandbox ID of this pod.
@@ -248,6 +249,7 @@ func GenerateHcnEndpoint(epInfo *EndpointInfo, n *NetConf) (*hcn.HostComputeEndp
 			Minor: 0,
 		},
 		Name:               epInfo.EndpointName,
+		MacAddress: epInfo.MacAddress,
 		HostComputeNetwork: epInfo.NetworkId,
 		Dns: hcn.Dns{
 			Domain:     epInfo.DNS.Domain,
@@ -279,6 +281,16 @@ func RemoveHcnEndpoint(epName string) error {
 			return nil
 		}
 		return errors.Annotatef(err, "failed to find HostComputeEndpoint %s", epName)
+	}
+	epNamespace, err := hcn.GetNamespaceByID(hcnEndpoint.HostComputeNamespace)
+	if err != nil && !hcn.IsNotFoundError(err) {
+		return errors.Annotatef(err, "failed to get HostComputeNamespace %s", epName)
+	}
+	if epNamespace != nil {
+		err = hcn.RemoveNamespaceEndpoint(hcnEndpoint.HostComputeNamespace, hcnEndpoint.Id)
+		if err != nil && !hcn.IsNotFoundError(err) {
+			return errors.Annotatef(err,"error removing endpoint: %s from namespace", epName)
+		}
 	}
 
 	err = hcnEndpoint.Delete()

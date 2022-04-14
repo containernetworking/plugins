@@ -17,11 +17,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"runtime"
 	"strings"
 
 	"github.com/Microsoft/hcsshim"
 
+	"github.com/Microsoft/hcsshim/hcn"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
@@ -55,16 +57,106 @@ func loadNetConf(bytes []byte) (*NetConf, string, error) {
 	return n, n.CNIVersion, nil
 }
 
-func cmdAdd(args *skel.CmdArgs) error {
-	success := false
-	n, cniVersion, err := loadNetConf(args.StdinData)
-	if err != nil {
-		return errors.Annotate(err, "error while loadNetConf")
+func processEndpointArgs(args *skel.CmdArgs, n *NetConf) (*hns.EndpointInfo, error) {
+	epInfo := new(hns.EndpointInfo)
+	epInfo.NetworkName = n.Name
+	epInfo.EndpointName = hns.ConstructEndpointName(args.ContainerID, args.Netns, epInfo.NetworkName)
+
+	if n.IPAM.Type != "" {
+		r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
+		if err != nil {
+			return nil, errors.Annotatef(err, "error while executing IPAM addition")
+		}
+
+		// convert whatever the IPAM result was into the current result
+		result, err := current.NewResultFromResult(r)
+		if err != nil {
+			return nil, errors.Annotatef(err, "error while converting the result from IPAM addition")
+		}
+		if len(result.IPs) == 0 {
+			return nil, fmt.Errorf("IPAM plugin return is missing IP config")
+		}
+		epInfo.IpAddress = result.IPs[0].Address.IP.To4()
+		if epInfo.IpAddress == nil {
+			return nil, fmt.Errorf("IPAM plugin return is missing valid IP Address")
+		}
+		epInfo.MacAddress = fmt.Sprintf("%v-%02x-%02x-%02x-%02x", n.EndpointMacPrefix, epInfo.IpAddress[0], epInfo.IpAddress[1], epInfo.IpAddress[2], epInfo.IpAddress[3])
+
 	}
+	epInfo.DNS = n.GetDNS()
+	if n.LoopbackDSR {
+		n.ApplyLoopbackDSRPolicy(&epInfo.IpAddress)
+	}
+	return epInfo, nil
+}
+
+func cmdHcnAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
+	if len(n.EndpointMacPrefix) != 0 {
+		if len(n.EndpointMacPrefix) != 5 || n.EndpointMacPrefix[2] != '-' {
+			return nil, fmt.Errorf("endpointMacPrefix [%v] is invalid, value must be of the format xx-xx", n.EndpointMacPrefix)
+		}
+	} else {
+		n.EndpointMacPrefix = "0E-2A"
+	}
+
+	networkName := n.Name
+	hnsNetwork, err := hcsshim.GetHNSNetworkByName(networkName)
+	hcnNetwork, err := hcn.GetNetworkByName(networkName)
+	if err != nil {
+		return nil, errors.Annotatef(err, "error while hcn.GetNetworkByName(%s)", networkName)
+	}
+	if hcnNetwork == nil {
+		return  nil, fmt.Errorf("network %v is not found", networkName)
+	}
+	if hnsNetwork == nil {
+		return nil, fmt.Errorf("network %v not found", networkName)
+	}
+
+	if !strings.EqualFold(string (hcnNetwork.Type), "Overlay") {
+		return nil, fmt.Errorf("network %v is of an unexpected type: %v", networkName, hcnNetwork.Type)
+	}
+
+	epName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
+
+	hcnEndpoint, err := hns.AddHcnEndpoint(epName, hcnNetwork.Id, args.Netns, func() (*hcn.HostComputeEndpoint, error) {
+		epInfo, err := processEndpointArgs(args, n)
+		if err != nil {
+			return nil, errors.Annotate(err, "error while processing endpoint args")
+		}
+		epInfo.NetworkId = hcnNetwork.Id
+		gatewayAddr := net.ParseIP(hnsNetwork.Subnets[0].GatewayAddress)
+		epInfo.Gateway = gatewayAddr.To4()
+		n.ApplyDefaultPAPolicy(hnsNetwork.ManagementIP)
+		if n.IPMasq {
+			n.ApplyOutboundNatPolicy(hnsNetwork.Subnets[0].AddressPrefix)
+		}
+		hcnEndpoint, err := hns.GenerateHcnEndpoint(epInfo, &n.NetConf)
+
+		if err != nil {
+			return nil, errors.Annotate(err, "error while generating HostComputeEndpoint")
+		}
+		return hcnEndpoint, nil
+	})
+	if err != nil {
+		return nil, errors.Annotate(err, "error while adding HostComputeEndpoint")
+	}
+
+	result, err := hns.ConstructHcnResult(hcnNetwork, hcnEndpoint)
+
+	if err != nil {
+		ipam.ExecDel(n.IPAM.Type, args.StdinData)
+		return nil, errors.Annotate(err, "error while constructing HostComputeEndpoint addition result")
+	}
+
+	return result, nil
+
+}
+func cmdHnsAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
+	success := false
 
 	if len(n.EndpointMacPrefix) != 0 {
 		if len(n.EndpointMacPrefix) != 5 || n.EndpointMacPrefix[2] != '-' {
-			return fmt.Errorf("endpointMacPrefix [%v] is invalid, value must be of the format xx-xx", n.EndpointMacPrefix)
+			return nil, fmt.Errorf("endpointMacPrefix [%v] is invalid, value must be of the format xx-xx", n.EndpointMacPrefix)
 		}
 	} else {
 		n.EndpointMacPrefix = "0E-2A"
@@ -73,15 +165,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 	networkName := n.Name
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(networkName)
 	if err != nil {
-		return errors.Annotatef(err, "error while GETHNSNewtorkByName(%s)", networkName)
+		return nil, errors.Annotatef(err, "error while GETHNSNewtorkByName(%s)", networkName)
 	}
 
 	if hnsNetwork == nil {
-		return fmt.Errorf("network %v not found", networkName)
+		return nil, fmt.Errorf("network %v not found", networkName)
 	}
 
 	if !strings.EqualFold(hnsNetwork.Type, "Overlay") {
-		return fmt.Errorf("network %v is of an unexpected type: %v", networkName, hnsNetwork.Type)
+		return nil, fmt.Errorf("network %v is of an unexpected type: %v", networkName, hnsNetwork.Type)
 	}
 
 	epName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
@@ -140,15 +232,34 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	}()
 	if err != nil {
-		return errors.Annotatef(err, "error while AddHnsEndpoint(%v,%v,%v)", epName, hnsNetwork.Id, args.ContainerID)
+		return nil, errors.Annotatef(err, "error while AddHnsEndpoint(%v,%v,%v)", epName, hnsNetwork.Id, args.ContainerID)
 	}
 
 	result, err := hns.ConstructHnsResult(hnsNetwork, hnsEndpoint)
 	if err != nil {
-		return errors.Annotatef(err, "error while constructResult")
+		return nil, errors.Annotatef(err, "error while constructResult")
 	}
 
 	success = true
+	return result, nil
+}
+func cmdAdd(args *skel.CmdArgs) error {
+	n, cniVersion, err := loadNetConf(args.StdinData)
+	if err != nil {
+		return err
+	}
+
+	var result *current.Result
+	if n.ApiVersion == 2 {
+		result, err = cmdHcnAdd(args, n)
+	} else {
+		result, err = cmdHnsAdd(args, n)
+	}
+	if err != nil {
+		ipam.ExecDel(n.IPAM.Type, args.StdinData)
+		return err
+	}
+
 	return types.PrintResult(result, cniVersion)
 }
 
@@ -158,12 +269,16 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if err := ipam.ExecDel(n.IPAM.Type, args.StdinData); err != nil {
-		return err
+	if n.IPAM.Type != "" {
+		if err := ipam.ExecDel(n.IPAM.Type, args.StdinData); err != nil {
+			return err
+		}
 	}
-
 	epName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
 
+	if n.ApiVersion == 2 {
+		return hns.RemoveHcnEndpoint(epName)
+	}
 	return hns.RemoveHnsEndpoint(epName, args.Netns, args.ContainerID)
 }
 
