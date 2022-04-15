@@ -130,6 +130,7 @@ var _ = Describe("tuning plugin", func() {
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
+		sysctlDuplicatesMap = map[sysctlKey]interface{}{}
 	})
 
 	AfterEach(func() {
@@ -1122,5 +1123,53 @@ var _ = Describe("tuning plugin", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 		})
+
+		It(fmt.Sprintf("[%s] does not allow duplicated sysctl values", ver), func() {
+			conf := []byte(fmt.Sprintf(`{
+				"name": "test",
+				"type": "tuning",
+				"cniVersion": "%s",
+				"sysctl": {
+					"net.ipv4.conf.all.log_martians": "1",
+					"net.ipv4.conf.all.log_martians": "0"
+				},
+				"prevResult": {
+					"interfaces": [
+						{"name": "dummy0", "sandbox":"netns"}
+					],
+					"ips": [
+						{
+							"version": "4",
+							"address": "10.0.0.2/24",
+							"gateway": "10.0.0.1",
+							"interface": 0
+						}
+					]
+				}
+			}`, ver))
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   conf,
+			}
+
+			beforeConf = configToRestore{}
+
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				_, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("duplicated"))
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 	}
 })
