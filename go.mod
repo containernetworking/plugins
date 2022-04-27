@@ -6,7 +6,7 @@ require (
 	github.com/Microsoft/hcsshim v0.8.20
 	github.com/alexflint/go-filemutex v1.1.0
 	github.com/buger/jsonparser v1.1.1
-	github.com/containernetworking/cni v1.0.1
+	github.com/containernetworking/cni v1.1.0-rc1
 	github.com/coreos/go-iptables v0.6.0
 	github.com/coreos/go-systemd/v22 v22.3.2
 	github.com/d2g/dhcp4 v0.0.0-20170904100407-a1d1b6c41b1c
@@ -16,7 +16,7 @@ require (
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/networkplumbing/go-nft v0.2.0
 	github.com/onsi/ginkgo v1.16.4
-	github.com/onsi/gomega v1.15.0
+	github.com/onsi/gomega v1.17.0
 	github.com/safchain/ethtool v0.0.0-20210803160452-9aa261dae9b1
 	github.com/vishvananda/netlink v1.2.0-beta
 	golang.org/x/sys v0.0.0-20210809222454-d867a43fc93e
