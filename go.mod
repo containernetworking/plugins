@@ -18,7 +18,7 @@ require (
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.15.0
 	github.com/safchain/ethtool v0.0.0-20210803160452-9aa261dae9b1
-	github.com/vishvananda/netlink v1.1.1-0.20210330154013-f5de75959ad5
+	github.com/vishvananda/netlink v1.2.0-beta
 	golang.org/x/sys v0.0.0-20210809222454-d867a43fc93e
 )
 
