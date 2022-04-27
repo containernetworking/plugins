@@ -489,6 +489,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		result.IPs = ipamResult.IPs
 		result.Routes = ipamResult.Routes
+		result.DNS = ipamResult.DNS
 
 		if len(result.IPs) == 0 {
 			return errors.New("IPAM plugin returned missing IP config")
@@ -611,16 +612,27 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	brInterface.Mac = br.Attrs().HardwareAddr.String()
 
-	result.DNS = n.DNS
-
 	// Return an error requested by testcases, if any
 	if debugPostIPAMError != nil {
 		return debugPostIPAMError
 	}
 
+	// Use incoming DNS settings if provided, otherwise use the
+	// settings that were already configued by the IPAM plugin
+	if dnsConfSet(n.DNS) {
+		result.DNS = n.DNS
+	}
+
 	success = true
 
 	return types.PrintResult(result, cniVersion)
+}
+
+func dnsConfSet(dnsConf types.DNS) bool {
+	return dnsConf.Nameservers != nil ||
+		dnsConf.Search != nil ||
+		dnsConf.Options != nil ||
+		dnsConf.Domain != ""
 }
 
 func cmdDel(args *skel.CmdArgs) error {

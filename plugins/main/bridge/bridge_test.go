@@ -45,6 +45,7 @@ const (
 	BRNAME     = "bridge0"
 	BRNAMEVLAN = "bridge0.100"
 	IFNAME     = "eth0"
+	NAMESERVER = "192.0.2.0"
 )
 
 type Net struct {
@@ -70,6 +71,7 @@ type testCase struct {
 	subnet      string      // Single subnet config: Subnet CIDR
 	gateway     string      // Single subnet config: Gateway
 	ranges      []rangeInfo // Ranges list (multiple subnets config)
+	resolvConf  string      // host-local resolvConf file path
 	isGW        bool
 	isLayer2    bool
 	expGWCIDRs  []string // Expected gateway addresses in CIDR form
@@ -138,6 +140,9 @@ const (
 
 	ipamDataDirStr = `,
         "dataDir": "%s"`
+
+	ipamResolvConfStr = `,
+		"resolvConf": "%s"`
 
 	ipMasqConfStr = `,
 	"ipMasq": %t`
@@ -215,6 +220,9 @@ func (tc testCase) netConfJSON(dataDir string) string {
 			if tc.ranges != nil {
 				conf += tc.rangesConfig()
 			}
+			if tc.resolvConf != "" {
+				conf += tc.resolvConfConfig()
+			}
 			conf += ipamEndStr
 		}
 	} else {
@@ -250,6 +258,26 @@ func (tc testCase) rangesConfig() string {
 		}
 	}
 	return conf + rangesEndStr
+}
+
+func (tc testCase) resolvConfConfig() string {
+	conf := fmt.Sprintf(ipamResolvConfStr, tc.resolvConf)
+	return conf
+}
+
+func newResolvConf() (string, error) {
+	f, err := ioutil.TempFile("", "host_local_resolv")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	name := f.Name()
+	_, err = f.WriteString(fmt.Sprintf("nameserver %s", NAMESERVER))
+	return name, err
+}
+
+func deleteResolvConf(path string) error {
+	return os.Remove(path)
 }
 
 var counter uint
@@ -563,6 +591,11 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		// this check is not relevant for a layer 2 bridge
 		if !tc.isLayer2 && tc.vlan == 0 {
 			Expect(link.Attrs().HardwareAddr.String()).NotTo(Equal(bridgeMAC))
+		}
+
+		// Check that resolvConf was used properly
+		if !tc.isLayer2 && tc.resolvConf != "" {
+			Expect(result.DNS.Nameservers).To(Equal([]string{NAMESERVER}))
 		}
 
 		return nil
@@ -1587,6 +1620,9 @@ var _ = Describe("bridge Operations", func() {
 	var originalNS, targetNS ns.NetNS
 	var dataDir string
 
+	resolvConf, err := newResolvConf()
+	Expect(err).NotTo(HaveOccurred())
+
 	BeforeEach(func() {
 		// Create a new NetNS so we don't modify the host
 		var err error
@@ -1608,6 +1644,10 @@ var _ = Describe("bridge Operations", func() {
 		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
 		Expect(targetNS.Close()).To(Succeed())
 		Expect(testutils.UnmountNS(targetNS)).To(Succeed())
+	})
+
+	AfterSuite(func() {
+		deleteResolvConf(resolvConf)
 	})
 
 	for _, ver := range testutils.AllSpecVersions {
@@ -1705,6 +1745,12 @@ var _ = Describe("bridge Operations", func() {
 				DelErr020: "CNI version 0.2.0 does not support more than 1 address per family",
 				AddErr010: "CNI version 0.1.0 does not support more than 1 address per family",
 				DelErr010: "CNI version 0.1.0 does not support more than 1 address per family",
+			},
+			{
+				// with resolvConf DNS settings
+				subnet:     "10.1.2.0/24",
+				expGWCIDRs: []string{"10.1.2.1/24"},
+				resolvConf: resolvConf,
 			},
 		} {
 			tc := tc
