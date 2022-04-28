@@ -14,7 +14,7 @@
 
 // This is a sample chained plugin that supports multiple CNI versions. It
 // parses prevResult according to the cniVersion
-package main
+package firewall
 
 import (
 	"fmt"

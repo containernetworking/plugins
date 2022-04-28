@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package dhcp
 
 import (
 	"encoding/json"
@@ -70,7 +70,7 @@ type RequestOption struct {
 	Option DHCPOption `json:"option"`
 }
 
-func main() {
+func Dhcp() {
 	if len(os.Args) > 1 && os.Args[1] == "daemon" {
 		var pidfilePath string
 		var hostPrefix string

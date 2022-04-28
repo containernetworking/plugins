@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package winoverlay
 
 import (
 	"encoding/json"
@@ -287,6 +287,6 @@ func cmdCheck(_ *skel.CmdArgs) error {
 	return nil
 }
 
-func main() {
+func WinOverlay() {
 	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("win-overlay"))
 }

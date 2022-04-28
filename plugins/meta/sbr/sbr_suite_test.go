@@ -1,6 +1,6 @@
 // The boilerplate needed for Ginkgo
 
-package main
+package sbr
 
 import (
 	. "github.com/onsi/ginkgo"

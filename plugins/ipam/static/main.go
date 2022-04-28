@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package static
 
 import (
 	"encoding/json"
@@ -67,7 +67,7 @@ type Address struct {
 	Version    string
 }
 
-func main() {
+func Static() {
 	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("static"))
 }
 

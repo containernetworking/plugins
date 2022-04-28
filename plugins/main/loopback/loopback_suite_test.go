@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main_test
+package loopback_test
 
 import (
+	"os"
+	"path/filepath"
+
 	"github.com/onsi/gomega/gexec"
 
 	. "github.com/onsi/ginkgo"
@@ -32,7 +35,11 @@ func TestLoopback(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	var err error
-	pathToLoPlugin, err = gexec.Build("github.com/containernetworking/plugins/plugins/main/loopback")
+	var pathToPlugins string
+	pathToPlugins, err = gexec.Build("github.com/containernetworking/plugins/launcher/linux")
+	pathToLoPlugin = filepath.Join(filepath.Dir(pathToPlugins), "loopback")
+	os.Symlink(pathToPlugins, pathToLoPlugin)
+
 	Expect(err).NotTo(HaveOccurred())
 })
 

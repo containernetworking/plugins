@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package vrf
 
 import (
 	"encoding/json"
@@ -39,7 +39,7 @@ type VRFNetConf struct {
 	Table uint32 `json:"table"`
 }
 
-func main() {
+func Vrf() {
 	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.VersionsStartingFrom("0.3.1"), bv.BuildString("vrf"))
 }
 

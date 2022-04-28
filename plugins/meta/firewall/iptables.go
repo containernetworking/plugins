@@ -15,7 +15,7 @@
 // This is a "meta-plugin". It reads in its own netconf, it does not create
 // any network interface but just changes the network sysctl.
 
-package main
+package firewall
 
 import (
 	"fmt"

@@ -15,7 +15,7 @@
 // This is a "meta-plugin". It reads in its own netconf, it does not create
 // any network interface but just changes the network sysctl.
 
-package main
+package tuning
 
 import (
 	"encoding/json"
@@ -403,7 +403,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	return nil
 }
 
-func main() {
+func Tuning() {
 	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("tuning"))
 }
 

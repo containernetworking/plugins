@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // This is the Source Based Routing plugin that sets up source based routing.
-package main
+package sbr
 
 import (
 	"encoding/json"
@@ -396,7 +396,7 @@ RULE_LOOP:
 	return errReturn
 }
 
-func main() {
+func Sbr() {
 	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("sbr"))
 }
 

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package hostdevice
 
 import (
 	"bytes"
@@ -382,7 +382,7 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) 
 	return nil, fmt.Errorf("failed to find physical interface")
 }
 
-func main() {
+func HostDevice() {
 	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("host-device"))
 }
 
