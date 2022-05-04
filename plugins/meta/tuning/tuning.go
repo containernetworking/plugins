@@ -304,6 +304,9 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
+	if err := validateSysctlConflictingKeys(args.StdinData); err != nil {
+		return err
+	}
 	tuningConf, err := parseConf(args.StdinData, args.Args)
 	if err != nil {
 		return err
@@ -405,6 +408,9 @@ func main() {
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
+	if err := validateSysctlConflictingKeys(args.StdinData); err != nil {
+		return err
+	}
 	tuningConf, err := parseConf(args.StdinData, args.Args)
 	if err != nil {
 		return err
@@ -541,4 +547,26 @@ func readAllowlist() (bool, []string, error) {
 		}
 	}
 	return true, allowList, nil
+}
+
+type sysctlKey string
+
+type sysctlCheck struct {
+	SysCtl map[sysctlKey]string `json:"sysctl"`
+}
+
+var sysctlDuplicatesMap = map[sysctlKey]interface{}{}
+
+func (d *sysctlKey) UnmarshalText(data []byte) error {
+	key := sysctlKey(string(data))
+	if _, exists := sysctlDuplicatesMap[key]; exists {
+		return errors.New("duplicated sysctl keys are not allowed")
+	}
+	sysctlDuplicatesMap[key] = ""
+	return nil
+}
+
+func validateSysctlConflictingKeys(data []byte) error {
+	sysctlCheck := sysctlCheck{}
+	return json.Unmarshal(data, &sysctlCheck)
 }
