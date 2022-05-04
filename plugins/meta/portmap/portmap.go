@@ -120,10 +120,13 @@ func checkPorts(config *PortMapConf, containerNet net.IPNet) error {
 	dnatChain := genDnatChain(config.Name, config.ContainerID)
 	fillDnatRules(&dnatChain, config, containerNet)
 
-	ip4t := maybeGetIptables(false)
-	ip6t := maybeGetIptables(true)
+	ip4t, err4 := maybeGetIptables(false)
+	ip6t, err6 := maybeGetIptables(true)
 	if ip4t == nil && ip6t == nil {
-		return fmt.Errorf("neither iptables nor ip6tables usable")
+		err := fmt.Errorf("neither iptables nor ip6tables is usable")
+		err = fmt.Errorf("%v, (iptables) %v", err, err4)
+		err = fmt.Errorf("%v, (ip6tables) %v", err, err6)
+		return err
 	}
 
 	if ip4t != nil {
@@ -354,10 +357,13 @@ func unforwardPorts(config *PortMapConf) error {
 	// Might be lying around from old versions
 	oldSnatChain := genOldSnatChain(config.Name, config.ContainerID)
 
-	ip4t := maybeGetIptables(false)
-	ip6t := maybeGetIptables(true)
+	ip4t, err4 := maybeGetIptables(false)
+	ip6t, err6 := maybeGetIptables(true)
 	if ip4t == nil && ip6t == nil {
-		return fmt.Errorf("neither iptables nor ip6tables usable")
+		err := fmt.Errorf("neither iptables nor ip6tables is usable")
+		err = fmt.Errorf("%v, (iptables) %v", err, err4)
+		err = fmt.Errorf("%v, (ip6tables) %v", err, err6)
+		return err
 	}
 
 	if ip4t != nil {
@@ -378,7 +384,7 @@ func unforwardPorts(config *PortMapConf) error {
 
 // maybeGetIptables implements the soft error swallowing. If iptables is
 // usable for the given protocol, returns a handle, otherwise nil
-func maybeGetIptables(isV6 bool) *iptables.IPTables {
+func maybeGetIptables(isV6 bool) (*iptables.IPTables, error) {
 	proto := iptables.ProtocolIPv4
 	if isV6 {
 		proto = iptables.ProtocolIPv6
@@ -386,15 +392,15 @@ func maybeGetIptables(isV6 bool) *iptables.IPTables {
 
 	ipt, err := iptables.NewWithProtocol(proto)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	_, err = ipt.List("nat", "OUTPUT")
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
-	return ipt
+	return ipt, nil
 }
 
 // deletePortmapStaleConnections delete the UDP conntrack entries on the specified IP family
