@@ -19,11 +19,7 @@ import (
 	"github.com/d2g/dhcp4client"
 )
 
-const (
-	MaxDHCPLen = 576
-)
-
-//Send the Discovery Packet to the Broadcast Channel
+// Send the Discovery Packet to the Broadcast Channel
 func DhcpSendDiscoverPacket(c *dhcp4client.Client, options dhcp4.Options) (dhcp4.Packet, error) {
 	discoveryPacket := c.DiscoverPacket()
 
@@ -35,7 +31,7 @@ func DhcpSendDiscoverPacket(c *dhcp4client.Client, options dhcp4.Options) (dhcp4
 	return discoveryPacket, c.SendPacket(discoveryPacket)
 }
 
-//Send Request Based On the offer Received.
+// Send Request Based On the offer Received.
 func DhcpSendRequest(c *dhcp4client.Client, options dhcp4.Options, offerPacket *dhcp4.Packet) (dhcp4.Packet, error) {
 	requestPacket := c.RequestPacket(offerPacket)
 
@@ -48,20 +44,7 @@ func DhcpSendRequest(c *dhcp4client.Client, options dhcp4.Options, offerPacket *
 	return requestPacket, c.SendPacket(requestPacket)
 }
 
-//Send Decline to the received acknowledgement.
-func DhcpSendDecline(c *dhcp4client.Client, acknowledgementPacket *dhcp4.Packet, options dhcp4.Options) (dhcp4.Packet, error) {
-	declinePacket := c.DeclinePacket(acknowledgementPacket)
-
-	for opt, data := range options {
-		declinePacket.AddOption(opt, data)
-	}
-
-	declinePacket.PadToMinSize()
-
-	return declinePacket, c.SendPacket(declinePacket)
-}
-
-//Lets do a Full DHCP Request.
+// Lets do a Full DHCP Request.
 func DhcpRequest(c *dhcp4client.Client, options dhcp4.Options) (bool, dhcp4.Packet, error) {
 	discoveryPacket, err := DhcpSendDiscoverPacket(c, options)
 	if err != nil {
@@ -91,8 +74,8 @@ func DhcpRequest(c *dhcp4client.Client, options dhcp4.Options) (bool, dhcp4.Pack
 	return true, acknowledgement, nil
 }
 
-//Renew a lease backed on the Acknowledgement Packet.
-//Returns Successful, The AcknoledgementPacket, Any Errors
+// Renew a lease backed on the Acknowledgement Packet.
+// Returns Successful, The AcknoledgementPacket, Any Errors
 func DhcpRenew(c *dhcp4client.Client, acknowledgement dhcp4.Packet, options dhcp4.Options) (bool, dhcp4.Packet, error) {
 	renewRequest := c.RenewalRequestPacket(&acknowledgement)
 
@@ -120,8 +103,8 @@ func DhcpRenew(c *dhcp4client.Client, acknowledgement dhcp4.Packet, options dhcp
 	return true, newAcknowledgement, nil
 }
 
-//Release a lease backed on the Acknowledgement Packet.
-//Returns Any Errors
+// Release a lease backed on the Acknowledgement Packet.
+// Returns Any Errors
 func DhcpRelease(c *dhcp4client.Client, acknowledgement dhcp4.Packet, options dhcp4.Options) error {
 	release := c.ReleasePacket(&acknowledgement)
 

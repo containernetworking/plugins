@@ -58,5 +58,5 @@ func echo1(f string) error {
 			return nil
 		}
 	}
-	return ioutil.WriteFile(f, []byte("1"), 0644)
+	return ioutil.WriteFile(f, []byte("1"), 0o644)
 }

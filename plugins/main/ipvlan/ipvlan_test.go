@@ -25,9 +25,9 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/020"
-	"github.com/containernetworking/cni/pkg/types/040"
-	"github.com/containernetworking/cni/pkg/types/100"
+	types020 "github.com/containernetworking/cni/pkg/types/020"
+	types040 "github.com/containernetworking/cni/pkg/types/040"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -91,7 +91,6 @@ func buildOneConfig(cniVersion string, master string, orig *Net, prevResult type
 	}
 
 	return conf, nil
-
 }
 
 func ipvlanAddCheckDelTest(conf, masterName string, originalNS, targetNS ns.NetNS) {
@@ -205,9 +204,11 @@ type tester interface {
 
 type testerBase struct{}
 
-type testerV10x testerBase
-type testerV04x testerBase
-type testerV02x testerBase
+type (
+	testerV10x testerBase
+	testerV04x testerBase
+	testerV02x testerBase
+)
 
 func newTesterByVersion(version string) tester {
 	switch {
@@ -438,8 +439,8 @@ var _ = Describe("ipvlan Operations", func() {
 				err = netlink.LinkSetUp(link)
 				Expect(err).NotTo(HaveOccurred())
 
-				var address = &net.IPNet{IP: net.IPv4(192, 0, 0, 1), Mask: net.CIDRMask(24, 32)}
-				var addr = &netlink.Addr{IPNet: address}
+				address := &net.IPNet{IP: net.IPv4(192, 0, 0, 1), Mask: net.CIDRMask(24, 32)}
+				addr := &netlink.Addr{IPNet: address}
 				err = netlink.AddrAdd(link, addr)
 				Expect(err).NotTo(HaveOccurred())
 

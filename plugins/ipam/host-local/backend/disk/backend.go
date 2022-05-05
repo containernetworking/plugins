@@ -25,8 +25,10 @@ import (
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend"
 )
 
-const lastIPFilePrefix = "last_reserved_ip."
-const LineBreak = "\r\n"
+const (
+	lastIPFilePrefix = "last_reserved_ip."
+	LineBreak        = "\r\n"
+)
 
 var defaultDataDir = "/var/lib/cni/networks"
 
@@ -45,7 +47,7 @@ func New(network, dataDir string) (*Store, error) {
 		dataDir = defaultDataDir
 	}
 	dir := filepath.Join(dataDir, network)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
 
@@ -59,7 +61,7 @@ func New(network, dataDir string) (*Store, error) {
 func (s *Store) Reserve(id string, ifname string, ip net.IP, rangeID string) (bool, error) {
 	fname := GetEscapedPath(s.dataDir, ip.String())
 
-	f, err := os.OpenFile(fname, os.O_RDWR|os.O_EXCL|os.O_CREATE, 0644)
+	f, err := os.OpenFile(fname, os.O_RDWR|os.O_EXCL|os.O_CREATE, 0o644)
 	if os.IsExist(err) {
 		return false, nil
 	}
@@ -77,7 +79,7 @@ func (s *Store) Reserve(id string, ifname string, ip net.IP, rangeID string) (bo
 	}
 	// store the reserved ip in lastIPFile
 	ipfile := GetEscapedPath(s.dataDir, lastIPFilePrefix+rangeID)
-	err = ioutil.WriteFile(ipfile, []byte(ip.String()), 0644)
+	err = ioutil.WriteFile(ipfile, []byte(ip.String()), 0o644)
 	if err != nil {
 		return false, err
 	}
@@ -115,7 +117,6 @@ func (s *Store) FindByKey(id string, ifname string, match string) (bool, error) 
 		return nil
 	})
 	return found, err
-
 }
 
 func (s *Store) FindByID(id string, ifname string) bool {
@@ -129,7 +130,7 @@ func (s *Store) FindByID(id string, ifname string) bool {
 	// Match anything created by this id
 	if !found && err == nil {
 		match := strings.TrimSpace(id)
-		found, err = s.FindByKey(id, ifname, match)
+		found, _ = s.FindByKey(id, ifname, match)
 	}
 
 	return found
@@ -154,7 +155,6 @@ func (s *Store) ReleaseByKey(id string, ifname string, match string) (bool, erro
 		return nil
 	})
 	return found, err
-
 }
 
 // N.B. This function eats errors to be tolerant and
@@ -167,7 +167,7 @@ func (s *Store) ReleaseByID(id string, ifname string) error {
 	// For backwards compatibility, look for files written by a previous version
 	if !found && err == nil {
 		match := strings.TrimSpace(id)
-		found, err = s.ReleaseByKey(id, ifname, match)
+		_, err = s.ReleaseByKey(id, ifname, match)
 	}
 	return err
 }

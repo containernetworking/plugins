@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types/100"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -121,7 +121,7 @@ const (
 )
 
 var _ = BeforeSuite(func() {
-	err := os.MkdirAll(cniDirPrefix, 0700)
+	err := os.MkdirAll(cniDirPrefix, 0o700)
 	Expect(err).NotTo(HaveOccurred())
 })
 

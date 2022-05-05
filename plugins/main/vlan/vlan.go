@@ -285,7 +285,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 	//
 	// Check prevResults for ips, routes and dns against values found in the container
 	if err := netns.Do(func(_ ns.NetNS) error {
-
 		// Check interface against values found in the container
 		err := validateCniContainerInterface(contMap, m.Attrs().Index, conf.VlanId, conf.MTU)
 		if err != nil {
@@ -310,7 +309,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 }
 
 func validateCniContainerInterface(intf current.Interface, masterIndex int, vlanId int, mtu int) error {
-
 	var link netlink.Link
 	var err error
 

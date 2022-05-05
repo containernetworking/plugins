@@ -1,0 +1,52 @@
+name: lint
+
+on:
+  push:
+    branches:
+      - master
+      - release-*
+    tags:
+      - v*
+  pull_request:
+    types: ['opened', 'edited', 'reopened', 'synchronize']
+jobs:
+  build:
+    name: Build ${{ matrix.target_os }}_${{ matrix.target_arch }} binaries
+    runs-on: ${{ matrix.os }}
+    env:
+      GOVER: 1.18
+      GOOS: ${{ matrix.target_os }}
+      GOARCH: ${{ matrix.target_arch }}
+      GOPROXY: https://proxy.golang.org
+      GOLANGCI_LINT_VER: v1.45.2
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        target_arch: [amd64]
+        include:
+          - os: ubuntu-latest
+            target_os: linux
+    steps:
+      - name: Check if need skip
+        id: skip_check
+        uses: fkirc/skip-duplicate-actions@v4.0.0
+        with:
+          cancel_others: 'true'
+          paths_ignore: '["**.md"]'
+      - name: Set up Go ${{ env.GOVER }}
+        if: ${{ steps.skip_check.outputs.should_skip != 'true' }}
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GOVER }}
+      - name: Check out code into the Go module directory
+        if: ${{ steps.skip_check.outputs.should_skip != 'true' }}
+        uses: actions/checkout@v3
+      - name: Run golangci-lint
+        if: matrix.target_arch == 'amd64' && matrix.target_os == 'linux' && steps.skip_check.outputs.should_skip != 'true'
+        uses: golangci/golangci-lint-action@v3.1.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VER }}
+          args: "--out-${NO_FUTURE}format colored-line-number"
+      - name: Run go mod tidy check diff
+        if: matrix.target_arch == 'amd64' && matrix.target_os == 'linux' && steps.skip_check.outputs.should_skip != 'true'
+        run: make modtidy-all check-diff

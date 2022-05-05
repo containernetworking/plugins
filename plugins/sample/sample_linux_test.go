@@ -125,5 +125,4 @@ var _ = Describe("sample test", func() {
 		_, _, err := testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
 		Expect(err).To(MatchError("must be called as chained plugin"))
 	})
-
 })

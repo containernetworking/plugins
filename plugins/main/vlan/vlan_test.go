@@ -25,9 +25,9 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/020"
-	"github.com/containernetworking/cni/pkg/types/040"
-	"github.com/containernetworking/cni/pkg/types/100"
+	types020 "github.com/containernetworking/cni/pkg/types/020"
+	types040 "github.com/containernetworking/cni/pkg/types/040"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -93,7 +93,6 @@ func buildOneConfig(netName string, cniVersion string, orig *Net, prevResult typ
 	}
 
 	return conf, nil
-
 }
 
 type tester interface {
@@ -103,10 +102,12 @@ type tester interface {
 
 type testerBase struct{}
 
-type testerV10x testerBase
-type testerV04x testerBase
-type testerV03x testerBase
-type testerV01xOr02x testerBase
+type (
+	testerV10x      testerBase
+	testerV04x      testerBase
+	testerV03x      testerBase
+	testerV01xOr02x testerBase
+)
 
 func newTesterByVersion(version string) tester {
 	switch {

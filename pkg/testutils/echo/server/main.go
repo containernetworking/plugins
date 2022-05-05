@@ -58,7 +58,7 @@ func main() {
 			log.Fatalf("Error from ReadFrom(): %s", err)
 		}
 		sock.SetWriteDeadline(time.Now().Add(1 * time.Minute))
-		n, err = sock.WriteTo(buffer[0:n], addr)
+		_, err = sock.WriteTo(buffer[0:n], addr)
 		if err != nil {
 			return
 		}

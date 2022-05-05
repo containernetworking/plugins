@@ -25,9 +25,9 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/020"
-	"github.com/containernetworking/cni/pkg/types/040"
-	"github.com/containernetworking/cni/pkg/types/100"
+	types020 "github.com/containernetworking/cni/pkg/types/020"
+	types040 "github.com/containernetworking/cni/pkg/types/040"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -97,7 +97,6 @@ func buildOneConfig(netName string, cniVersion string, orig *Net, prevResult typ
 	}
 
 	return conf, nil
-
 }
 
 type tester interface {
@@ -107,10 +106,12 @@ type tester interface {
 
 type testerBase struct{}
 
-type testerV10x testerBase
-type testerV04x testerBase
-type testerV03x testerBase
-type testerV01xOr02x testerBase
+type (
+	testerV10x      testerBase
+	testerV04x      testerBase
+	testerV03x      testerBase
+	testerV01xOr02x testerBase
+)
 
 func newTesterByVersion(version string) tester {
 	switch {
@@ -377,7 +378,6 @@ var _ = Describe("macvlan Operations", func() {
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
-
 		})
 
 		It(fmt.Sprintf("[%s] configures and deconfigures a l2 macvlan link with ADD/DEL", ver), func() {
@@ -600,8 +600,8 @@ var _ = Describe("macvlan Operations", func() {
 				err = netlink.LinkSetUp(link)
 				Expect(err).NotTo(HaveOccurred())
 
-				var address = &net.IPNet{IP: net.IPv4(192, 0, 0, 1), Mask: net.CIDRMask(24, 32)}
-				var addr = &netlink.Addr{IPNet: address}
+				address := &net.IPNet{IP: net.IPv4(192, 0, 0, 1), Mask: net.CIDRMask(24, 32)}
+				addr := &netlink.Addr{IPNet: address}
 				err = netlink.AddrAdd(link, addr)
 				Expect(err).NotTo(HaveOccurred())
 

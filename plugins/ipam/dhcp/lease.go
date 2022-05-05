@@ -79,8 +79,8 @@ var requestOptionsDefault = map[dhcp4.OptionCode]bool{
 }
 
 func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequestOptions []RequestOption) (
-	optsRequesting map[dhcp4.OptionCode]bool, optsProviding map[dhcp4.OptionCode][]byte, err error) {
-
+	optsRequesting map[dhcp4.OptionCode]bool, optsProviding map[dhcp4.OptionCode][]byte, err error,
+) {
 	// parse CNI args
 	cniArgsParsed := map[string]string{}
 	for _, argPair := range strings.Split(cniArgs, ";") {
@@ -441,7 +441,7 @@ func jitter(span time.Duration) time.Duration {
 func backoffRetry(resendMax time.Duration, f func() (*dhcp4.Packet, error)) (*dhcp4.Packet, error) {
 	var baseDelay time.Duration = resendDelay0
 	var sleepTime time.Duration
-	var fastRetryLimit = resendFastMax
+	fastRetryLimit := resendFastMax
 	for {
 		pkt, err := f()
 		if err == nil {

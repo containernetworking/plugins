@@ -129,7 +129,6 @@ func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 //    - Calculates and compiles a list of gateway addresses
 //    - Adds a default route if needed
 func calcGateways(result *current.Result, n *NetConf) (*gwInfo, *gwInfo, error) {
-
 	gwsV4 := &gwInfo{}
 	gwsV6 := &gwInfo{}
 
@@ -554,8 +553,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 						}
 
 						if vlanInterface == nil {
-							vlanInterface = &current.Interface{Name: vlanIface.Attrs().Name,
-								Mac: vlanIface.Attrs().HardwareAddr.String()}
+							vlanInterface = &current.Interface{
+								Name: vlanIface.Attrs().Name,
+								Mac:  vlanIface.Attrs().HardwareAddr.String(),
+							}
 							result.Interfaces = append(result.Interfaces, vlanInterface)
 						}
 
@@ -718,7 +719,6 @@ type cniBridgeIf struct {
 }
 
 func validateInterface(intf current.Interface, expectInSb bool) (cniBridgeIf, netlink.Link, error) {
-
 	ifFound := cniBridgeIf{found: false}
 	if intf.Name == "" {
 		return ifFound, nil, fmt.Errorf("Interface name missing ")
@@ -743,7 +743,6 @@ func validateInterface(intf current.Interface, expectInSb bool) (cniBridgeIf, ne
 }
 
 func validateCniBrInterface(intf current.Interface, n *NetConf) (cniBridgeIf, error) {
-
 	brFound, link, err := validateInterface(intf, false)
 	if err != nil {
 		return brFound, err
@@ -775,7 +774,6 @@ func validateCniBrInterface(intf current.Interface, n *NetConf) (cniBridgeIf, er
 }
 
 func validateCniVethInterface(intf *current.Interface, brIf cniBridgeIf, contIf cniBridgeIf) (cniBridgeIf, error) {
-
 	vethFound, link, err := validateInterface(*intf, false)
 	if err != nil {
 		return vethFound, err
@@ -819,7 +817,6 @@ func validateCniVethInterface(intf *current.Interface, brIf cniBridgeIf, contIf 
 }
 
 func validateCniContainerInterface(intf current.Interface) (cniBridgeIf, error) {
-
 	vethFound, link, err := validateInterface(intf, true)
 	if err != nil {
 		return vethFound, err
@@ -848,7 +845,6 @@ func validateCniContainerInterface(intf current.Interface) (cniBridgeIf, error) 
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
-
 	n, _, err := loadNetConf(args.StdinData, args.Args)
 	if err != nil {
 		return err

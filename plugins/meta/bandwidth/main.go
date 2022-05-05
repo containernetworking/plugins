@@ -32,17 +32,19 @@ import (
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
-const maxIfbDeviceLength = 15
-const ifbDevicePrefix = "bwp"
+const (
+	maxIfbDeviceLength = 15
+	ifbDevicePrefix    = "bwp"
+)
 
 // BandwidthEntry corresponds to a single entry in the bandwidth argument,
 // see CONVENTIONS.md
 type BandwidthEntry struct {
-	IngressRate  uint64 `json:"ingressRate"`  //Bandwidth rate in bps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
-	IngressBurst uint64 `json:"ingressBurst"` //Bandwidth burst in bits for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
+	IngressRate  uint64 `json:"ingressRate"`  // Bandwidth rate in bps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
+	IngressBurst uint64 `json:"ingressBurst"` // Bandwidth burst in bits for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
 
-	EgressRate  uint64 `json:"egressRate"`  //Bandwidth rate in bps for traffic through container. 0 for no limit. If egressRate is set, egressBurst must also be set
-	EgressBurst uint64 `json:"egressBurst"` //Bandwidth burst in bits for traffic through container. 0 for no limit. If egressBurst is set, egressRate must also be set
+	EgressRate  uint64 `json:"egressRate"`  // Bandwidth rate in bps for traffic through container. 0 for no limit. If egressRate is set, egressBurst must also be set
+	EgressBurst uint64 `json:"egressBurst"` // Bandwidth burst in bits for traffic through container. 0 for no limit. If egressBurst is set, egressRate must also be set
 }
 
 func (bw *BandwidthEntry) isZero() bool {
@@ -92,7 +94,6 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 	}
 
 	return &conf, nil
-
 }
 
 func getBandwidth(conf *PluginConf) *BandwidthEntry {

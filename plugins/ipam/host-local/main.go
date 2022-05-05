@@ -34,7 +34,6 @@ func main() {
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
-
 	ipamConf, _, err := allocator.LoadIPAMConfig(args.StdinData, args.Args)
 	if err != nil {
 		return err
@@ -48,8 +47,8 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 	defer store.Close()
 
-	containerIpFound := store.FindByID(args.ContainerID, args.IfName)
-	if containerIpFound == false {
+	containerIPFound := store.FindByID(args.ContainerID, args.IfName)
+	if !containerIPFound {
 		return fmt.Errorf("host-local: Failed to find address added by container %v", args.ContainerID)
 	}
 
@@ -84,7 +83,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// Store all requested IPs in a map, so we can easily remove ones we use
 	// and error if some remain
-	requestedIPs := map[string]net.IP{} //net.IP cannot be a key
+	requestedIPs := map[string]net.IP{} // net.IP cannot be a key
 
 	for _, ip := range ipamConf.IPArgs {
 		requestedIPs[ip.String()] = ip

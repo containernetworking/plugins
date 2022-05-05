@@ -37,7 +37,6 @@ var _ = Describe("chain tests", func() {
 	var cleanup func()
 
 	BeforeEach(func() {
-
 		// Save a reference to the original namespace,
 		// Add a new NS
 		currNs, err := ns.GetCurrentNS()
@@ -83,7 +82,6 @@ var _ = Describe("chain tests", func() {
 			ipt.DeleteChain(TABLE, tlChainName)
 			currNs.Set()
 		}
-
 	})
 
 	It("creates and destroys a chain", func() {
@@ -167,7 +165,6 @@ var _ = Describe("chain tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(len(rules)).To(Equal(3))
-
 	})
 
 	It("deletes chains idempotently", func() {
@@ -229,6 +226,5 @@ var _ = Describe("chain tests", func() {
 				Fail("Chain was not deleted")
 			}
 		}
-
 	})
 })

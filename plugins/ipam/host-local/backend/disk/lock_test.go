@@ -31,7 +31,7 @@ var _ = Describe("Lock Operations", func() {
 
 		// create a dummy file to lock
 		path := filepath.Join(dir, "x")
-		f, err := os.OpenFile(path, os.O_RDONLY|os.O_CREATE, 0666)
+		f, err := os.OpenFile(path, os.O_RDONLY|os.O_CREATE, 0o666)
 		Expect(err).ToNot(HaveOccurred())
 		err = f.Close()
 		Expect(err).ToNot(HaveOccurred())

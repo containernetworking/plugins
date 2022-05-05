@@ -15,10 +15,10 @@
 package disk
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"testing"
 )
 
 func TestLock(t *testing.T) {

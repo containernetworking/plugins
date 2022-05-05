@@ -34,7 +34,6 @@ func CreateIfb(ifbDeviceName string, mtu int) error {
 			MTU:   mtu,
 		},
 	})
-
 	if err != nil {
 		return fmt.Errorf("adding link: %s", err)
 	}
@@ -145,10 +144,6 @@ func createTBF(rateInBits, burstInBits uint64, linkIndex int) error {
 		return fmt.Errorf("create qdisc: %s", err)
 	}
 	return nil
-}
-
-func tick2Time(tick uint32) uint32 {
-	return uint32(float64(tick) / float64(netlink.TickInUsec()))
 }
 
 func time2Tick(time uint32) uint32 {

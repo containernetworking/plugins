@@ -377,7 +377,6 @@ func main() {
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
-
 	n, _, err := loadConf(args.StdinData, args.Args)
 	if err != nil {
 		return err
@@ -436,7 +435,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	// Check prevResults for ips, routes and dns against values found in the container
 	if err := netns.Do(func(_ ns.NetNS) error {
-
 		// Check interface against values found in the container
 		err := validateCniContainerInterface(contMap, m.Attrs().Index, n.Mode)
 		if err != nil {
@@ -461,7 +459,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 }
 
 func validateCniContainerInterface(intf current.Interface, parentIndex int, modeExpected string) error {
-
 	var link netlink.Link
 	var err error
 

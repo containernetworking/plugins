@@ -28,7 +28,7 @@ import (
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/100"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -79,7 +79,6 @@ func buildOneConfig(name, cniVersion string, orig *PluginConf, prevResult types.
 	}
 
 	return conf, newBytes, nil
-
 }
 
 var _ = Describe("bandwidth test", func() {
@@ -222,7 +221,6 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 					return nil
 				})).To(Succeed())
-
 			})
 
 			It(fmt.Sprintf("[%s] does not apply ingress when disabled", ver), func() {
@@ -290,7 +288,6 @@ var _ = Describe("bandwidth test", func() {
 
 					return nil
 				})).To(Succeed())
-
 			})
 
 			It(fmt.Sprintf("[%s] does not apply egress when disabled", ver), func() {
@@ -360,7 +357,6 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(35)))
 					return nil
 				})).To(Succeed())
-
 			})
 
 			It(fmt.Sprintf("[%s] fails an invalid ingress config", ver), func() {
@@ -508,7 +504,6 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 					return nil
 				})).To(Succeed())
-
 			})
 
 			It(fmt.Sprintf("[%s] should apply static config when both static config and runtime config exist", ver), func() {
@@ -621,7 +616,6 @@ var _ = Describe("bandwidth test", func() {
 
 					return nil
 				})).To(Succeed())
-
 			})
 		})
 
@@ -731,7 +725,6 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 					return nil
 				})).To(Succeed())
-
 			})
 
 			It(fmt.Sprintf("[%s] should fail when container interface has no veth peer", ver), func() {
