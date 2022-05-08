@@ -386,10 +386,7 @@ func calcGatewayIP(ipn *net.IPNet) net.IP {
 }
 
 func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
-	vlanFiltering := false
-	if n.Vlan != 0 {
-		vlanFiltering = true
-	}
+	vlanFiltering := n.Vlan != 0
 	// create bridge if necessary
 	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, vlanFiltering)
 	if err != nil {
