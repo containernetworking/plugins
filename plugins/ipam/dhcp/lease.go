@@ -202,10 +202,19 @@ func (l *DHCPLease) Stop() {
 
 func (l *DHCPLease) getOptionsWithClientId() dhcp4.Options {
 	opts := make(dhcp4.Options)
-	opts[dhcp4.OptionClientIdentifier] = []byte(l.clientID)
+
+	var clientIdentifier []byte
+	if val, ok := l.optsProviding[dhcp4.OptionClientIdentifier]; ok {
+		clientIdentifier = val
+	} else {
+		// if not set by config, use the default one set by AcquireLease
+		clientIdentifier = []byte(l.clientID)
+	}
+
 	// client identifier's first byte is "type"
-	newClientID := []byte{0}
-	newClientID = append(newClientID, opts[dhcp4.OptionClientIdentifier]...)
+	// 0 means the identifier is not an hardware address
+	// reference: https://datatracker.ietf.org/doc/html/rfc2132#section-9.14
+	newClientID := append([]byte{0}, clientIdentifier...)
 	opts[dhcp4.OptionClientIdentifier] = newClientID
 	return opts
 }
@@ -214,6 +223,10 @@ func (l *DHCPLease) getAllOptions() dhcp4.Options {
 	opts := l.getOptionsWithClientId()
 
 	for k, v := range l.optsProviding {
+		// skip client id since we have already set it
+		if k == dhcp4.OptionClientIdentifier {
+			continue
+		}
 		opts[k] = v
 	}
 
