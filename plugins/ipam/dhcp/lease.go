@@ -308,7 +308,7 @@ func (l *DHCPLease) maintain() {
 				log.Printf("%v: %v", l.clientID, err)
 
 				if time.Now().After(l.rebindingTime) {
-					log.Printf("%v: renawal time expired, rebinding", l.clientID)
+					log.Printf("%v: renewal time expired, rebinding", l.clientID)
 					state = leaseStateRebinding
 				}
 			} else {
@@ -356,7 +356,7 @@ func (l *DHCPLease) renew() error {
 	}
 	defer c.Close()
 
-	opts := l.getOptionsWithClientId()
+	opts := l.getAllOptions()
 	pkt, err := backoffRetry(l.resendMax, func() (*dhcp4.Packet, error) {
 		ok, ack, err := DhcpRenew(c, *l.ack, opts)
 		switch {
