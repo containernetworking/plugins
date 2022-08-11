@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+GO="/usr/local/go/bin/go"
+
 set -e
 cd "$(dirname "$0")"
 
