@@ -157,18 +157,14 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 
 		if e.IP != "" {
 			for _, item := range strings.Split(string(e.IP), ",") {
-				ipstr := strings.TrimSpace(item)
+				addrStr := strings.TrimSpace(item)
 
-				ip, subnet, err := net.ParseCIDR(ipstr)
+				_, addr, err := net.ParseCIDR(addrStr)
 				if err != nil {
-					return nil, "", fmt.Errorf("the 'ip' field is expected to be in CIDR notation, got: '%s'", ipstr)
+					return nil, "", fmt.Errorf("the 'ip' field is expected to be in CIDR notation, got: '%s'", addrStr)
 				}
 
-				addr := Address{
-					Address:    net.IPNet{IP: ip, Mask: subnet.Mask},
-					AddressStr: ipstr,
-				}
-				n.IPAM.Addresses = append(n.IPAM.Addresses, addr)
+				n.IPAM.Addresses = append(n.IPAM.Addresses, Address{AddressStr: addrStr, Address: *addr})
 			}
 		}
 
