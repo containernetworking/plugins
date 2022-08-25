@@ -222,8 +222,9 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, ifName string) (netl
 		if err = netlink.LinkSetDown(contDev); err != nil {
 			return fmt.Errorf("failed to set %q down: %v", hostDev.Attrs().Name, err)
 		}
-		// Save host device name into the container device's alias property
-		if err := netlink.LinkSetAlias(contDev, hostDev.Attrs().Name); err != nil {
+		// Save host device name and initial ifName into the container device's alias property
+		alias := fmt.Sprintf("host-device/%s/%s", hostDev.Attrs().Name, ifName)
+		if err := netlink.LinkSetAlias(contDev, alias); err != nil {
 			return fmt.Errorf("failed to set alias to %q: %v", hostDev.Attrs().Name, err)
 		}
 		// Rename container device to respect args.IfName
@@ -247,6 +248,28 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, ifName string) (netl
 	return contDev, nil
 }
 
+func getLinkFromAlias(ifName string) (netlink.Link, string, error) {
+	links, err := netlink.LinkList()
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to list links: %v", err)
+	}
+
+	for _, link := range links {
+		saved_info := strings.Split(link.Attrs().Alias, "/")
+		if len(saved_info) != 3 {
+			continue
+		}
+		magic := saved_info[0]
+		hostIfName := saved_info[1]
+		podIfName := saved_info[2]
+		if magic == "host-device" && podIfName == ifName {
+			return link, hostIfName, nil
+		}
+	}
+
+	return nil, "", fmt.Errorf("failed to find %q", ifName)
+}
+
 func moveLinkOut(containerNs ns.NetNS, ifName string) error {
 	defaultNs, err := ns.GetCurrentNS()
 	if err != nil {
@@ -255,9 +278,9 @@ func moveLinkOut(containerNs ns.NetNS, ifName string) error {
 	defer defaultNs.Close()
 
 	return containerNs.Do(func(_ ns.NetNS) error {
-		dev, err := netlink.LinkByName(ifName)
+		dev, hostIfName, err := getLinkFromAlias(ifName)
 		if err != nil {
-			return fmt.Errorf("failed to find %q: %v", ifName, err)
+			return err
 		}
 
 		// Devices can be renamed only when down
@@ -277,8 +300,8 @@ func moveLinkOut(containerNs ns.NetNS, ifName string) error {
 		}()
 
 		// Rename the device to its original name from the host namespace
-		if err = netlink.LinkSetName(dev, dev.Attrs().Alias); err != nil {
-			return fmt.Errorf("failed to restore %q to original name %q: %v", ifName, dev.Attrs().Alias, err)
+		if err = netlink.LinkSetName(dev, hostIfName); err != nil {
+			return fmt.Errorf("failed to restore %q to original name %q: %v", ifName, hostIfName, err)
 		}
 
 		if err = netlink.LinkSetNsFd(dev, int(defaultNs.Fd())); err != nil {
