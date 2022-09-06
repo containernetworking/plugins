@@ -94,10 +94,6 @@ func (s *Store) LastReservedIP(rangeID string) (net.IP, error) {
 	return net.ParseIP(string(data)), nil
 }
 
-func (s *Store) Release(ip net.IP) error {
-	return os.Remove(GetEscapedPath(s.dataDir, ip.String()))
-}
-
 func (s *Store) FindByKey(id string, ifname string, match string) (bool, error) {
 	found := false
 
