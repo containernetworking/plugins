@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,9 +24,11 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -195,11 +198,27 @@ func runDaemon(
 		return fmt.Errorf("Error getting listener: %v", err)
 	}
 
+	srv := http.Server{}
+	exit := make(chan os.Signal, 1)
+	done := make(chan bool, 1)
+	signal.Notify(exit, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-exit
+		srv.Shutdown(context.TODO())
+		os.Remove(hostPrefix + socketPath)
+		os.Remove(pidfilePath)
+
+		done <- true
+	}()
+
 	dhcp := newDHCP(dhcpClientTimeout, resendMax)
 	dhcp.hostNetnsPrefix = hostPrefix
 	dhcp.broadcast = broadcast
 	rpc.Register(dhcp)
 	rpc.HandleHTTP()
-	http.Serve(l, nil)
+	srv.Serve(l)
+
+	<-done
 	return nil
 }
