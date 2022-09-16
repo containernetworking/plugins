@@ -54,6 +54,7 @@ type PortMapConf struct {
 	SNAT                 *bool     `json:"snat,omitempty"`
 	ConditionsV4         *[]string `json:"conditionsV4"`
 	ConditionsV6         *[]string `json:"conditionsV6"`
+	MasqAll              bool      `json:"masqAll,omitempty"`
 	MarkMasqBit          *int      `json:"markMasqBit"`
 	ExternalSetMarkChain *string   `json:"externalSetMarkChain"`
 	RuntimeConfig        struct {
