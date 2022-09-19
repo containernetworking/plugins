@@ -63,11 +63,6 @@ func (s *FakeStore) LastReservedIP(rangeID string) (net.IP, error) {
 	return ip, nil
 }
 
-func (s *FakeStore) Release(ip net.IP) error {
-	delete(s.ipMap, ip.String())
-	return nil
-}
-
 func (s *FakeStore) ReleaseByID(id string, ifname string) error {
 	toDelete := []string{}
 	for k, v := range s.ipMap {
