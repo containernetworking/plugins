@@ -7,7 +7,7 @@ export GOOS=windows
 export GOFLAGS="${GOFLAGS} -mod=vendor"
 echo "$GOFLAGS"
 
-PLUGINS=$(cat plugins/windows_only.txt | dos2unix )
+PLUGINS=$(cat plugins/windows_only.txt)
 for d in $PLUGINS; do
 	plugin="$(basename "$d").exe"
 	echo "building $plugin"

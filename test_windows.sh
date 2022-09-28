@@ -11,7 +11,7 @@ echo "Running tests"
 
 PKGS="./pkg/hns/..."
 
-PLUGINS=$(cat plugins/windows_only.txt | dos2unix )
+PLUGINS=$(cat plugins/windows_only.txt)
 for d in $PLUGINS; do
 	PKGS="$PKGS ./$d/..."
 done
