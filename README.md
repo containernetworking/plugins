@@ -14,6 +14,7 @@ Read [CONTRIBUTING](CONTRIBUTING.md) for build and test instructions.
 * `ptp`: Creates a veth pair.
 * `vlan`: Allocates a vlan device.
 * `host-device`: Move an already-existing device into a container.
+* `dummy`: Creates a new Dummy device in the container.
 #### Windows: Windows specific
 * `win-bridge`: Creates a bridge, adds the host and the container to it.
 * `win-overlay`: Creates an overlay interface to the container.
