@@ -97,6 +97,23 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 
+		err = netlink.LinkSetMulticastOn(link)
+		if err != nil {
+			return err // not tested
+		}
+
+		err = netlink.RouteAdd(&netlink.Route{
+			LinkIndex: link.Attrs().Index,
+			Scope:     netlink.SCOPE_HOST,
+			Dst: &net.IPNet{
+				IP:   net.IPv4(224, 0, 0, 0),
+				Mask: net.IPv4Mask(240, 0, 0, 0),
+			},
+		})
+		if err != nil {
+			return err // not tested
+		}
+
 		return nil
 	})
 	if err != nil {
