@@ -1,3 +1,6 @@
+# bou.ke/monkey v1.0.2
+## explicit; go 1.13
+bou.ke/monkey
 # github.com/Microsoft/go-winio v0.4.17
 ## explicit; go 1.12
 github.com/Microsoft/go-winio
@@ -135,6 +138,10 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
+# github.com/opencontainers/selinux v1.8.0
+## explicit; go 1.13
+github.com/opencontainers/selinux/go-selinux
+github.com/opencontainers/selinux/pkg/pwalk
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors
@@ -151,6 +158,9 @@ github.com/vishvananda/netlink/nl
 # github.com/vishvananda/netns v0.0.0-20210104183010-2eb08e3e575f
 ## explicit; go 1.12
 github.com/vishvananda/netns
+# github.com/willf/bitset v1.1.11
+## explicit; go 1.14
+github.com/willf/bitset
 # go.opencensus.io v0.22.3
 ## explicit; go 1.13
 go.opencensus.io

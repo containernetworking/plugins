@@ -3,6 +3,7 @@ module github.com/containernetworking/plugins
 go 1.17
 
 require (
+	bou.ke/monkey v1.0.2
 	github.com/Microsoft/hcsshim v0.8.20
 	github.com/alexflint/go-filemutex v1.1.0
 	github.com/buger/jsonparser v1.1.1
@@ -17,6 +18,7 @@ require (
 	github.com/networkplumbing/go-nft v0.2.0
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.15.0
+	github.com/opencontainers/selinux v1.8.0
 	github.com/safchain/ethtool v0.0.0-20210803160452-9aa261dae9b1
 	github.com/vishvananda/netlink v1.2.0-beta
 	golang.org/x/sys v0.0.0-20210809222454-d867a43fc93e
@@ -32,6 +34,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/vishvananda/netns v0.0.0-20210104183010-2eb08e3e575f // indirect
+	github.com/willf/bitset v1.1.11 // indirect
 	go.opencensus.io v0.22.3 // indirect
 	golang.org/x/net v0.0.0-20210428140749-89ef3d95e781 // indirect
 	golang.org/x/text v0.3.6 // indirect
