@@ -35,6 +35,9 @@ github.com/Microsoft/hcsshim/osversion
 # github.com/alexflint/go-filemutex v1.2.0
 ## explicit; go 1.13
 github.com/alexflint/go-filemutex
+# github.com/bits-and-blooms/bitset v1.2.0
+## explicit; go 1.14
+github.com/bits-and-blooms/bitset
 # github.com/buger/jsonparser v1.1.1
 ## explicit; go 1.13
 github.com/buger/jsonparser
@@ -145,6 +148,10 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
+# github.com/opencontainers/selinux v1.8.2
+## explicit; go 1.13
+github.com/opencontainers/selinux/go-selinux
+github.com/opencontainers/selinux/pkg/pwalk
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors
