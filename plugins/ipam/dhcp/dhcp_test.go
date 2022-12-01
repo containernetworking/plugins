@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -27,7 +26,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types/100"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -43,7 +42,7 @@ import (
 )
 
 func getTmpDir() (string, error) {
-	tmpDir, err := ioutil.TempDir(cniDirPrefix, "dhcp")
+	tmpDir, err := os.MkdirTemp(cniDirPrefix, "dhcp")
 	if err == nil {
 		tmpDir = filepath.ToSlash(tmpDir)
 	}

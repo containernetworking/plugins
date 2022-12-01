@@ -15,7 +15,6 @@
 package disk
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -25,7 +24,7 @@ import (
 
 var _ = Describe("Lock Operations", func() {
 	It("locks a file path", func() {
-		dir, err := ioutil.TempDir("", "")
+		dir, err := os.MkdirTemp("", "")
 		Expect(err).ToNot(HaveOccurred())
 		defer os.RemoveAll(dir)
 
@@ -47,7 +46,7 @@ var _ = Describe("Lock Operations", func() {
 	})
 
 	It("locks a folder path", func() {
-		dir, err := ioutil.TempDir("", "")
+		dir, err := os.MkdirTemp("", "")
 		Expect(err).ToNot(HaveOccurred())
 		defer os.RemoveAll(dir)
 

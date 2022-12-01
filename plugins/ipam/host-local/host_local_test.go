@@ -16,7 +16,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -24,7 +23,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/100"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/disk"
@@ -43,7 +42,7 @@ var _ = Describe("host-local Operations", func() {
 
 	BeforeEach(func() {
 		var err error
-		tmpDir, err = ioutil.TempDir("", "host-local_test")
+		tmpDir, err = os.MkdirTemp("", "host-local_test")
 		Expect(err).NotTo(HaveOccurred())
 		tmpDir = filepath.ToSlash(tmpDir)
 	})
@@ -58,7 +57,7 @@ var _ = Describe("host-local Operations", func() {
 		ver := ver
 
 		It(fmt.Sprintf("[%s] allocates and releases addresses with ADD/DEL", ver), func() {
-			err := ioutil.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0644)
 			Expect(err).NotTo(HaveOccurred())
 
 			conf := fmt.Sprintf(`{
@@ -134,22 +133,22 @@ var _ = Describe("host-local Operations", func() {
 			}
 
 			ipFilePath1 := filepath.Join(tmpDir, "mynet", "10.1.2.2")
-			contents, err := ioutil.ReadFile(ipFilePath1)
+			contents, err := os.ReadFile(ipFilePath1)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(contents)).To(Equal(args.ContainerID + LineBreak + ifname))
 
 			ipFilePath2 := filepath.Join(tmpDir, disk.GetEscapedPath("mynet", "2001:db8:1::2"))
-			contents, err = ioutil.ReadFile(ipFilePath2)
+			contents, err = os.ReadFile(ipFilePath2)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(contents)).To(Equal(args.ContainerID + LineBreak + ifname))
 
 			lastFilePath1 := filepath.Join(tmpDir, "mynet", "last_reserved_ip.0")
-			contents, err = ioutil.ReadFile(lastFilePath1)
+			contents, err = os.ReadFile(lastFilePath1)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(contents)).To(Equal("10.1.2.2"))
 
 			lastFilePath2 := filepath.Join(tmpDir, "mynet", "last_reserved_ip.1")
-			contents, err = ioutil.ReadFile(lastFilePath2)
+			contents, err = os.ReadFile(lastFilePath2)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(contents)).To(Equal("2001:db8:1::2"))
 			// Release the IP
@@ -167,7 +166,7 @@ var _ = Describe("host-local Operations", func() {
 		It(fmt.Sprintf("[%s] allocates and releases addresses on specific interface with ADD/DEL", ver), func() {
 			const ifname1 string = "eth1"
 
-			err := ioutil.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0644)
 			Expect(err).NotTo(HaveOccurred())
 
 			conf0 := fmt.Sprintf(`{
@@ -239,12 +238,12 @@ var _ = Describe("host-local Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			ipFilePath0 := filepath.Join(tmpDir, "mynet0", "10.1.2.2")
-			contents, err := ioutil.ReadFile(ipFilePath0)
+			contents, err := os.ReadFile(ipFilePath0)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(contents)).To(Equal(args0.ContainerID + LineBreak + ifname))
 
 			ipFilePath1 := filepath.Join(tmpDir, "mynet1", "10.2.2.2")
-			contents, err = ioutil.ReadFile(ipFilePath1)
+			contents, err = os.ReadFile(ipFilePath1)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(contents)).To(Equal(args1.ContainerID + LineBreak + ifname1))
 
@@ -257,7 +256,7 @@ var _ = Describe("host-local Operations", func() {
 			Expect(err).To(HaveOccurred())
 
 			// reread ipFilePath1, ensure that ifname1 didn't get deleted
-			contents, err = ioutil.ReadFile(ipFilePath1)
+			contents, err = os.ReadFile(ipFilePath1)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(contents)).To(Equal(args1.ContainerID + LineBreak + ifname1))
 
@@ -357,7 +356,7 @@ var _ = Describe("host-local Operations", func() {
 		})
 
 		It(fmt.Sprintf("[%s] verify DEL works on backwards compatible allocate", ver), func() {
-			err := ioutil.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0644)
 			Expect(err).NotTo(HaveOccurred())
 
 			conf := fmt.Sprintf(`{
@@ -395,10 +394,10 @@ var _ = Describe("host-local Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			ipFilePath := filepath.Join(tmpDir, "mynet", "10.1.2.2")
-			contents, err := ioutil.ReadFile(ipFilePath)
+			contents, err := os.ReadFile(ipFilePath)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(contents)).To(Equal(args.ContainerID + LineBreak + ifname))
-			err = ioutil.WriteFile(ipFilePath, []byte(strings.TrimSpace(args.ContainerID)), 0644)
+			err = os.WriteFile(ipFilePath, []byte(strings.TrimSpace(args.ContainerID)), 0644)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = testutils.CmdDelWithArgs(args, func() error {
@@ -466,7 +465,7 @@ var _ = Describe("host-local Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			ipFilePath := filepath.Join(tmpDir, "mynet", result.IPs[0].Address.IP.String())
-			contents, err := ioutil.ReadFile(ipFilePath)
+			contents, err := os.ReadFile(ipFilePath)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(contents)).To(Equal("dummy" + LineBreak + ifname))
 
@@ -547,7 +546,7 @@ var _ = Describe("host-local Operations", func() {
 		})
 
 		It(fmt.Sprintf("[%s] allocates custom IPs from multiple ranges", ver), func() {
-			err := ioutil.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0644)
 			Expect(err).NotTo(HaveOccurred())
 
 			conf := fmt.Sprintf(`{
@@ -595,7 +594,7 @@ var _ = Describe("host-local Operations", func() {
 		})
 
 		It(fmt.Sprintf("[%s] allocates custom IPs from multiple protocols", ver), func() {
-			err := ioutil.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0644)
 			Expect(err).NotTo(HaveOccurred())
 
 			conf := fmt.Sprintf(`{

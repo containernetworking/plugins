@@ -17,7 +17,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
@@ -1161,7 +1160,7 @@ type fakeFilesystem struct {
 
 func (fs *fakeFilesystem) use() func() {
 	// create the new fake fs root dir in /tmp/sriov...
-	tmpDir, err := ioutil.TempDir("", "sriov")
+	tmpDir, err := os.MkdirTemp("", "sriov")
 	if err != nil {
 		panic(fmt.Errorf("error creating fake root dir: %s", err.Error()))
 	}

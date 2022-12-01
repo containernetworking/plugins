@@ -15,7 +15,6 @@
 package main
 
 import (
-	"io/ioutil"
 	"os"
 
 	"github.com/containernetworking/cni/pkg/types"
@@ -64,7 +63,7 @@ options four
 })
 
 func parse(contents string) (*types.DNS, error) {
-	f, err := ioutil.TempFile("", "host_local_resolv")
+	f, err := os.CreateTemp("", "host_local_resolv")
 	if err != nil {
 		return nil, err
 	}

@@ -17,7 +17,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -266,7 +265,7 @@ func (tc testCase) resolvConfConfig() string {
 }
 
 func newResolvConf() (string, error) {
-	f, err := ioutil.TempFile("", "host_local_resolv")
+	f, err := os.CreateTemp("", "host_local_resolv")
 	if err != nil {
 		return "", err
 	}
@@ -397,16 +396,16 @@ func ipVersion(ip net.IP) string {
 
 func countIPAMIPs(path string) (int, error) {
 	count := 0
-	files, err := ioutil.ReadDir(path)
+	entries, err := os.ReadDir(path)
 	if err != nil {
 		return -1, err
 	}
-	for _, file := range files {
-		if file.IsDir() {
+	for _, entry := range entries {
+		if entry.IsDir() {
 			continue
 		}
 
-		if net.ParseIP(file.Name()) != nil {
+		if net.ParseIP(entry.Name()) != nil {
 			count++
 		}
 	}
@@ -1631,7 +1630,7 @@ var _ = Describe("bridge Operations", func() {
 		targetNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
-		dataDir, err = ioutil.TempDir("", "bridge_test")
+		dataDir, err = os.MkdirTemp("", "bridge_test")
 		Expect(err).NotTo(HaveOccurred())
 
 		// Do not emulate an error, each test will set this if needed

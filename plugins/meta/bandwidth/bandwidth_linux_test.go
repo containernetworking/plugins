@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"time"
@@ -28,7 +27,7 @@ import (
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/100"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 
@@ -896,7 +895,7 @@ var _ = Describe("bandwidth test", func() {
 				packetInBytes = rateInBytes * 25
 
 				var err error
-				dataDir, err = ioutil.TempDir("", "bandwidth_linux_test")
+				dataDir, err = os.MkdirTemp("", "bandwidth_linux_test")
 				Expect(err).NotTo(HaveOccurred())
 
 				ptpConf = fmt.Sprintf(`{

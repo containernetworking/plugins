@@ -2,7 +2,7 @@ package main_test
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"os/exec"
 	"strings"
@@ -74,7 +74,7 @@ var _ = Describe("Echosvr", func() {
 			defer conn.Close()
 
 			fmt.Fprintf(conn, "hello\n")
-			Expect(ioutil.ReadAll(conn)).To(Equal([]byte("hello")))
+			Expect(io.ReadAll(conn)).To(Equal([]byte("hello")))
 		})
 	})
 

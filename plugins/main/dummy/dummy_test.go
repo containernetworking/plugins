@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -175,7 +174,7 @@ var _ = Describe("dummy Operations", func() {
 		targetNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
-		dataDir, err = ioutil.TempDir("", "dummy_test")
+		dataDir, err = os.MkdirTemp("", "dummy_test")
 		Expect(err).NotTo(HaveOccurred())
 
 		err = originalNS.Do(func(ns.NetNS) error {
