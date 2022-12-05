@@ -67,6 +67,7 @@ type DHCPLease struct {
 	broadcast     bool
 	stopping      uint32
 	stop          chan struct{}
+	check         chan struct{}
 	wg            sync.WaitGroup
 	// list of requesting and providing options and if they are necessary / their value
 	optsRequesting map[dhcp4.OptionCode]bool
@@ -150,6 +151,7 @@ func AcquireLease(
 	l := &DHCPLease{
 		clientID:       clientID,
 		stop:           make(chan struct{}),
+		check:          make(chan struct{}),
 		timeout:        timeout,
 		resendMax:      resendMax,
 		broadcast:      broadcast,
@@ -198,6 +200,10 @@ func (l *DHCPLease) Stop() {
 		close(l.stop)
 	}
 	l.wg.Wait()
+}
+
+func (l *DHCPLease) Check() {
+	l.check <- struct{}{}
 }
 
 func (l *DHCPLease) getOptionsWithClientId() dhcp4.Options {
@@ -333,6 +339,9 @@ func (l *DHCPLease) maintain() {
 
 		select {
 		case <-time.After(sleepDur):
+
+		case <-l.check:
+			log.Printf("%v: Checking lease", l.clientID)
 
 		case <-l.stop:
 			if err := l.release(); err != nil {
