@@ -207,7 +207,7 @@ var _ = Describe("portmap integration tests", func() {
 
 				// Verify iptables rules are gone
 				_, err = ipt.List("nat", dnatChainName)
-				Expect(err).To(MatchError(ContainSubstring("iptables: No chain/target/match by that name.")))
+				Expect(err).To(HaveOccurred())
 
 				// Check that everything succeeded *after* we clean up the network
 				if !contOK {
