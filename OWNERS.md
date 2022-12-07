@@ -7,3 +7,4 @@ This is the official list of the CNI network plugins owners:
 - Matt Dupre <matt@tigera.io> (@matthewdupre)
 - Michael Cambria <mcambria@redhat.com> (@mccv1r0)
 - Piotr Skarmuk <piotr.skarmuk@gmail.com> (@jellonek)
+- Michael Zappa <michael.zappa@gmail.com> (@MikeZappa87)
