@@ -167,7 +167,7 @@ golang.org/x/net/html/charset
 golang.org/x/net/internal/iana
 golang.org/x/net/internal/socket
 golang.org/x/net/ipv4
-# golang.org/x/sys v0.0.0-20210809222454-d867a43fc93e
+# golang.org/x/sys v0.3.0
 ## explicit; go 1.17
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
