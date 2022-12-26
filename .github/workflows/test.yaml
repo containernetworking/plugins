@@ -16,7 +16,7 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ env.GO_VERSION }}
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Build on all supported architectures
         run: |
@@ -46,7 +46,7 @@ jobs:
         run: |
           sudo ln -sf `which go` `sudo which go` || true
           sudo go version
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Install test binaries
         env:
@@ -75,6 +75,6 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ env.GO_VERSION }}
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: test
         run: bash ./test_windows.sh
