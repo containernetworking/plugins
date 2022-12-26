@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/Microsoft/hcsshim v0.9.6
-	github.com/alexflint/go-filemutex v1.1.0
+	github.com/alexflint/go-filemutex v1.2.0
 	github.com/buger/jsonparser v1.1.1
 	github.com/containernetworking/cni v1.0.1
 	github.com/coreos/go-iptables v0.6.0

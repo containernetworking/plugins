@@ -32,7 +32,7 @@ github.com/Microsoft/hcsshim/internal/vmcompute
 github.com/Microsoft/hcsshim/internal/wclayer
 github.com/Microsoft/hcsshim/internal/winapi
 github.com/Microsoft/hcsshim/osversion
-# github.com/alexflint/go-filemutex v1.1.0
+# github.com/alexflint/go-filemutex v1.2.0
 ## explicit; go 1.13
 github.com/alexflint/go-filemutex
 # github.com/buger/jsonparser v1.1.1
