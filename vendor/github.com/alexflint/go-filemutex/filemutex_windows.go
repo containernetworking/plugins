@@ -6,53 +6,22 @@ package filemutex
 
 import (
 	"syscall"
-	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
-var (
-	modkernel32      = syscall.NewLazyDLL("kernel32.dll")
-	procLockFileEx   = modkernel32.NewProc("LockFileEx")
-	procUnlockFileEx = modkernel32.NewProc("UnlockFileEx")
-)
-
-const (
-	lockfileFailImmediately = 1
-	lockfileExclusiveLock   = 2
-)
-
-func lockFileEx(h syscall.Handle, flags, reserved, locklow, lockhigh uint32, ol *syscall.Overlapped) (err error) {
-	r1, _, e1 := syscall.Syscall6(procLockFileEx.Addr(), 6, uintptr(h), uintptr(flags), uintptr(reserved), uintptr(locklow), uintptr(lockhigh), uintptr(unsafe.Pointer(ol)))
-	if r1 == 0 {
-		if e1 != 0 {
-			err = error(e1)
-		} else {
-			err = syscall.EINVAL
-		}
-	}
-	return
-}
-
-func unlockFileEx(h syscall.Handle, reserved, locklow, lockhigh uint32, ol *syscall.Overlapped) (err error) {
-	r1, _, e1 := syscall.Syscall6(procUnlockFileEx.Addr(), 5, uintptr(h), uintptr(reserved), uintptr(locklow), uintptr(lockhigh), uintptr(unsafe.Pointer(ol)), 0)
-	if r1 == 0 {
-		if e1 != 0 {
-			err = error(e1)
-		} else {
-			err = syscall.EINVAL
-		}
-	}
-	return
-}
+// see https://msdn.microsoft.com/en-us/library/windows/desktop/ms681382(v=vs.85).aspx
+var errLockUnlocked syscall.Errno = 0x9E
 
 // FileMutex is similar to sync.RWMutex, but also synchronizes across processes.
 // This implementation is based on flock syscall.
 type FileMutex struct {
-	fd syscall.Handle
+	fd windows.Handle
 }
 
 func New(filename string) (*FileMutex, error) {
-	fd, err := syscall.CreateFile(&(syscall.StringToUTF16(filename)[0]), syscall.GENERIC_READ|syscall.GENERIC_WRITE,
-		syscall.FILE_SHARE_READ|syscall.FILE_SHARE_WRITE, nil, syscall.OPEN_ALWAYS, syscall.FILE_ATTRIBUTE_NORMAL, 0)
+	fd, err := windows.CreateFile(&(windows.StringToUTF16(filename)[0]), windows.GENERIC_READ|windows.GENERIC_WRITE,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -60,10 +29,9 @@ func New(filename string) (*FileMutex, error) {
 }
 
 func (m *FileMutex) TryLock() error {
-	var ol syscall.Overlapped
-	if err := lockFileEx(m.fd, lockfileFailImmediately|lockfileExclusiveLock, 0, 1, 0, &ol); err != nil {
-		if errno, ok := err.(syscall.Errno); ok {
-			if errno == syscall.Errno(0x21) {
+	if err := windows.LockFileEx(m.fd, windows.LOCKFILE_FAIL_IMMEDIATELY|windows.LOCKFILE_EXCLUSIVE_LOCK, 0, 1, 0, &windows.Overlapped{}); err != nil {
+		if errno, ok := err.(windows.Errno); ok {
+			if errno == windows.ERROR_LOCK_VIOLATION {
 				return AlreadyLocked
 			}
 		}
@@ -73,42 +41,25 @@ func (m *FileMutex) TryLock() error {
 }
 
 func (m *FileMutex) Lock() error {
-	var ol syscall.Overlapped
-	if err := lockFileEx(m.fd, lockfileExclusiveLock, 0, 1, 0, &ol); err != nil {
-		return err
-	}
-	return nil
+	return windows.LockFileEx(m.fd, windows.LOCKFILE_EXCLUSIVE_LOCK, 0, 1, 0, &windows.Overlapped{})
 }
 
 func (m *FileMutex) Unlock() error {
-	var ol syscall.Overlapped
-	if err := unlockFileEx(m.fd, 0, 1, 0, &ol); err != nil {
-		return err
-	}
-	return nil
+	return windows.UnlockFileEx(m.fd, 0, 1, 0, &windows.Overlapped{})
 }
 
 func (m *FileMutex) RLock() error {
-	var ol syscall.Overlapped
-	if err := lockFileEx(m.fd, 0, 0, 1, 0, &ol); err != nil {
-		return err
-	}
-	return nil
+	return windows.LockFileEx(m.fd, 0, 0, 1, 0, &windows.Overlapped{})
 }
 
 func (m *FileMutex) RUnlock() error {
-	var ol syscall.Overlapped
-	if err := unlockFileEx(m.fd, 0, 1, 0, &ol); err != nil {
-		return err
-	}
-	return nil
+	return windows.UnlockFileEx(m.fd, 0, 1, 0, &windows.Overlapped{})
 }
 
 // Close unlocks the lock and closes the underlying file descriptor.
 func (m *FileMutex) Close() error {
-	var ol syscall.Overlapped
-	if err := unlockFileEx(m.fd, 0, 1, 0, &ol); err != nil {
+	if err := windows.UnlockFileEx(m.fd, 0, 1, 0, &windows.Overlapped{}); err != nil && err != errLockUnlocked {
 		return err
 	}
-	return syscall.Close(m.fd)
+	return windows.Close(m.fd)
 }

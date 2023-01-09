@@ -4,9 +4,7 @@
 
 package unix
 
-import (
-	"unsafe"
-)
+import "unsafe"
 
 // IoctlRetInt performs an ioctl operation specified by req on a device
 // associated with opened file descriptor fd, and returns a non-negative
@@ -48,15 +46,15 @@ func IoctlSetRTCWkAlrm(fd int, value *RTCWkAlrm) error {
 // IoctlGetEthtoolDrvinfo fetches ethtool driver information for the network
 // device specified by ifname.
 func IoctlGetEthtoolDrvinfo(fd int, ifname string) (*EthtoolDrvinfo, error) {
-	ifr, err := newIfreq(ifname)
+	ifr, err := NewIfreq(ifname)
 	if err != nil {
 		return nil, err
 	}
 
 	value := EthtoolDrvinfo{Cmd: ETHTOOL_GDRVINFO}
-	ifrd := ifr.SetData(unsafe.Pointer(&value))
+	ifrd := ifr.withData(unsafe.Pointer(&value))
 
-	err = ioctlPtr(fd, SIOCETHTOOL, unsafe.Pointer(&ifrd))
+	err = ioctlIfreqData(fd, SIOCETHTOOL, &ifrd)
 	return &value, err
 }
 
@@ -175,4 +173,61 @@ func IoctlHIDGetRawUniq(fd int) (string, error) {
 	var value [_HIDIOCGRAWUNIQ_LEN]byte
 	err := ioctlPtr(fd, _HIDIOCGRAWUNIQ, unsafe.Pointer(&value[0]))
 	return ByteSliceToString(value[:]), err
+}
+
+// IoctlIfreq performs an ioctl using an Ifreq structure for input and/or
+// output. See the netdevice(7) man page for details.
+func IoctlIfreq(fd int, req uint, value *Ifreq) error {
+	// It is possible we will add more fields to *Ifreq itself later to prevent
+	// misuse, so pass the raw *ifreq directly.
+	return ioctlPtr(fd, req, unsafe.Pointer(&value.raw))
+}
+
+// TODO(mdlayher): export if and when IfreqData is exported.
+
+// ioctlIfreqData performs an ioctl using an ifreqData structure for input
+// and/or output. See the netdevice(7) man page for details.
+func ioctlIfreqData(fd int, req uint, value *ifreqData) error {
+	// The memory layout of IfreqData (type-safe) and ifreq (not type-safe) are
+	// identical so pass *IfreqData directly.
+	return ioctlPtr(fd, req, unsafe.Pointer(value))
+}
+
+// IoctlKCMClone attaches a new file descriptor to a multiplexor by cloning an
+// existing KCM socket, returning a structure containing the file descriptor of
+// the new socket.
+func IoctlKCMClone(fd int) (*KCMClone, error) {
+	var info KCMClone
+	if err := ioctlPtr(fd, SIOCKCMCLONE, unsafe.Pointer(&info)); err != nil {
+		return nil, err
+	}
+
+	return &info, nil
+}
+
+// IoctlKCMAttach attaches a TCP socket and associated BPF program file
+// descriptor to a multiplexor.
+func IoctlKCMAttach(fd int, info KCMAttach) error {
+	return ioctlPtr(fd, SIOCKCMATTACH, unsafe.Pointer(&info))
+}
+
+// IoctlKCMUnattach unattaches a TCP socket file descriptor from a multiplexor.
+func IoctlKCMUnattach(fd int, info KCMUnattach) error {
+	return ioctlPtr(fd, SIOCKCMUNATTACH, unsafe.Pointer(&info))
+}
+
+// IoctlLoopGetStatus64 gets the status of the loop device associated with the
+// file descriptor fd using the LOOP_GET_STATUS64 operation.
+func IoctlLoopGetStatus64(fd int) (*LoopInfo64, error) {
+	var value LoopInfo64
+	if err := ioctlPtr(fd, LOOP_GET_STATUS64, unsafe.Pointer(&value)); err != nil {
+		return nil, err
+	}
+	return &value, nil
+}
+
+// IoctlLoopSetStatus64 sets the status of the loop device associated with the
+// file descriptor fd using the LOOP_SET_STATUS64 operation.
+func IoctlLoopSetStatus64(fd int, value *LoopInfo64) error {
+	return ioctlPtr(fd, LOOP_SET_STATUS64, unsafe.Pointer(value))
 }
