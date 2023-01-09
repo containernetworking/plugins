@@ -578,8 +578,8 @@ func validateSysctlConflictingKeys(data []byte) error {
 }
 
 func validateArgs(args *skel.CmdArgs) error {
-	if strings.Contains(args.Args, string(os.PathSeparator)) {
-		return errors.New(fmt.Sprintf("Interface name contains an invalid character %s", string(os.PathSeparator)))
+	if strings.Contains(args.IfName, string(os.PathSeparator)) {
+		return errors.New(fmt.Sprintf("Interface name (%s) contains an invalid character %s", args.IfName, string(os.PathSeparator)))
 	}
 	return nil
 }
