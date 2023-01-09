@@ -248,13 +248,22 @@ func fillDnatRules(c *chain, config *PortMapConf, containerNet net.IPNet) {
 			hpRule := make([]string, len(ruleBase), len(ruleBase)+4)
 			copy(hpRule, ruleBase)
 
+			masqCIDR := containerNet.String()
+			if config.MasqAll {
+				if isV6 {
+					masqCIDR = "::/0"
+				} else {
+					masqCIDR = "0.0.0.0/0"
+				}
+			}
+
 			hpRule = append(hpRule,
-				"-s", containerNet.String(),
+				"-s", masqCIDR,
 				"-j", setMarkChainName,
 			)
 			c.rules = append(c.rules, hpRule)
 
-			if !isV6 {
+			if !isV6 && !config.MasqAll {
 				// localhost
 				localRule := make([]string, len(ruleBase), len(ruleBase)+4)
 				copy(localRule, ruleBase)
