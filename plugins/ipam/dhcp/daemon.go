@@ -80,12 +80,20 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 	}
 
 	clientID := generateClientID(args.ContainerID, conf.Name, args.IfName)
-	hostNetns := d.hostNetnsPrefix + args.Netns
-	l, err := AcquireLease(clientID, hostNetns, args.IfName,
-		optsRequesting, optsProviding,
-		d.clientTimeout, d.clientResendMax, d.broadcast)
-	if err != nil {
-		return err
+
+	// If we already have an active lease for this clientID, do not create
+	// another one
+	l := d.getLease(clientID)
+	if l != nil {
+		l.Check()
+	} else {
+		hostNetns := d.hostNetnsPrefix + args.Netns
+		l, err = AcquireLease(clientID, hostNetns, args.IfName,
+			optsRequesting, optsProviding,
+			d.clientTimeout, d.clientResendMax, d.broadcast)
+		if err != nil {
+			return err
+		}
 	}
 
 	ipn, err := l.IPNet()
