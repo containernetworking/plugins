@@ -343,6 +343,17 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 		if err != nil {
 			return err
 		}
+
+		cveth, err := netlink.LinkByName(containerVeth.Name)
+		if err != nil {
+			return fmt.Errorf("failed to lookup %q: %v", ifName, err)
+		}
+
+		// set link up explicitly
+		if err = netlink.LinkSetUp(cveth); err != nil {
+			return fmt.Errorf("failed to set container side of %q up: %v", ifName, err)
+		}
+
 		contIface.Name = containerVeth.Name
 		contIface.Mac = containerVeth.HardwareAddr.String()
 		contIface.Sandbox = netns.Path()
@@ -358,12 +369,33 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to lookup %q: %v", hostIface.Name, err)
 	}
-	hostIface.Mac = hostVeth.Attrs().HardwareAddr.String()
+
+	// set link up explicitly
+	if err = netlink.LinkSetUp(hostVeth); err != nil {
+		return nil, nil, fmt.Errorf("failed to set host side of %q up: %v", ifName, err)
+	}
+
+	// check bridge port state
+	retries := []int{0, 50, 500, 1000, 1000}
+	for idx, sleep := range retries {
+
+		time.Sleep(time.Duration(sleep) * time.Millisecond)
+		if hostVeth.Attrs().OperState == netlink.OperUp {
+			break
+		}
+
+		if idx == len(retries)-1 {
+			return nil, nil, fmt.Errorf("bridge port in error state: %s", hostVeth.Attrs().OperState)
+		}
+	}
 
 	// connect host veth end to the bridge
 	if err := netlink.LinkSetMaster(hostVeth, br); err != nil {
 		return nil, nil, fmt.Errorf("failed to connect %q to bridge %v: %v", hostVeth.Attrs().Name, br.Attrs().Name, err)
 	}
+
+	// Save the MAC
+	hostIface.Mac = hostVeth.Attrs().HardwareAddr.String()
 
 	// set hairpin mode
 	if err = netlink.LinkSetHairpin(hostVeth, hairpinMode); err != nil {
@@ -515,24 +547,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return nil
 		}); err != nil {
 			return err
-		}
-
-		// check bridge port state
-		retries := []int{0, 50, 500, 1000, 1000}
-		for idx, sleep := range retries {
-			time.Sleep(time.Duration(sleep) * time.Millisecond)
-
-			hostVeth, err := netlink.LinkByName(hostInterface.Name)
-			if err != nil {
-				return err
-			}
-			if hostVeth.Attrs().OperState == netlink.OperUp {
-				break
-			}
-
-			if idx == len(retries)-1 {
-				return fmt.Errorf("bridge port in error state: %s", hostVeth.Attrs().OperState)
-			}
 		}
 
 		if n.IsGW {
