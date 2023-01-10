@@ -376,7 +376,7 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 	}
 
 	// check bridge port state
-	retries := []int{0, 50, 500, 1000, 1000}
+	retries := []int{0, 50, 500, 1000, 1000, 2000, 3000, 4000, 5000}
 	for idx, sleep := range retries {
 
 		time.Sleep(time.Duration(sleep) * time.Millisecond)
