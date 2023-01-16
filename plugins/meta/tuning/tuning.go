@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path"
@@ -235,7 +234,7 @@ func createBackup(ifName, containerID, backupPath string, tuningConf *TuningConf
 	if err != nil {
 		return fmt.Errorf("failed to marshall data for %q: %v", ifName, err)
 	}
-	if err = ioutil.WriteFile(path.Join(backupPath, containerID+"_"+ifName+".json"), data, 0600); err != nil {
+	if err = os.WriteFile(path.Join(backupPath, containerID+"_"+ifName+".json"), data, 0600); err != nil {
 		return fmt.Errorf("failed to save file %s.json: %v", ifName, err)
 	}
 
@@ -250,7 +249,7 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 		return nil
 	}
 
-	file, err := ioutil.ReadFile(filePath)
+	file, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to open file %q: %v", filePath, err)
 	}
@@ -349,7 +348,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return fmt.Errorf("invalid net sysctl key: %q", key)
 			}
 			content := []byte(value)
-			err := ioutil.WriteFile(fileName, content, 0644)
+			err := os.WriteFile(fileName, content, 0644)
 			if err != nil {
 				return err
 			}
@@ -441,7 +440,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 		for key, confValue := range tuningConf.SysCtl {
 			fileName := filepath.Join("/proc/sys", strings.Replace(key, ".", "/", -1))
 
-			contents, err := ioutil.ReadFile(fileName)
+			contents, err := os.ReadFile(fileName)
 			if err != nil {
 				return err
 			}

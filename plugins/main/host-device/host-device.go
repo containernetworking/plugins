@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -46,7 +45,7 @@ var (
 // Array of different linux drivers bound to network device needed for DPDK
 var userspaceDrivers = []string{"vfio-pci", "uio_pci_generic", "igb_uio"}
 
-//NetConf for host-device config, look the README to learn how to use those parameters
+// NetConf for host-device config, look the README to learn how to use those parameters
 type NetConf struct {
 	types.NetConf
 	Device        string `json:"device"` // Device-Name, something like eth0 or can0 etc.
@@ -345,16 +344,16 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) 
 			return nil, fmt.Errorf("kernel device path %q must be absolute and begin with /sys/devices/", kernelpath)
 		}
 		netDir := filepath.Join(kernelpath, "net")
-		files, err := ioutil.ReadDir(netDir)
+		entries, err := os.ReadDir(netDir)
 		if err != nil {
 			return nil, fmt.Errorf("failed to find network devices at %q", netDir)
 		}
 
 		// Grab the first device from eg /sys/devices/pci0000:00/0000:00:19.0/net
-		for _, file := range files {
+		for _, entry := range entries {
 			// Make sure it's really an interface
 			for _, l := range links {
-				if file.Name() == l.Attrs().Name {
+				if entry.Name() == l.Attrs().Name {
 					return l, nil
 				}
 			}
@@ -369,12 +368,12 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) 
 			}
 			netDir = matches[0]
 		}
-		fInfo, err := ioutil.ReadDir(netDir)
+		entries, err := os.ReadDir(netDir)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read net directory %s: %q", netDir, err)
 		}
-		if len(fInfo) > 0 {
-			return netlink.LinkByName(fInfo[0].Name())
+		if len(entries) > 0 {
+			return netlink.LinkByName(entries[0].Name())
 		}
 		return nil, fmt.Errorf("failed to find device name for pci address %s", pciaddr)
 	}

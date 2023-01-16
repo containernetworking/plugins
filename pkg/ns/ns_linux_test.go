@@ -17,7 +17,6 @@ package ns_test
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -208,7 +207,7 @@ var _ = Describe("Linux namespace operations", func() {
 			})
 
 			It("fails when the path is not a namespace", func() {
-				tempFile, err := ioutil.TempFile("", "nstest")
+				tempFile, err := os.CreateTemp("", "nstest")
 				Expect(err).NotTo(HaveOccurred())
 				defer tempFile.Close()
 
@@ -262,7 +261,7 @@ var _ = Describe("Linux namespace operations", func() {
 		})
 
 		It("should refuse other paths", func() {
-			tempFile, err := ioutil.TempFile("", "nstest")
+			tempFile, err := os.CreateTemp("", "nstest")
 			Expect(err).NotTo(HaveOccurred())
 			defer tempFile.Close()
 

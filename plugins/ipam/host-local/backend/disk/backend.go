@@ -15,7 +15,6 @@
 package disk
 
 import (
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -77,7 +76,7 @@ func (s *Store) Reserve(id string, ifname string, ip net.IP, rangeID string) (bo
 	}
 	// store the reserved ip in lastIPFile
 	ipfile := GetEscapedPath(s.dataDir, lastIPFilePrefix+rangeID)
-	err = ioutil.WriteFile(ipfile, []byte(ip.String()), 0644)
+	err = os.WriteFile(ipfile, []byte(ip.String()), 0644)
 	if err != nil {
 		return false, err
 	}
@@ -87,7 +86,7 @@ func (s *Store) Reserve(id string, ifname string, ip net.IP, rangeID string) (bo
 // LastReservedIP returns the last reserved IP if exists
 func (s *Store) LastReservedIP(rangeID string) (net.IP, error) {
 	ipfile := GetEscapedPath(s.dataDir, lastIPFilePrefix+rangeID)
-	data, err := ioutil.ReadFile(ipfile)
+	data, err := os.ReadFile(ipfile)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +100,7 @@ func (s *Store) FindByKey(id string, ifname string, match string) (bool, error) 
 		if err != nil || info.IsDir() {
 			return nil
 		}
-		data, err := ioutil.ReadFile(path)
+		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil
 		}
@@ -137,7 +136,7 @@ func (s *Store) ReleaseByKey(id string, ifname string, match string) (bool, erro
 		if err != nil || info.IsDir() {
 			return nil
 		}
-		data, err := ioutil.ReadFile(path)
+		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil
 		}
@@ -181,7 +180,7 @@ func (s *Store) GetByID(id string, ifname string) []net.IP {
 		if err != nil || info.IsDir() {
 			return nil
 		}
-		data, err := ioutil.ReadFile(path)
+		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil
 		}
