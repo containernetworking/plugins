@@ -126,8 +126,8 @@ func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 
 // calcGateways processes the results from the IPAM plugin and does the
 // following for each IP family:
-//    - Calculates and compiles a list of gateway addresses
-//    - Adds a default route if needed
+//   - Calculates and compiles a list of gateway addresses
+//   - Adds a default route if needed
 func calcGateways(result *current.Result, n *NetConf) (*gwInfo, *gwInfo, error) {
 
 	gwsV4 := &gwInfo{}
@@ -517,24 +517,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err
 		}
 
-		// check bridge port state
-		retries := []int{0, 50, 500, 1000, 1000}
-		for idx, sleep := range retries {
-			time.Sleep(time.Duration(sleep) * time.Millisecond)
-
-			hostVeth, err := netlink.LinkByName(hostInterface.Name)
-			if err != nil {
-				return err
-			}
-			if hostVeth.Attrs().OperState == netlink.OperUp {
-				break
-			}
-
-			if idx == len(retries)-1 {
-				return fmt.Errorf("bridge port in error state: %s", hostVeth.Attrs().OperState)
-			}
-		}
-
 		if n.IsGW {
 			var firstV4Addr net.IP
 			var vlanInterface *current.Interface
@@ -600,6 +582,29 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err
 		}
 	}
+
+	var hostVeth netlink.Link
+
+	// check bridge port state
+	retries := []int{0, 50, 500, 1000, 1000}
+	for idx, sleep := range retries {
+		time.Sleep(time.Duration(sleep) * time.Millisecond)
+
+		hostVeth, err = netlink.LinkByName(hostInterface.Name)
+		if err != nil {
+			return err
+		}
+		if hostVeth.Attrs().OperState == netlink.OperUp {
+			break
+		}
+
+		if idx == len(retries)-1 {
+			return fmt.Errorf("bridge port in error state: %s", hostVeth.Attrs().OperState)
+		}
+	}
+
+	// In certain circumstances, the host-side of the veth may change addrs
+	hostInterface.Mac = hostVeth.Attrs().HardwareAddr.String()
 
 	// Refetch the bridge since its MAC address may change when the first
 	// veth is added or after its IP address is set
