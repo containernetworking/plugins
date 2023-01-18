@@ -774,10 +774,6 @@ func cmdDel(args *skel.CmdArgs) error {
 		return nil
 	}
 
-	if args.Netns == "" {
-		return ipamDel()
-	}
-
 	// There is a netns so try to clean up. Delete can be called multiple times
 	// so don't return an error if the device is already removed.
 	// If the device isn't there then don't try to clean up IP masq either.
@@ -791,14 +787,42 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	})
 	if err != nil {
-		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
+		// if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.
 		// https://github.com/kubernetes/kubernetes/issues/43014#issuecomment-287164444
-		_, ok := err.(ns.NSPathNotExistErr)
-		if ok {
-			return ipamDel()
+		if _, isNotExists := err.(ns.NSPathNotExistErr); !isNotExists {
+			return err
 		}
-		return err
+	}
+
+	if len(ipnets) == 0 {
+		// could not get ip address within netns, so try to get it from prevResult
+		prevResult, err := parsePrevResult(n)
+		if err != nil {
+			return err
+		}
+
+		if prevResult != nil {
+			ipCfgs, err := getIPCfgs(args.IfName, prevResult)
+			if err != nil {
+				return err
+			}
+
+			for _, ip := range ipCfgs {
+				ipnets = append(ipnets, &ip.Address)
+			}
+		}
+	}
+
+	// clean up IP masq first
+	if isLayer3 && n.IPMasq {
+		chain := utils.FormatChainName(n.Name, args.ContainerID)
+		comment := utils.FormatComment(n.Name, args.ContainerID)
+		for _, ipn := range ipnets {
+			if err := ip.TeardownIPMasq(ipn, chain, comment); err != nil {
+				return err
+			}
+		}
 	}
 
 	// call ipam.ExecDel after clean up device in netns
@@ -810,16 +834,6 @@ func cmdDel(args *skel.CmdArgs) error {
 		sc := link.NewSpoofChecker("", "", uniqueID(args.ContainerID, args.IfName))
 		if err := sc.Teardown(); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
-		}
-	}
-
-	if isLayer3 && n.IPMasq {
-		chain := utils.FormatChainName(n.Name, args.ContainerID)
-		comment := utils.FormatComment(n.Name, args.ContainerID)
-		for _, ipn := range ipnets {
-			if err := ip.TeardownIPMasq(ipn, chain, comment); err != nil {
-				return err
-			}
 		}
 	}
 
@@ -1093,4 +1107,56 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 func uniqueID(containerID, cniIface string) string {
 	return containerID + "-" + cniIface
+}
+
+// parsePrevResult parse previous result
+func parsePrevResult(conf *NetConf) (*current.Result, error) {
+	var prevResult *current.Result
+	if conf.RawPrevResult != nil {
+		resultBytes, err := json.Marshal(conf.RawPrevResult)
+		if err != nil {
+			return nil, fmt.Errorf("could not serialize prevResult: %#v", err)
+		}
+		res, err := version.NewResult(conf.CNIVersion, resultBytes)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse prevResult: %v", err)
+		}
+		conf.RawPrevResult = nil
+		prevResult, err = current.NewResultFromResult(res)
+		if err != nil {
+			return nil, fmt.Errorf("could not convert result to current version: %v", err)
+		}
+	}
+	return prevResult, nil
+}
+
+// getIPCfgs finds the IPs on the supplied interface, returning as IPConfig structures
+func getIPCfgs(iface string, prevResult *current.Result) ([]*current.IPConfig, error) {
+	if len(prevResult.IPs) == 0 {
+		// No IP addresses; that makes no sense. Pack it in.
+		return nil, fmt.Errorf("No IP addresses supplied on interface: %s", iface)
+	}
+
+	// ips contains the IPConfig structures that were passed, filtered somewhat
+	ipCfgs := make([]*current.IPConfig, 0, len(prevResult.IPs))
+
+	for _, ipCfg := range prevResult.IPs {
+		// IPs have an interface that is an index into the interfaces array.
+		// We assume a match if this index is missing.
+		if ipCfg.Interface == nil {
+			ipCfgs = append(ipCfgs, ipCfg)
+			continue
+		}
+
+		// Skip all IPs we know belong to an interface with the wrong name.
+		intIdx := *ipCfg.Interface
+		// We do a single interface name, stored in args.IfName
+		if intIdx >= 0 && intIdx < len(prevResult.Interfaces) && prevResult.Interfaces[intIdx].Name != iface {
+			continue
+		}
+
+		ipCfgs = append(ipCfgs, ipCfg)
+	}
+
+	return ipCfgs, nil
 }
