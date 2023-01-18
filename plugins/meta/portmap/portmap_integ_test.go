@@ -29,13 +29,11 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/coreos/go-iptables/iptables"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	"github.com/vishvananda/netlink"
 )
-
-const TIMEOUT = 90
 
 func makeConfig(ver string) *libcni.NetworkConfigList {
 	configList, err := libcni.ConfListFromBytes([]byte(fmt.Sprintf(`{
@@ -224,7 +222,7 @@ var _ = Describe("portmap integration tests", func() {
 				}
 
 				close(done)
-			}, TIMEOUT*9)
+			})
 
 			It(fmt.Sprintf("[%s] forwards a UDP port on ipv4 and keep working after creating a second container with the same HostPort", ver), func(done Done) {
 				var err error
@@ -421,7 +419,7 @@ var _ = Describe("portmap integration tests", func() {
 				}
 
 				close(done)
-			}, TIMEOUT*9)
+			})
 		})
 	}
 })

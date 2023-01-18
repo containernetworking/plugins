@@ -37,7 +37,7 @@ import (
 	"github.com/d2g/dhcp4server/leasepool"
 	"github.com/d2g/dhcp4server/leasepool/memorypool"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

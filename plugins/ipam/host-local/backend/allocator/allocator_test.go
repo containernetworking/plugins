@@ -22,7 +22,7 @@ import (
 	current "github.com/containernetworking/cni/pkg/types/100"
 	fakestore "github.com/containernetworking/plugins/plugins/ipam/host-local/backend/testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

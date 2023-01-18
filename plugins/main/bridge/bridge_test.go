@@ -36,7 +36,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -1619,9 +1619,6 @@ var _ = Describe("bridge Operations", func() {
 	var originalNS, targetNS ns.NetNS
 	var dataDir string
 
-	resolvConf, err := newResolvConf()
-	Expect(err).NotTo(HaveOccurred())
-
 	BeforeEach(func() {
 		// Create a new NetNS so we don't modify the host
 		var err error
@@ -1643,10 +1640,6 @@ var _ = Describe("bridge Operations", func() {
 		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
 		Expect(targetNS.Close()).To(Succeed())
 		Expect(testutils.UnmountNS(targetNS)).To(Succeed())
-	})
-
-	AfterSuite(func() {
-		deleteResolvConf(resolvConf)
 	})
 
 	for _, ver := range testutils.AllSpecVersions {
