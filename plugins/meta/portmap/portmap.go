@@ -68,6 +68,10 @@ func forwardPorts(config *PortMapConf, containerNet net.IPNet) error {
 		return fmt.Errorf("failed to open iptables: %v", err)
 	}
 
+	if err := ipt.AppendUnique("filter", "FORWARD", "-s", containerNet.IP.String(), "-m", "conntrack", "--ctstate", "INVALID", "-j", "DROP", "-m", "comment", "--comment", "portmap rule"); err != nil {
+		return err
+	}
+
 	// Enable masquerading for traffic as necessary.
 	// The DNAT chain sets a mark bit for traffic that needs masq:
 	// - connections from localhost
@@ -117,11 +121,12 @@ func forwardPorts(config *PortMapConf, containerNet net.IPNet) error {
 }
 
 func checkPorts(config *PortMapConf, containerNet net.IPNet) error {
+	isV6 := (containerNet.IP.To4() == nil)
 	dnatChain := genDnatChain(config.Name, config.ContainerID)
 	fillDnatRules(&dnatChain, config, containerNet)
 
 	ip4t, err4 := maybeGetIptables(false)
-	ip6t, err6 := maybeGetIptables(true)
+	ip6t, err6 := maybeGetIptables(isV6)
 	if ip4t == nil && ip6t == nil {
 		err := fmt.Errorf("neither iptables nor ip6tables is usable")
 		err = fmt.Errorf("%v, (iptables) %v", err, err4)
@@ -360,14 +365,15 @@ func genOldSnatChain(netName, containerID string) chain {
 // don't know which protocols were used.
 // So, we first check that iptables is "generally OK" by doing a check. If
 // not, we ignore the error, unless neither v4 nor v6 are OK.
-func unforwardPorts(config *PortMapConf) error {
+func unforwardPorts(config *PortMapConf, containerNet net.IPNet) error {
+	isV6 := (containerNet.IP.To4() == nil)
 	dnatChain := genDnatChain(config.Name, config.ContainerID)
 
 	// Might be lying around from old versions
 	oldSnatChain := genOldSnatChain(config.Name, config.ContainerID)
 
 	ip4t, err4 := maybeGetIptables(false)
-	ip6t, err6 := maybeGetIptables(true)
+	ip6t, err6 := maybeGetIptables(isV6)
 	if ip4t == nil && ip6t == nil {
 		err := fmt.Errorf("neither iptables nor ip6tables is usable")
 		err = fmt.Errorf("%v, (iptables) %v", err, err4)
@@ -380,6 +386,11 @@ func unforwardPorts(config *PortMapConf) error {
 			return fmt.Errorf("could not teardown ipv4 dnat: %v", err)
 		}
 		oldSnatChain.teardown(ip4t)
+
+		err := ip4t.Delete("filter", "FORWARD", "-s", containerNet.IP.String(), "-m", "conntrack", "--ctstate", "INVALID", "-j", "DROP", "-m", "comment", "--comment", "portmap rule")
+		if err != nil && !isNotExist(err) {
+			return fmt.Errorf("could not teardown ipv4 FORWARD dnat: %v", err)
+		}
 	}
 
 	if ip6t != nil {
@@ -387,6 +398,11 @@ func unforwardPorts(config *PortMapConf) error {
 			return fmt.Errorf("could not teardown ipv6 dnat: %v", err)
 		}
 		oldSnatChain.teardown(ip6t)
+
+		err := ip6t.Delete("filter", "FORWARD", "-m", "conntrack", "--ctstate", "INVALID", "-j", "DROP")
+		if err != nil && !isNotExist(err) {
+			return fmt.Errorf("could not teardown ipv6 FORWARD dnat: %v", err)
+		}
 	}
 	return nil
 }
@@ -426,4 +442,14 @@ func deletePortmapStaleConnections(portMappings []PortMapEntry, family netlink.I
 		}
 	}
 	return nil
+}
+
+// isNotExist returnst true if the error is from iptables indicating
+// that the target does not exist.
+func isNotExist(err error) bool {
+	e, ok := err.(*iptables.Error)
+	if !ok {
+		return false
+	}
+	return e.IsNotExist()
 }

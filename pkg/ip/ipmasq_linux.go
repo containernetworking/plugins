@@ -41,6 +41,10 @@ func SetupIPMasq(ipn *net.IPNet, chain string, comment string) error {
 		return fmt.Errorf("failed to locate iptables: %v", err)
 	}
 
+	if err := ipt.AppendUnique("filter", "FORWARD", "-s", ipn.IP.String(), "-m", "conntrack", "--ctstate", "INVALID", "-j", "DROP", "-m", "comment", "--comment", "bridge masq rule"); err != nil {
+		return err
+	}
+
 	// Create chain if doesn't exist
 	exists := false
 	chains, err := ipt.ListChains("nat")
@@ -88,6 +92,10 @@ func TeardownIPMasq(ipn *net.IPNet, chain string, comment string) error {
 	}
 	if err != nil {
 		return fmt.Errorf("failed to locate iptables: %v", err)
+	}
+
+	if err := ipt.Delete("filter", "FORWARD", "-s", ipn.IP.String(), "-m", "conntrack", "--ctstate", "INVALID", "-j", "DROP", "-m", "comment", "--comment", "bridge masq rule"); err != nil {
+		return err
 	}
 
 	err = ipt.Delete("nat", "POSTROUTING", "-s", ipn.IP.String(), "-j", chain, "-m", "comment", "--comment", comment)

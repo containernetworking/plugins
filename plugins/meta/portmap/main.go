@@ -128,11 +128,17 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	netConf.ContainerID = args.ContainerID
 
-	// We don't need to parse out whether or not we're using v6 or snat,
-	// deletion is idempotent
-	if err := unforwardPorts(netConf); err != nil {
-		return err
+	if netConf.ContIPv4.IP != nil {
+		if err := unforwardPorts(netConf, netConf.ContIPv4); err != nil {
+			return err
+		}
 	}
+	if netConf.ContIPv6.IP != nil {
+		if err := unforwardPorts(netConf, netConf.ContIPv6); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
