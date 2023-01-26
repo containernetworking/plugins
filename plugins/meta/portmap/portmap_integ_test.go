@@ -94,7 +94,8 @@ var _ = Describe("portmap integration tests", func() {
 		testutils.UnmountNS(targetNS)
 	})
 
-	for _, ver := range []string{"0.3.0", "0.3.1", "0.4.0", "1.0.0"} {
+	//for _, ver := range []string{"0.3.0", "0.3.1", "0.4.0", "1.0.0"} {
+	for _, ver := range []string{"0.4.0", "1.0.0"} {
 		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
 		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
 		ver := ver

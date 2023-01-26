@@ -77,6 +77,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse config: %v", err)
 	}
+	if netConf.ContIPv4.IP == nil || netConf.ContIPv4.Mask == nil {
+		return fmt.Errorf(" parsed netConf doesn't have an IPv4 field: %v", netConf)
+	}
 
 	if netConf.PrevResult == nil {
 		return fmt.Errorf("must be called as chained plugin")
@@ -121,6 +124,9 @@ func cmdDel(args *skel.CmdArgs) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse config: %v", err)
 	}
+	if netConf.ContIPv4.IP == nil || netConf.ContIPv4.Mask == nil {
+		return fmt.Errorf(" parsed netConf doesn't have an IPv4 field: %v", netConf)
+	}
 
 	if len(netConf.RuntimeConfig.PortMaps) == 0 {
 		return nil
@@ -147,9 +153,12 @@ func main() {
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
-	conf, result, err := parseConfig(args.StdinData, args.IfName)
+	netConf, result, err := parseConfig(args.StdinData, args.IfName)
 	if err != nil {
 		return err
+	}
+	if netConf.ContIPv4.IP == nil || netConf.ContIPv4.Mask == nil {
+		return fmt.Errorf(" parsed netConf doesn't have an IPv4 field: %v", netConf)
 	}
 
 	// Ensure we have previous result.
@@ -157,20 +166,20 @@ func cmdCheck(args *skel.CmdArgs) error {
 		return fmt.Errorf("Required prevResult missing")
 	}
 
-	if len(conf.RuntimeConfig.PortMaps) == 0 {
+	if len(netConf.RuntimeConfig.PortMaps) == 0 {
 		return nil
 	}
 
-	conf.ContainerID = args.ContainerID
+	netConf.ContainerID = args.ContainerID
 
-	if conf.ContIPv4.IP != nil {
-		if err := checkPorts(conf, conf.ContIPv4); err != nil {
+	if netConf.ContIPv4.IP != nil {
+		if err := checkPorts(netConf, netConf.ContIPv4); err != nil {
 			return err
 		}
 	}
 
-	if conf.ContIPv6.IP != nil {
-		if err := checkPorts(conf, conf.ContIPv6); err != nil {
+	if netConf.ContIPv6.IP != nil {
+		if err := checkPorts(netConf, netConf.ContIPv6); err != nil {
 			return err
 		}
 	}
