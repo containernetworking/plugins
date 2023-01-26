@@ -115,6 +115,11 @@ var _ = Describe("portmap integration tests", func() {
 								"containerPort": containerPort,
 								"protocol":      "tcp",
 							},
+							{
+								"hostPort":      hostPort,
+								"containerPort": containerPort,
+								"protocol":      "udp",
+							},
 						},
 					},
 				}
