@@ -205,6 +205,12 @@ var _ = Describe("portmap integration tests", func() {
 				err = deleteNetwork()
 				Expect(err).NotTo(HaveOccurred())
 
+				// dump iptables-save output for debugging
+				cmd = exec.Command("iptables-save")
+				cmd.Stderr = GinkgoWriter
+				cmd.Stdout = GinkgoWriter
+				Expect(cmd.Run()).To(Succeed())
+
 				// Verify iptables rules are gone
 				_, err = ipt.List("nat", dnatChainName)
 				Expect(err).To(HaveOccurred())
@@ -287,22 +293,22 @@ var _ = Describe("portmap integration tests", func() {
 					hostIP, hostPort, contIP, containerPort)
 
 				// dump iptables-save output for debugging
-				cmd = exec.Command("iptables-save")
-				cmd.Stderr = GinkgoWriter
-				cmd.Stdout = GinkgoWriter
-				Expect(cmd.Run()).To(Succeed())
+				//cmd = exec.Command("iptables-save")
+				//cmd.Stderr = GinkgoWriter
+				//cmd.Stdout = GinkgoWriter
+				//Expect(cmd.Run()).To(Succeed())
 
 				// dump ip routes output for debugging
-				cmd = exec.Command("ip", "route")
-				cmd.Stderr = GinkgoWriter
-				cmd.Stdout = GinkgoWriter
-				Expect(cmd.Run()).To(Succeed())
+				//cmd = exec.Command("ip", "route")
+				//cmd.Stderr = GinkgoWriter
+				//cmd.Stdout = GinkgoWriter
+				//Expect(cmd.Run()).To(Succeed())
 
 				// dump ip addresses output for debugging
-				cmd = exec.Command("ip", "addr")
-				cmd.Stderr = GinkgoWriter
-				cmd.Stdout = GinkgoWriter
-				Expect(cmd.Run()).To(Succeed())
+				//cmd = exec.Command("ip", "addr")
+				//cmd.Stderr = GinkgoWriter
+				//cmd.Stdout = GinkgoWriter
+				//Expect(cmd.Run()).To(Succeed())
 
 				// Sanity check: verify that the container is reachable directly
 				fmt.Fprintln(GinkgoWriter, "Connect to container:", contIP.String(), containerPort)
@@ -382,22 +388,22 @@ var _ = Describe("portmap integration tests", func() {
 					hostIP, hostPort, contIP2, containerPort)
 
 				// dump iptables-save output for debugging
-				cmd = exec.Command("iptables-save")
-				cmd.Stderr = GinkgoWriter
-				cmd.Stdout = GinkgoWriter
-				Expect(cmd.Run()).To(Succeed())
+				//cmd = exec.Command("iptables-save")
+				//cmd.Stderr = GinkgoWriter
+				//cmd.Stdout = GinkgoWriter
+				//Expect(cmd.Run()).To(Succeed())
 
 				// dump ip routes output for debugging
-				cmd = exec.Command("ip", "route")
-				cmd.Stderr = GinkgoWriter
-				cmd.Stdout = GinkgoWriter
-				Expect(cmd.Run()).To(Succeed())
+				//cmd = exec.Command("ip", "route")
+				//cmd.Stderr = GinkgoWriter
+				//cmd.Stdout = GinkgoWriter
+				//Expect(cmd.Run()).To(Succeed())
 
 				// dump ip addresses output for debugging
-				cmd = exec.Command("ip", "addr")
-				cmd.Stderr = GinkgoWriter
-				cmd.Stdout = GinkgoWriter
-				Expect(cmd.Run()).To(Succeed())
+				//cmd = exec.Command("ip", "addr")
+				//cmd.Stderr = GinkgoWriter
+				//cmd.Stdout = GinkgoWriter
+				//Expect(cmd.Run()).To(Succeed())
 
 				// Sanity check: verify that the container is reachable directly
 				fmt.Fprintln(GinkgoWriter, "Connect to container:", contIP2.String(), containerPort)
