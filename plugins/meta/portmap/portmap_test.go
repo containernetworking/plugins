@@ -86,6 +86,7 @@ var _ = Describe("portmapping configuration", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(c.ContIPv4).To(Equal(*n))
 				n, err = types.ParseCIDR("2001:db8:1::2/64")
+				Expect(err).NotTo(HaveOccurred())
 				Expect(c.ContIPv6).To(Equal(*n))
 			})
 
@@ -199,6 +200,7 @@ var _ = Describe("portmapping configuration", func() {
 					}))
 
 					n, err := types.ParseCIDR("10.0.0.2/24")
+					Expect(err).NotTo(HaveOccurred())
 					fillDnatRules(&ch, conf, *n)
 
 					Expect(ch.entryRules).To(Equal([][]string{
