@@ -369,7 +369,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			updateResultsMacAddr(tuningConf, args.IfName, tuningConf.Mac)
 		}
 
-		if tuningConf.Promisc != false {
+		if tuningConf.Promisc {
 			if err = changePromisc(args.IfName, true); err != nil {
 				return err
 			}

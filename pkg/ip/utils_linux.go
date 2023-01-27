@@ -48,7 +48,7 @@ func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) 
 				break
 			}
 		}
-		if match == false {
+		if !match {
 			return fmt.Errorf("Failed to match addr %v on interface %v", ourAddr, ifName)
 		}
 
