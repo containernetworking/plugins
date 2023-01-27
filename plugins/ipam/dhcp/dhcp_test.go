@@ -120,7 +120,7 @@ const (
 )
 
 var _ = BeforeSuite(func() {
-	err := os.MkdirAll(cniDirPrefix, 0700)
+	err := os.MkdirAll(cniDirPrefix, 0o700)
 	Expect(err).NotTo(HaveOccurred())
 })
 

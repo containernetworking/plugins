@@ -40,7 +40,6 @@ var _ = Describe("range sets", func() {
 		r, err = p.RangeFor(net.IP{192, 168, 99, 99})
 		Expect(r).To(BeNil())
 		Expect(err).To(MatchError("192.168.99.99 not in range set 192.168.0.1-192.168.0.254,172.16.1.1-172.16.1.254"))
-
 	})
 
 	It("should discover overlaps within a set", func() {

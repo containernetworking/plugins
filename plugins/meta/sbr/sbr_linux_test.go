@@ -114,7 +114,6 @@ func readback(targetNs ns.NetNS, devNames []string) (netStatus, error) {
 			routes, err := netlink.RouteListFiltered(netlink.FAMILY_ALL,
 				routeFilter,
 				netlink.RT_FILTER_OIF|netlink.RT_FILTER_TABLE)
-
 			if err != nil {
 				return err
 			}
@@ -218,7 +217,8 @@ func createDefaultStatus() netStatus {
 
 	return netStatus{
 		Devices: devs,
-		Rules:   rules}
+		Rules:   rules,
+	}
 }
 
 var _ = Describe("sbr test", func() {
@@ -293,7 +293,8 @@ var _ = Describe("sbr test", func() {
 			netlink.Route{
 				Gw:        net.IPv4(192, 168, 1, 1),
 				Table:     100,
-				LinkIndex: expNet1.Routes[0].LinkIndex})
+				LinkIndex: expNet1.Routes[0].LinkIndex,
+			})
 
 		Expect(len(newStatus.Rules)).To(Equal(1))
 		Expect(newStatus.Rules[0].Table).To(Equal(100))
@@ -367,7 +368,8 @@ var _ = Describe("sbr test", func() {
 		preStatus.Devices[1].Routes = append(preStatus.Devices[1].Routes,
 			netlink.Route{
 				Gw:        net.IPv4(192, 168, 1, 1),
-				LinkIndex: routes[0].LinkIndex})
+				LinkIndex: routes[0].LinkIndex,
+			})
 
 		err := setup(targetNs, preStatus)
 		Expect(err).NotTo(HaveOccurred())
@@ -480,7 +482,8 @@ var _ = Describe("sbr test", func() {
 						netlink.Route{
 							Dst:       expNet1.Routes[i].Dst,
 							Table:     101,
-							LinkIndex: expNet1.Routes[i].LinkIndex})
+							LinkIndex: expNet1.Routes[i].LinkIndex,
+						})
 				} else {
 					// All 192.168.1.x routes expected in table 100
 					expNet1.Routes[i].Table = 100
@@ -491,13 +494,15 @@ var _ = Describe("sbr test", func() {
 			netlink.Route{
 				Gw:        net.IPv4(192, 168, 1, 1),
 				Table:     100,
-				LinkIndex: expNet1.Routes[0].LinkIndex})
+				LinkIndex: expNet1.Routes[0].LinkIndex,
+			})
 
 		expNet1.Routes = append(expNet1.Routes,
 			netlink.Route{
 				Gw:        net.IPv4(192, 168, 101, 1),
 				Table:     101,
-				LinkIndex: expNet1.Routes[0].LinkIndex})
+				LinkIndex: expNet1.Routes[0].LinkIndex,
+			})
 
 		// 2 Rules will be created for each IP address. (100, 101)
 		Expect(len(newStatus.Rules)).To(Equal(2))
@@ -514,7 +519,6 @@ var _ = Describe("sbr test", func() {
 		devEth0 := newStatus.Devices[1]
 		Expect(equalRoutes(expNet1.Routes, devNet1.Routes)).To(BeTrue())
 		Expect(equalRoutes(expEth0.Routes, devEth0.Routes)).To(BeTrue())
-
 	})
 
 	It("fails with CNI spec versions that don't support plugin chaining", func() {
@@ -537,5 +541,4 @@ var _ = Describe("sbr test", func() {
 		_, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
 		Expect(err).To(MatchError("This plugin must be called as chained plugin"))
 	})
-
 })

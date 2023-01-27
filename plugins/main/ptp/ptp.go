@@ -282,7 +282,6 @@ func cmdDel(args *skel.CmdArgs) error {
 		}
 		return err
 	})
-
 	if err != nil {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.
@@ -358,7 +357,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 	//
 	// Check prevResults for ips, routes and dns against values found in the container
 	if err := netns.Do(func(_ ns.NetNS) error {
-
 		// Check interface against values found in the container
 		err := validateCniContainerInterface(contMap)
 		if err != nil {
@@ -383,7 +381,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 }
 
 func validateCniContainerInterface(intf current.Interface) error {
-
 	var link netlink.Link
 	var err error
 

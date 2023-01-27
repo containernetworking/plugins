@@ -90,7 +90,6 @@ func buildOneConfig(cniVersion string, master string, orig *Net, prevResult type
 	}
 
 	return conf, nil
-
 }
 
 func ipvlanAddCheckDelTest(conf, masterName string, originalNS, targetNS ns.NetNS) {
@@ -204,9 +203,11 @@ type tester interface {
 
 type testerBase struct{}
 
-type testerV10x testerBase
-type testerV04x testerBase
-type testerV02x testerBase
+type (
+	testerV10x testerBase
+	testerV04x testerBase
+	testerV02x testerBase
+)
 
 func newTesterByVersion(version string) tester {
 	switch {
@@ -437,8 +438,8 @@ var _ = Describe("ipvlan Operations", func() {
 				err = netlink.LinkSetUp(link)
 				Expect(err).NotTo(HaveOccurred())
 
-				var address = &net.IPNet{IP: net.IPv4(192, 0, 0, 1), Mask: net.CIDRMask(24, 32)}
-				var addr = &netlink.Addr{IPNet: address}
+				address := &net.IPNet{IP: net.IPv4(192, 0, 0, 1), Mask: net.CIDRMask(24, 32)}
+				addr := &netlink.Addr{IPNet: address}
 				err = netlink.AddrAdd(link, addr)
 				Expect(err).NotTo(HaveOccurred())
 

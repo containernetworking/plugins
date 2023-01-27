@@ -15,12 +15,12 @@
 package main_test
 
 import (
+	"testing"
+
 	"github.com/onsi/gomega/gexec"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"testing"
 )
 
 var pathToLoPlugin string

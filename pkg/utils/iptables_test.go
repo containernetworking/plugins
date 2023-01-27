@@ -34,7 +34,6 @@ var _ = Describe("chain tests", func() {
 	var cleanup func()
 
 	BeforeEach(func() {
-
 		// Save a reference to the original namespace,
 		// Add a new NS
 		currNs, err := ns.GetCurrentNS()
@@ -60,7 +59,6 @@ var _ = Describe("chain tests", func() {
 			ipt.DeleteChain(TABLE, testChain)
 			currNs.Set()
 		}
-
 	})
 
 	AfterEach(func() {
@@ -93,5 +91,4 @@ var _ = Describe("chain tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
-
 })

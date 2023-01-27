@@ -1,9 +1,10 @@
 // Echosvr is a simple TCP echo server
 //
 // It prints its listen address on stdout
-//    127.0.0.1:xxxxx
-//  A test should wait for this line, parse it
-//  and may then attempt to connect.
+//
+//	  127.0.0.1:xxxxx
+//	A test should wait for this line, parse it
+//	and may then attempt to connect.
 package main
 
 import (

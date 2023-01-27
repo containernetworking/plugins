@@ -71,7 +71,6 @@ func buildOneConfig(name, cniVersion string, orig *VRFNetConf, prevResult types.
 	}
 
 	return conf, newBytes, nil
-
 }
 
 var _ = Describe("vrf plugin", func() {
@@ -344,7 +343,6 @@ var _ = Describe("vrf plugin", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 			})
-
 		},
 		Entry("added to the same vrf", VRF0Name, VRF0Name, "10.0.0.2/24", "10.0.0.3/24"),
 		Entry("added to different vrfs", VRF0Name, VRF1Name, "10.0.0.2/24", "10.0.0.3/24"),
@@ -607,7 +605,6 @@ var _ = Describe("vrf plugin", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
-
 })
 
 var _ = Describe("unit tests", func() {

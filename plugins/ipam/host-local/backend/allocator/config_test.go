@@ -415,7 +415,6 @@ var _ = Describe("IPAM config", func() {
 		}`
 		_, _, err := LoadIPAMConfig([]byte(input), "")
 		Expect(err).To(MatchError("invalid range set 0: mixed address families"))
-
 	})
 
 	It("Should should error on too many ranges", func() {

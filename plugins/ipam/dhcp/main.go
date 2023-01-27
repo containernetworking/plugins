@@ -127,7 +127,7 @@ func cmdDel(args *skel.CmdArgs) error {
 func cmdCheck(args *skel.CmdArgs) error {
 	// Plugin must return result in same version as specified in netconf
 	versionDecoder := &version.ConfigDecoder{}
-	//confVersion, err := versionDecoder.Decode(args.StdinData)
+	// confVersion, err := versionDecoder.Decode(args.StdinData)
 	_, err := versionDecoder.Decode(args.StdinData)
 	if err != nil {
 		return err

@@ -112,7 +112,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		r := &current.Result{
 			CNIVersion: conf.CNIVersion,
 			Interfaces: []*current.Interface{
-				&current.Interface{
+				{
 					Name:    args.IfName,
 					Mac:     "00:00:00:00:00:00",
 					Sandbox: args.Netns,

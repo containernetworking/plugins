@@ -27,7 +27,6 @@ import (
 )
 
 func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) error {
-
 	// Ensure ips
 	for _, ips := range resultIPs {
 		ourAddr := netlink.Addr{IPNet: &ips.Address}
@@ -77,7 +76,6 @@ func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) 
 }
 
 func ValidateExpectedRoute(resultRoutes []*types.Route) error {
-
 	// Ensure that each static route in prevResults is found in the routing table
 	for _, route := range resultRoutes {
 		find := &netlink.Route{Dst: &route.Dst, Gw: route.GW}

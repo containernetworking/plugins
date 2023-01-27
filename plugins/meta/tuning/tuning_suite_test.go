@@ -15,10 +15,10 @@
 package main
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"testing"
 )
 
 func TestTuning(t *testing.T) {

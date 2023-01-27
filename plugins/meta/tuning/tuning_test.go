@@ -74,11 +74,10 @@ func buildOneConfig(name, cniVersion string, orig *TuningConf, prevResult types.
 	}
 
 	return conf, newBytes, nil
-
 }
 
 func createSysctlAllowFile(sysctls []string) error {
-	err := os.MkdirAll(defaultAllowlistDir, 0755)
+	err := os.MkdirAll(defaultAllowlistDir, 0o755)
 	if err != nil {
 		return err
 	}

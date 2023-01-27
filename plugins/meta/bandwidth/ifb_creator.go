@@ -34,7 +34,6 @@ func CreateIfb(ifbDeviceName string, mtu int) error {
 			MTU:   mtu,
 		},
 	})
-
 	if err != nil {
 		return fmt.Errorf("adding link: %s", err)
 	}

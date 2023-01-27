@@ -166,7 +166,7 @@ func getListener(socketPath string) (net.Listener, error) {
 
 	switch {
 	case len(l) == 0:
-		if err := os.MkdirAll(filepath.Dir(socketPath), 0700); err != nil {
+		if err := os.MkdirAll(filepath.Dir(socketPath), 0o700); err != nil {
 			return nil, err
 		}
 		return net.Listen("unix", socketPath)
@@ -195,7 +195,7 @@ func runDaemon(
 		if !filepath.IsAbs(pidfilePath) {
 			return fmt.Errorf("Error writing pidfile %q: path not absolute", pidfilePath)
 		}
-		if err := os.WriteFile(pidfilePath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
+		if err := os.WriteFile(pidfilePath, []byte(fmt.Sprintf("%d", os.Getpid())), 0o644); err != nil {
 			return fmt.Errorf("Error writing pidfile %q: %v", pidfilePath, err)
 		}
 	}
