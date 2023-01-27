@@ -415,7 +415,7 @@ func (computeSystem *System) statisticsInProc(job *jobobject.JobObject) (*hcssch
 	// as well which isn't great and is wasted work to fetch.
 	//
 	// HCS only let's you grab statistics in an all or nothing fashion, so we can't just grab the private
-	// working set ourselves and ask for everything else separately. The optimization we can make here is
+	// working set ourselves and ask for everything else seperately. The optimization we can make here is
 	// to open the silo ourselves and do the same queries for the rest of the info, as well as calculating
 	// the private working set in a more efficient manner by:
 	//

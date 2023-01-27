@@ -15,3 +15,7 @@ linters-settings:
       - standard
       - default
       - prefix(github.com/containernetworking/plugins)
+
+run:
+  skip-dirs:
+    - vendor
