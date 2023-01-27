@@ -117,11 +117,22 @@ func forwardPorts(config *PortMapConf, containerNet net.IPNet) error {
 }
 
 func checkPorts(config *PortMapConf, containerNet net.IPNet) error {
+	isV6 := (containerNet.IP.To4() == nil)
 	dnatChain := genDnatChain(config.Name, config.ContainerID)
 	fillDnatRules(&dnatChain, config, containerNet)
 
-	ip4t, err4 := maybeGetIptables(false)
-	ip6t, err6 := maybeGetIptables(true)
+	// check is called for each address, not once for all addresses
+	var ip4t *iptables.IPTables
+	var err4 error
+	var ip6t *iptables.IPTables
+	var err6 error
+
+	if isV6 {
+		ip6t, err6 = maybeGetIptables(true)
+	} else {
+		ip4t, err4 = maybeGetIptables(false)
+	}
+
 	if ip4t == nil && ip6t == nil {
 		err := fmt.Errorf("neither iptables nor ip6tables is usable")
 		err = fmt.Errorf("%v, (iptables) %v", err, err4)
