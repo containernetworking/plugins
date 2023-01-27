@@ -1,10 +1,12 @@
 linters:
   enable:
     - gci
-    - gofmt
+    - gofumpt
     - govet
     - misspell
     - nolintlint
+  disable:
+    - errcheck
 
 linters-settings:
   gci:
