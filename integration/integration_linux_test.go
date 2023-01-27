@@ -148,7 +148,7 @@ var _ = Describe("Basic PTP using cnitool", func() {
 		})
 
 		Measure("limits traffic only on the restricted bandwidth veth device", func(b Benchmarker) {
-			ipRegexp := regexp.MustCompile("10\\.1[12]\\.2\\.\\d{1,3}")
+			ipRegexp := regexp.MustCompile(`10\.1[12]\.2\.\d{1,3}`)
 
 			By(fmt.Sprintf("adding %s to %s\n\n", "chained-bridge-bandwidth", contNS1.ShortName()))
 			chainedBridgeBandwidthEnv.runInNS(hostNS, cnitoolBin, "add", "network-chain-test", contNS1.LongName())
