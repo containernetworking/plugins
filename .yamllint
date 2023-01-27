@@ -1,6 +1,9 @@
 ---
 extends: default
 
+ignore: |
+  vendor
+
 rules:
   document-start: disable
   line-length: disable
