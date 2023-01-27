@@ -478,6 +478,9 @@ func validateCniContainerInterface(intf current.Interface, parentIndex int, mode
 	}
 
 	mode, err := modeFromString(modeExpected)
+	if err != nil {
+		return err
+	}
 	if macv.Mode != mode {
 		currString, err := modeToString(macv.Mode)
 		if err != nil {
