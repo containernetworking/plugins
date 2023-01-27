@@ -32,7 +32,7 @@ import (
 func getHwAddr(linkname string) string {
 	veth, err := netlink.LinkByName(linkname)
 	Expect(err).NotTo(HaveOccurred())
-	return fmt.Sprintf("%s", veth.Attrs().HardwareAddr)
+	return veth.Attrs().HardwareAddr.String()
 }
 
 var _ = Describe("Link", func() {

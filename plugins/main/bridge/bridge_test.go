@@ -1258,7 +1258,6 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 }
 
 func (tester *testerV03x) cmdCheckTest(tc testCase, conf *Net, dataDir string) {
-	return
 }
 
 func (tester *testerV03x) cmdDelTest(tc testCase, dataDir string) {
@@ -1489,7 +1488,6 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (types.Re
 }
 
 func (tester *testerV01xOr02x) cmdCheckTest(tc testCase, conf *Net, dataDir string) {
-	return
 }
 
 func (tester *testerV01xOr02x) cmdDelTest(tc testCase, dataDir string) {

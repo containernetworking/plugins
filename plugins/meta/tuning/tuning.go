@@ -514,7 +514,7 @@ func validateSysctlConf(tuningConf *TuningConf) error {
 			return err
 		}
 		if !match {
-			return errors.New(fmt.Sprintf("Sysctl %s is not allowed. Only the following sysctls are allowed: %+v", sysctl, allowlist))
+			return fmt.Errorf("Sysctl %s is not allowed. Only the following sysctls are allowed: %+v", sysctl, allowlist)
 		}
 	}
 	return nil
@@ -579,7 +579,7 @@ func validateSysctlConflictingKeys(data []byte) error {
 
 func validateArgs(args *skel.CmdArgs) error {
 	if strings.Contains(args.IfName, string(os.PathSeparator)) {
-		return errors.New(fmt.Sprintf("Interface name (%s) contains an invalid character %s", args.IfName, string(os.PathSeparator)))
+		return fmt.Errorf("Interface name (%s) contains an invalid character %s", args.IfName, string(os.PathSeparator))
 	}
 	return nil
 }

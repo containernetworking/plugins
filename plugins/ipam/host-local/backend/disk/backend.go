@@ -125,7 +125,7 @@ func (s *Store) FindByID(id string, ifname string) bool {
 	// Match anything created by this id
 	if !found && err == nil {
 		match := strings.TrimSpace(id)
-		found, err = s.FindByKey(id, ifname, match)
+		found, _ = s.FindByKey(id, ifname, match)
 	}
 
 	return found
@@ -162,7 +162,7 @@ func (s *Store) ReleaseByID(id string, ifname string) error {
 	// For backwards compatibility, look for files written by a previous version
 	if !found && err == nil {
 		match := strings.TrimSpace(id)
-		found, err = s.ReleaseByKey(id, ifname, match)
+		found, _ = s.ReleaseByKey(id, ifname, match)
 	}
 	return err
 }

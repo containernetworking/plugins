@@ -428,8 +428,7 @@ var _ = Describe("vlan Operations", func() {
 			}`
 
 			BeforeEach(func() {
-				var err error
-				err = originalNS.Do(func(ns.NetNS) error {
+				err := originalNS.Do(func(ns.NetNS) error {
 					defer GinkgoRecover()
 
 					// set master link's MTU to 1500
