@@ -54,7 +54,9 @@ func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) 
 
 		// Convert the host/prefixlen to just prefix for route lookup.
 		_, ourPrefix, err := net.ParseCIDR(ourAddr.String())
-
+		if err != nil {
+			return err
+		}
 		findGwy := &netlink.Route{Dst: ourPrefix}
 		routeFilter := netlink.RT_FILTER_DST
 
