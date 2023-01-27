@@ -162,7 +162,7 @@ func (s *Store) ReleaseByID(id string, ifname string) error {
 	// For backwards compatibility, look for files written by a previous version
 	if !found && err == nil {
 		match := strings.TrimSpace(id)
-		found, _ = s.ReleaseByKey(id, ifname, match)
+		_, err = s.ReleaseByKey(id, ifname, match)
 	}
 	return err
 }
