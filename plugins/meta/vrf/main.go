@@ -156,6 +156,9 @@ func cmdCheck(args *skel.CmdArgs) error {
 			return err
 		}
 		vrfInterfaces, err := assignedInterfaces(vrf)
+		if err != nil {
+			return err
+		}
 
 		found := false
 		for _, intf := range vrfInterfaces {
@@ -169,6 +172,9 @@ func cmdCheck(args *skel.CmdArgs) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
