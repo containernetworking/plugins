@@ -83,6 +83,7 @@ var _ = Describe("portmapping configuration", func() {
 				Expect(c.Name).To(Equal("test"))
 
 				n, err := types.ParseCIDR("10.0.0.2/24")
+				Expect(err).NotTo(HaveOccurred())
 				Expect(c.ContIPv4).To(Equal(*n))
 				n, err = types.ParseCIDR("2001:db8:1::2/64")
 				Expect(c.ContIPv6).To(Equal(*n))
