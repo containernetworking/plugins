@@ -504,7 +504,7 @@ var _ = Describe("host-local Operations", func() {
 				return cmdAdd(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(strings.Index(string(out), "Error retriving last reserved ip")).To(Equal(-1))
+			Expect(strings.Index(string(out), "Error retrieving last reserved ip")).To(Equal(-1))
 		})
 
 		It(fmt.Sprintf("[%s] allocates a custom IP when requested by config args", ver), func() {

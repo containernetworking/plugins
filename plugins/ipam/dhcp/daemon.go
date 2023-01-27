@@ -55,7 +55,7 @@ func newDHCP(clientTimeout, clientResendMax time.Duration) *DHCP {
 }
 
 // TODO: current client ID is too long. At least the container ID should not be used directly.
-// A seperate issue is necessary to ensure no breaking change is affecting other users.
+// A separate issue is necessary to ensure no breaking change is affecting other users.
 func generateClientID(containerID string, netName string, ifName string) string {
 	clientID := containerID + "/" + netName + "/" + ifName
 	// defined in RFC 2132, length size can not be larger than 1 octet. So we truncate 254 to make everyone happy.

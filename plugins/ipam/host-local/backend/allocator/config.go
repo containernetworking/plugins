@@ -43,7 +43,7 @@ type Net struct {
 
 // IPAMConfig represents the IP related network configuration.
 // This nests Range because we initially only supported a single
-// range directly, and wish to preserve backwards compatability
+// range directly, and wish to preserve backwards compatibility
 type IPAMConfig struct {
 	*Range
 	Name       string

@@ -87,7 +87,7 @@ func new(hr error, title string, rest string) error {
 
 //
 // Note that the below errors are not errors returned by hcn itself
-// we wish to seperate them as they are shim usage error
+// we wish to separate them as they are shim usage error
 //
 
 // NetworkNotFoundError results from a failed seach for a network by Id or Name
