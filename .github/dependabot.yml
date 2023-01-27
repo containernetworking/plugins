@@ -5,7 +5,7 @@
 
 version: 2
 updates:
-  - package-ecosystem: "docker" 
+  - package-ecosystem: "docker"
     directory: "/.github/actions/retest-action"
     schedule:
       interval: "weekly"
