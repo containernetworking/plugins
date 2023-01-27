@@ -417,6 +417,9 @@ func validateCniContainerInterface(intf current.Interface, masterIndex int, mode
 	}
 
 	mode, err := modeFromString(modeExpected)
+	if err != nil {
+		return err
+	}
 	if ipv.Mode != mode {
 		currString, err := modeToString(ipv.Mode)
 		if err != nil {
