@@ -22,8 +22,9 @@ import (
 	"net"
 
 	current "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/utils"
 	"github.com/coreos/go-iptables/iptables"
+
+	"github.com/containernetworking/plugins/pkg/utils"
 )
 
 func getPrivChainRules(ip string) [][]string {

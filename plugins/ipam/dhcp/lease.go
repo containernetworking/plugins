@@ -24,11 +24,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/containernetworking/cni/pkg/types"
 	"github.com/d2g/dhcp4"
 	"github.com/d2g/dhcp4client"
 	"github.com/vishvananda/netlink"
 
-	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/plugins/pkg/ns"
 )
 

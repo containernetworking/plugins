@@ -18,9 +18,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/containernetworking/plugins/pkg/utils"
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/mattn/go-shellwords"
+
+	"github.com/containernetworking/plugins/pkg/utils"
 )
 
 type chain struct {

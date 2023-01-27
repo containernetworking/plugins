@@ -18,10 +18,11 @@ import (
 	"fmt"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/testutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 )
 
 var _ = Describe("sample test", func() {

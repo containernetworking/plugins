@@ -18,7 +18,6 @@ import (
 	"fmt"
 
 	"github.com/networkplumbing/go-nft/nft"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 

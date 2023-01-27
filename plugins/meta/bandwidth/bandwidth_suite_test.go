@@ -24,14 +24,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/onsi/gomega/gbytes"
-	"github.com/onsi/gomega/gexec"
-
-	"github.com/vishvananda/netlink"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
+	"github.com/onsi/gomega/gexec"
+	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/plugins/pkg/ns"
 )
 
 func TestTBF(t *testing.T) {

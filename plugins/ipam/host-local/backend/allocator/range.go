@@ -19,6 +19,7 @@ import (
 	"net"
 
 	"github.com/containernetworking/cni/pkg/types"
+
 	"github.com/containernetworking/plugins/pkg/ip"
 )
 

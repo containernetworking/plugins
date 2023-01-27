@@ -24,11 +24,11 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/testutils"
-
-	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/disk"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/containernetworking/plugins/pkg/testutils"
+	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/disk"
 )
 
 const LineBreak = "\r\n"

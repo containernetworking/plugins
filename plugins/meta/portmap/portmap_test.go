@@ -18,7 +18,6 @@ import (
 	"fmt"
 
 	"github.com/containernetworking/cni/pkg/types"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

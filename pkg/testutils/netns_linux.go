@@ -24,8 +24,9 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/containernetworking/plugins/pkg/ns"
 	"golang.org/x/sys/unix"
+
+	"github.com/containernetworking/plugins/pkg/ns"
 )
 
 func getNsRunDir() string {

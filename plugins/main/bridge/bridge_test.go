@@ -21,23 +21,21 @@ import (
 	"os"
 	"strings"
 
-	"github.com/coreos/go-iptables/iptables"
-	"github.com/networkplumbing/go-nft/nft"
-	"github.com/vishvananda/netlink/nl"
-
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	types040 "github.com/containernetworking/cni/pkg/types/040"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/coreos/go-iptables/iptables"
+	"github.com/networkplumbing/go-nft/nft"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netlink/nl"
+
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-
-	"github.com/vishvananda/netlink"
-
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
 const (
