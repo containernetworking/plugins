@@ -104,8 +104,6 @@ func getBandwidth(conf *PluginConf) *BandwidthEntry {
 
 func validateRateAndBurst(rate, burst uint64) error {
 	switch {
-	case burst < 0 || rate < 0:
-		return fmt.Errorf("rate and burst must be a positive integer")
 	case burst == 0 && rate != 0:
 		return fmt.Errorf("if rate is set, burst must also be set")
 	case rate == 0 && burst != 0:
