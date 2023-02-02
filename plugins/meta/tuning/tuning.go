@@ -502,6 +502,9 @@ func cmdCheck(args *skel.CmdArgs) error {
 func validateSysctlConf(tuningConf *TuningConf) error {
 	isPresent, allowlist, err := readAllowlist()
 	if err != nil {
+		if os.IsPermission(err) {
+			return nil
+		}
 		return err
 	}
 	if !isPresent {
