@@ -37,10 +37,11 @@ import (
 
 type NetConf struct {
 	types.NetConf
-	Master string `json:"master"`
-	Mode   string `json:"mode"`
-	MTU    int    `json:"mtu"`
-	Mac    string `json:"mac,omitempty"`
+	Master     string `json:"master"`
+	Mode       string `json:"mode"`
+	MTU        int    `json:"mtu"`
+	Mac        string `json:"mac,omitempty"`
+	LinkContNs bool   `json:"linkInContainer,omitempty"`
 
 	RuntimeConfig struct {
 		Mac string `json:"mac,omitempty"`
@@ -79,13 +80,36 @@ func getDefaultRouteInterfaceName() (string, error) {
 	return "", fmt.Errorf("no default route interface found")
 }
 
-func loadConf(bytes []byte, envArgs string) (*NetConf, string, error) {
+func getNamespacedDefaultRouteInterfaceName(namespace string, inContainer bool) (string, error) {
+	if !inContainer {
+		return getDefaultRouteInterfaceName()
+	}
+	netns, err := ns.GetNS(namespace)
+	if err != nil {
+		return "", fmt.Errorf("failed to open netns %q: %v", netns, err)
+	}
+	defer netns.Close()
+	var defaultRouteInterface string
+	err = netns.Do(func(_ ns.NetNS) error {
+		defaultRouteInterface, err = getDefaultRouteInterfaceName()
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return defaultRouteInterface, nil
+}
+
+func loadConf(args *skel.CmdArgs, envArgs string) (*NetConf, string, error) {
 	n := &NetConf{}
-	if err := json.Unmarshal(bytes, n); err != nil {
+	if err := json.Unmarshal(args.StdinData, n); err != nil {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
 	}
 	if n.Master == "" {
-		defaultRouteInterface, err := getDefaultRouteInterfaceName()
+		defaultRouteInterface, err := getNamespacedDefaultRouteInterfaceName(args.Netns, n.LinkContNs)
 		if err != nil {
 			return nil, "", err
 		}
@@ -93,7 +117,7 @@ func loadConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 	}
 
 	// check existing and MTU of master interface
-	masterMTU, err := getMTUByName(n.Master)
+	masterMTU, err := getMTUByName(n.Master, args.Netns, n.LinkContNs)
 	if err != nil {
 		return nil, "", err
 	}
@@ -120,8 +144,23 @@ func loadConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 	return n, n.CNIVersion, nil
 }
 
-func getMTUByName(ifName string) (int, error) {
-	link, err := netlink.LinkByName(ifName)
+func getMTUByName(ifName string, namespace string, inContainer bool) (int, error) {
+	var link netlink.Link
+	var err error
+	if inContainer {
+		netns, err := ns.GetNS(namespace)
+		if err != nil {
+			return 0, fmt.Errorf("failed to open netns %q: %v", netns, err)
+		}
+		defer netns.Close()
+
+		err = netns.Do(func(_ ns.NetNS) error {
+			link, err = netlink.LinkByName(ifName)
+			return err
+		})
+	} else {
+		link, err = netlink.LinkByName(ifName)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -166,7 +205,15 @@ func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Inter
 		return nil, err
 	}
 
-	m, err := netlink.LinkByName(conf.Master)
+	var m netlink.Link
+	if conf.LinkContNs {
+		err = netns.Do(func(_ ns.NetNS) error {
+			m, err = netlink.LinkByName(conf.Master)
+			return err
+		})
+	} else {
+		m, err = netlink.LinkByName(conf.Master)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
 	}
@@ -198,7 +245,16 @@ func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Inter
 		Mode:      mode,
 	}
 
-	if err := netlink.LinkAdd(mv); err != nil {
+	if conf.LinkContNs {
+		err = netns.Do(func(_ ns.NetNS) error {
+			return netlink.LinkAdd(mv)
+		})
+	} else {
+		if err = netlink.LinkAdd(mv); err != nil {
+			return nil, fmt.Errorf("failed to create macvlan: %v", err)
+		}
+	}
+	if err != nil {
 		return nil, fmt.Errorf("failed to create macvlan: %v", err)
 	}
 
@@ -228,7 +284,7 @@ func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Inter
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
-	n, cniVersion, err := loadConf(args.StdinData, args.Args)
+	n, cniVersion, err := loadConf(args, args.Args)
 	if err != nil {
 		return err
 	}
@@ -329,7 +385,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
-	n, _, err := loadConf(args.StdinData, args.Args)
+	n, _, err := loadConf(args, args.Args)
 	if err != nil {
 		return err
 	}
@@ -378,7 +434,7 @@ func main() {
 
 func cmdCheck(args *skel.CmdArgs) error {
 
-	n, _, err := loadConf(args.StdinData, args.Args)
+	n, _, err := loadConf(args, args.Args)
 	if err != nil {
 		return err
 	}
@@ -429,7 +485,15 @@ func cmdCheck(args *skel.CmdArgs) error {
 			contMap.Sandbox, args.Netns)
 	}
 
-	m, err := netlink.LinkByName(n.Master)
+	var m netlink.Link
+	if n.LinkContNs {
+		err = netns.Do(func(_ ns.NetNS) error {
+			m, err = netlink.LinkByName(n.Master)
+			return err
+		})
+	} else {
+		m, err = netlink.LinkByName(n.Master)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to lookup master %q: %v", n.Master, err)
 	}
