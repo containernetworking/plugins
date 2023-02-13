@@ -17,6 +17,7 @@ require (
 	github.com/networkplumbing/go-nft v0.2.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.26.0
+	github.com/opencontainers/selinux v1.8.2
 	github.com/safchain/ethtool v0.2.0
 	github.com/vishvananda/netlink v1.2.1-beta.2
 	golang.org/x/sys v0.5.0
@@ -24,6 +25,7 @@ require (
 
 require (
 	github.com/Microsoft/go-winio v0.4.17 // indirect
+	github.com/bits-and-blooms/bitset v1.2.0 // indirect
 	github.com/containerd/cgroups v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
