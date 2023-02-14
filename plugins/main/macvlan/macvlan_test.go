@@ -317,7 +317,6 @@ var _ = Describe("macvlan Operations", func() {
 					IfName:      IFNAME,
 					StdinData:   []byte(conf),
 				}
-
 				var macAddress string
 				err := originalNS.Do(func(ns.NetNS) error {
 					defer GinkgoRecover()
@@ -543,7 +542,6 @@ var _ = Describe("macvlan Operations", func() {
 						Expect(err).NotTo(HaveOccurred())
 						Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
 					}
-
 					addrs, err := netlink.AddrList(link, syscall.AF_INET)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(len(addrs)).To(Equal(1))
@@ -637,7 +635,6 @@ var _ = Describe("macvlan Operations", func() {
 					Expect(err).NotTo(HaveOccurred())
 					err = netlink.LinkSetUp(link)
 					Expect(err).NotTo(HaveOccurred())
-
 					address := &net.IPNet{IP: net.IPv4(192, 0, 0, 1), Mask: net.CIDRMask(24, 32)}
 					addr := &netlink.Addr{IPNet: address}
 					err = netlink.AddrAdd(link, addr)

@@ -338,7 +338,6 @@ var _ = Describe("vlan Operations", func() {
 				"dataDir": "%s"
 			    }
 			}`, ver, masterInterface, isInContainer, dataDir)
-
 				args := &skel.CmdArgs{
 					ContainerID: "dummy",
 					Netns:       targetNS.Path(),
@@ -347,7 +346,6 @@ var _ = Describe("vlan Operations", func() {
 				}
 
 				t := newTesterByVersion(ver)
-
 				var result types.Result
 				var macAddress string
 				err := originalNS.Do(func(ns.NetNS) error {
@@ -484,7 +482,6 @@ var _ = Describe("vlan Operations", func() {
 						Expect(err).NotTo(HaveOccurred())
 						err = netlink.LinkSetMTU(link, 1500)
 						Expect(err).NotTo(HaveOccurred())
-
 						return nil
 					})
 					Expect(err).NotTo(HaveOccurred())
