@@ -23,7 +23,7 @@ func Annotate(err error, message string) error {
 		return nil
 	}
 
-	return fmt.Errorf("%s: %v", message, err)
+	return fmt.Errorf("%s: %w", message, err)
 }
 
 // Annotatef is used to add extra context with args to an existing error. The return will be
@@ -33,5 +33,5 @@ func Annotatef(err error, message string, args ...interface{}) error {
 		return nil
 	}
 
-	return fmt.Errorf("%s: %v", fmt.Sprintf(message, args...), err)
+	return fmt.Errorf("%s: %w", fmt.Sprintf(message, args...), err)
 }

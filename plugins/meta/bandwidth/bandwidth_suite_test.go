@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,14 +24,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/onsi/gomega/gbytes"
-	"github.com/onsi/gomega/gexec"
-
-	"github.com/vishvananda/netlink"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
+	"github.com/onsi/gomega/gexec"
+	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/plugins/pkg/ns"
 )
 
 func TestTBF(t *testing.T) {
@@ -118,17 +117,17 @@ func createVeth(hostNs ns.NetNS, hostVethIfName string, containerNs ns.NetNS, co
 
 	err := hostNs.Do(func(_ ns.NetNS) error {
 		if err := netlink.LinkAdd(vethDeviceRequest); err != nil {
-			return fmt.Errorf("creating veth pair: %s", err)
+			return fmt.Errorf("creating veth pair: %w", err)
 		}
 
 		containerVeth, err := netlink.LinkByName(containerVethIfName)
 		if err != nil {
-			return fmt.Errorf("failed to find newly-created veth device %q: %v", containerVethIfName, err)
+			return fmt.Errorf("failed to find newly-created veth device %q: %w", containerVethIfName, err)
 		}
 
 		err = netlink.LinkSetNsFd(containerVeth, int(containerNs.Fd()))
 		if err != nil {
-			return fmt.Errorf("failed to move veth to container namespace: %s", err)
+			return fmt.Errorf("failed to move veth to container namespace: %w", err)
 		}
 
 		localAddr := &net.IPNet{
@@ -141,7 +140,7 @@ func createVeth(hostNs ns.NetNS, hostVethIfName string, containerNs ns.NetNS, co
 		}
 		addr, err := netlink.ParseAddr(localAddr.String())
 		if err != nil {
-			return fmt.Errorf("parsing address %s: %s", localAddr, err)
+			return fmt.Errorf("parsing address %s: %w", localAddr, err)
 		}
 
 		addr.Peer = peerAddr
@@ -149,12 +148,12 @@ func createVeth(hostNs ns.NetNS, hostVethIfName string, containerNs ns.NetNS, co
 		addr.Scope = int(netlink.SCOPE_LINK)
 		hostVeth, err := netlink.LinkByName(hostVethIfName)
 		if err != nil {
-			return fmt.Errorf("failed to find newly-created veth device %q: %v", containerVethIfName, err)
+			return fmt.Errorf("failed to find newly-created veth device %q: %w", containerVethIfName, err)
 		}
 
 		err = netlink.AddrAdd(hostVeth, addr)
 		if err != nil {
-			return fmt.Errorf("adding IP address %s: %s", localAddr, err)
+			return fmt.Errorf("adding IP address %s: %w", localAddr, err)
 		}
 
 		return nil
@@ -172,7 +171,7 @@ func createVeth(hostNs ns.NetNS, hostVethIfName string, containerNs ns.NetNS, co
 		}
 		addr, err := netlink.ParseAddr(localAddr.String())
 		if err != nil {
-			return fmt.Errorf("parsing address %s: %s", localAddr, err)
+			return fmt.Errorf("parsing address %s: %w", localAddr, err)
 		}
 
 		addr.Peer = peerAddr
@@ -180,11 +179,11 @@ func createVeth(hostNs ns.NetNS, hostVethIfName string, containerNs ns.NetNS, co
 		addr.Scope = int(netlink.SCOPE_LINK)
 		containerVeth, err := netlink.LinkByName(containerVethIfName)
 		if err != nil {
-			return fmt.Errorf("failed to find newly-created veth device %q: %v", containerVethIfName, err)
+			return fmt.Errorf("failed to find newly-created veth device %q: %w", containerVethIfName, err)
 		}
 		err = netlink.AddrAdd(containerVeth, addr)
 		if err != nil {
-			return fmt.Errorf("adding IP address %s: %s", localAddr, err)
+			return fmt.Errorf("adding IP address %s: %w", localAddr, err)
 		}
 
 		return nil
@@ -204,12 +203,12 @@ func createVethInOneNs(netNS ns.NetNS, vethName, peerName string) {
 
 	err := netNS.Do(func(_ ns.NetNS) error {
 		if err := netlink.LinkAdd(vethDeviceRequest); err != nil {
-			return fmt.Errorf("failed to create veth pair: %v", err)
+			return fmt.Errorf("failed to create veth pair: %w", err)
 		}
 
 		_, err := netlink.LinkByName(peerName)
 		if err != nil {
-			return fmt.Errorf("failed to find newly-created veth device %q: %v", peerName, err)
+			return fmt.Errorf("failed to find newly-created veth device %q: %w", peerName, err)
 		}
 		return nil
 	})
@@ -220,7 +219,7 @@ func createMacvlan(netNS ns.NetNS, master, macvlanName string) {
 	err := netNS.Do(func(_ ns.NetNS) error {
 		m, err := netlink.LinkByName(master)
 		if err != nil {
-			return fmt.Errorf("failed to lookup master %q: %v", master, err)
+			return fmt.Errorf("failed to lookup master %q: %w", master, err)
 		}
 
 		macvlanDeviceRequest := &netlink.Macvlan{
@@ -233,12 +232,12 @@ func createMacvlan(netNS ns.NetNS, master, macvlanName string) {
 		}
 
 		if err = netlink.LinkAdd(macvlanDeviceRequest); err != nil {
-			return fmt.Errorf("failed to create macvlan device: %s", err)
+			return fmt.Errorf("failed to create macvlan device: %w", err)
 		}
 
 		_, err = netlink.LinkByName(macvlanName)
 		if err != nil {
-			return fmt.Errorf("failed to find newly-created macvlan device %q: %v", macvlanName, err)
+			return fmt.Errorf("failed to find newly-created macvlan device %q: %w", macvlanName, err)
 		}
 		return nil
 	})

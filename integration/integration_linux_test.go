@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,15 +14,14 @@
 package integration_test
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"math/rand"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-
-	"bytes"
-	"io"
-	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -148,8 +147,8 @@ var _ = Describe("Basic PTP using cnitool", func() {
 			basicBridgeEnv.runInNS(hostNS, cnitoolBin, "del", "network-chain-test", contNS2.LongName())
 		})
 
-		Measure("limits traffic only on the restricted bandwith veth device", func(b Benchmarker) {
-			ipRegexp := regexp.MustCompile("10\\.1[12]\\.2\\.\\d{1,3}")
+		Measure("limits traffic only on the restricted bandwidth veth device", func(b Benchmarker) {
+			ipRegexp := regexp.MustCompile(`10\.1[12]\.2\.\d{1,3}`)
 
 			By(fmt.Sprintf("adding %s to %s\n\n", "chained-bridge-bandwidth", contNS1.ShortName()))
 			chainedBridgeBandwidthEnv.runInNS(hostNS, cnitoolBin, "add", "network-chain-test", contNS1.LongName())

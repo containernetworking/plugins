@@ -29,7 +29,7 @@ import (
 func TmpResolvConf(dnsConf types.DNS) (string, error) {
 	f, err := os.CreateTemp("", "cni_test_resolv.conf")
 	if err != nil {
-		return "", fmt.Errorf("failed to get temp file for CNI test resolv.conf: %v", err)
+		return "", fmt.Errorf("failed to get temp file for CNI test resolv.conf: %w", err)
 	}
 	defer f.Close()
 
@@ -52,7 +52,7 @@ func TmpResolvConf(dnsConf types.DNS) (string, error) {
 	resolvConf := strings.Join(resolvConfLines, "\n")
 	_, err = f.Write([]byte(resolvConf))
 	if err != nil {
-		return "", fmt.Errorf("failed to write temp resolv.conf for CNI test: %v", err)
+		return "", fmt.Errorf("failed to write temp resolv.conf for CNI test: %w", err)
 	}
 
 	return path, err

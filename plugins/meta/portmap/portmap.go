@@ -21,10 +21,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/containernetworking/plugins/pkg/utils"
-	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/plugins/pkg/utils"
+	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 )
 
 // This creates the chains to be added to iptables. The basic structure is
@@ -65,7 +66,7 @@ func forwardPorts(config *PortMapConf, containerNet net.IPNet) error {
 		ipt, err = iptables.NewWithProtocol(iptables.ProtocolIPv4)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to open iptables: %v", err)
+		return fmt.Errorf("failed to open iptables: %w", err)
 	}
 
 	// Enable masquerading for traffic as necessary.
@@ -78,12 +79,12 @@ func forwardPorts(config *PortMapConf, containerNet net.IPNet) error {
 		if config.ExternalSetMarkChain == nil {
 			setMarkChain := genSetMarkChain(*config.MarkMasqBit)
 			if err := setMarkChain.setup(ipt); err != nil {
-				return fmt.Errorf("unable to create chain %s: %v", setMarkChain.name, err)
+				return fmt.Errorf("unable to create chain %s: %w", setMarkChain.name, err)
 			}
 
 			masqChain := genMarkMasqChain(*config.MarkMasqBit)
 			if err := masqChain.setup(ipt); err != nil {
-				return fmt.Errorf("unable to create chain %s: %v", setMarkChain.name, err)
+				return fmt.Errorf("unable to create chain %s: %w", setMarkChain.name, err)
 			}
 		}
 
@@ -93,7 +94,7 @@ func forwardPorts(config *PortMapConf, containerNet net.IPNet) error {
 			hostIfName := getRoutableHostIF(containerNet.IP)
 			if hostIfName != "" {
 				if err := enableLocalnetRouting(hostIfName); err != nil {
-					return fmt.Errorf("unable to enable route_localnet: %v", err)
+					return fmt.Errorf("unable to enable route_localnet: %w", err)
 				}
 			}
 		}
@@ -102,7 +103,7 @@ func forwardPorts(config *PortMapConf, containerNet net.IPNet) error {
 	// Generate the DNAT (actual port forwarding) rules
 	toplevelDnatChain := genToplevelDnatChain()
 	if err := toplevelDnatChain.setup(ipt); err != nil {
-		return fmt.Errorf("failed to create top-level DNAT chain: %v", err)
+		return fmt.Errorf("failed to create top-level DNAT chain: %w", err)
 	}
 
 	dnatChain := genDnatChain(config.Name, config.ContainerID)
@@ -110,34 +111,45 @@ func forwardPorts(config *PortMapConf, containerNet net.IPNet) error {
 	// sort of collision or bad state.
 	fillDnatRules(&dnatChain, config, containerNet)
 	if err := dnatChain.setup(ipt); err != nil {
-		return fmt.Errorf("unable to setup DNAT: %v", err)
+		return fmt.Errorf("unable to setup DNAT: %w", err)
 	}
 
 	return nil
 }
 
 func checkPorts(config *PortMapConf, containerNet net.IPNet) error {
+	isV6 := (containerNet.IP.To4() == nil)
 	dnatChain := genDnatChain(config.Name, config.ContainerID)
 	fillDnatRules(&dnatChain, config, containerNet)
 
-	ip4t, err4 := maybeGetIptables(false)
-	ip6t, err6 := maybeGetIptables(true)
+	// check is called for each address, not once for all addresses
+	var ip4t *iptables.IPTables
+	var err4 error
+	var ip6t *iptables.IPTables
+	var err6 error
+
+	if isV6 {
+		ip6t, err6 = maybeGetIptables(true)
+	} else {
+		ip4t, err4 = maybeGetIptables(false)
+	}
+
 	if ip4t == nil && ip6t == nil {
 		err := fmt.Errorf("neither iptables nor ip6tables is usable")
-		err = fmt.Errorf("%v, (iptables) %v", err, err4)
-		err = fmt.Errorf("%v, (ip6tables) %v", err, err6)
+		err = fmt.Errorf("%v, (iptables) %w", err, err4)
+		err = fmt.Errorf("%v, (ip6tables) %w", err, err6)
 		return err
 	}
 
 	if ip4t != nil {
 		if err := dnatChain.check(ip4t); err != nil {
-			return fmt.Errorf("could not check ipv4 dnat: %v", err)
+			return fmt.Errorf("could not check ipv4 dnat: %w", err)
 		}
 	}
 
 	if ip6t != nil {
 		if err := dnatChain.check(ip6t); err != nil {
-			return fmt.Errorf("could not check ipv6 dnat: %v", err)
+			return fmt.Errorf("could not check ipv6 dnat: %w", err)
 		}
 	}
 
@@ -370,21 +382,21 @@ func unforwardPorts(config *PortMapConf) error {
 	ip6t, err6 := maybeGetIptables(true)
 	if ip4t == nil && ip6t == nil {
 		err := fmt.Errorf("neither iptables nor ip6tables is usable")
-		err = fmt.Errorf("%v, (iptables) %v", err, err4)
-		err = fmt.Errorf("%v, (ip6tables) %v", err, err6)
+		err = fmt.Errorf("%v, (iptables) %w", err, err4)
+		err = fmt.Errorf("%v, (ip6tables) %w", err, err6)
 		return err
 	}
 
 	if ip4t != nil {
 		if err := dnatChain.teardown(ip4t); err != nil {
-			return fmt.Errorf("could not teardown ipv4 dnat: %v", err)
+			return fmt.Errorf("could not teardown ipv4 dnat: %w", err)
 		}
 		oldSnatChain.teardown(ip4t)
 	}
 
 	if ip6t != nil {
 		if err := dnatChain.teardown(ip6t); err != nil {
-			return fmt.Errorf("could not teardown ipv6 dnat: %v", err)
+			return fmt.Errorf("could not teardown ipv6 dnat: %w", err)
 		}
 		oldSnatChain.teardown(ip6t)
 	}

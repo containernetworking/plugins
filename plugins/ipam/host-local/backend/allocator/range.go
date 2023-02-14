@@ -19,6 +19,7 @@ import (
 	"net"
 
 	"github.com/containernetworking/cni/pkg/types"
+
 	"github.com/containernetworking/plugins/pkg/ip"
 )
 
@@ -125,7 +126,7 @@ func (r *Range) Contains(addr net.IP) bool {
 
 // Overlaps returns true if there is any overlap between ranges
 func (r *Range) Overlaps(r1 *Range) bool {
-	// different familes
+	// different families
 	if len(r.RangeStart) != len(r1.RangeStart) {
 		return false
 	}

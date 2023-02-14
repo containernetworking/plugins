@@ -22,8 +22,9 @@ import (
 	"net"
 
 	current "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/utils"
 	"github.com/coreos/go-iptables/iptables"
+
+	"github.com/containernetworking/plugins/pkg/utils"
 )
 
 func getPrivChainRules(ip string) [][]string {
@@ -211,7 +212,6 @@ type iptablesBackend struct {
 	protos         map[iptables.Protocol]*iptables.IPTables
 	privChainName  string
 	adminChainName string
-	ifName         string
 }
 
 // iptablesBackend implements the FirewallBackend interface
@@ -232,7 +232,7 @@ func newIptablesBackend(conf *FirewallNetConf) (FirewallBackend, error) {
 	for _, proto := range []iptables.Protocol{iptables.ProtocolIPv4, iptables.ProtocolIPv6} {
 		ipt, err := iptables.NewWithProtocol(proto)
 		if err != nil {
-			return nil, fmt.Errorf("could not initialize iptables protocol %v: %v", proto, err)
+			return nil, fmt.Errorf("could not initialize iptables protocol %v: %w", proto, err)
 		}
 		backend.protos[proto] = ipt
 	}

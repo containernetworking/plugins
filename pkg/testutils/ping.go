@@ -16,6 +16,7 @@ package testutils
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"os/exec"
@@ -47,14 +48,13 @@ func Ping(saddr, daddr string, timeoutSec int) error {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		switch e := err.(type) {
-		case *exec.ExitError:
+		var e *exec.ExitError
+		if errors.As(err, &e) {
 			return fmt.Errorf("%v exit status %d: %s",
 				args, e.Sys().(syscall.WaitStatus).ExitStatus(),
 				stderr.String())
-		default:
-			return err
 		}
+		return err
 	}
 
 	return nil

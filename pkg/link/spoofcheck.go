@@ -84,7 +84,7 @@ func (sc *SpoofChecker) Setup() error {
 	baseConfig.AddChain(macChain)
 
 	if err := sc.configurer.Apply(baseConfig); err != nil {
-		return fmt.Errorf("failed to setup spoof-check: %v", err)
+		return fmt.Errorf("failed to setup spoof-check: %w", err)
 	}
 
 	rulesConfig := nft.NewConfig()
@@ -98,7 +98,7 @@ func (sc *SpoofChecker) Setup() error {
 	rulesConfig.AddRule(sc.dropRule(macChain.Name))
 
 	if err := sc.configurer.Apply(rulesConfig); err != nil {
-		return fmt.Errorf("failed to setup spoof-check: %v", err)
+		return fmt.Errorf("failed to setup spoof-check: %w", err)
 	}
 
 	return nil
@@ -123,7 +123,7 @@ func (sc *SpoofChecker) Teardown() error {
 				c.DeleteRule(rule)
 			}
 			if err := sc.configurer.Apply(c); err != nil {
-				ifaceMatchRuleErr = fmt.Errorf("failed to delete iface match rule: %v", err)
+				ifaceMatchRuleErr = fmt.Errorf("failed to delete iface match rule: %w", err)
 			}
 		} else {
 			fmt.Fprintf(os.Stderr, "spoofcheck/teardown: unable to detect iface match rule for deletion: %+v", expectedRuleToFind)
@@ -136,11 +136,11 @@ func (sc *SpoofChecker) Teardown() error {
 
 	var regularChainsErr error
 	if err := sc.configurer.Apply(regularChainsConfig); err != nil {
-		regularChainsErr = fmt.Errorf("failed to delete regular chains: %v", err)
+		regularChainsErr = fmt.Errorf("failed to delete regular chains: %w", err)
 	}
 
 	if ifaceMatchRuleErr != nil || regularChainsErr != nil {
-		return fmt.Errorf("failed to teardown spoof-check: %v, %v", ifaceMatchRuleErr, regularChainsErr)
+		return fmt.Errorf("failed to teardown spoof-check: %v, %w", ifaceMatchRuleErr, regularChainsErr)
 	}
 	return nil
 }

@@ -53,7 +53,7 @@ func DeleteConntrackEntriesForDstIP(dstIP string, protocol uint8) error {
 
 	_, err := netlink.ConntrackDeleteFilter(netlink.ConntrackTable, family, filter)
 	if err != nil {
-		return fmt.Errorf("error deleting connection tracking state for protocol: %d IP: %s, error: %v", protocol, ip, err)
+		return fmt.Errorf("error deleting connection tracking state for protocol: %d IP: %s, error: %w", protocol, ip, err)
 	}
 	return nil
 }
@@ -67,7 +67,7 @@ func DeleteConntrackEntriesForDstPort(port uint16, protocol uint8, family netlin
 
 	_, err := netlink.ConntrackDeleteFilter(netlink.ConntrackTable, family, filter)
 	if err != nil {
-		return fmt.Errorf("error deleting connection tracking state for protocol: %d Port: %d, error: %v", protocol, port, err)
+		return fmt.Errorf("error deleting connection tracking state for protocol: %d Port: %d, error: %w", protocol, port, err)
 	}
 	return nil
 }

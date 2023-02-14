@@ -31,13 +31,13 @@ func EnsureChain(ipt *iptables.IPTables, table, chain string) error {
 	}
 	exists, err := ChainExists(ipt, table, chain)
 	if err != nil {
-		return fmt.Errorf("failed to list iptables chains: %v", err)
+		return fmt.Errorf("failed to list iptables chains: %w", err)
 	}
 	if !exists {
 		err = ipt.NewChain(table, chain)
 		if err != nil {
-			eerr, eok := err.(*iptables.Error)
-			if eok && eerr.ExitStatus() != statusChainExists {
+			var eerr *iptables.Error
+			if errors.As(err, &eerr) && eerr.ExitStatus() != statusChainExists {
 				return err
 			}
 		}
@@ -70,17 +70,17 @@ func DeleteRule(ipt *iptables.IPTables, table, chain string, rulespec ...string)
 		return errors.New("failed to ensure iptable chain: IPTables was nil")
 	}
 	if err := ipt.Delete(table, chain, rulespec...); err != nil {
-		eerr, eok := err.(*iptables.Error)
-		switch {
-		case eok && eerr.IsNotExist():
-			// swallow here, the chain was already deleted
-			return nil
-		case eok && eerr.ExitStatus() == 2:
-			// swallow here, invalid command line parameter because the referring rule is missing
-			return nil
-		default:
-			return fmt.Errorf("Failed to delete referring rule %s %s: %v", table, chain, err)
+		var eerr *iptables.Error
+		if errors.As(err, &eerr) {
+			if eerr.IsNotExist() {
+				// swallow here, the chain was already deleted
+				return nil
+			} else if eerr.ExitStatus() == 2 {
+				// swallow here, invalid command line parameter because the referring rule is missing
+				return nil
+			}
 		}
+		return fmt.Errorf("failed to delete referring rule %s %s: %w", table, chain, err)
 	}
 	return nil
 }
@@ -93,14 +93,12 @@ func DeleteChain(ipt *iptables.IPTables, table, chain string) error {
 	}
 
 	err := ipt.DeleteChain(table, chain)
-	eerr, eok := err.(*iptables.Error)
-	switch {
-	case eok && eerr.IsNotExist():
+	var eerr *iptables.Error
+	if errors.As(err, &eerr) && eerr.IsNotExist() {
 		// swallow here, the chain was already deleted
 		return nil
-	default:
-		return err
 	}
+	return err
 }
 
 // ClearChain idempotently clear the iptables rules in the specified table/chain.
@@ -110,14 +108,12 @@ func ClearChain(ipt *iptables.IPTables, table, chain string) error {
 		return errors.New("failed to ensure iptable chain: IPTables was nil")
 	}
 	err := ipt.ClearChain(table, chain)
-	eerr, eok := err.(*iptables.Error)
-	switch {
-	case eok && eerr.IsNotExist():
+	var eerr *iptables.Error
+	if errors.As(err, &eerr) && eerr.IsNotExist() {
 		// swallow here, the chain was already deleted
 		return EnsureChain(ipt, table, chain)
-	default:
-		return err
 	}
+	return err
 }
 
 // InsertUnique will add a rule to a chain if it does not already exist.

@@ -19,12 +19,11 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/vishvananda/netlink"
-
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -32,17 +31,19 @@ import (
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
-const maxIfbDeviceLength = 15
-const ifbDevicePrefix = "bwp"
+const (
+	maxIfbDeviceLength = 15
+	ifbDevicePrefix    = "bwp"
+)
 
 // BandwidthEntry corresponds to a single entry in the bandwidth argument,
 // see CONVENTIONS.md
 type BandwidthEntry struct {
-	IngressRate  uint64 `json:"ingressRate"`  //Bandwidth rate in bps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
-	IngressBurst uint64 `json:"ingressBurst"` //Bandwidth burst in bits for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
+	IngressRate  uint64 `json:"ingressRate"`  // Bandwidth rate in bps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
+	IngressBurst uint64 `json:"ingressBurst"` // Bandwidth burst in bits for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
 
-	EgressRate  uint64 `json:"egressRate"`  //Bandwidth rate in bps for traffic through container. 0 for no limit. If egressRate is set, egressBurst must also be set
-	EgressBurst uint64 `json:"egressBurst"` //Bandwidth burst in bits for traffic through container. 0 for no limit. If egressBurst is set, egressRate must also be set
+	EgressRate  uint64 `json:"egressRate"`  // Bandwidth rate in bps for traffic through container. 0 for no limit. If egressRate is set, egressBurst must also be set
+	EgressBurst uint64 `json:"egressBurst"` // Bandwidth burst in bits for traffic through container. 0 for no limit. If egressBurst is set, egressRate must also be set
 }
 
 func (bw *BandwidthEntry) isZero() bool {
@@ -64,7 +65,7 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 	conf := PluginConf{}
 
 	if err := json.Unmarshal(stdin, &conf); err != nil {
-		return nil, fmt.Errorf("failed to parse network configuration: %v", err)
+		return nil, fmt.Errorf("failed to parse network configuration: %w", err)
 	}
 
 	bandwidth := getBandwidth(&conf)
@@ -82,17 +83,16 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 	if conf.RawPrevResult != nil {
 		var err error
 		if err = version.ParsePrevResult(&conf.NetConf); err != nil {
-			return nil, fmt.Errorf("could not parse prevResult: %v", err)
+			return nil, fmt.Errorf("could not parse prevResult: %w", err)
 		}
 
 		_, err = current.NewResultFromResult(conf.PrevResult)
 		if err != nil {
-			return nil, fmt.Errorf("could not convert result to current version: %v", err)
+			return nil, fmt.Errorf("could not convert result to current version: %w", err)
 		}
 	}
 
 	return &conf, nil
-
 }
 
 func getBandwidth(conf *PluginConf) *BandwidthEntry {
@@ -104,8 +104,6 @@ func getBandwidth(conf *PluginConf) *BandwidthEntry {
 
 func validateRateAndBurst(rate, burst uint64) error {
 	switch {
-	case burst < 0 || rate < 0:
-		return fmt.Errorf("rate and burst must be a positive integer")
 	case burst == 0 && rate != 0:
 		return fmt.Errorf("if rate is set, burst must also be set")
 	case rate == 0 && burst != 0:
@@ -144,7 +142,7 @@ func getHostInterface(interfaces []*current.Interface, containerIfName string, n
 		return nil
 	})
 	if peerIndex <= 0 {
-		return nil, fmt.Errorf("container interface %s has no veth peer: %v", containerIfName, err)
+		return nil, fmt.Errorf("container interface %s has no veth peer: %w", containerIfName, err)
 	}
 
 	// find host interface by index
@@ -178,12 +176,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	result, err := current.NewResultFromResult(conf.PrevResult)
 	if err != nil {
-		return fmt.Errorf("could not convert result to current version: %v", err)
+		return fmt.Errorf("could not convert result to current version: %w", err)
 	}
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", netns, err)
 	}
 	defer netns.Close()
 
@@ -278,12 +276,12 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	result, err := current.NewResultFromResult(bwConf.PrevResult)
 	if err != nil {
-		return fmt.Errorf("could not convert result to current version: %v", err)
+		return fmt.Errorf("could not convert result to current version: %w", err)
 	}
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", netns, err)
 	}
 	defer netns.Close()
 
@@ -341,7 +339,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 		ifbDevice, err := netlink.LinkByName(ifbDeviceName)
 		if err != nil {
-			return fmt.Errorf("get ifb device: %s", err)
+			return fmt.Errorf("get ifb device: %w", err)
 		}
 
 		qdiscs, err := SafeQdiscList(ifbDevice)

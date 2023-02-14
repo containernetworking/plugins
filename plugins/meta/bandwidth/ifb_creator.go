@@ -15,13 +15,14 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"syscall"
 
-	"github.com/containernetworking/plugins/pkg/ip"
-
 	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/plugins/pkg/ip"
 )
 
 const latencyInMillis = 25
@@ -34,9 +35,8 @@ func CreateIfb(ifbDeviceName string, mtu int) error {
 			MTU:   mtu,
 		},
 	})
-
 	if err != nil {
-		return fmt.Errorf("adding link: %s", err)
+		return fmt.Errorf("adding link: %w", err)
 	}
 
 	return nil
@@ -44,7 +44,7 @@ func CreateIfb(ifbDeviceName string, mtu int) error {
 
 func TeardownIfb(deviceName string) error {
 	_, err := ip.DelLinkByNameAddr(deviceName)
-	if err != nil && err == ip.ErrLinkNotFound {
+	if err != nil && errors.Is(err, ip.ErrLinkNotFound) {
 		return nil
 	}
 	return err
@@ -53,7 +53,7 @@ func TeardownIfb(deviceName string) error {
 func CreateIngressQdisc(rateInBits, burstInBits uint64, hostDeviceName string) error {
 	hostDevice, err := netlink.LinkByName(hostDeviceName)
 	if err != nil {
-		return fmt.Errorf("get host device: %s", err)
+		return fmt.Errorf("get host device: %w", err)
 	}
 	return createTBF(rateInBits, burstInBits, hostDevice.Attrs().Index)
 }
@@ -61,11 +61,11 @@ func CreateIngressQdisc(rateInBits, burstInBits uint64, hostDeviceName string) e
 func CreateEgressQdisc(rateInBits, burstInBits uint64, hostDeviceName string, ifbDeviceName string) error {
 	ifbDevice, err := netlink.LinkByName(ifbDeviceName)
 	if err != nil {
-		return fmt.Errorf("get ifb device: %s", err)
+		return fmt.Errorf("get ifb device: %w", err)
 	}
 	hostDevice, err := netlink.LinkByName(hostDeviceName)
 	if err != nil {
-		return fmt.Errorf("get host device: %s", err)
+		return fmt.Errorf("get host device: %w", err)
 	}
 
 	// add qdisc ingress on host device
@@ -79,7 +79,7 @@ func CreateEgressQdisc(rateInBits, burstInBits uint64, hostDeviceName string, if
 
 	err = netlink.QdiscAdd(ingress)
 	if err != nil {
-		return fmt.Errorf("create ingress qdisc: %s", err)
+		return fmt.Errorf("create ingress qdisc: %w", err)
 	}
 
 	// add filter on host device to mirror traffic to ifb device
@@ -102,13 +102,13 @@ func CreateEgressQdisc(rateInBits, burstInBits uint64, hostDeviceName string, if
 	}
 	err = netlink.FilterAdd(filter)
 	if err != nil {
-		return fmt.Errorf("add filter: %s", err)
+		return fmt.Errorf("add filter: %w", err)
 	}
 
 	// throttle traffic on ifb device
 	err = createTBF(rateInBits, burstInBits, ifbDevice.Attrs().Index)
 	if err != nil {
-		return fmt.Errorf("create ifb qdisc: %s", err)
+		return fmt.Errorf("create ifb qdisc: %w", err)
 	}
 	return nil
 }
@@ -142,13 +142,9 @@ func createTBF(rateInBits, burstInBits uint64, linkIndex int) error {
 	}
 	err := netlink.QdiscAdd(qdisc)
 	if err != nil {
-		return fmt.Errorf("create qdisc: %s", err)
+		return fmt.Errorf("create qdisc: %w", err)
 	}
 	return nil
-}
-
-func tick2Time(tick uint32) uint32 {
-	return uint32(float64(tick) / float64(netlink.TickInUsec()))
 }
 
 func time2Tick(time uint32) uint32 {

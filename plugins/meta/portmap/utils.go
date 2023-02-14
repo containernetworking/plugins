@@ -32,13 +32,6 @@ func fmtIpPort(ip net.IP, port int) string {
 	return fmt.Sprintf("%s:%d", ip.String(), port)
 }
 
-func localhostIP(isV6 bool) string {
-	if isV6 {
-		return "::1"
-	}
-	return "127.0.0.1"
-}
-
 // getRoutableHostIF will try and determine which interface routes the container's
 // traffic. This is the one on which we disable martian filtering.
 func getRoutableHostIF(containerIP net.IP) string {

@@ -20,12 +20,11 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/vishvananda/netlink"
-
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
@@ -34,15 +33,15 @@ import (
 func parseNetConf(bytes []byte) (*types.NetConf, error) {
 	conf := &types.NetConf{}
 	if err := json.Unmarshal(bytes, conf); err != nil {
-		return nil, fmt.Errorf("failed to parse network config: %v", err)
+		return nil, fmt.Errorf("failed to parse network config: %w", err)
 	}
 
 	if conf.RawPrevResult != nil {
 		if err := version.ParsePrevResult(conf); err != nil {
-			return nil, fmt.Errorf("failed to parse prevResult: %v", err)
+			return nil, fmt.Errorf("failed to parse prevResult: %w", err)
 		}
 		if _, err := current.NewResultFromResult(conf.PrevResult); err != nil {
-			return nil, fmt.Errorf("failed to convert result to current version: %v", err)
+			return nil, fmt.Errorf("failed to convert result to current version: %w", err)
 		}
 	}
 
@@ -112,7 +111,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		r := &current.Result{
 			CNIVersion: conf.CNIVersion,
 			Interfaces: []*current.Interface{
-				&current.Interface{
+				{
 					Name:    args.IfName,
 					Mac:     "00:00:00:00:00:00",
 					Sandbox: args.Netns,
@@ -162,8 +161,8 @@ func cmdDel(args *skel.CmdArgs) error {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.
 		// https://github.com/kubernetes/kubernetes/issues/43014#issuecomment-287164444
-		_, ok := err.(ns.NSPathNotExistErr)
-		if ok {
+		var e ns.NSPathNotExistErr
+		if errors.As(err, &e) {
 			return nil
 		}
 		return err

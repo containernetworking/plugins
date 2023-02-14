@@ -24,6 +24,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
@@ -74,7 +75,7 @@ func main() {
 func loadNetConf(bytes []byte) (*types.NetConf, string, error) {
 	n := &types.NetConf{}
 	if err := json.Unmarshal(bytes, n); err != nil {
-		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
+		return nil, "", fmt.Errorf("failed to load netconf: %w", err)
 	}
 	return n, n.CNIVersion, nil
 }
@@ -232,7 +233,7 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		}
 
 		if err := canonicalizeIP(&n.IPAM.Addresses[i].Address.IP); err != nil {
-			return nil, "", fmt.Errorf("invalid address %d: %s", i, err)
+			return nil, "", fmt.Errorf("invalid address %d: %w", i, err)
 		}
 
 		if n.IPAM.Addresses[i].Address.IP.To4() != nil {

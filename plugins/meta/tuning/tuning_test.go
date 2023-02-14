@@ -24,14 +24,13 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/testutils"
-	"golang.org/x/sys/unix"
-
-	"github.com/vishvananda/netlink"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
+
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 )
 
 func buildOneConfig(name, cniVersion string, orig *TuningConf, prevResult types.Result) (*TuningConf, []byte, error) {
@@ -56,7 +55,7 @@ func buildOneConfig(name, cniVersion string, orig *TuningConf, prevResult types.
 
 	err = json.Unmarshal(confBytes, &config)
 	if err != nil {
-		return nil, nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
+		return nil, nil, fmt.Errorf("unmarshal existing network bytes: %w", err)
 	}
 
 	for key, value := range inject {
@@ -70,15 +69,14 @@ func buildOneConfig(name, cniVersion string, orig *TuningConf, prevResult types.
 
 	conf := &TuningConf{}
 	if err := json.Unmarshal(newBytes, &conf); err != nil {
-		return nil, nil, fmt.Errorf("error parsing configuration: %s", err)
+		return nil, nil, fmt.Errorf("error parsing configuration: %w", err)
 	}
 
 	return conf, newBytes, nil
-
 }
 
 func createSysctlAllowFile(sysctls []string) error {
-	err := os.MkdirAll(defaultAllowlistDir, 0755)
+	err := os.MkdirAll(defaultAllowlistDir, 0o755)
 	if err != nil {
 		return err
 	}

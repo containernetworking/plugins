@@ -22,18 +22,17 @@ import (
 	"os"
 	"time"
 
-	"github.com/vishvananda/netlink"
-
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/testutils"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
+	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 )
 
 func buildOneConfig(name, cniVersion string, orig *PluginConf, prevResult types.Result) (*PluginConf, []byte, error) {
@@ -60,7 +59,7 @@ func buildOneConfig(name, cniVersion string, orig *PluginConf, prevResult types.
 
 	err = json.Unmarshal(confBytes, &config)
 	if err != nil {
-		return nil, nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
+		return nil, nil, fmt.Errorf("unmarshal existing network bytes: %w", err)
 	}
 
 	for key, value := range inject {
@@ -74,11 +73,10 @@ func buildOneConfig(name, cniVersion string, orig *PluginConf, prevResult types.
 
 	conf := &PluginConf{}
 	if err := json.Unmarshal(newBytes, &conf); err != nil {
-		return nil, nil, fmt.Errorf("error parsing configuration: %s", err)
+		return nil, nil, fmt.Errorf("error parsing configuration: %w", err)
 	}
 
 	return conf, newBytes, nil
-
 }
 
 var _ = Describe("bandwidth test", func() {
@@ -221,7 +219,6 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 					return nil
 				})).To(Succeed())
-
 			})
 
 			It(fmt.Sprintf("[%s] does not apply ingress when disabled", ver), func() {
@@ -289,7 +286,6 @@ var _ = Describe("bandwidth test", func() {
 
 					return nil
 				})).To(Succeed())
-
 			})
 
 			It(fmt.Sprintf("[%s] does not apply egress when disabled", ver), func() {
@@ -359,7 +355,6 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(35)))
 					return nil
 				})).To(Succeed())
-
 			})
 
 			It(fmt.Sprintf("[%s] fails an invalid ingress config", ver), func() {
@@ -507,7 +502,6 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 					return nil
 				})).To(Succeed())
-
 			})
 
 			It(fmt.Sprintf("[%s] should apply static config when both static config and runtime config exist", ver), func() {
@@ -620,7 +614,6 @@ var _ = Describe("bandwidth test", func() {
 
 					return nil
 				})).To(Succeed())
-
 			})
 		})
 
@@ -730,7 +723,6 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 					return nil
 				})).To(Succeed())
-
 			})
 
 			It(fmt.Sprintf("[%s] should fail when container interface has no veth peer", ver), func() {

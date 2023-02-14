@@ -8,8 +8,25 @@ env:
   LINUX_ARCHES: "amd64 386 arm arm64 s390x mips64le ppc64le riscv64"
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: setup go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: actions/checkout@v3
+      - uses: ibiqlik/action-yamllint@v3
+        with:
+          format: auto
+      - uses: golangci/golangci-lint-action@v3
+        with:
+          args: -v
+
   build:
     name: Build all linux architectures
+    needs: lint
     runs-on: ubuntu-latest
     steps:
       - name: setup go
@@ -29,6 +46,7 @@ jobs:
 
   test-linux:
     name: Run tests on Linux amd64
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Install kernel module
@@ -69,6 +87,7 @@ jobs:
 
   test-win:
     name: Build and run tests on Windows
+    needs: build
     runs-on: windows-latest
     steps:
       - name: setup go

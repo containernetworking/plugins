@@ -25,14 +25,13 @@ import (
 	types020 "github.com/containernetworking/cni/pkg/types/020"
 	types040 "github.com/containernetworking/cni/pkg/types/040"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/testutils"
-
-	"github.com/vishvananda/netlink"
-
-	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
+	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
 )
 
 type Net struct {
@@ -69,7 +68,7 @@ func buildOneConfig(netName string, cniVersion string, orig *Net, prevResult typ
 
 	err = json.Unmarshal(confBytes, &config)
 	if err != nil {
-		return nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
+		return nil, fmt.Errorf("unmarshal existing network bytes: %w", err)
 	}
 
 	for key, value := range inject {
@@ -83,11 +82,10 @@ func buildOneConfig(netName string, cniVersion string, orig *Net, prevResult typ
 
 	conf := &Net{}
 	if err := json.Unmarshal(newBytes, &conf); err != nil {
-		return nil, fmt.Errorf("error parsing configuration: %s", err)
+		return nil, fmt.Errorf("error parsing configuration: %w", err)
 	}
 
 	return conf, nil
-
 }
 
 type tester interface {
@@ -97,10 +95,12 @@ type tester interface {
 
 type testerBase struct{}
 
-type testerV10x testerBase
-type testerV04x testerBase
-type testerV03x testerBase
-type testerV01xOr02x testerBase
+type (
+	testerV10x      testerBase
+	testerV04x      testerBase
+	testerV03x      testerBase
+	testerV01xOr02x testerBase
+)
 
 func newTesterByVersion(version string) tester {
 	switch {
@@ -275,7 +275,7 @@ var _ = Describe("ptp Operations", func() {
 			for _, ipc := range ips {
 				fmt.Fprintln(GinkgoWriter, "ping", ipc.ip, "->", ipc.gw)
 				if err := testutils.Ping(ipc.ip, ipc.gw, 30); err != nil {
-					return fmt.Errorf("ping %s -> %s failed: %s", ipc.ip, ipc.gw, err)
+					return fmt.Errorf("ping %s -> %s failed: %w", ipc.ip, ipc.gw, err)
 				}
 			}
 

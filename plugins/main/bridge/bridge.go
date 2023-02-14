@@ -24,12 +24,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vishvananda/netlink"
-
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/vishvananda/netlink"
+
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/link"
@@ -96,7 +96,7 @@ func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 		BrName: defaultBrName,
 	}
 	if err := json.Unmarshal(bytes, n); err != nil {
-		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
+		return nil, "", fmt.Errorf("failed to load netconf: %w", err)
 	}
 	if n.Vlan < 0 || n.Vlan > 4094 {
 		return nil, "", fmt.Errorf("invalid VLAN ID %d (must be between 0 and 4094)", n.Vlan)
@@ -129,7 +129,6 @@ func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 //   - Calculates and compiles a list of gateway addresses
 //   - Adds a default route if needed
 func calcGateways(result *current.Result, n *NetConf) (*gwInfo, *gwInfo, error) {
-
 	gwsV4 := &gwInfo{}
 	gwsV6 := &gwInfo{}
 
@@ -193,8 +192,8 @@ func calcGateways(result *current.Result, n *NetConf) (*gwInfo, *gwInfo, error) 
 
 func ensureAddr(br netlink.Link, family int, ipn *net.IPNet, forceAddress bool) error {
 	addrs, err := netlink.AddrList(br, family)
-	if err != nil && err != syscall.ENOENT {
-		return fmt.Errorf("could not get list of IP addresses: %v", err)
+	if err != nil && !errors.Is(err, syscall.ENOENT) {
+		return fmt.Errorf("could not get list of IP addresses: %w", err)
 	}
 
 	ipnStr := ipn.String()
@@ -221,14 +220,14 @@ func ensureAddr(br netlink.Link, family int, ipn *net.IPNet, forceAddress bool) 
 	}
 
 	addr := &netlink.Addr{IPNet: ipn, Label: ""}
-	if err := netlink.AddrAdd(br, addr); err != nil && err != syscall.EEXIST {
-		return fmt.Errorf("could not add IP address to %q: %v", br.Attrs().Name, err)
+	if err := netlink.AddrAdd(br, addr); err != nil && !errors.Is(err, syscall.EEXIST) {
+		return fmt.Errorf("could not add IP address to %q: %w", br.Attrs().Name, err)
 	}
 
 	// Set the bridge's MAC to itself. Otherwise, the bridge will take the
 	// lowest-numbered mac on the bridge, and will change as ifs churn
 	if err := netlink.LinkSetHardwareAddr(br, br.Attrs().HardwareAddr); err != nil {
-		return fmt.Errorf("could not set bridge's mac: %v", err)
+		return fmt.Errorf("could not set bridge's mac: %w", err)
 	}
 
 	return nil
@@ -238,7 +237,7 @@ func deleteAddr(br netlink.Link, ipn *net.IPNet) error {
 	addr := &netlink.Addr{IPNet: ipn, Label: ""}
 
 	if err := netlink.AddrDel(br, addr); err != nil {
-		return fmt.Errorf("could not remove IP address from %q: %v", br.Attrs().Name, err)
+		return fmt.Errorf("could not remove IP address from %q: %w", br.Attrs().Name, err)
 	}
 
 	return nil
@@ -247,7 +246,7 @@ func deleteAddr(br netlink.Link, ipn *net.IPNet) error {
 func bridgeByName(name string) (*netlink.Bridge, error) {
 	l, err := netlink.LinkByName(name)
 	if err != nil {
-		return nil, fmt.Errorf("could not lookup %q: %v", name, err)
+		return nil, fmt.Errorf("could not lookup %q: %w", name, err)
 	}
 	br, ok := l.(*netlink.Bridge)
 	if !ok {
@@ -273,13 +272,13 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 	}
 
 	err := netlink.LinkAdd(br)
-	if err != nil && err != syscall.EEXIST {
-		return nil, fmt.Errorf("could not add %q: %v", brName, err)
+	if err != nil && !errors.Is(err, syscall.EEXIST) {
+		return nil, fmt.Errorf("could not add %q: %w", brName, err)
 	}
 
 	if promiscMode {
 		if err := netlink.SetPromiscOn(br); err != nil {
-			return nil, fmt.Errorf("could not set promiscuous mode on %q: %v", brName, err)
+			return nil, fmt.Errorf("could not set promiscuous mode on %q: %w", brName, err)
 		}
 	}
 
@@ -306,27 +305,27 @@ func ensureVlanInterface(br *netlink.Bridge, vlanId int) (netlink.Link, error) {
 	brGatewayVeth, err := netlink.LinkByName(name)
 	if err != nil {
 		if err.Error() != "Link not found" {
-			return nil, fmt.Errorf("failed to find interface %q: %v", name, err)
+			return nil, fmt.Errorf("failed to find interface %q: %w", name, err)
 		}
 
 		hostNS, err := ns.GetCurrentNS()
 		if err != nil {
-			return nil, fmt.Errorf("faild to find host namespace: %v", err)
+			return nil, fmt.Errorf("faild to find host namespace: %w", err)
 		}
 
 		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanId, "")
 		if err != nil {
-			return nil, fmt.Errorf("faild to create vlan gateway %q: %v", name, err)
+			return nil, fmt.Errorf("faild to create vlan gateway %q: %w", name, err)
 		}
 
 		brGatewayVeth, err = netlink.LinkByName(brGatewayIface.Name)
 		if err != nil {
-			return nil, fmt.Errorf("failed to lookup %q: %v", brGatewayIface.Name, err)
+			return nil, fmt.Errorf("failed to lookup %q: %w", brGatewayIface.Name, err)
 		}
 
 		err = netlink.LinkSetUp(brGatewayVeth)
 		if err != nil {
-			return nil, fmt.Errorf("failed to up %q: %v", brGatewayIface.Name, err)
+			return nil, fmt.Errorf("failed to up %q: %w", brGatewayIface.Name, err)
 		}
 	}
 
@@ -356,24 +355,24 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 	// need to lookup hostVeth again as its index has changed during ns move
 	hostVeth, err := netlink.LinkByName(hostIface.Name)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to lookup %q: %v", hostIface.Name, err)
+		return nil, nil, fmt.Errorf("failed to lookup %q: %w", hostIface.Name, err)
 	}
 	hostIface.Mac = hostVeth.Attrs().HardwareAddr.String()
 
 	// connect host veth end to the bridge
 	if err := netlink.LinkSetMaster(hostVeth, br); err != nil {
-		return nil, nil, fmt.Errorf("failed to connect %q to bridge %v: %v", hostVeth.Attrs().Name, br.Attrs().Name, err)
+		return nil, nil, fmt.Errorf("failed to connect %q to bridge %v: %w", hostVeth.Attrs().Name, br.Attrs().Name, err)
 	}
 
 	// set hairpin mode
 	if err = netlink.LinkSetHairpin(hostVeth, hairpinMode); err != nil {
-		return nil, nil, fmt.Errorf("failed to setup hairpin mode for %v: %v", hostVeth.Attrs().Name, err)
+		return nil, nil, fmt.Errorf("failed to setup hairpin mode for %v: %w", hostVeth.Attrs().Name, err)
 	}
 
 	if vlanID != 0 {
 		err = netlink.BridgeVlanAdd(hostVeth, uint16(vlanID), true, true, false, true)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to setup vlan tag on interface %q: %v", hostIface.Name, err)
+			return nil, nil, fmt.Errorf("failed to setup vlan tag on interface %q: %w", hostIface.Name, err)
 		}
 	}
 
@@ -390,7 +389,7 @@ func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
 	// create bridge if necessary
 	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, vlanFiltering)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create bridge %q: %v", n.BrName, err)
+		return nil, nil, fmt.Errorf("failed to create bridge %q: %w", n.BrName, err)
 	}
 
 	return br, &current.Interface{
@@ -431,7 +430,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer netns.Close()
 
@@ -529,30 +528,32 @@ func cmdAdd(args *skel.CmdArgs) error {
 					if n.Vlan != 0 {
 						vlanIface, err := ensureVlanInterface(br, n.Vlan)
 						if err != nil {
-							return fmt.Errorf("failed to create vlan interface: %v", err)
+							return fmt.Errorf("failed to create vlan interface: %w", err)
 						}
 
 						if vlanInterface == nil {
-							vlanInterface = &current.Interface{Name: vlanIface.Attrs().Name,
-								Mac: vlanIface.Attrs().HardwareAddr.String()}
+							vlanInterface = &current.Interface{
+								Name: vlanIface.Attrs().Name,
+								Mac:  vlanIface.Attrs().HardwareAddr.String(),
+							}
 							result.Interfaces = append(result.Interfaces, vlanInterface)
 						}
 
 						err = ensureAddr(vlanIface, gws.family, &gw, n.ForceAddress)
 						if err != nil {
-							return fmt.Errorf("failed to set vlan interface for bridge with addr: %v", err)
+							return fmt.Errorf("failed to set vlan interface for bridge with addr: %w", err)
 						}
 					} else {
 						err = ensureAddr(br, gws.family, &gw, n.ForceAddress)
 						if err != nil {
-							return fmt.Errorf("failed to set bridge addr: %v", err)
+							return fmt.Errorf("failed to set bridge addr: %w", err)
 						}
 					}
 				}
 
 				if gws.gws != nil {
 					if err = enableIPForward(gws.family); err != nil {
-						return fmt.Errorf("failed to enable forwarding: %v", err)
+						return fmt.Errorf("failed to enable forwarding: %w", err)
 					}
 				}
 			}
@@ -571,11 +572,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if err := netns.Do(func(_ ns.NetNS) error {
 			link, err := netlink.LinkByName(args.IfName)
 			if err != nil {
-				return fmt.Errorf("failed to retrieve link: %v", err)
+				return fmt.Errorf("failed to retrieve link: %w", err)
 			}
 			// If layer 2 we still need to set the container veth to up
 			if err = netlink.LinkSetUp(link); err != nil {
-				return fmt.Errorf("failed to set %q up: %v", args.IfName, err)
+				return fmt.Errorf("failed to set %q up: %w", args.IfName, err)
 			}
 			return nil
 		}); err != nil {
@@ -665,7 +666,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		var err error
 		ipnets, err = ip.DelLinkByNameAddr(args.IfName)
-		if err != nil && err == ip.ErrLinkNotFound {
+		if err != nil && errors.Is(err, ip.ErrLinkNotFound) {
 			return nil
 		}
 		return err
@@ -675,8 +676,8 @@ func cmdDel(args *skel.CmdArgs) error {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.
 		// https://github.com/kubernetes/kubernetes/issues/43014#issuecomment-287164444
-		_, ok := err.(ns.NSPathNotExistErr)
-		if ok {
+		var e ns.NSPathNotExistErr
+		if errors.As(err, &e) {
 			return ipamDel()
 		}
 		return err
@@ -720,7 +721,6 @@ type cniBridgeIf struct {
 }
 
 func validateInterface(intf current.Interface, expectInSb bool) (cniBridgeIf, netlink.Link, error) {
-
 	ifFound := cniBridgeIf{found: false}
 	if intf.Name == "" {
 		return ifFound, nil, fmt.Errorf("Interface name missing ")
@@ -745,7 +745,6 @@ func validateInterface(intf current.Interface, expectInSb bool) (cniBridgeIf, ne
 }
 
 func validateCniBrInterface(intf current.Interface, n *NetConf) (cniBridgeIf, error) {
-
 	brFound, link, err := validateInterface(intf, false)
 	if err != nil {
 		return brFound, err
@@ -777,7 +776,6 @@ func validateCniBrInterface(intf current.Interface, n *NetConf) (cniBridgeIf, er
 }
 
 func validateCniVethInterface(intf *current.Interface, brIf cniBridgeIf, contIf cniBridgeIf) (cniBridgeIf, error) {
-
 	vethFound, link, err := validateInterface(*intf, false)
 	if err != nil {
 		return vethFound, err
@@ -821,7 +819,6 @@ func validateCniVethInterface(intf *current.Interface, brIf cniBridgeIf, contIf 
 }
 
 func validateCniContainerInterface(intf current.Interface) (cniBridgeIf, error) {
-
 	vethFound, link, err := validateInterface(intf, true)
 	if err != nil {
 		return vethFound, err
@@ -850,14 +847,13 @@ func validateCniContainerInterface(intf current.Interface) (cniBridgeIf, error) 
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
-
 	n, _, err := loadNetConf(args.StdinData, args.Args)
 	if err != nil {
 		return err
 	}
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer netns.Close()
 

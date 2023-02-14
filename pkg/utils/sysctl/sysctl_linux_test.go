@@ -20,12 +20,13 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/testutils"
-	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
+	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 )
 
 const (
@@ -38,7 +39,6 @@ var _ = Describe("Sysctl tests", func() {
 	var cleanup func()
 
 	BeforeEach(func() {
-
 		// Save a reference to the original namespace,
 		// Add a new NS
 		currNs, err := ns.GetCurrentNS()
@@ -66,7 +66,6 @@ var _ = Describe("Sysctl tests", func() {
 			netlink.LinkDel(testIface)
 			currNs.Set()
 		}
-
 	})
 
 	AfterEach(func() {
@@ -110,5 +109,4 @@ var _ = Describe("Sysctl tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
-
 })

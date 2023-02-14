@@ -27,18 +27,16 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/testutils"
-
-	"github.com/vishvananda/netlink"
-
 	"github.com/d2g/dhcp4"
 	"github.com/d2g/dhcp4server"
 	"github.com/d2g/dhcp4server/leasepool"
 	"github.com/d2g/dhcp4server/leasepool/memorypool"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 )
 
 func getTmpDir() (string, error) {
@@ -62,7 +60,7 @@ func dhcpServerStart(netns ns.NetNS, leaseIP, serverIP net.IP, numLeases int, st
 	for i := 5; i < numLeases+5; i++ {
 		err := lp.AddLease(leasepool.Lease{IP: dhcp4.IPAdd(net.IPv4(192, 168, 1, byte(i)), 0)})
 		if err != nil {
-			return nil, fmt.Errorf("error adding IP to DHCP pool: %v", err)
+			return nil, fmt.Errorf("error adding IP to DHCP pool: %w", err)
 		}
 	}
 
@@ -74,7 +72,7 @@ func dhcpServerStart(netns ns.NetNS, leaseIP, serverIP net.IP, numLeases int, st
 		dhcp4server.LeaseDuration(time.Minute*15),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create DHCP server: %v", err)
+		return nil, fmt.Errorf("failed to create DHCP server: %w", err)
 	}
 
 	stopWg := sync.WaitGroup{}
@@ -91,7 +89,7 @@ func dhcpServerStart(netns ns.NetNS, leaseIP, serverIP net.IP, numLeases int, st
 			if err := dhcpServer.ListenAndServe(); err != nil {
 				// Log, but don't trap errors; the server will
 				// always report an error when stopped
-				GinkgoT().Logf("DHCP server finished with error: %v", err)
+				GinkgoT().Logf("DHCP server finished with error: %w", err)
 			}
 			return nil
 		})
@@ -120,7 +118,7 @@ const (
 )
 
 var _ = BeforeSuite(func() {
-	err := os.MkdirAll(cniDirPrefix, 0700)
+	err := os.MkdirAll(cniDirPrefix, 0o700)
 	Expect(err).NotTo(HaveOccurred())
 })
 

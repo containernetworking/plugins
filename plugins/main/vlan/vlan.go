@@ -20,12 +20,11 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/vishvananda/netlink"
-
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
@@ -35,9 +34,10 @@ import (
 
 type NetConf struct {
 	types.NetConf
-	Master string `json:"master"`
-	VlanId int    `json:"vlanId"`
-	MTU    int    `json:"mtu,omitempty"`
+	Master     string `json:"master"`
+	VlanId     int    `json:"vlanId"`
+	MTU        int    `json:"mtu,omitempty"`
+	LinkContNs bool   `json:"linkInContainer,omitempty"`
 }
 
 func init() {
@@ -47,10 +47,10 @@ func init() {
 	runtime.LockOSThread()
 }
 
-func loadConf(bytes []byte) (*NetConf, string, error) {
+func loadConf(args *skel.CmdArgs) (*NetConf, string, error) {
 	n := &NetConf{}
-	if err := json.Unmarshal(bytes, n); err != nil {
-		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
+	if err := json.Unmarshal(args.StdinData, n); err != nil {
+		return nil, "", fmt.Errorf("failed to load netconf: %w", err)
 	}
 	if n.Master == "" {
 		return nil, "", fmt.Errorf("\"master\" field is required. It specifies the host interface name to create the VLAN for.")
@@ -60,19 +60,33 @@ func loadConf(bytes []byte) (*NetConf, string, error) {
 	}
 
 	// check existing and MTU of master interface
-	masterMTU, err := getMTUByName(n.Master)
+	masterMTU, err := getMTUByName(n.Master, args.Netns, n.LinkContNs)
 	if err != nil {
 		return nil, "", err
 	}
 	if n.MTU < 0 || n.MTU > masterMTU {
 		return nil, "", fmt.Errorf("invalid MTU %d, must be [0, master MTU(%d)]", n.MTU, masterMTU)
 	}
-
 	return n, n.CNIVersion, nil
 }
 
-func getMTUByName(ifName string) (int, error) {
-	link, err := netlink.LinkByName(ifName)
+func getMTUByName(ifName string, namespace string, inContainer bool) (int, error) {
+	var link netlink.Link
+	var err error
+	if inContainer {
+		netns, err := ns.GetNS(namespace)
+		if err != nil {
+			return 0, fmt.Errorf("failed to open netns %q: %w", netns, err)
+		}
+		defer netns.Close()
+
+		err = netns.Do(func(_ ns.NetNS) error {
+			link, err = netlink.LinkByName(ifName)
+			return err
+		})
+	} else {
+		link, err = netlink.LinkByName(ifName)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -82,9 +96,19 @@ func getMTUByName(ifName string) (int, error) {
 func createVlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interface, error) {
 	vlan := &current.Interface{}
 
-	m, err := netlink.LinkByName(conf.Master)
+	var m netlink.Link
+	var err error
+	if conf.LinkContNs {
+		err = netns.Do(func(_ ns.NetNS) error {
+			m, err = netlink.LinkByName(conf.Master)
+			return err
+		})
+	} else {
+		m, err = netlink.LinkByName(conf.Master)
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
+		return nil, fmt.Errorf("failed to lookup master %q: %w", conf.Master, err)
 	}
 
 	// due to kernel bug we have to create with tmpname or it might
@@ -104,21 +128,28 @@ func createVlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interfac
 		VlanId: conf.VlanId,
 	}
 
-	if err := netlink.LinkAdd(v); err != nil {
-		return nil, fmt.Errorf("failed to create vlan: %v", err)
+	if conf.LinkContNs {
+		err = netns.Do(func(_ ns.NetNS) error {
+			return netlink.LinkAdd(v)
+		})
+	} else {
+		err = netlink.LinkAdd(v)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to create vlan: %w", err)
 	}
 
 	err = netns.Do(func(_ ns.NetNS) error {
 		err := ip.RenameLink(tmpName, ifName)
 		if err != nil {
-			return fmt.Errorf("failed to rename vlan to %q: %v", ifName, err)
+			return fmt.Errorf("failed to rename vlan to %q: %w", ifName, err)
 		}
 		vlan.Name = ifName
 
 		// Re-fetch interface to get all properties/attributes
 		contVlan, err := netlink.LinkByName(vlan.Name)
 		if err != nil {
-			return fmt.Errorf("failed to refetch vlan %q: %v", vlan.Name, err)
+			return fmt.Errorf("failed to refetch vlan %q: %w", vlan.Name, err)
 		}
 		vlan.Mac = contVlan.Attrs().HardwareAddr.String()
 		vlan.Sandbox = netns.Path()
@@ -133,14 +164,14 @@ func createVlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interfac
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
-	n, cniVersion, err := loadConf(args.StdinData)
+	n, cniVersion, err := loadConf(args)
 	if err != nil {
 		return err
 	}
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer netns.Close()
 
@@ -152,7 +183,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// run the IPAM plugin and get back the config to apply
 	r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
 	if err != nil {
-		return fmt.Errorf("failed to execute IPAM delegate: %v", err)
+		return fmt.Errorf("failed to execute IPAM delegate: %w", err)
 	}
 
 	// Invoke ipam del if err to avoid ip leak
@@ -191,7 +222,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
-	n, _, err := loadConf(args.StdinData)
+	n, _, err := loadConf(args)
 	if err != nil {
 		return err
 	}
@@ -207,7 +238,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		err = ip.DelLinkByName(args.IfName)
-		if err != nil && err == ip.ErrLinkNotFound {
+		if err != nil && errors.Is(err, ip.ErrLinkNotFound) {
 			return nil
 		}
 		return err
@@ -217,8 +248,8 @@ func cmdDel(args *skel.CmdArgs) error {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.
 		// https://github.com/kubernetes/kubernetes/issues/43014#issuecomment-287164444
-		_, ok := err.(ns.NSPathNotExistErr)
-		if ok {
+		var e ns.NSPathNotExistErr
+		if errors.As(err, &e) {
 			return nil
 		}
 		return err
@@ -234,12 +265,12 @@ func main() {
 func cmdCheck(args *skel.CmdArgs) error {
 	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
-		return fmt.Errorf("failed to load netconf: %v", err)
+		return fmt.Errorf("failed to load netconf: %w", err)
 	}
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer netns.Close()
 
@@ -276,16 +307,23 @@ func cmdCheck(args *skel.CmdArgs) error {
 		return fmt.Errorf("Sandbox in prevResult %s doesn't match configured netns: %s",
 			contMap.Sandbox, args.Netns)
 	}
+	var m netlink.Link
+	if conf.LinkContNs {
+		err = netns.Do(func(_ ns.NetNS) error {
+			m, err = netlink.LinkByName(conf.Master)
+			return err
+		})
+	} else {
+		m, err = netlink.LinkByName(conf.Master)
+	}
 
-	m, err := netlink.LinkByName(conf.Master)
 	if err != nil {
-		return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
+		return fmt.Errorf("failed to lookup master %q: %w", conf.Master, err)
 	}
 
 	//
 	// Check prevResults for ips, routes and dns against values found in the container
 	if err := netns.Do(func(_ ns.NetNS) error {
-
 		// Check interface against values found in the container
 		err := validateCniContainerInterface(contMap, m.Attrs().Index, conf.VlanId, conf.MTU)
 		if err != nil {
@@ -310,7 +348,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 }
 
 func validateCniContainerInterface(intf current.Interface, masterIndex int, vlanId int, mtu int) error {
-
 	var link netlink.Link
 	var err error
 

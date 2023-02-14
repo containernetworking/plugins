@@ -1,0 +1,27 @@
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters:
+  enable:
+    - contextcheck
+    - errorlint
+    - gci
+    - gofumpt
+    - govet
+    - misspell
+    - nolintlint
+    - unused
+  disable:
+    - errcheck
+
+linters-settings:
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/containernetworking/plugins)
+
+run:
+  skip-dirs:
+    - vendor

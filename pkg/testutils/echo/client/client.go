@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -47,7 +48,7 @@ func connectTCP(target, payload string) {
 	for {
 		n, err := conn.Read(buf)
 		fmt.Print(string(buf[:n]))
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

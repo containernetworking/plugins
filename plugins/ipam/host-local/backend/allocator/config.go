@@ -43,7 +43,7 @@ type Net struct {
 
 // IPAMConfig represents the IP related network configuration.
 // This nests Range because we initially only supported a single
-// range directly, and wish to preserve backwards compatability
+// range directly, and wish to preserve backwards compatibility
 type IPAMConfig struct {
 	*Range
 	Name       string
@@ -113,7 +113,7 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 
 	for idx := range n.IPAM.IPArgs {
 		if err := canonicalizeIP(&n.IPAM.IPArgs[idx]); err != nil {
-			return nil, "", fmt.Errorf("cannot understand ip: %v", err)
+			return nil, "", fmt.Errorf("cannot understand ip: %w", err)
 		}
 	}
 
@@ -138,7 +138,7 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	numV6 := 0
 	for i := range n.IPAM.Ranges {
 		if err := n.IPAM.Ranges[i].Canonicalize(); err != nil {
-			return nil, "", fmt.Errorf("invalid range set %d: %s", i, err)
+			return nil, "", fmt.Errorf("invalid range set %d: %w", i, err)
 		}
 
 		if n.IPAM.Ranges[i][0].RangeStart.To4() != nil {

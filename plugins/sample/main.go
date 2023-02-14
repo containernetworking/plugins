@@ -51,7 +51,7 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 	conf := PluginConf{}
 
 	if err := json.Unmarshal(stdin, &conf); err != nil {
-		return nil, fmt.Errorf("failed to parse network configuration: %v", err)
+		return nil, fmt.Errorf("failed to parse network configuration: %w", err)
 	}
 
 	// Parse previous result. This will parse, validate, and place the
@@ -59,7 +59,7 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 	// or inspect the PrevResult you will need to convert it to a concrete
 	// versioned Result struct.
 	if err := version.ParsePrevResult(&conf.NetConf); err != nil {
-		return nil, fmt.Errorf("could not parse prevResult: %v", err)
+		return nil, fmt.Errorf("could not parse prevResult: %w", err)
 	}
 	// End previous result parsing
 
@@ -93,7 +93,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// Convert the PrevResult to a concrete Result type that can be modified.
 	prevResult, err := current.GetResult(conf.PrevResult)
 	if err != nil {
-		return fmt.Errorf("failed to convert prevResult: %v", err)
+		return fmt.Errorf("failed to convert prevResult: %w", err)
 	}
 
 	if len(prevResult.IPs) == 0 {

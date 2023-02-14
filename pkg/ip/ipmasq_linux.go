@@ -15,6 +15,7 @@
 package ip
 
 import (
+	"errors"
 	"fmt"
 	"net"
 
@@ -38,14 +39,14 @@ func SetupIPMasq(ipn *net.IPNet, chain string, comment string) error {
 		multicastNet = "224.0.0.0/4"
 	}
 	if err != nil {
-		return fmt.Errorf("failed to locate iptables: %v", err)
+		return fmt.Errorf("failed to locate iptables: %w", err)
 	}
 
 	// Create chain if doesn't exist
 	exists := false
 	chains, err := ipt.ListChains("nat")
 	if err != nil {
-		return fmt.Errorf("failed to list chains: %v", err)
+		return fmt.Errorf("failed to list chains: %w", err)
 	}
 	for _, ch := range chains {
 		if ch == chain {
@@ -87,7 +88,7 @@ func TeardownIPMasq(ipn *net.IPNet, chain string, comment string) error {
 		ipt, err = iptables.NewWithProtocol(iptables.ProtocolIPv4)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to locate iptables: %v", err)
+		return fmt.Errorf("failed to locate iptables: %w", err)
 	}
 
 	err = ipt.Delete("nat", "POSTROUTING", "-s", ipn.IP.String(), "-j", chain, "-m", "comment", "--comment", comment)
@@ -104,7 +105,6 @@ func TeardownIPMasq(ipn *net.IPNet, chain string, comment string) error {
 	err = ipt.ClearChain("nat", chain)
 	if err != nil && !isNotExist(err) {
 		return err
-
 	}
 
 	err = ipt.DeleteChain("nat", chain)
@@ -118,8 +118,8 @@ func TeardownIPMasq(ipn *net.IPNet, chain string, comment string) error {
 // isNotExist returnst true if the error is from iptables indicating
 // that the target does not exist.
 func isNotExist(err error) bool {
-	e, ok := err.(*iptables.Error)
-	if !ok {
+	var e *iptables.Error
+	if !errors.As(err, &e) {
 		return false
 	}
 	return e.IsNotExist()

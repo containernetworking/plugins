@@ -28,12 +28,12 @@ import (
 	types040 "github.com/containernetworking/cni/pkg/types/040"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/testutils"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 )
 
 type Net struct {
@@ -103,13 +103,13 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	for i := range n.IPAM.Addresses {
 		ip, addr, err := net.ParseCIDR(n.IPAM.Addresses[i].AddressStr)
 		if err != nil {
-			return nil, "", fmt.Errorf("invalid CIDR %s: %s", n.IPAM.Addresses[i].AddressStr, err)
+			return nil, "", fmt.Errorf("invalid CIDR %s: %w", n.IPAM.Addresses[i].AddressStr, err)
 		}
 		n.IPAM.Addresses[i].Address = *addr
 		n.IPAM.Addresses[i].Address.IP = ip
 
 		if err := canonicalizeIP(&n.IPAM.Addresses[i].Address.IP); err != nil {
-			return nil, "", fmt.Errorf("invalid address %d: %s", i, err)
+			return nil, "", fmt.Errorf("invalid address %d: %w", i, err)
 		}
 
 		if n.IPAM.Addresses[i].Address.IP.To4() != nil {
@@ -132,7 +132,7 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 
 				ip, subnet, err := net.ParseCIDR(ipstr)
 				if err != nil {
-					return nil, "", fmt.Errorf("invalid CIDR %s: %s", ipstr, err)
+					return nil, "", fmt.Errorf("invalid CIDR %s: %w", ipstr, err)
 				}
 
 				addr := Address{Address: net.IPNet{IP: ip, Mask: subnet.Mask}}
@@ -196,7 +196,7 @@ func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result)
 
 	err = json.Unmarshal(confBytes, &config)
 	if err != nil {
-		return nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
+		return nil, fmt.Errorf("unmarshal existing network bytes: %w", err)
 	}
 
 	for key, value := range inject {
@@ -210,11 +210,10 @@ func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result)
 
 	conf := &Net{}
 	if err := json.Unmarshal(newBytes, &conf); err != nil {
-		return nil, fmt.Errorf("error parsing configuration: %s", err)
+		return nil, fmt.Errorf("error parsing configuration: %w", err)
 	}
 
 	return conf, nil
-
 }
 
 type tester interface {
@@ -224,9 +223,11 @@ type tester interface {
 
 type testerBase struct{}
 
-type testerV10x testerBase
-type testerV04x testerBase
-type testerV03x testerBase
+type (
+	testerV10x testerBase
+	testerV04x testerBase
+	testerV03x testerBase
+)
 
 func newTesterByVersion(version string) tester {
 	switch {
@@ -664,11 +665,11 @@ var _ = Describe("base functionality", func() {
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 
-				//get the IP address of the interface in the target namespace
+				// get the IP address of the interface in the target namespace
 				addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 				Expect(err).NotTo(HaveOccurred())
 				addr := addrs[0].IPNet.String()
-				//assert that IP address is what we set
+				// assert that IP address is what we set
 				Expect(addr).To(Equal(targetIP))
 
 				return nil
@@ -711,7 +712,6 @@ var _ = Describe("base functionality", func() {
 			}
 			_, _, err := testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
 			Expect(err).To(MatchError(`specify either "device", "hwaddr", "kernelpath" or "pciBusID"`))
-
 		})
 
 		It(fmt.Sprintf("[%s] works with a valid config without IPAM", ver), func() {
@@ -961,11 +961,11 @@ var _ = Describe("base functionality", func() {
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 
-				//get the IP address of the interface in the target namespace
+				// get the IP address of the interface in the target namespace
 				addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 				Expect(err).NotTo(HaveOccurred())
 				addr := addrs[0].IPNet.String()
-				//assert that IP address is what we set
+				// assert that IP address is what we set
 				Expect(addr).To(Equal(targetIP))
 
 				return nil
@@ -1162,21 +1162,21 @@ func (fs *fakeFilesystem) use() func() {
 	// create the new fake fs root dir in /tmp/sriov...
 	tmpDir, err := os.MkdirTemp("", "sriov")
 	if err != nil {
-		panic(fmt.Errorf("error creating fake root dir: %s", err.Error()))
+		panic(fmt.Errorf("error creating fake root dir: %w", err))
 	}
 	fs.rootDir = tmpDir
 
 	for _, dir := range fs.dirs {
-		err := os.MkdirAll(path.Join(fs.rootDir, dir), 0755)
+		err := os.MkdirAll(path.Join(fs.rootDir, dir), 0o755)
 		if err != nil {
-			panic(fmt.Errorf("error creating fake directory: %s", err.Error()))
+			panic(fmt.Errorf("error creating fake directory: %w", err))
 		}
 	}
 
 	for link, target := range fs.symlinks {
 		err = os.Symlink(target, path.Join(fs.rootDir, link))
 		if err != nil {
-			panic(fmt.Errorf("error creating fake symlink: %s", err.Error()))
+			panic(fmt.Errorf("error creating fake symlink: %w", err))
 		}
 	}
 
@@ -1186,7 +1186,7 @@ func (fs *fakeFilesystem) use() func() {
 		// remove temporary fake fs
 		err := os.RemoveAll(fs.rootDir)
 		if err != nil {
-			panic(fmt.Errorf("error tearing down fake filesystem: %s", err.Error()))
+			panic(fmt.Errorf("error tearing down fake filesystem: %w", err))
 		}
 	}
 }

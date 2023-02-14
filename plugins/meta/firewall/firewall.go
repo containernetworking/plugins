@@ -83,7 +83,7 @@ func ipString(ip net.IPNet) string {
 func parseConf(data []byte) (*FirewallNetConf, *current.Result, error) {
 	conf := FirewallNetConf{}
 	if err := json.Unmarshal(data, &conf); err != nil {
-		return nil, nil, fmt.Errorf("failed to load netconf: %v", err)
+		return nil, nil, fmt.Errorf("failed to load netconf: %w", err)
 	}
 
 	// Default the firewalld zone to trusted
@@ -101,12 +101,12 @@ func parseConf(data []byte) (*FirewallNetConf, *current.Result, error) {
 	var result *current.Result
 	var err error
 	if err = version.ParsePrevResult(&conf.NetConf); err != nil {
-		return nil, nil, fmt.Errorf("could not parse prevResult: %v", err)
+		return nil, nil, fmt.Errorf("could not parse prevResult: %w", err)
 	}
 
 	result, err = current.NewResultFromResult(conf.PrevResult)
 	if err != nil {
-		return nil, nil, fmt.Errorf("could not convert result to current version: %v", err)
+		return nil, nil, fmt.Errorf("could not convert result to current version: %w", err)
 	}
 
 	return &conf, result, nil

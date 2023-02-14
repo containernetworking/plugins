@@ -75,7 +75,7 @@ const DefaultMarkBit = 13
 func cmdAdd(args *skel.CmdArgs) error {
 	netConf, _, err := parseConfig(args.StdinData, args.IfName)
 	if err != nil {
-		return fmt.Errorf("failed to parse config: %v", err)
+		return fmt.Errorf("failed to parse config: %w", err)
 	}
 
 	if netConf.PrevResult == nil {
@@ -119,7 +119,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 func cmdDel(args *skel.CmdArgs) error {
 	netConf, _, err := parseConfig(args.StdinData, args.IfName)
 	if err != nil {
-		return fmt.Errorf("failed to parse config: %v", err)
+		return fmt.Errorf("failed to parse config: %w", err)
 	}
 
 	if len(netConf.RuntimeConfig.PortMaps) == 0 {
@@ -177,7 +177,7 @@ func parseConfig(stdin []byte, ifName string) (*PortMapConf, *current.Result, er
 	conf := PortMapConf{}
 
 	if err := json.Unmarshal(stdin, &conf); err != nil {
-		return nil, nil, fmt.Errorf("failed to parse network configuration: %v", err)
+		return nil, nil, fmt.Errorf("failed to parse network configuration: %w", err)
 	}
 
 	// Parse previous result.
@@ -185,12 +185,12 @@ func parseConfig(stdin []byte, ifName string) (*PortMapConf, *current.Result, er
 	if conf.RawPrevResult != nil {
 		var err error
 		if err = version.ParsePrevResult(&conf.NetConf); err != nil {
-			return nil, nil, fmt.Errorf("could not parse prevResult: %v", err)
+			return nil, nil, fmt.Errorf("could not parse prevResult: %w", err)
 		}
 
 		result, err = current.NewResultFromResult(conf.PrevResult)
 		if err != nil {
-			return nil, nil, fmt.Errorf("could not convert result to current version: %v", err)
+			return nil, nil, fmt.Errorf("could not convert result to current version: %w", err)
 		}
 	}
 

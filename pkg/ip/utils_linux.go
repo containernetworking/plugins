@@ -27,7 +27,6 @@ import (
 )
 
 func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) error {
-
 	// Ensure ips
 	for _, ips := range resultIPs {
 		ourAddr := netlink.Addr{IPNet: &ips.Address}
@@ -49,13 +48,15 @@ func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) 
 				break
 			}
 		}
-		if match == false {
+		if !match {
 			return fmt.Errorf("Failed to match addr %v on interface %v", ourAddr, ifName)
 		}
 
 		// Convert the host/prefixlen to just prefix for route lookup.
 		_, ourPrefix, err := net.ParseCIDR(ourAddr.String())
-
+		if err != nil {
+			return err
+		}
 		findGwy := &netlink.Route{Dst: ourPrefix}
 		routeFilter := netlink.RT_FILTER_DST
 
@@ -66,7 +67,7 @@ func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) 
 
 		gwy, err := netlink.RouteListFiltered(family, findGwy, routeFilter)
 		if err != nil {
-			return fmt.Errorf("Error %v trying to find Gateway %v for interface %v", err, ips.Gateway, ifName)
+			return fmt.Errorf("Error %w trying to find Gateway %v for interface %v", err, ips.Gateway, ifName)
 		}
 		if gwy == nil {
 			return fmt.Errorf("Failed to find Gateway %v for interface %v", ips.Gateway, ifName)
@@ -77,7 +78,6 @@ func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) 
 }
 
 func ValidateExpectedRoute(resultRoutes []*types.Route) error {
-
 	// Ensure that each static route in prevResults is found in the routing table
 	for _, route := range resultRoutes {
 		find := &netlink.Route{Dst: &route.Dst, Gw: route.GW}
@@ -105,7 +105,7 @@ func ValidateExpectedRoute(resultRoutes []*types.Route) error {
 
 		wasFound, err := netlink.RouteListFiltered(family, find, routeFilter)
 		if err != nil {
-			return fmt.Errorf("Expected Route %v not route table lookup error %v", route, err)
+			return fmt.Errorf("Expected Route %v not route table lookup error %w", route, err)
 		}
 		if wasFound == nil {
 			return fmt.Errorf("Expected Route %v not found in routing table", route)

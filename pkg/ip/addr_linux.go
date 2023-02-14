@@ -32,14 +32,14 @@ const SETTLE_INTERVAL = 50 * time.Millisecond
 func SettleAddresses(ifName string, timeout int) error {
 	link, err := netlink.LinkByName(ifName)
 	if err != nil {
-		return fmt.Errorf("failed to retrieve link: %v", err)
+		return fmt.Errorf("failed to retrieve link: %w", err)
 	}
 
 	deadline := time.Now().Add(time.Duration(timeout) * time.Second)
 	for {
 		addrs, err := netlink.AddrList(link, netlink.FAMILY_ALL)
 		if err != nil {
-			return fmt.Errorf("could not list addresses: %v", err)
+			return fmt.Errorf("could not list addresses: %w", err)
 		}
 
 		if len(addrs) == 0 {

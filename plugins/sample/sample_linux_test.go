@@ -18,10 +18,11 @@ import (
 	"fmt"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/testutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 )
 
 var _ = Describe("sample test", func() {
@@ -125,5 +126,4 @@ var _ = Describe("sample test", func() {
 		_, _, err := testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
 		Expect(err).To(MatchError("must be called as chained plugin"))
 	})
-
 })

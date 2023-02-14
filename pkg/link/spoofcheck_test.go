@@ -16,8 +16,8 @@ package link_test
 
 import (
 	"fmt"
-	"github.com/networkplumbing/go-nft/nft"
 
+	"github.com/networkplumbing/go-nft/nft"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -70,9 +70,8 @@ var _ = Describe("spoofcheck", func() {
 			config.FromJSON([]byte(rowConfigWithRulesOnly()))
 			c := &configurerStub{applyConfig: []*nft.Config{config}, readConfig: config, failFirstApplyConfig: true}
 			sc := link.NewSpoofCheckerWithConfigurer("", "", id, c)
-			Expect(sc.Teardown()).To(MatchError(fmt.Sprintf(
-				"failed to teardown spoof-check: failed to delete iface match rule: %s, <nil>", errorFirstApplyText,
-			)))
+			Expect(sc.Teardown()).To(MatchError(fmt.Errorf(
+				"failed to teardown spoof-check: failed to delete iface match rule: %s, %w", errorFirstApplyText, nil)))
 		})
 
 		It("fails, read current config is unsuccessful", func() {
@@ -80,9 +79,8 @@ var _ = Describe("spoofcheck", func() {
 			config.FromJSON([]byte(rowConfigWithRulesOnly()))
 			c := &configurerStub{applyConfig: []*nft.Config{config}, readConfig: config, failReadConfig: true}
 			sc := link.NewSpoofCheckerWithConfigurer("", "", id, c)
-			Expect(sc.Teardown()).To(MatchError(fmt.Sprintf(
-				"failed to teardown spoof-check: %s, <nil>", errorReadText,
-			)))
+			Expect(sc.Teardown()).To(MatchError(fmt.Errorf(
+				"failed to teardown spoof-check: %s, %w", errorReadText, nil)))
 		})
 
 		It("fails, 2nd apply is unsuccessful (delete the regular chains)", func() {

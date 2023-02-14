@@ -24,10 +24,11 @@ import (
 
 	"github.com/containernetworking/cni/libcni"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/testutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 )
 
 // The integration tests expect the "firewall" binary to be present in $PATH.
@@ -148,7 +149,7 @@ var _ = Describe("firewall integration tests (ingressPolicy: same-bridge)", func
 				// Create the network
 				res, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig)
 				Expect(err).NotTo(HaveOccurred())
-				// nolint: errcheck
+				//nolint: errcheck
 				defer deleteNetwork()
 
 				results[i], err = types100.NewResultFromResult(res)

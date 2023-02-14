@@ -28,6 +28,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
@@ -127,7 +128,7 @@ func cmdDel(args *skel.CmdArgs) error {
 func cmdCheck(args *skel.CmdArgs) error {
 	// Plugin must return result in same version as specified in netconf
 	versionDecoder := &version.ConfigDecoder{}
-	//confVersion, err := versionDecoder.Decode(args.StdinData)
+	// confVersion, err := versionDecoder.Decode(args.StdinData)
 	_, err := versionDecoder.Decode(args.StdinData)
 	if err != nil {
 		return err
@@ -144,7 +145,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 func getSocketPath(stdinData []byte) (string, error) {
 	conf := NetConf{}
 	if err := json.Unmarshal(stdinData, &conf); err != nil {
-		return "", fmt.Errorf("error parsing socket path conf: %v", err)
+		return "", fmt.Errorf("error parsing socket path conf: %w", err)
 	}
 	if conf.IPAM.DaemonSocketPath == "" {
 		return defaultSocketPath, nil
@@ -155,25 +156,25 @@ func getSocketPath(stdinData []byte) (string, error) {
 func rpcCall(method string, args *skel.CmdArgs, result interface{}) error {
 	socketPath, err := getSocketPath(args.StdinData)
 	if err != nil {
-		return fmt.Errorf("error obtaining socketPath: %v", err)
+		return fmt.Errorf("error obtaining socketPath: %w", err)
 	}
 
 	client, err := rpc.DialHTTP("unix", socketPath)
 	if err != nil {
-		return fmt.Errorf("error dialing DHCP daemon: %v", err)
+		return fmt.Errorf("error dialing DHCP daemon: %w", err)
 	}
 
 	// The daemon may be running under a different working dir
 	// so make sure the netns path is absolute.
 	netns, err := filepath.Abs(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to make %q an absolute path: %v", args.Netns, err)
+		return fmt.Errorf("failed to make %q an absolute path: %w", args.Netns, err)
 	}
 	args.Netns = netns
 
 	err = client.Call(method, args, result)
 	if err != nil {
-		return fmt.Errorf("error calling %v: %v", method, err)
+		return fmt.Errorf("error calling %v: %w", method, err)
 	}
 
 	return nil

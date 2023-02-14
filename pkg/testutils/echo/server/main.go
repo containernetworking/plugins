@@ -1,13 +1,15 @@
 // Echosvr is a simple TCP echo server
 //
 // It prints its listen address on stdout
-//    127.0.0.1:xxxxx
-//  A test should wait for this line, parse it
-//  and may then attempt to connect.
+//
+//	  127.0.0.1:xxxxx
+//	A test should wait for this line, parse it
+//	and may then attempt to connect.
 package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -58,7 +60,7 @@ func main() {
 			log.Fatalf("Error from ReadFrom(): %s", err)
 		}
 		sock.SetWriteDeadline(time.Now().Add(1 * time.Minute))
-		n, err = sock.WriteTo(buffer[0:n], addr)
+		_, err = sock.WriteTo(buffer[0:n], addr)
 		if err != nil {
 			return
 		}
@@ -68,7 +70,7 @@ func main() {
 func handleConnection(conn net.Conn) {
 	conn.SetReadDeadline(time.Now().Add(1 * time.Minute))
 	content, err := bufio.NewReader(conn).ReadString('\n')
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		fmt.Fprint(os.Stderr, err.Error())
 		return
 	}

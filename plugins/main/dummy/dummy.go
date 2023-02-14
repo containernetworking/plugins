@@ -20,12 +20,11 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/vishvananda/netlink"
-
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
@@ -36,13 +35,12 @@ import (
 func parseNetConf(bytes []byte) (*types.NetConf, error) {
 	conf := &types.NetConf{}
 	if err := json.Unmarshal(bytes, conf); err != nil {
-		return nil, fmt.Errorf("failed to parse network config: %v", err)
+		return nil, fmt.Errorf("failed to parse network config: %w", err)
 	}
 	return conf, nil
 }
 
 func createDummy(conf *types.NetConf, ifName string, netns ns.NetNS) (*current.Interface, error) {
-
 	dummy := &current.Interface{}
 
 	dm := &netlink.Dummy{
@@ -53,7 +51,7 @@ func createDummy(conf *types.NetConf, ifName string, netns ns.NetNS) (*current.I
 	}
 
 	if err := netlink.LinkAdd(dm); err != nil {
-		return nil, fmt.Errorf("failed to create dummy: %v", err)
+		return nil, fmt.Errorf("failed to create dummy: %w", err)
 	}
 	dummy.Name = ifName
 
@@ -61,7 +59,7 @@ func createDummy(conf *types.NetConf, ifName string, netns ns.NetNS) (*current.I
 		// Re-fetch interface to get all properties/attributes
 		contDummy, err := netlink.LinkByName(ifName)
 		if err != nil {
-			return fmt.Errorf("failed to fetch dummy%q: %v", ifName, err)
+			return fmt.Errorf("failed to fetch dummy%q: %w", ifName, err)
 		}
 
 		dummy.Mac = contDummy.Attrs().HardwareAddr.String()
@@ -88,7 +86,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", netns, err)
 	}
 	defer netns.Close()
 
@@ -165,7 +163,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	err = ns.WithNetNSPath(args.Netns, func(ns.NetNS) error {
 		err = ip.DelLinkByName(args.IfName)
-		if err != nil && err == ip.ErrLinkNotFound {
+		if err != nil && errors.Is(err, ip.ErrLinkNotFound) {
 			return nil
 		}
 		return err
@@ -175,8 +173,8 @@ func cmdDel(args *skel.CmdArgs) error {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.
 		// https://github.com/kubernetes/kubernetes/issues/43014#issuecomment-287164444
-		_, ok := err.(ns.NSPathNotExistErr)
-		if ok {
+		var e ns.NSPathNotExistErr
+		if errors.As(err, &e) {
 			return nil
 		}
 		return err
@@ -201,7 +199,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer netns.Close()
 
@@ -245,7 +243,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 	//
 	// Check prevResults for ips, routes and dns against values found in the container
 	if err := netns.Do(func(_ ns.NetNS) error {
-
 		// Check interface against values found in the container
 		err := validateCniContainerInterface(contMap)
 		if err != nil {
@@ -262,11 +259,9 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 
 	return nil
-
 }
 
 func validateCniContainerInterface(intf current.Interface) error {
-
 	var link netlink.Link
 	var err error
 
