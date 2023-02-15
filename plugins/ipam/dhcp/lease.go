@@ -84,8 +84,11 @@ var requestOptionsDefault = map[dhcp4.OptionCode]bool{
 }
 
 func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequestOptions []RequestOption) (
-	optsRequesting map[dhcp4.OptionCode]bool, optsProviding map[dhcp4.OptionCode][]byte, err error,
+	map[dhcp4.OptionCode]bool, map[dhcp4.OptionCode][]byte, error,
 ) {
+	var optsRequesting map[dhcp4.OptionCode]bool
+	var optsProviding map[dhcp4.OptionCode][]byte
+	var err error
 	// parse CNI args
 	cniArgsParsed := map[string]string{}
 	for _, argPair := range strings.Split(cniArgs, ";") {
@@ -101,20 +104,18 @@ func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequestOptio
 	for _, opt := range ProvideOptions {
 		optParsed, err = parseOptionName(string(opt.Option))
 		if err != nil {
-			err = fmt.Errorf("Can not parse option %q: %w", opt.Option, err)
-			return
+			return optsRequesting, optsProviding, fmt.Errorf("Can not parse option %q: %w", opt.Option, err)
 		}
 		if len(opt.Value) > 0 {
 			if len(opt.Value) > 255 {
 				err = fmt.Errorf("value too long for option %q: %q", opt.Option, opt.Value)
-				return
+				return optsRequesting, optsProviding, err
 			}
 			optsProviding[optParsed] = []byte(opt.Value)
 		}
 		if value, ok := cniArgsParsed[opt.ValueFromCNIArg]; ok {
 			if len(value) > 255 {
-				err = fmt.Errorf("value too long for option %q from CNI_ARGS %q: %q", opt.Option, opt.ValueFromCNIArg, opt.Value)
-				return
+				return optsRequesting, optsProviding, fmt.Errorf("value too long for option %q from CNI_ARGS %q: %q", opt.Option, opt.ValueFromCNIArg, opt.Value)
 			}
 			optsProviding[optParsed] = []byte(value)
 		}
@@ -129,8 +130,7 @@ func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequestOptio
 		}
 		optParsed, err = parseOptionName(string(opt.Option))
 		if err != nil {
-			err = fmt.Errorf("Can not parse option %q: %w", opt.Option, err)
-			return
+			return optsRequesting, optsProviding, fmt.Errorf("Can not parse option %q: %w", opt.Option, err)
 		}
 		optsRequesting[optParsed] = true
 	}
@@ -140,7 +140,7 @@ func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequestOptio
 			optsRequesting[k] = v
 		}
 	}
-	return
+	return optsRequesting, optsProviding, err
 }
 
 // AcquireLease gets an DHCP lease and then maintains it in the background

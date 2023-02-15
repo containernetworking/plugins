@@ -8,9 +8,12 @@ linters:
     - errorlint
     - gci
     - gofumpt
+    - gosimple
     - govet
     - misspell
     - nolintlint
+    - nonamedreturns
+    - predeclared
     - unused
   disable:
     - errcheck
