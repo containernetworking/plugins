@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"net"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -174,8 +174,8 @@ var _ = Describe("IP Operations", func() {
 		}
 	})
 
-	It("Decode", func() {
-		Context("valid IP", func() {
+	Context("Decode", func() {
+		It("valid IP", func() {
 			testCases := []struct {
 				text     string
 				expected *IP
@@ -208,7 +208,7 @@ var _ = Describe("IP Operations", func() {
 
 		})
 
-		Context("empty text", func() {
+		It("empty text", func() {
 			ip := &IP{}
 			err := json.Unmarshal([]byte(`""`), ip)
 
@@ -216,7 +216,7 @@ var _ = Describe("IP Operations", func() {
 			Expect(ip).To(Equal(newIP(nil, nil)))
 		})
 
-		Context("invalid IP", func() {
+		It("invalid IP", func() {
 			testCases := []struct {
 				text        string
 				expectedErr error
@@ -243,7 +243,7 @@ var _ = Describe("IP Operations", func() {
 			}
 		})
 
-		Context("IP slice", func() {
+		It("IP slice", func() {
 			testCases := []struct {
 				text     string
 				expected []*IP
