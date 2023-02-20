@@ -1,0 +1,12 @@
+extends: default
+
+ignore: |
+  vendor
+
+rules:
+  document-start: disable
+  line-length: disable
+  truthy:
+    ignore: |
+      .github/workflows/*.yml
+      .github/workflows/*.yaml
