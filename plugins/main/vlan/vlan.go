@@ -75,7 +75,8 @@ func getMTUByName(ifName string, namespace string, inContainer bool) (int, error
 	var link netlink.Link
 	var err error
 	if inContainer {
-		netns, err := ns.GetNS(namespace)
+		var netns ns.NetNS
+		netns, err = ns.GetNS(namespace)
 		if err != nil {
 			return 0, fmt.Errorf("failed to open netns %q: %v", netns, err)
 		}
