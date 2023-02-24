@@ -32,6 +32,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
+	"github.com/containernetworking/plugins/pkg/utils"
 
 	"github.com/vishvananda/netlink"
 
@@ -66,21 +67,22 @@ type Net struct {
 // testCase defines the CNI network configuration and the expected
 // bridge addresses for a test case.
 type testCase struct {
-	cniVersion  string      // CNI Version
-	subnet      string      // Single subnet config: Subnet CIDR
-	gateway     string      // Single subnet config: Gateway
-	ranges      []rangeInfo // Ranges list (multiple subnets config)
-	resolvConf  string      // host-local resolvConf file path
-	isGW        bool
-	isLayer2    bool
-	expGWCIDRs  []string // Expected gateway addresses in CIDR form
-	vlan        int
-	ipMasq      bool
-	macspoofchk bool
-	AddErr020   string
-	DelErr020   string
-	AddErr010   string
-	DelErr010   string
+	cniVersion      string      // CNI Version
+	subnet          string      // Single subnet config: Subnet CIDR
+	gateway         string      // Single subnet config: Gateway
+	ranges          []rangeInfo // Ranges list (multiple subnets config)
+	resolvConf      string      // host-local resolvConf file path
+	isGW            bool
+	isLayer2        bool
+	expGWCIDRs      []string // Expected gateway addresses in CIDR form
+	vlan            int
+	ipMasq          bool
+	ipMasqOwnSubnet bool
+	macspoofchk     bool
+	AddErr020       string
+	DelErr020       string
+	AddErr010       string
+	DelErr010       string
 
 	envArgs       string // CNI_ARGS
 	runtimeConfig struct {
@@ -146,6 +148,9 @@ const (
 	ipMasqConfStr = `,
 	"ipMasq": %t`
 
+	ipMasqOwnSubnetConfStr = `,
+	"ipMasqOwnSubnet": %t`
+
 	// Single subnet configuration (legacy)
 	subnetConfStr = `,
         "subnet":  "%s"`
@@ -196,6 +201,9 @@ func (tc testCase) netConfJSON(dataDir string) string {
 	if tc.ipMasq {
 		conf += tc.ipMasqConfig()
 	}
+	if tc.ipMasqOwnSubnet {
+		conf += tc.ipMasqOwnSubnetConfig()
+	}
 	if tc.args.cni.mac != "" {
 		conf += fmt.Sprintf(argsFormat, tc.args.cni.mac)
 	}
@@ -241,6 +249,11 @@ func (tc testCase) subnetConfig() string {
 
 func (tc testCase) ipMasqConfig() string {
 	conf := fmt.Sprintf(ipMasqConfStr, tc.ipMasq)
+	return conf
+}
+
+func (tc testCase) ipMasqOwnSubnetConfig() string {
+	conf := fmt.Sprintf(ipMasqOwnSubnetConfStr, tc.ipMasqOwnSubnet)
 	return conf
 }
 
@@ -2153,34 +2166,59 @@ var _ = Describe("bridge Operations", func() {
 			It(fmt.Sprintf("[%s] configures a bridge and ipMasq rules", ver), func() {
 				err := originalNS.Do(func(ns.NetNS) error {
 					defer GinkgoRecover()
-					tc := testCase{
-						ranges: []rangeInfo{{
-							subnet: "10.1.2.0/24",
-						}},
-						ipMasq:     true,
-						cniVersion: ver,
+					for _, tc := range []testCase{
+						{
+							ranges: []rangeInfo{{
+								subnet: "10.1.2.0/24",
+							}},
+							ipMasq:     true,
+							cniVersion: ver,
+						},
+						{
+							ranges: []rangeInfo{{
+								subnet: "10.1.2.0/24",
+							}},
+							ipMasq:          true,
+							ipMasqOwnSubnet: true,
+							cniVersion:      ver,
+						},
+					} {
+						args := tc.createCmdArgs(originalNS, dataDir)
+						r, _, err := testutils.CmdAddWithArgs(args, func() error {
+							return cmdAdd(args)
+						})
+						Expect(err).NotTo(HaveOccurred())
+						result, err := types100.GetResult(r)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(result.IPs).Should(HaveLen(1))
+
+						ipt, err := iptables.NewWithProtocol(iptables.ProtocolIPv4)
+						Expect(err).NotTo(HaveOccurred())
+
+						rules, err := ipt.List("nat", "POSTROUTING")
+						Expect(err).NotTo(HaveOccurred())
+						Expect(rules).Should(ContainElement(ContainSubstring(result.IPs[0].Address.IP.String())))
+
+						// Test ipMasqOwnSubnet.
+						ipnet := net.IPNet{
+							IP:   result.IPs[0].Address.IP,
+							Mask: result.IPs[0].Address.Mask,
+						}
+						_, subnet, _ := net.ParseCIDR(ipnet.String())
+						regex := fmt.Sprintf("-d %s.*-j ACCEPT", subnet.String())
+						chain := utils.FormatChainName(tc.netConf().Name, args.ContainerID)
+						chainRules, err := ipt.List("nat", chain)
+						if tc.ipMasqOwnSubnet {
+							Expect(chainRules).ShouldNot(ContainElement(MatchRegexp(regex)))
+						} else {
+							Expect(chainRules).Should(ContainElement(MatchRegexp(regex)))
+						}
+
+						err = testutils.CmdDelWithArgs(args, func() error {
+							return cmdDel(args)
+						})
+						Expect(err).NotTo(HaveOccurred())
 					}
-
-					args := tc.createCmdArgs(originalNS, dataDir)
-					r, _, err := testutils.CmdAddWithArgs(args, func() error {
-						return cmdAdd(args)
-					})
-					Expect(err).NotTo(HaveOccurred())
-					result, err := types100.GetResult(r)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(result.IPs).Should(HaveLen(1))
-
-					ipt, err := iptables.NewWithProtocol(iptables.ProtocolIPv4)
-					Expect(err).NotTo(HaveOccurred())
-
-					rules, err := ipt.List("nat", "POSTROUTING")
-					Expect(err).NotTo(HaveOccurred())
-					Expect(rules).Should(ContainElement(ContainSubstring(result.IPs[0].Address.IP.String())))
-
-					err = testutils.CmdDelWithArgs(args, func() error {
-						return cmdDel(args)
-					})
-					Expect(err).NotTo(HaveOccurred())
 					return nil
 				})
 				Expect(err).NotTo(HaveOccurred())

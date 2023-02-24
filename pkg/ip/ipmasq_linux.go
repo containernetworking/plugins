@@ -23,7 +23,7 @@ import (
 
 // SetupIPMasq installs iptables rules to masquerade traffic
 // coming from ip of ipn and going outside of ipn
-func SetupIPMasq(ipn *net.IPNet, chain string, comment string) error {
+func SetupIPMasq(ipn *net.IPNet, chain string, comment string, ipMasqOwnSubnet bool) error {
 	isV6 := ipn.IP.To4() == nil
 
 	var ipt *iptables.IPTables
@@ -59,9 +59,11 @@ func SetupIPMasq(ipn *net.IPNet, chain string, comment string) error {
 		}
 	}
 
-	// Packets to this network should not be touched
-	if err := ipt.AppendUnique("nat", chain, "-d", ipn.String(), "-j", "ACCEPT", "-m", "comment", "--comment", comment); err != nil {
-		return err
+	// Packets to this network should not be touched unless explicitly requested.
+	if !ipMasqOwnSubnet {
+		if err := ipt.AppendUnique("nat", chain, "-d", ipn.String(), "-j", "ACCEPT", "-m", "comment", "--comment", comment); err != nil {
+			return err
+		}
 	}
 
 	// Don't masquerade multicast - pods should be able to talk to other pods

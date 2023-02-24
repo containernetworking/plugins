@@ -46,17 +46,18 @@ const defaultBrName = "cni0"
 
 type NetConf struct {
 	types.NetConf
-	BrName       string `json:"bridge"`
-	IsGW         bool   `json:"isGateway"`
-	IsDefaultGW  bool   `json:"isDefaultGateway"`
-	ForceAddress bool   `json:"forceAddress"`
-	IPMasq       bool   `json:"ipMasq"`
-	MTU          int    `json:"mtu"`
-	HairpinMode  bool   `json:"hairpinMode"`
-	PromiscMode  bool   `json:"promiscMode"`
-	Vlan         int    `json:"vlan"`
-	MacSpoofChk  bool   `json:"macspoofchk,omitempty"`
-	EnableDad    bool   `json:"enabledad,omitempty"`
+	BrName          string `json:"bridge"`
+	IsGW            bool   `json:"isGateway"`
+	IsDefaultGW     bool   `json:"isDefaultGateway"`
+	ForceAddress    bool   `json:"forceAddress"`
+	IPMasq          bool   `json:"ipMasq"`
+	IPMasqOwnSubnet bool   `json:"ipMasqOwnSubnet"`
+	MTU             int    `json:"mtu"`
+	HairpinMode     bool   `json:"hairpinMode"`
+	PromiscMode     bool   `json:"promiscMode"`
+	Vlan            int    `json:"vlan"`
+	MacSpoofChk     bool   `json:"macspoofchk,omitempty"`
+	EnableDad       bool   `json:"enabledad,omitempty"`
 
 	Args struct {
 		Cni BridgeArgs `json:"cni,omitempty"`
@@ -562,7 +563,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			chain := utils.FormatChainName(n.Name, args.ContainerID)
 			comment := utils.FormatComment(n.Name, args.ContainerID)
 			for _, ipc := range result.IPs {
-				if err = ip.SetupIPMasq(&ipc.Address, chain, comment); err != nil {
+				if err = ip.SetupIPMasq(&ipc.Address, chain, comment, n.IPMasqOwnSubnet); err != nil {
 					return err
 				}
 			}
