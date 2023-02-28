@@ -28,7 +28,6 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
@@ -109,7 +108,6 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 
 // getIPCfgs finds the IPs on the supplied interface, returning as IPConfig structures
 func getIPCfgs(iface string, prevResult *current.Result) ([]*current.IPConfig, error) {
-
 	if len(prevResult.IPs) == 0 {
 		// No IP addresses; that makes no sense. Pack it in.
 		return nil, fmt.Errorf("No IP addresses supplied on interface: %s", iface)
@@ -276,7 +274,8 @@ func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface strin
 				Dst:       &dest,
 				Gw:        ipCfg.Gateway,
 				Table:     table,
-				LinkIndex: linkIndex}
+				LinkIndex: linkIndex,
+			}
 
 			err = netlink.RouteAdd(&route)
 			if err != nil {
@@ -350,7 +349,6 @@ func cmdDel(args *skel.CmdArgs) error {
 
 // Tidy up the rules for the deleted interface
 func tidyRules(iface string) error {
-
 	// We keep on going on rule deletion error, but return the last failure.
 	var errReturn error
 

@@ -26,7 +26,6 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
@@ -112,7 +111,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		r := &current.Result{
 			CNIVersion: conf.CNIVersion,
 			Interfaces: []*current.Interface{
-				&current.Interface{
+				{
 					Name:    args.IfName,
 					Mac:     "00:00:00:00:00:00",
 					Sandbox: args.Netns,

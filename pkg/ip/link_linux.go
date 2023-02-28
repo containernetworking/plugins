@@ -28,9 +28,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 )
 
-var (
-	ErrLinkNotFound = errors.New("link not found")
-)
+var ErrLinkNotFound = errors.New("link not found")
 
 // makeVethPair is called from within the container's network namespace
 func makeVethPair(name, peer string, mtu int, mac string, hostNS ns.NetNS) (netlink.Link, error) {

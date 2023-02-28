@@ -1,9 +1,10 @@
 // Echosvr is a simple TCP echo server
 //
 // It prints its listen address on stdout
-//    127.0.0.1:xxxxx
-//  A test should wait for this line, parse it
-//  and may then attempt to connect.
+//
+//	  127.0.0.1:xxxxx
+//	A test should wait for this line, parse it
+//	and may then attempt to connect.
 package main
 
 import (
@@ -58,7 +59,7 @@ func main() {
 			log.Fatalf("Error from ReadFrom(): %s", err)
 		}
 		sock.SetWriteDeadline(time.Now().Add(1 * time.Minute))
-		n, err = sock.WriteTo(buffer[0:n], addr)
+		_, err = sock.WriteTo(buffer[0:n], addr)
 		if err != nil {
 			return
 		}

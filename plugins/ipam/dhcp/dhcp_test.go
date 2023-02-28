@@ -25,20 +25,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/containernetworking/cni/pkg/skel"
-	types100 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/testutils"
-
-	"github.com/vishvananda/netlink"
-
 	"github.com/d2g/dhcp4"
 	"github.com/d2g/dhcp4server"
 	"github.com/d2g/dhcp4server/leasepool"
 	"github.com/d2g/dhcp4server/leasepool/memorypool"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/cni/pkg/skel"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 )
 
 func getTmpDir() (string, error) {
@@ -120,7 +118,7 @@ const (
 )
 
 var _ = BeforeSuite(func() {
-	err := os.MkdirAll(cniDirPrefix, 0700)
+	err := os.MkdirAll(cniDirPrefix, 0o700)
 	Expect(err).NotTo(HaveOccurred())
 })
 

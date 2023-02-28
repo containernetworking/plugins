@@ -22,7 +22,6 @@ import (
 	"strconv"
 
 	current "github.com/containernetworking/cni/pkg/types/100"
-
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend"
 )

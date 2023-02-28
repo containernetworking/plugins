@@ -35,14 +35,15 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
-const defaultDataDir = "/run/cni/tuning"
-const defaultAllowlistDir = "/etc/cni/tuning/"
-const defaultAllowlistFile = "allowlist.conf"
+const (
+	defaultDataDir       = "/run/cni/tuning"
+	defaultAllowlistDir  = "/etc/cni/tuning/"
+	defaultAllowlistFile = "allowlist.conf"
+)
 
 // TuningConf represents the network tuning configuration.
 type TuningConf struct {
@@ -225,7 +226,7 @@ func createBackup(ifName, containerID, backupPath string, tuningConf *TuningConf
 	}
 
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
-		if err = os.MkdirAll(backupPath, 0600); err != nil {
+		if err = os.MkdirAll(backupPath, 0o600); err != nil {
 			return fmt.Errorf("failed to create backup directory: %v", err)
 		}
 	}
@@ -234,7 +235,7 @@ func createBackup(ifName, containerID, backupPath string, tuningConf *TuningConf
 	if err != nil {
 		return fmt.Errorf("failed to marshall data for %q: %v", ifName, err)
 	}
-	if err = os.WriteFile(path.Join(backupPath, containerID+"_"+ifName+".json"), data, 0600); err != nil {
+	if err = os.WriteFile(path.Join(backupPath, containerID+"_"+ifName+".json"), data, 0o600); err != nil {
 		return fmt.Errorf("failed to save file %s.json: %v", ifName, err)
 	}
 
@@ -348,7 +349,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return fmt.Errorf("invalid net sysctl key: %q", key)
 			}
 			content := []byte(value)
-			err := os.WriteFile(fileName, content, 0644)
+			err := os.WriteFile(fileName, content, 0o644)
 			if err != nil {
 				return err
 			}
@@ -507,7 +508,7 @@ func validateSysctlConf(tuningConf *TuningConf) error {
 	if !isPresent {
 		return nil
 	}
-	for sysctl, _ := range tuningConf.SysCtl {
+	for sysctl := range tuningConf.SysCtl {
 		match, err := contains(sysctl, allowlist)
 		if err != nil {
 			return err

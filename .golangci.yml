@@ -1,0 +1,21 @@
+linters:
+  enable:
+    - gci
+    - gofumpt
+    - misspell
+  disable:
+    - errcheck
+    - gosimple
+    - ineffassign
+    - staticcheck
+
+linters-settings:
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/containernetworking)
+
+run:
+  skip-dirs:
+    - vendor

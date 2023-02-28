@@ -17,11 +17,10 @@ package ns_test
 import (
 	"math/rand"
 	"runtime"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"testing"
 )
 
 func TestNs(t *testing.T) {

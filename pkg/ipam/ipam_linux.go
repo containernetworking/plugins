@@ -19,11 +19,11 @@ import (
 	"net"
 	"os"
 
+	"github.com/vishvananda/netlink"
+
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
-
-	"github.com/vishvananda/netlink"
 )
 
 const (

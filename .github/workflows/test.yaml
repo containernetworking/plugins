@@ -20,6 +20,9 @@ jobs:
       - uses: ibiqlik/action-yamllint@v3
         with:
           format: auto
+      - uses: golangci/golangci-lint-action@v3
+        with:
+          args: -v
   build:
     name: Build all linux architectures
     needs: lint

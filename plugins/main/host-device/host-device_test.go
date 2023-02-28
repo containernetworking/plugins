@@ -23,6 +23,10 @@ import (
 	"path"
 	"strings"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	types040 "github.com/containernetworking/cni/pkg/types/040"
@@ -30,10 +34,6 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"github.com/vishvananda/netlink"
 )
 
 type Net struct {
@@ -214,7 +214,6 @@ func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result)
 	}
 
 	return conf, nil
-
 }
 
 type tester interface {
@@ -224,9 +223,11 @@ type tester interface {
 
 type testerBase struct{}
 
-type testerV10x testerBase
-type testerV04x testerBase
-type testerV03x testerBase
+type (
+	testerV10x testerBase
+	testerV04x testerBase
+	testerV03x testerBase
+)
 
 func newTesterByVersion(version string) tester {
 	switch {
@@ -664,11 +665,11 @@ var _ = Describe("base functionality", func() {
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 
-				//get the IP address of the interface in the target namespace
+				// get the IP address of the interface in the target namespace
 				addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 				Expect(err).NotTo(HaveOccurred())
 				addr := addrs[0].IPNet.String()
-				//assert that IP address is what we set
+				// assert that IP address is what we set
 				Expect(addr).To(Equal(targetIP))
 
 				return nil
@@ -711,7 +712,6 @@ var _ = Describe("base functionality", func() {
 			}
 			_, _, err := testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
 			Expect(err).To(MatchError(`specify either "device", "hwaddr", "kernelpath" or "pciBusID"`))
-
 		})
 
 		It(fmt.Sprintf("[%s] works with a valid config without IPAM", ver), func() {
@@ -961,11 +961,11 @@ var _ = Describe("base functionality", func() {
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 
-				//get the IP address of the interface in the target namespace
+				// get the IP address of the interface in the target namespace
 				addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 				Expect(err).NotTo(HaveOccurred())
 				addr := addrs[0].IPNet.String()
-				//assert that IP address is what we set
+				// assert that IP address is what we set
 				Expect(addr).To(Equal(targetIP))
 
 				return nil
@@ -1167,7 +1167,7 @@ func (fs *fakeFilesystem) use() func() {
 	fs.rootDir = tmpDir
 
 	for _, dir := range fs.dirs {
-		err := os.MkdirAll(path.Join(fs.rootDir, dir), 0755)
+		err := os.MkdirAll(path.Join(fs.rootDir, dir), 0o755)
 		if err != nil {
 			panic(fmt.Errorf("error creating fake directory: %s", err.Error()))
 		}

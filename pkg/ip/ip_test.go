@@ -205,7 +205,6 @@ var _ = Describe("IP Operations", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(ip).To(Equal(test.expected))
 			}
-
 		})
 
 		It("empty text", func() {

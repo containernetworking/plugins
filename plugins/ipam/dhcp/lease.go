@@ -34,13 +34,17 @@ import (
 
 // RFC 2131 suggests using exponential backoff, starting with 4sec
 // and randomized to +/- 1sec
-const resendDelay0 = 4 * time.Second
-const resendDelayMax = 62 * time.Second
+const (
+	resendDelay0   = 4 * time.Second
+	resendDelayMax = 62 * time.Second
+)
 
 // To speed up the retry for first few failures, we retry without
 // backoff for a few times
-const resendFastDelay = 2 * time.Second
-const resendFastMax = 4
+const (
+	resendFastDelay = 2 * time.Second
+	resendFastMax   = 4
+)
 
 const (
 	leaseStateBound = iota
@@ -80,8 +84,8 @@ var requestOptionsDefault = map[dhcp4.OptionCode]bool{
 }
 
 func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequestOptions []RequestOption) (
-	optsRequesting map[dhcp4.OptionCode]bool, optsProviding map[dhcp4.OptionCode][]byte, err error) {
-
+	optsRequesting map[dhcp4.OptionCode]bool, optsProviding map[dhcp4.OptionCode][]byte, err error,
+) {
 	// parse CNI args
 	cniArgsParsed := map[string]string{}
 	for _, argPair := range strings.Split(cniArgs, ";") {
@@ -450,7 +454,7 @@ func jitter(span time.Duration) time.Duration {
 func backoffRetry(resendMax time.Duration, f func() (*dhcp4.Packet, error)) (*dhcp4.Packet, error) {
 	var baseDelay time.Duration = resendDelay0
 	var sleepTime time.Duration
-	var fastRetryLimit = resendFastMax
+	fastRetryLimit := resendFastMax
 	for {
 		pkt, err := f()
 		if err == nil {

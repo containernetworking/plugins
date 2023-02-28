@@ -17,10 +17,10 @@ package main
 import (
 	"fmt"
 
-	"github.com/containernetworking/cni/pkg/types"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/containernetworking/cni/pkg/types"
 )
 
 var _ = Describe("portmapping configuration", func() {
@@ -202,18 +202,22 @@ var _ = Describe("portmapping configuration", func() {
 					fillDnatRules(&ch, conf, *n)
 
 					Expect(ch.entryRules).To(Equal([][]string{
-						{"-m", "comment", "--comment",
+						{
+							"-m", "comment", "--comment",
 							fmt.Sprintf("dnat name: \"test\" id: \"%s\"", containerID),
 							"-m", "multiport",
 							"-p", "tcp",
 							"--destination-ports", "8080,8081,8083,8084,8085,8086",
-							"a", "b"},
-						{"-m", "comment", "--comment",
+							"a", "b",
+						},
+						{
+							"-m", "comment", "--comment",
 							fmt.Sprintf("dnat name: \"test\" id: \"%s\"", containerID),
 							"-m", "multiport",
 							"-p", "udp",
 							"--destination-ports", "8080,8082",
-							"a", "b"},
+							"a", "b",
+						},
 					}))
 
 					Expect(ch.rules).To(Equal([][]string{

@@ -16,8 +16,8 @@ package link_test
 
 import (
 	"fmt"
-	"github.com/networkplumbing/go-nft/nft"
 
+	"github.com/networkplumbing/go-nft/nft"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 

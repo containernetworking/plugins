@@ -20,12 +20,12 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/vishvananda/netlink"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-	"github.com/vishvananda/netlink"
-
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -61,7 +61,6 @@ func loadConf(args *skel.CmdArgs) (*NetConf, string, error) {
 
 	// check existing and MTU of master interface
 	masterMTU, err := getMTUByName(n.Master, args.Netns, n.LinkContNs)
-
 	if err != nil {
 		return nil, "", err
 	}
@@ -326,7 +325,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 	//
 	// Check prevResults for ips, routes and dns against values found in the container
 	if err := netns.Do(func(_ ns.NetNS) error {
-
 		// Check interface against values found in the container
 		err := validateCniContainerInterface(contMap, m.Attrs().Index, conf.VlanId, conf.MTU)
 		if err != nil {
@@ -351,7 +349,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 }
 
 func validateCniContainerInterface(intf current.Interface, masterIndex int, vlanId int, mtu int) error {
-
 	var link netlink.Link
 	var err error
 

@@ -31,16 +31,13 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
-var (
-	sysBusPCI = "/sys/bus/pci/devices"
-)
+var sysBusPCI = "/sys/bus/pci/devices"
 
 // Array of different linux drivers bound to network device needed for DPDK
 var userspaceDrivers = []string{"vfio-pci", "uio_pci_generic", "igb_uio"}
@@ -386,7 +383,6 @@ func main() {
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
-
 	cfg, err := loadConf(args.StdinData)
 	if err != nil {
 		return err
@@ -443,7 +439,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 	//
 	// Check prevResults for ips, routes and dns against values found in the container
 	if err := netns.Do(func(_ ns.NetNS) error {
-
 		// Check interface against values found in the container
 		err := validateCniContainerInterface(contMap)
 		if err != nil {
@@ -469,7 +464,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 }
 
 func validateCniContainerInterface(intf current.Interface) error {
-
 	var link netlink.Link
 	var err error
 
