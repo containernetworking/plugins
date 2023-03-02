@@ -3,11 +3,11 @@ linters:
     - gci
     - gofumpt
     - misspell
+    - staticcheck
   disable:
     - errcheck
     - gosimple
     - ineffassign
-    - staticcheck
 
 linters-settings:
   gci:

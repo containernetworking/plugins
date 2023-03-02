@@ -167,6 +167,7 @@ var _ = Describe("vrf plugin", func() {
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
+		Expect(err).NotTo(HaveOccurred())
 
 		err = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
@@ -296,6 +297,7 @@ var _ = Describe("vrf plugin", func() {
 					link, err := netlink.LinkByName(IF0Name)
 					Expect(err).NotTo(HaveOccurred())
 					addresses, err := netlink.AddrList(link, netlink.FAMILY_ALL)
+					Expect(err).NotTo(HaveOccurred())
 					Expect(len(addresses)).To(Equal(1))
 					Expect(addresses[0].IP.Equal(addr0.IP)).To(BeTrue())
 					Expect(addresses[0].Mask).To(Equal(addr0.Mask))
@@ -313,6 +315,7 @@ var _ = Describe("vrf plugin", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					addresses, err := netlink.AddrList(link, netlink.FAMILY_ALL)
+					Expect(err).NotTo(HaveOccurred())
 					Expect(len(addresses)).To(Equal(1))
 					Expect(addresses[0].IP.Equal(addr1.IP)).To(BeTrue())
 					Expect(addresses[0].Mask).To(Equal(addr1.Mask))

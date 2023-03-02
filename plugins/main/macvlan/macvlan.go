@@ -455,7 +455,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	// Parse previous result.
 	if n.NetConf.RawPrevResult == nil {
-		return fmt.Errorf("Required prevResult missing")
+		return fmt.Errorf("required prevResult missing")
 	}
 
 	if err := version.ParsePrevResult(&n.NetConf); err != nil {
@@ -480,7 +480,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	// The namespace must be the same as what was configured
 	if args.Netns != contMap.Sandbox {
-		return fmt.Errorf("Sandbox in prevResult %s doesn't match configured netns: %s",
+		return fmt.Errorf("sandbox in prevResult %s doesn't match configured netns: %s",
 			contMap.Sandbox, args.Netns)
 	}
 
@@ -527,22 +527,25 @@ func validateCniContainerInterface(intf current.Interface, parentIndex int, mode
 	var err error
 
 	if intf.Name == "" {
-		return fmt.Errorf("Container interface name missing in prevResult: %v", intf.Name)
+		return fmt.Errorf("container interface name missing in prevResult: %v", intf.Name)
 	}
 	link, err = netlink.LinkByName(intf.Name)
 	if err != nil {
-		return fmt.Errorf("Container Interface name in prevResult: %s not found", intf.Name)
+		return fmt.Errorf("container Interface name in prevResult: %s not found", intf.Name)
 	}
 	if intf.Sandbox == "" {
-		return fmt.Errorf("Error: Container interface %s should not be in host namespace", link.Attrs().Name)
+		return fmt.Errorf("error: Container interface %s should not be in host namespace", link.Attrs().Name)
 	}
 
 	macv, isMacvlan := link.(*netlink.Macvlan)
 	if !isMacvlan {
-		return fmt.Errorf("Error: Container interface %s not of type macvlan", link.Attrs().Name)
+		return fmt.Errorf("error: Container interface %s not of type macvlan", link.Attrs().Name)
 	}
 
 	mode, err := modeFromString(modeExpected)
+	if err != nil {
+		return err
+	}
 	if macv.Mode != mode {
 		currString, err := modeToString(macv.Mode)
 		if err != nil {
@@ -552,12 +555,12 @@ func validateCniContainerInterface(intf current.Interface, parentIndex int, mode
 		if err != nil {
 			return err
 		}
-		return fmt.Errorf("Container macvlan mode %s does not match expected value: %s", currString, confString)
+		return fmt.Errorf("container macvlan mode %s does not match expected value: %s", currString, confString)
 	}
 
 	if intf.Mac != "" {
 		if intf.Mac != link.Attrs().HardwareAddr.String() {
-			return fmt.Errorf("Interface %s Mac %s doesn't match container Mac: %s", intf.Name, intf.Mac, link.Attrs().HardwareAddr)
+			return fmt.Errorf("interface %s Mac %s doesn't match container Mac: %s", intf.Name, intf.Mac, link.Attrs().HardwareAddr)
 		}
 	}
 

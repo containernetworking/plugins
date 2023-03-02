@@ -84,8 +84,10 @@ var _ = Describe("portmapping configuration", func() {
 				Expect(c.Name).To(Equal("test"))
 
 				n, err := types.ParseCIDR("10.0.0.2/24")
+				Expect(err).NotTo(HaveOccurred())
 				Expect(c.ContIPv4).To(Equal(*n))
 				n, err = types.ParseCIDR("2001:db8:1::2/64")
+				Expect(err).NotTo(HaveOccurred())
 				Expect(c.ContIPv6).To(Equal(*n))
 			})
 
@@ -199,6 +201,7 @@ var _ = Describe("portmapping configuration", func() {
 					}))
 
 					n, err := types.ParseCIDR("10.0.0.2/24")
+					Expect(err).NotTo(HaveOccurred())
 					fillDnatRules(&ch, conf, *n)
 
 					Expect(ch.entryRules).To(Equal([][]string{
@@ -249,6 +252,7 @@ var _ = Describe("portmapping configuration", func() {
 					ch.entryRules = nil
 
 					n, err = types.ParseCIDR("2001:db8::2/64")
+					Expect(err).NotTo(HaveOccurred())
 					fillDnatRules(&ch, conf, *n)
 
 					Expect(ch.rules).To(Equal([][]string{
@@ -277,6 +281,7 @@ var _ = Describe("portmapping configuration", func() {
 					conf.SNAT = &fvar
 
 					n, err = types.ParseCIDR("10.0.0.2/24")
+					Expect(err).NotTo(HaveOccurred())
 					fillDnatRules(&ch, conf, *n)
 					Expect(ch.rules).To(Equal([][]string{
 						{"-p", "tcp", "--dport", "8080", "-j", "DNAT", "--to-destination", "10.0.0.2:80"},
@@ -316,6 +321,7 @@ var _ = Describe("portmapping configuration", func() {
 
 					ch = genDnatChain(conf.Name, containerID)
 					n, err := types.ParseCIDR("10.0.0.2/24")
+					Expect(err).NotTo(HaveOccurred())
 					fillDnatRules(&ch, conf, *n)
 					Expect(ch.rules).To(Equal([][]string{
 						{"-p", "tcp", "--dport", "8080", "-s", "10.0.0.2/24", "-j", "PLZ-SET-MARK"},
