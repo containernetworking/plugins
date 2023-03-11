@@ -5,6 +5,7 @@ linters:
     - gofumpt
     - ineffassign
     - misspell
+    - nonamedreturns
     - staticcheck
   disable:
     - errcheck
