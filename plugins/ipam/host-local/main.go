@@ -47,7 +47,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	defer store.Close()
 
 	containerIpFound := store.FindByID(args.ContainerID, args.IfName)
-	if containerIpFound == false {
+	if !containerIpFound {
 		return fmt.Errorf("host-local: Failed to find address added by container %v", args.ContainerID)
 	}
 

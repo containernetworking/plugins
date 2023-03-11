@@ -305,7 +305,7 @@ func (l *DHCPLease) maintain() {
 
 		switch state {
 		case leaseStateBound:
-			sleepDur = l.renewalTime.Sub(time.Now())
+			sleepDur = time.Until(l.renewalTime)
 			if sleepDur <= 0 {
 				log.Printf("%v: renewing lease", l.clientID)
 				state = leaseStateRenewing

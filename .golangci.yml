@@ -3,13 +3,13 @@ linters:
     - contextcheck
     - gci
     - gofumpt
+    - gosimple
     - ineffassign
     - misspell
     - nonamedreturns
     - staticcheck
   disable:
     - errcheck
-    - gosimple
 
 linters-settings:
   gci:
