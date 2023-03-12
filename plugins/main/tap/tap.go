@@ -173,14 +173,15 @@ func createLinkWithNetlink(tmpName string, mtu int, nsFd int, multiqueue bool, m
 }
 
 func createLink(tmpName string, conf *NetConf, netns ns.NetNS) error {
-	if conf.SelinuxContext != "" {
+	switch {
+	case conf.SelinuxContext != "":
 		if err := selinux.SetExecLabel(conf.SelinuxContext); err != nil {
 			return fmt.Errorf("failed set socket label: %v", err)
 		}
 		return createTapWithIptool(tmpName, conf.MTU, conf.MultiQueue, conf.Mac, conf.Owner, conf.Group)
-	} else if conf.Owner == nil || conf.Group == nil {
+	case conf.Owner == nil || conf.Group == nil:
 		return createTapWithIptool(tmpName, conf.MTU, conf.MultiQueue, conf.Mac, conf.Owner, conf.Group)
-	} else {
+	default:
 		return createLinkWithNetlink(tmpName, conf.MTU, int(netns.Fd()), conf.MultiQueue, conf.Mac, conf.Owner, conf.Group)
 	}
 }

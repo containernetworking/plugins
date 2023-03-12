@@ -143,7 +143,7 @@ func (ib *iptablesBackend) checkRules(conf *FirewallNetConf, result *current.Res
 		}
 	}
 
-	if len(rules) <= 0 {
+	if len(rules) == 0 {
 		return nil
 	}
 

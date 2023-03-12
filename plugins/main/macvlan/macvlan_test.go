@@ -48,10 +48,10 @@ type Net struct {
 	Master     string                `json:"master"`
 	Mode       string                `json:"mode"`
 	IPAM       *allocator.IPAMConfig `json:"ipam"`
-	//RuntimeConfig struct {    // The capability arg
+	// RuntimeConfig struct {    // The capability arg
 	//	IPRanges []RangeSet `json:"ipRanges,omitempty"`
-	//} `json:"runtimeConfig,omitempty"`
-	//Args *struct {
+	// Args *struct {
+	// } `json:"runtimeConfig,omitempty"`
 	//	A *IPAMArgs `json:"cni"`
 	DNS           types.DNS              `json:"dns"`
 	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`

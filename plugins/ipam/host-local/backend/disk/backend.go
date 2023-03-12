@@ -198,7 +198,7 @@ func (s *Store) GetByID(id string, ifname string) []net.IP {
 
 func GetEscapedPath(dataDir string, fname string) string {
 	if runtime.GOOS == "windows" {
-		fname = strings.Replace(fname, ":", "_", -1)
+		fname = strings.ReplaceAll(fname, ":", "_")
 	}
 	return filepath.Join(dataDir, fname)
 }

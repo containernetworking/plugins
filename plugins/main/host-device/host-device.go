@@ -322,10 +322,11 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to list node links: %v", err)
 	}
+	switch {
 
-	if len(devname) > 0 {
+	case len(devname) > 0:
 		return netlink.LinkByName(devname)
-	} else if len(hwaddr) > 0 {
+	case len(hwaddr) > 0:
 		hwAddr, err := net.ParseMAC(hwaddr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse MAC address %q: %v", hwaddr, err)
@@ -336,7 +337,7 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) 
 				return link, nil
 			}
 		}
-	} else if len(kernelpath) > 0 {
+	case len(kernelpath) > 0:
 		if !filepath.IsAbs(kernelpath) || !strings.HasPrefix(kernelpath, "/sys/devices/") {
 			return nil, fmt.Errorf("kernel device path %q must be absolute and begin with /sys/devices/", kernelpath)
 		}
@@ -355,7 +356,7 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) 
 				}
 			}
 		}
-	} else if len(pciaddr) > 0 {
+	case len(pciaddr) > 0:
 		netDir := filepath.Join(sysBusPCI, pciaddr, "net")
 		if _, err := os.Lstat(netDir); err != nil {
 			virtioNetDir := filepath.Join(sysBusPCI, pciaddr, "virtio*", "net")

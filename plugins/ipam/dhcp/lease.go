@@ -83,7 +83,7 @@ var requestOptionsDefault = map[dhcp4.OptionCode]bool{
 	dhcp4.OptionSubnetMask: true,
 }
 
-func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequestOptions []RequestOption) (
+func prepareOptions(cniArgs string, provideOptions []ProvideOption, requestOptions []RequestOption) (
 	map[dhcp4.OptionCode]bool, map[dhcp4.OptionCode][]byte, error,
 ) {
 	var optsRequesting map[dhcp4.OptionCode]bool
@@ -101,7 +101,7 @@ func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequestOptio
 	// parse providing options map
 	var optParsed dhcp4.OptionCode
 	optsProviding = make(map[dhcp4.OptionCode][]byte)
-	for _, opt := range ProvideOptions {
+	for _, opt := range provideOptions {
 		optParsed, err = parseOptionName(string(opt.Option))
 		if err != nil {
 			return nil, nil, fmt.Errorf("Can not parse option %q: %w", opt.Option, err)
@@ -123,7 +123,7 @@ func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequestOptio
 	// parse necessary options map
 	optsRequesting = make(map[dhcp4.OptionCode]bool)
 	skipRequireDefault := false
-	for _, opt := range RequestOptions {
+	for _, opt := range requestOptions {
 		if opt.SkipDefault {
 			skipRequireDefault = true
 		}

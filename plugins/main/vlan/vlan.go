@@ -369,7 +369,7 @@ func validateCniContainerInterface(intf current.Interface, masterIndex int, vlan
 	}
 
 	// TODO This works when unit testing via cnitool; fails with ./test.sh
-	//if masterIndex != vlan.Attrs().ParentIndex {
+	// if masterIndex != vlan.Attrs().ParentIndex {
 	//   return fmt.Errorf("Container vlan Master %d does not match expected value: %d", vlan.Attrs().ParentIndex, masterIndex)
 	//}
 

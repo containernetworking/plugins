@@ -51,10 +51,11 @@ type Net struct {
 	Type       string                `json:"type,omitempty"`
 	BrName     string                `json:"bridge"`
 	IPAM       *allocator.IPAMConfig `json:"ipam"`
-	//RuntimeConfig struct {    // The capability arg
+	// RuntimeConfig struct {    // The capability arg
 	//	IPRanges []RangeSet `json:"ipRanges,omitempty"`
-	//} `json:"runtimeConfig,omitempty"`
-	//Args *struct {
+	// Args *struct {
+	// } `json:"runtimeConfig,omitempty"`
+
 	//	A *IPAMArgs `json:"cni"`
 	DNS           types.DNS              `json:"dns"`
 	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
@@ -1497,11 +1498,12 @@ func (tester *testerV01xOr02x) cmdDelTest(tc testCase, dataDir string) {
 		err := testutils.CmdDelWithArgs(tester.args, func() error {
 			return cmdDel(tester.args)
 		})
-		if expect020DelError(tc) {
+		switch {
+		case expect020DelError(tc):
 			Expect(err).To(MatchError(tc.DelErr020))
-		} else if expect010DelError(tc) {
+		case expect010DelError(tc):
 			Expect(err).To(MatchError(tc.DelErr010))
-		} else {
+		default:
 			Expect(err).NotTo(HaveOccurred())
 		}
 		return nil
