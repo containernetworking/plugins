@@ -1027,7 +1027,7 @@ var _ = Describe("bandwidth test", func() {
 						result, err := types100.GetResult(containerWithTbfRes)
 						Expect(err).NotTo(HaveOccurred())
 
-						makeTcpClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithTbf, packetInBytes)
+						makeTCPClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithTbf, packetInBytes)
 					})
 				})
 
@@ -1036,7 +1036,7 @@ var _ = Describe("bandwidth test", func() {
 						result, err := types100.GetResult(containerWithoutTbfRes)
 						Expect(err).NotTo(HaveOccurred())
 
-						makeTcpClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithoutTbf, packetInBytes)
+						makeTCPClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithoutTbf, packetInBytes)
 					})
 				})
 

@@ -86,7 +86,7 @@ func startEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session, error) {
 	return port, session, nil
 }
 
-func makeTcpClientInNS(netns string, address string, port int, numBytes int) {
+func makeTCPClientInNS(netns string, address string, port int, numBytes int) {
 	payload := bytes.Repeat([]byte{'a'}, numBytes)
 	message := string(payload)
 

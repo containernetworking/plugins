@@ -41,11 +41,11 @@ type SpoofChecker struct {
 
 type defaultNftConfigurer struct{}
 
-func (_ defaultNftConfigurer) Apply(cfg *nft.Config) error {
+func (dnc defaultNftConfigurer) Apply(cfg *nft.Config) error {
 	return nft.ApplyConfig(cfg)
 }
 
-func (_ defaultNftConfigurer) Read() (*nft.Config, error) {
+func (dnc defaultNftConfigurer) Read() (*nft.Config, error) {
 	return nft.ReadConfig()
 }
 
@@ -208,7 +208,7 @@ func (sc *SpoofChecker) dropRule(chain string) *schema.Rule {
 	}
 }
 
-func (_ *SpoofChecker) baseChain() *schema.Chain {
+func (sc *SpoofChecker) baseChain() *schema.Chain {
 	chainPriority := -300
 	return &schema.Chain{
 		Family: schema.FamilyBridge,
@@ -230,7 +230,7 @@ func (sc *SpoofChecker) ifaceChain() *schema.Chain {
 	}
 }
 
-func (_ *SpoofChecker) macChain(ifaceChainName string) *schema.Chain {
+func (sc *SpoofChecker) macChain(ifaceChainName string) *schema.Chain {
 	macChainName := ifaceChainName + "-mac"
 	return &schema.Chain{
 		Family: schema.FamilyBridge,

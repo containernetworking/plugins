@@ -299,8 +299,8 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 	return br, nil
 }
 
-func ensureVlanInterface(br *netlink.Bridge, vlanId int) (netlink.Link, error) {
-	name := fmt.Sprintf("%s.%d", br.Name, vlanId)
+func ensureVlanInterface(br *netlink.Bridge, vlanID int) (netlink.Link, error) {
+	name := fmt.Sprintf("%s.%d", br.Name, vlanID)
 
 	brGatewayVeth, err := netlink.LinkByName(name)
 	if err != nil {
@@ -313,7 +313,7 @@ func ensureVlanInterface(br *netlink.Bridge, vlanId int) (netlink.Link, error) {
 			return nil, fmt.Errorf("faild to find host namespace: %v", err)
 		}
 
-		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanId, "")
+		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanID, "")
 		if err != nil {
 			return nil, fmt.Errorf("faild to create vlan gateway %q: %v", name, err)
 		}
@@ -406,7 +406,7 @@ func enableIPForward(family int) error {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
-	var success bool = false
+	success := false
 
 	n, cniVersion, err := loadNetConf(args.StdinData, args.Args)
 	if err != nil {
@@ -420,7 +420,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	if n.HairpinMode && n.PromiscMode {
-		return fmt.Errorf("cannot set hairpin mode and promiscuous mode at the same time.")
+		return fmt.Errorf("cannot set hairpin mode and promiscuous mode at the same time")
 	}
 
 	br, brInterface, err := setupBridge(n)

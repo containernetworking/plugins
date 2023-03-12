@@ -209,7 +209,7 @@ func (l *DHCPLease) Check() {
 	l.check <- struct{}{}
 }
 
-func (l *DHCPLease) getOptionsWithClientId() dhcp4.Options {
+func (l *DHCPLease) getOptionsWithClientID() dhcp4.Options {
 	opts := make(dhcp4.Options)
 	opts[dhcp4.OptionClientIdentifier] = []byte(l.clientID)
 	// client identifier's first byte is "type"
@@ -220,7 +220,7 @@ func (l *DHCPLease) getOptionsWithClientId() dhcp4.Options {
 }
 
 func (l *DHCPLease) getAllOptions() dhcp4.Options {
-	opts := l.getOptionsWithClientId()
+	opts := l.getOptionsWithClientID()
 
 	for k, v := range l.optsProviding {
 		opts[k] = v
@@ -397,7 +397,7 @@ func (l *DHCPLease) release() error {
 	}
 	defer c.Close()
 
-	opts := l.getOptionsWithClientId()
+	opts := l.getOptionsWithClientID()
 
 	if err = DhcpRelease(c, *l.ack, opts); err != nil {
 		return fmt.Errorf("failed to send DHCPRELEASE")
@@ -427,9 +427,9 @@ func (l *DHCPLease) Routes() []*types.Route {
 
 	// RFC 3442 states that if Classless Static Routes (option 121)
 	// exist, we ignore Static Routes (option 33) and the Router/Gateway.
-	opt121_routes := parseCIDRRoutes(l.opts)
-	if len(opt121_routes) > 0 {
-		return append(routes, opt121_routes...)
+	opt121Routes := parseCIDRRoutes(l.opts)
+	if len(opt121Routes) > 0 {
+		return append(routes, opt121Routes...)
 	}
 
 	// Append Static Routes
@@ -451,7 +451,7 @@ func jitter(span time.Duration) time.Duration {
 }
 
 func backoffRetry(resendMax time.Duration, f func() (*dhcp4.Packet, error)) (*dhcp4.Packet, error) {
-	var baseDelay time.Duration = resendDelay0
+	baseDelay := resendDelay0
 	var sleepTime time.Duration
 	fastRetryLimit := resendFastMax
 	for {

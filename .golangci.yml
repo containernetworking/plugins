@@ -1,3 +1,12 @@
+issues:
+  exclude-rules:
+    - linters:
+        - revive
+      text: "don't use ALL_CAPS in Go names; use CamelCase"
+    - linters:
+        - revive
+      text: " and that stutters;"
+
 linters:
   enable:
     - contextcheck
@@ -8,6 +17,7 @@ linters:
     - ineffassign
     - misspell
     - nonamedreturns
+    - revive
     - staticcheck
   disable:
     - errcheck

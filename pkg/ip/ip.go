@@ -47,13 +47,12 @@ func ParseIP(s string) *IP {
 			return nil
 		}
 		return newIP(ip, ipNet.Mask)
-	} else {
-		ip := net.ParseIP(s)
-		if ip == nil {
-			return nil
-		}
-		return newIP(ip, nil)
 	}
+	ip := net.ParseIP(s)
+	if ip == nil {
+		return nil
+	}
+	return newIP(ip, nil)
 }
 
 // ToIP will return a net.IP in standard form from this IP.

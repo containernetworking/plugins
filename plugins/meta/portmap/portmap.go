@@ -293,7 +293,7 @@ func fillDnatRules(c *chain, config *PortMapConf, containerNet net.IPNet) {
 		copy(dnatRule, ruleBase)
 		dnatRule = append(dnatRule,
 			"-j", "DNAT",
-			"--to-destination", fmtIpPort(containerNet.IP, entry.ContainerPort),
+			"--to-destination", fmtIPPort(containerNet.IP, entry.ContainerPort),
 		)
 		c.rules = append(c.rules, dnatRule)
 	}

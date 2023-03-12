@@ -410,9 +410,9 @@ func countIPAMIPs(path string) (int, error) {
 	return count, nil
 }
 
-func checkVlan(vlanId int, bridgeVlanInfo []*nl.BridgeVlanInfo) bool {
+func checkVlan(vlanID int, bridgeVlanInfo []*nl.BridgeVlanInfo) bool {
 	for _, vlan := range bridgeVlanInfo {
-		if vlan.Vid == uint16(vlanId) {
+		if vlan.Vid == uint16(vlanID) {
 			return true
 		}
 	}

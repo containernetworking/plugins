@@ -196,7 +196,7 @@ func (i *RangeIter) Next() (*net.IPNet, net.IP) {
 	// If we've reached the end of this range, we need to advance the range
 	// RangeEnd is inclusive as well
 	if i.cur.Equal(r.RangeEnd) {
-		i.rangeIdx += 1
+		i.rangeIdx++
 		i.rangeIdx %= len(*i.rangeset)
 		r = (*i.rangeset)[i.rangeIdx]
 

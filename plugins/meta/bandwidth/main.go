@@ -115,8 +115,8 @@ func validateRateAndBurst(rate, burst uint64) error {
 	return nil
 }
 
-func getIfbDeviceName(networkName string, containerId string) string {
-	return utils.MustFormatHashWithPrefix(maxIfbDeviceLength, ifbDevicePrefix, networkName+containerId)
+func getIfbDeviceName(networkName string, containerID string) string {
+	return utils.MustFormatHashWithPrefix(maxIfbDeviceLength, ifbDevicePrefix, networkName+containerID)
 }
 
 func getMTU(deviceName string) (int, error) {

@@ -46,7 +46,7 @@ type Net struct {
 	CNIVersion    string                 `json:"cniVersion"`
 	Type          string                 `json:"type,omitempty"`
 	Master        string                 `json:"master"`
-	VlanId        int                    `json:"vlanId"`
+	VlanID        int                    `json:"vlanId"`
 	MTU           int                    `json:"mtu"`
 	IPAM          *allocator.IPAMConfig  `json:"ipam"`
 	DNS           types.DNS              `json:"dns"`
@@ -249,7 +249,7 @@ var _ = Describe("vlan Operations", func() {
 						Type:       "vlan",
 					},
 					Master:     masterInterface,
-					VlanId:     33,
+					VlanID:     33,
 					MTU:        1500,
 					LinkContNs: isInContainer,
 				}
@@ -285,7 +285,7 @@ var _ = Describe("vlan Operations", func() {
 						Type:       "vlan",
 					},
 					Master:     masterInterface,
-					VlanId:     33,
+					VlanID:     33,
 					LinkContNs: isInContainer,
 				}
 

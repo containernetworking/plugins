@@ -25,7 +25,7 @@ import (
 
 // fmtIpPort correctly formats ip:port literals for iptables and ip6tables -
 // need to wrap v6 literals in a []
-func fmtIpPort(ip net.IP, port int) string {
+func fmtIPPort(ip net.IP, port int) string {
 	if ip.To4() == nil {
 		return fmt.Sprintf("[%s]:%d", ip.String(), port)
 	}
