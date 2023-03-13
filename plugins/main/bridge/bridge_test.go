@@ -2303,10 +2303,10 @@ func assertMacSpoofCheckRules(assert func(actual interface{}, expectedLen int)) 
 
 	expectedTable := nft.NewTable("nat", "bridge")
 	filter := nft.TypeFilter
-	hook := nft.HookPreRouting
+	hook := nft.HookPostRouting
 	prio := -300
 	policy := nft.PolicyAccept
-	expectedBaseChain := nft.NewChain(expectedTable, "PREROUTING", &filter, &hook, &prio, &policy)
+	expectedBaseChain := nft.NewChain(expectedTable, "POSTROUTING", &filter, &hook, &prio, &policy)
 
 	assert(c.LookupRule(nft.NewRule(
 		expectedTable,

@@ -145,11 +145,11 @@ func assertExpectedBaseChainRuleDeletionInTeardownConfig(action configurerStub) 
 				{"delete": {"rule": {
 					"family": "bridge",
 					"table": "nat",
-					"chain": "PREROUTING",
+					"chain": "POSTROUTING",
 					"expr": [
 						{"match": {
 							"op": "==",
-							"left": {"meta": {"key": "iifname"}},
+							"left": {"meta": {"key": "oifname"}},
 							"right": "net0"
 						}},
 						{"jump": {"target": "cni-br-iface-container99-net1"}}
@@ -163,9 +163,9 @@ func assertExpectedBaseChainRuleDeletionInTeardownConfig(action configurerStub) 
 func rowConfigWithRulesOnly() string {
 	return `
             {"nftables":[
-                {"rule":{"family":"bridge","table":"nat","chain":"PREROUTING",
+                {"rule":{"family":"bridge","table":"nat","chain":"POSTROUTING",
                     "expr":[
-                        {"match":{"op":"==","left":{"meta":{"key":"iifname"}},"right":"net0"}},
+                        {"match":{"op":"==","left":{"meta":{"key":"oifname"}},"right":"net0"}},
                         {"jump":{"target":"cni-br-iface-container99-net1"}}
                     ],
                     "comment":"macspoofchk-container99-net1"}},
@@ -202,9 +202,9 @@ func assertExpectedTableAndChainsInSetupConfig(c configurerStub) {
             {"chain": {
                 "family": "bridge",
                 "table": "nat",
-                "name": "PREROUTING",
+                "name": "POSTROUTING",
                 "type": "filter",
-                "hook": "prerouting",
+                "hook": "postrouting",
                 "prio": -300,
                 "policy": "accept"
             }},
@@ -231,9 +231,9 @@ func assertExpectedRulesInSetupConfig(c configurerStub) {
             {"nftables":[
                 {"flush":{"chain":{"family":"bridge","table":"nat","name":"cni-br-iface-container99-net1"}}},
                 {"flush":{"chain":{"family":"bridge","table":"nat","name":"cni-br-iface-container99-net1-mac"}}},
-                {"rule":{"family":"bridge","table":"nat","chain":"PREROUTING",
+                {"rule":{"family":"bridge","table":"nat","chain":"POSTROUTING",
                     "expr":[
-                        {"match":{"op":"==","left":{"meta":{"key":"iifname"}},"right":"net0"}},
+                        {"match":{"op":"==","left":{"meta":{"key":"oifname"}},"right":"net0"}},
                         {"jump":{"target":"cni-br-iface-container99-net1"}}
                     ],
                     "comment":"macspoofchk-container99-net1"}},

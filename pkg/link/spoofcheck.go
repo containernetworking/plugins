@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	natTableName            = "nat"
-	preRoutingBaseChainName = "PREROUTING"
+	natTableName             = "nat"
+	postRoutingBaseChainName = "POSTROUTING"
 )
 
 type NftConfigurer interface {
@@ -92,7 +92,7 @@ func (sc *SpoofChecker) Setup() error {
 	rulesConfig.FlushChain(ifaceChain)
 	rulesConfig.FlushChain(macChain)
 
-	rulesConfig.AddRule(sc.matchIfaceJumpToChainRule(preRoutingBaseChainName, ifaceChain.Name))
+	rulesConfig.AddRule(sc.matchIfaceJumpToChainRule(postRoutingBaseChainName, ifaceChain.Name))
 	rulesConfig.AddRule(sc.jumpToChainRule(ifaceChain.Name, macChain.Name))
 	rulesConfig.AddRule(sc.matchMacRule(macChain.Name))
 	rulesConfig.AddRule(sc.dropRule(macChain.Name))
@@ -111,7 +111,7 @@ func (sc *SpoofChecker) Teardown() error {
 	ifaceChain := sc.ifaceChain()
 	currentConfig, ifaceMatchRuleErr := sc.configurer.Read()
 	if ifaceMatchRuleErr == nil {
-		expectedRuleToFind := sc.matchIfaceJumpToChainRule(preRoutingBaseChainName, ifaceChain.Name)
+		expectedRuleToFind := sc.matchIfaceJumpToChainRule(postRoutingBaseChainName, ifaceChain.Name)
 		// It is safer to exclude the statement matching, avoiding cases where a current statement includes
 		// additional default entries (e.g. counters).
 		ruleToFindExcludingStatements := *expectedRuleToFind
@@ -153,7 +153,7 @@ func (sc *SpoofChecker) matchIfaceJumpToChainRule(chain, toChain string) *schema
 		Expr: []schema.Statement{
 			{Match: &schema.Match{
 				Op:    schema.OperEQ,
-				Left:  schema.Expression{RowData: []byte(`{"meta":{"key":"iifname"}}`)},
+				Left:  schema.Expression{RowData: []byte(`{"meta":{"key":"oifname"}}`)},
 				Right: schema.Expression{String: &sc.iface},
 			}},
 			{Verdict: schema.Verdict{Jump: &schema.ToTarget{Target: toChain}}},
@@ -213,9 +213,9 @@ func (sc *SpoofChecker) baseChain() *schema.Chain {
 	return &schema.Chain{
 		Family: schema.FamilyBridge,
 		Table:  natTableName,
-		Name:   preRoutingBaseChainName,
+		Name:   postRoutingBaseChainName,
 		Type:   schema.TypeFilter,
-		Hook:   schema.HookPreRouting,
+		Hook:   schema.HookPostRouting,
 		Prio:   &chainPriority,
 		Policy: schema.PolicyAccept,
 	}

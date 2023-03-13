@@ -450,13 +450,17 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	if n.MacSpoofChk {
-		sc := link.NewSpoofChecker(hostInterface.Name, containerInterface.Mac, uniqueID(args.ContainerID, args.IfName))
-		if err := sc.Setup(); err != nil {
+		sc := link.NewSpoofChecker(containerInterface.Name, containerInterface.Mac, uniqueID(args.ContainerID, args.IfName))
+		if err := netns.Do(func(_ ns.NetNS) error {
+			return sc.Setup()
+		}); err != nil {
 			return err
 		}
 		defer func() {
 			if !success {
-				if err := sc.Teardown(); err != nil {
+				if err := netns.Do(func(_ ns.NetNS) error {
+					return sc.Teardown()
+				}); err != nil {
 					fmt.Fprintf(os.Stderr, "%v", err)
 				}
 			}
