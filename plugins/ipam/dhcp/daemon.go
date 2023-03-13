@@ -30,9 +30,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/coreos/go-systemd/v22/activation"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	current "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/coreos/go-systemd/v22/activation"
 )
 
 var errNoMoreTries = errors.New("no more tries")
@@ -55,7 +56,7 @@ func newDHCP(clientTimeout, clientResendMax time.Duration) *DHCP {
 }
 
 // TODO: current client ID is too long. At least the container ID should not be used directly.
-// A seperate issue is necessary to ensure no breaking change is affecting other users.
+// A separate issue is necessary to ensure no breaking change is affecting other users.
 func generateClientID(containerID string, netName string, ifName string) string {
 	clientID := containerID + "/" + netName + "/" + ifName
 	// defined in RFC 2132, length size can not be larger than 1 octet. So we truncate 254 to make everyone happy.
@@ -166,7 +167,7 @@ func getListener(socketPath string) (net.Listener, error) {
 
 	switch {
 	case len(l) == 0:
-		if err := os.MkdirAll(filepath.Dir(socketPath), 0700); err != nil {
+		if err := os.MkdirAll(filepath.Dir(socketPath), 0o700); err != nil {
 			return nil, err
 		}
 		return net.Listen("unix", socketPath)
@@ -195,7 +196,7 @@ func runDaemon(
 		if !filepath.IsAbs(pidfilePath) {
 			return fmt.Errorf("Error writing pidfile %q: path not absolute", pidfilePath)
 		}
-		if err := os.WriteFile(pidfilePath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
+		if err := os.WriteFile(pidfilePath, []byte(fmt.Sprintf("%d", os.Getpid())), 0o644); err != nil {
 			return fmt.Errorf("Error writing pidfile %q: %v", pidfilePath, err)
 		}
 	}

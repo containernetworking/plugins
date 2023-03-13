@@ -25,15 +25,13 @@ import (
 	"syscall"
 
 	"github.com/opencontainers/selinux/go-selinux"
-
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-	"github.com/vishvananda/netlink"
-
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -43,15 +41,14 @@ import (
 
 type NetConf struct {
 	types.NetConf
-	MultiQueue     bool    `json:"multiQueue"`
-	MTU            int     `json:"mtu"`
-	Mac            string  `json:"mac,omitempty"`
-	Owner          *uint32 `json:"owner,omitempty"`
-	Group          *uint32 `json:"group,omitempty"`
-	SelinuxContext string  `json:"selinuxContext,omitempty"`
-	Args           *struct {
-	} `json:"args,omitempty"`
-	RuntimeConfig struct {
+	MultiQueue     bool      `json:"multiQueue"`
+	MTU            int       `json:"mtu"`
+	Mac            string    `json:"mac,omitempty"`
+	Owner          *uint32   `json:"owner,omitempty"`
+	Group          *uint32   `json:"group,omitempty"`
+	SelinuxContext string    `json:"selinuxContext,omitempty"`
+	Args           *struct{} `json:"args,omitempty"`
+	RuntimeConfig  struct {
 		Mac string `json:"mac,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
 }
@@ -176,14 +173,15 @@ func createLinkWithNetlink(tmpName string, mtu int, nsFd int, multiqueue bool, m
 }
 
 func createLink(tmpName string, conf *NetConf, netns ns.NetNS) error {
-	if conf.SelinuxContext != "" {
+	switch {
+	case conf.SelinuxContext != "":
 		if err := selinux.SetExecLabel(conf.SelinuxContext); err != nil {
 			return fmt.Errorf("failed set socket label: %v", err)
 		}
 		return createTapWithIptool(tmpName, conf.MTU, conf.MultiQueue, conf.Mac, conf.Owner, conf.Group)
-	} else if conf.Owner == nil || conf.Group == nil {
+	case conf.Owner == nil || conf.Group == nil:
 		return createTapWithIptool(tmpName, conf.MTU, conf.MultiQueue, conf.Mac, conf.Owner, conf.Group)
-	} else {
+	default:
 		return createLinkWithNetlink(tmpName, conf.MTU, int(netns.Fd()), conf.MultiQueue, conf.Mac, conf.Owner, conf.Group)
 	}
 }

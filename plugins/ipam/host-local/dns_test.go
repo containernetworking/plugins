@@ -17,9 +17,10 @@ package main
 import (
 	"os"
 
-	"github.com/containernetworking/cni/pkg/types"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/containernetworking/cni/pkg/types"
 )
 
 var _ = Describe("parsing resolv.conf", func() {

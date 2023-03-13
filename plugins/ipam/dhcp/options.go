@@ -21,8 +21,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/containernetworking/cni/pkg/types"
 	"github.com/d2g/dhcp4"
+
+	"github.com/containernetworking/cni/pkg/types"
 )
 
 var optionNameToID = map[string]dhcp4.OptionCode{

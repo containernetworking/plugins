@@ -23,6 +23,9 @@ import (
 
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/networkplumbing/go-nft/nft"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -32,12 +35,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-
-	"github.com/vishvananda/netlink"
-
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 )
 
 const (
@@ -53,10 +51,11 @@ type Net struct {
 	Type       string                `json:"type,omitempty"`
 	BrName     string                `json:"bridge"`
 	IPAM       *allocator.IPAMConfig `json:"ipam"`
-	//RuntimeConfig struct {    // The capability arg
+	// RuntimeConfig struct {    // The capability arg
 	//	IPRanges []RangeSet `json:"ipRanges,omitempty"`
-	//} `json:"runtimeConfig,omitempty"`
-	//Args *struct {
+	// Args *struct {
+	// } `json:"runtimeConfig,omitempty"`
+
 	//	A *IPAMArgs `json:"cni"`
 	DNS           types.DNS              `json:"dns"`
 	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
@@ -285,7 +284,7 @@ var counter uint
 // arguments for a test case.
 func (tc testCase) createCmdArgs(targetNS ns.NetNS, dataDir string) *skel.CmdArgs {
 	conf := tc.netConfJSON(dataDir)
-	//defer func() { counter += 1 }()
+	// defer func() { counter += 1 }()
 	return &skel.CmdArgs{
 		ContainerID: fmt.Sprintf("dummy-%d", counter),
 		Netns:       targetNS.Path(),
@@ -298,12 +297,11 @@ func (tc testCase) createCmdArgs(targetNS ns.NetNS, dataDir string) *skel.CmdArg
 // createCheckCmdArgs generates network configuration and creates command
 // arguments for a Check test case.
 func (tc testCase) createCheckCmdArgs(targetNS ns.NetNS, config *Net, dataDir string) *skel.CmdArgs {
-
 	conf, err := json.Marshal(config)
 	Expect(err).NotTo(HaveOccurred())
 
 	// TODO Don't we need to use the same counter as before?
-	//defer func() { counter += 1 }()
+	// defer func() { counter += 1 }()
 	return &skel.CmdArgs{
 		ContainerID: fmt.Sprintf("dummy-%d", counter),
 		Netns:       targetNS.Path(),
@@ -412,9 +410,9 @@ func countIPAMIPs(path string) (int, error) {
 	return count, nil
 }
 
-func checkVlan(vlanId int, bridgeVlanInfo []*nl.BridgeVlanInfo) bool {
+func checkVlan(vlanID int, bridgeVlanInfo []*nl.BridgeVlanInfo) bool {
 	for _, vlan := range bridgeVlanInfo {
-		if vlan.Vid == uint16(vlanId) {
+		if vlan.Vid == uint16(vlanID) {
 			return true
 		}
 	}
@@ -435,10 +433,12 @@ type testerBase struct {
 	vethName string
 }
 
-type testerV10x testerBase
-type testerV04x testerBase
-type testerV03x testerBase
-type testerV01xOr02x testerBase
+type (
+	testerV10x      testerBase
+	testerV04x      testerBase
+	testerV03x      testerBase
+	testerV01xOr02x testerBase
+)
 
 func newTesterByVersion(version string, testNS, targetNS ns.NetNS) cmdAddDelTester {
 	switch {
@@ -615,7 +615,7 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(addrs)).To(Equal(len(expCIDRsV4)))
 		addrs, err = netlink.AddrList(link, netlink.FAMILY_V6)
-		Expect(len(addrs)).To(Equal(len(expCIDRsV6) + 1)) //add one for the link-local
+		Expect(len(addrs)).To(Equal(len(expCIDRsV6) + 1)) // add one for the link-local
 		Expect(err).NotTo(HaveOccurred())
 		// Ignore link local address which may or may not be
 		// ready when we read addresses.
@@ -691,7 +691,7 @@ func (tester *testerV10x) cmdCheckTest(tc testCase, conf *Net, dataDir string) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(addrs)).To(Equal(len(expCIDRsV4)))
 		addrs, err = netlink.AddrList(link, netlink.FAMILY_V6)
-		Expect(len(addrs)).To(Equal(len(expCIDRsV6) + 1)) //add one for the link-local
+		Expect(len(addrs)).To(Equal(len(expCIDRsV6) + 1)) // add one for the link-local
 		Expect(err).NotTo(HaveOccurred())
 		// Ignore link local address which may or may not be
 		// ready when we read addresses.
@@ -915,7 +915,7 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(addrs)).To(Equal(len(expCIDRsV4)))
 		addrs, err = netlink.AddrList(link, netlink.FAMILY_V6)
-		Expect(len(addrs)).To(Equal(len(expCIDRsV6) + 1)) //add one for the link-local
+		Expect(len(addrs)).To(Equal(len(expCIDRsV6) + 1)) // add one for the link-local
 		Expect(err).NotTo(HaveOccurred())
 		// Ignore link local address which may or may not be
 		// ready when we read addresses.
@@ -991,7 +991,7 @@ func (tester *testerV04x) cmdCheckTest(tc testCase, conf *Net, dataDir string) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(addrs)).To(Equal(len(expCIDRsV4)))
 		addrs, err = netlink.AddrList(link, netlink.FAMILY_V6)
-		Expect(len(addrs)).To(Equal(len(expCIDRsV6) + 1)) //add one for the link-local
+		Expect(len(addrs)).To(Equal(len(expCIDRsV6) + 1)) // add one for the link-local
 		Expect(err).NotTo(HaveOccurred())
 		// Ignore link local address which may or may not be
 		// ready when we read addresses.
@@ -1259,7 +1259,6 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 }
 
 func (tester *testerV03x) cmdCheckTest(tc testCase, conf *Net, dataDir string) {
-	return
 }
 
 func (tester *testerV03x) cmdDelTest(tc testCase, dataDir string) {
@@ -1490,7 +1489,6 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (types.Re
 }
 
 func (tester *testerV01xOr02x) cmdCheckTest(tc testCase, conf *Net, dataDir string) {
-	return
 }
 
 func (tester *testerV01xOr02x) cmdDelTest(tc testCase, dataDir string) {
@@ -1500,11 +1498,12 @@ func (tester *testerV01xOr02x) cmdDelTest(tc testCase, dataDir string) {
 		err := testutils.CmdDelWithArgs(tester.args, func() error {
 			return cmdDel(tester.args)
 		})
-		if expect020DelError(tc) {
+		switch {
+		case expect020DelError(tc):
 			Expect(err).To(MatchError(tc.DelErr020))
-		} else if expect010DelError(tc) {
+		case expect010DelError(tc):
 			Expect(err).To(MatchError(tc.DelErr010))
-		} else {
+		default:
 			Expect(err).NotTo(HaveOccurred())
 		}
 		return nil
@@ -1577,7 +1576,6 @@ func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result)
 	}
 
 	return conf, nil
-
 }
 
 func cmdAddDelCheckTest(origNS, targetNS ns.NetNS, tc testCase, dataDir string) {
@@ -1989,8 +1987,6 @@ var _ = Describe("bridge Operations", func() {
 
 		It(fmt.Sprintf("[%s] ensure promiscuous mode on bridge", ver), func() {
 			const IFNAME = "bridge0"
-			const EXPECTED_IP = "10.0.0.0/8"
-			const CHANGED_EXPECTED_IP = "10.1.2.3/16"
 
 			conf := &NetConf{
 				NetConf: types.NetConf{
@@ -2014,7 +2010,7 @@ var _ = Describe("bridge Operations", func() {
 				// Check if ForceAddress has default value
 				Expect(conf.ForceAddress).To(Equal(false))
 
-				//Check if promiscuous mode is set correctly
+				// Check if promiscuous mode is set correctly
 				link, err := netlink.LinkByName("bridge0")
 				Expect(err).NotTo(HaveOccurred())
 

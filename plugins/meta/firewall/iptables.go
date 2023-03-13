@@ -21,9 +21,10 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/coreos/go-iptables/iptables"
+
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/utils"
-	"github.com/coreos/go-iptables/iptables"
 )
 
 func getPrivChainRules(ip string) [][]string {
@@ -142,7 +143,7 @@ func (ib *iptablesBackend) checkRules(conf *FirewallNetConf, result *current.Res
 		}
 	}
 
-	if len(rules) <= 0 {
+	if len(rules) == 0 {
 		return nil
 	}
 
@@ -211,7 +212,6 @@ type iptablesBackend struct {
 	protos         map[iptables.Protocol]*iptables.IPTables
 	privChainName  string
 	adminChainName string
-	ifName         string
 }
 
 // iptablesBackend implements the FirewallBackend interface

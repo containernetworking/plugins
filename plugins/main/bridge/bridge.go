@@ -129,7 +129,6 @@ func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 //   - Calculates and compiles a list of gateway addresses
 //   - Adds a default route if needed
 func calcGateways(result *current.Result, n *NetConf) (*gwInfo, *gwInfo, error) {
-
 	gwsV4 := &gwInfo{}
 	gwsV6 := &gwInfo{}
 
@@ -300,8 +299,8 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 	return br, nil
 }
 
-func ensureVlanInterface(br *netlink.Bridge, vlanId int) (netlink.Link, error) {
-	name := fmt.Sprintf("%s.%d", br.Name, vlanId)
+func ensureVlanInterface(br *netlink.Bridge, vlanID int) (netlink.Link, error) {
+	name := fmt.Sprintf("%s.%d", br.Name, vlanID)
 
 	brGatewayVeth, err := netlink.LinkByName(name)
 	if err != nil {
@@ -314,7 +313,7 @@ func ensureVlanInterface(br *netlink.Bridge, vlanId int) (netlink.Link, error) {
 			return nil, fmt.Errorf("faild to find host namespace: %v", err)
 		}
 
-		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanId, "")
+		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanID, "")
 		if err != nil {
 			return nil, fmt.Errorf("faild to create vlan gateway %q: %v", name, err)
 		}
@@ -407,7 +406,7 @@ func enableIPForward(family int) error {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
-	var success bool = false
+	success := false
 
 	n, cniVersion, err := loadNetConf(args.StdinData, args.Args)
 	if err != nil {
@@ -421,7 +420,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	if n.HairpinMode && n.PromiscMode {
-		return fmt.Errorf("cannot set hairpin mode and promiscuous mode at the same time.")
+		return fmt.Errorf("cannot set hairpin mode and promiscuous mode at the same time")
 	}
 
 	br, brInterface, err := setupBridge(n)
@@ -533,8 +532,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 						}
 
 						if vlanInterface == nil {
-							vlanInterface = &current.Interface{Name: vlanIface.Attrs().Name,
-								Mac: vlanIface.Attrs().HardwareAddr.String()}
+							vlanInterface = &current.Interface{
+								Name: vlanIface.Attrs().Name,
+								Mac:  vlanIface.Attrs().HardwareAddr.String(),
+							}
 							result.Interfaces = append(result.Interfaces, vlanInterface)
 						}
 
@@ -720,7 +721,6 @@ type cniBridgeIf struct {
 }
 
 func validateInterface(intf current.Interface, expectInSb bool) (cniBridgeIf, netlink.Link, error) {
-
 	ifFound := cniBridgeIf{found: false}
 	if intf.Name == "" {
 		return ifFound, nil, fmt.Errorf("Interface name missing ")
@@ -745,7 +745,6 @@ func validateInterface(intf current.Interface, expectInSb bool) (cniBridgeIf, ne
 }
 
 func validateCniBrInterface(intf current.Interface, n *NetConf) (cniBridgeIf, error) {
-
 	brFound, link, err := validateInterface(intf, false)
 	if err != nil {
 		return brFound, err
@@ -777,7 +776,6 @@ func validateCniBrInterface(intf current.Interface, n *NetConf) (cniBridgeIf, er
 }
 
 func validateCniVethInterface(intf *current.Interface, brIf cniBridgeIf, contIf cniBridgeIf) (cniBridgeIf, error) {
-
 	vethFound, link, err := validateInterface(*intf, false)
 	if err != nil {
 		return vethFound, err
@@ -821,7 +819,6 @@ func validateCniVethInterface(intf *current.Interface, brIf cniBridgeIf, contIf 
 }
 
 func validateCniContainerInterface(intf current.Interface) (cniBridgeIf, error) {
-
 	vethFound, link, err := validateInterface(intf, true)
 	if err != nil {
 		return vethFound, err
@@ -850,7 +847,6 @@ func validateCniContainerInterface(intf current.Interface) (cniBridgeIf, error) 
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
-
 	n, _, err := loadNetConf(args.StdinData, args.Args)
 	if err != nil {
 		return err

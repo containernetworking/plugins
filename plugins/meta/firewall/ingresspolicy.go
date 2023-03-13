@@ -19,9 +19,10 @@ package main
 import (
 	"fmt"
 
+	"github.com/coreos/go-iptables/iptables"
+
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/utils"
-	"github.com/coreos/go-iptables/iptables"
 )
 
 func setupIngressPolicy(conf *FirewallNetConf, prevResult *types100.Result) error {
@@ -166,7 +167,7 @@ func isolationStage2BridgeRule(bridgeName string) []string {
 }
 
 func withDefaultComment(rule []string) []string {
-	defaultComment := fmt.Sprintf("CNI firewall plugin rules (ingressPolicy: same-bridge)")
+	defaultComment := "CNI firewall plugin rules (ingressPolicy: same-bridge)"
 	return withComment(rule, defaultComment)
 }
 

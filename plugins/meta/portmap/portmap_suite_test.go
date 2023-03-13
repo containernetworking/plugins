@@ -21,15 +21,14 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"github.com/containernetworking/plugins/pkg/ns"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
 
-	"testing"
+	"github.com/containernetworking/plugins/pkg/ns"
 )
 
 func TestPortmap(t *testing.T) {

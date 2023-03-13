@@ -21,17 +21,16 @@ import (
 	"os"
 	"path/filepath"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-	"golang.org/x/sys/unix"
-
-	"github.com/vishvananda/netlink"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 )
 
 func buildOneConfig(name, cniVersion string, orig *TuningConf, prevResult types.Result) (*TuningConf, []byte, error) {
@@ -74,11 +73,10 @@ func buildOneConfig(name, cniVersion string, orig *TuningConf, prevResult types.
 	}
 
 	return conf, newBytes, nil
-
 }
 
 func createSysctlAllowFile(sysctls []string) error {
-	err := os.MkdirAll(defaultAllowlistDir, 0755)
+	err := os.MkdirAll(defaultAllowlistDir, 0o755)
 	if err != nil {
 		return err
 	}

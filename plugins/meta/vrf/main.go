@@ -24,7 +24,6 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
@@ -157,6 +156,9 @@ func cmdCheck(args *skel.CmdArgs) error {
 			return err
 		}
 		vrfInterfaces, err := assignedInterfaces(vrf)
+		if err != nil {
+			return err
+		}
 
 		found := false
 		for _, intf := range vrfInterfaces {
@@ -166,10 +168,13 @@ func cmdCheck(args *skel.CmdArgs) error {
 			}
 		}
 		if !found {
-			return fmt.Errorf("Failed to find %s associated to vrf %s", args.IfName, conf.VRFName)
+			return fmt.Errorf("failed to find %s associated to vrf %s", args.IfName, conf.VRFName)
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

@@ -17,10 +17,10 @@ package main
 import (
 	"fmt"
 
-	"github.com/containernetworking/cni/pkg/types"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/containernetworking/cni/pkg/types"
 )
 
 var _ = Describe("portmapping configuration", func() {
@@ -84,8 +84,10 @@ var _ = Describe("portmapping configuration", func() {
 				Expect(c.Name).To(Equal("test"))
 
 				n, err := types.ParseCIDR("10.0.0.2/24")
+				Expect(err).NotTo(HaveOccurred())
 				Expect(c.ContIPv4).To(Equal(*n))
 				n, err = types.ParseCIDR("2001:db8:1::2/64")
+				Expect(err).NotTo(HaveOccurred())
 				Expect(c.ContIPv6).To(Equal(*n))
 			})
 
@@ -199,21 +201,26 @@ var _ = Describe("portmapping configuration", func() {
 					}))
 
 					n, err := types.ParseCIDR("10.0.0.2/24")
+					Expect(err).NotTo(HaveOccurred())
 					fillDnatRules(&ch, conf, *n)
 
 					Expect(ch.entryRules).To(Equal([][]string{
-						{"-m", "comment", "--comment",
+						{
+							"-m", "comment", "--comment",
 							fmt.Sprintf("dnat name: \"test\" id: \"%s\"", containerID),
 							"-m", "multiport",
 							"-p", "tcp",
 							"--destination-ports", "8080,8081,8083,8084,8085,8086",
-							"a", "b"},
-						{"-m", "comment", "--comment",
+							"a", "b",
+						},
+						{
+							"-m", "comment", "--comment",
 							fmt.Sprintf("dnat name: \"test\" id: \"%s\"", containerID),
 							"-m", "multiport",
 							"-p", "udp",
 							"--destination-ports", "8080,8082",
-							"a", "b"},
+							"a", "b",
+						},
 					}))
 
 					Expect(ch.rules).To(Equal([][]string{
@@ -245,6 +252,7 @@ var _ = Describe("portmapping configuration", func() {
 					ch.entryRules = nil
 
 					n, err = types.ParseCIDR("2001:db8::2/64")
+					Expect(err).NotTo(HaveOccurred())
 					fillDnatRules(&ch, conf, *n)
 
 					Expect(ch.rules).To(Equal([][]string{
@@ -273,6 +281,7 @@ var _ = Describe("portmapping configuration", func() {
 					conf.SNAT = &fvar
 
 					n, err = types.ParseCIDR("10.0.0.2/24")
+					Expect(err).NotTo(HaveOccurred())
 					fillDnatRules(&ch, conf, *n)
 					Expect(ch.rules).To(Equal([][]string{
 						{"-p", "tcp", "--dport", "8080", "-j", "DNAT", "--to-destination", "10.0.0.2:80"},
@@ -312,6 +321,7 @@ var _ = Describe("portmapping configuration", func() {
 
 					ch = genDnatChain(conf.Name, containerID)
 					n, err := types.ParseCIDR("10.0.0.2/24")
+					Expect(err).NotTo(HaveOccurred())
 					fillDnatRules(&ch, conf, *n)
 					Expect(ch.rules).To(Equal([][]string{
 						{"-p", "tcp", "--dport", "8080", "-s", "10.0.0.2/24", "-j", "PLZ-SET-MARK"},

@@ -18,16 +18,15 @@ import (
 	"encoding/json"
 	"fmt"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-
-	"github.com/vishvananda/netlink"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 )
 
 func buildOneConfig(name, cniVersion string, orig *VRFNetConf, prevResult types.Result) (*VRFNetConf, []byte, error) {
@@ -70,7 +69,6 @@ func buildOneConfig(name, cniVersion string, orig *VRFNetConf, prevResult types.
 	}
 
 	return conf, newBytes, nil
-
 }
 
 var _ = Describe("vrf plugin", func() {
@@ -169,6 +167,7 @@ var _ = Describe("vrf plugin", func() {
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
+		Expect(err).NotTo(HaveOccurred())
 
 		err = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
@@ -298,6 +297,7 @@ var _ = Describe("vrf plugin", func() {
 					link, err := netlink.LinkByName(IF0Name)
 					Expect(err).NotTo(HaveOccurred())
 					addresses, err := netlink.AddrList(link, netlink.FAMILY_ALL)
+					Expect(err).NotTo(HaveOccurred())
 					Expect(len(addresses)).To(Equal(1))
 					Expect(addresses[0].IP.Equal(addr0.IP)).To(BeTrue())
 					Expect(addresses[0].Mask).To(Equal(addr0.Mask))
@@ -315,6 +315,7 @@ var _ = Describe("vrf plugin", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					addresses, err := netlink.AddrList(link, netlink.FAMILY_ALL)
+					Expect(err).NotTo(HaveOccurred())
 					Expect(len(addresses)).To(Equal(1))
 					Expect(addresses[0].IP.Equal(addr1.IP)).To(BeTrue())
 					Expect(addresses[0].Mask).To(Equal(addr1.Mask))
@@ -343,7 +344,6 @@ var _ = Describe("vrf plugin", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 			})
-
 		},
 		Entry("added to the same vrf", VRF0Name, VRF0Name, "10.0.0.2/24", "10.0.0.3/24"),
 		Entry("added to different vrfs", VRF0Name, VRF1Name, "10.0.0.2/24", "10.0.0.3/24"),
@@ -606,7 +606,6 @@ var _ = Describe("vrf plugin", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
-
 })
 
 var _ = Describe("unit tests", func() {
@@ -702,11 +701,4 @@ func checkInterfaceOnVRF(vrfName, intfName string) {
 	master, err := netlink.LinkByIndex(masterIndx)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(master.Attrs().Name).To(Equal(vrfName))
-}
-
-func checkLinkHasNoMaster(intfName string) {
-	link, err := netlink.LinkByName(intfName)
-	Expect(err).NotTo(HaveOccurred())
-	masterIndx := link.Attrs().MasterIndex
-	Expect(masterIndx).To(Equal(0))
 }

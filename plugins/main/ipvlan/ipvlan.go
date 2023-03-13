@@ -26,7 +26,6 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -357,7 +356,6 @@ func main() {
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
-
 	n, _, err := loadConf(args, true)
 	if err != nil {
 		return err
@@ -423,7 +421,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	// Check prevResults for ips, routes and dns against values found in the container
 	if err := netns.Do(func(_ ns.NetNS) error {
-
 		// Check interface against values found in the container
 		err := validateCniContainerInterface(contMap, m.Attrs().Index, n.Mode)
 		if err != nil {
@@ -448,7 +445,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 }
 
 func validateCniContainerInterface(intf current.Interface, masterIndex int, modeExpected string) error {
-
 	var link netlink.Link
 	var err error
 
@@ -469,6 +465,9 @@ func validateCniContainerInterface(intf current.Interface, masterIndex int, mode
 	}
 
 	mode, err := modeFromString(modeExpected)
+	if err != nil {
+		return err
+	}
 	if ipv.Mode != mode {
 		currString, err := modeToString(ipv.Mode)
 		if err != nil {

@@ -17,10 +17,10 @@ package allocator
 import (
 	"net"
 
-	"github.com/containernetworking/cni/pkg/types"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/containernetworking/cni/pkg/types"
 )
 
 var _ = Describe("IP ranges", func() {

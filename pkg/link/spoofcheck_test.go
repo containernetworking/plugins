@@ -16,8 +16,8 @@ package link_test
 
 import (
 	"fmt"
-	"github.com/networkplumbing/go-nft/nft"
 
+	"github.com/networkplumbing/go-nft/nft"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -116,10 +116,10 @@ var _ = Describe("spoofcheck", func() {
 })
 
 func assertExpectedRegularChainsDeletionInTeardownConfig(action configurerStub) {
-	deleteRegularChainRulesJsonConfig, err := action.applyConfig[1].ToJSON()
+	deleteRegularChainRulesJSONConfig, err := action.applyConfig[1].ToJSON()
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-	expectedDeleteRegularChainRulesJsonConfig := `
+	expectedDeleteRegularChainRulesJSONConfig := `
 			{"nftables": [
 				{"delete": {"chain": {
 					"family": "bridge",
@@ -133,14 +133,14 @@ func assertExpectedRegularChainsDeletionInTeardownConfig(action configurerStub) 
 				}}}
 			]}`
 
-	ExpectWithOffset(1, string(deleteRegularChainRulesJsonConfig)).To(MatchJSON(expectedDeleteRegularChainRulesJsonConfig))
+	ExpectWithOffset(1, string(deleteRegularChainRulesJSONConfig)).To(MatchJSON(expectedDeleteRegularChainRulesJSONConfig))
 }
 
 func assertExpectedBaseChainRuleDeletionInTeardownConfig(action configurerStub) {
-	deleteBaseChainRuleJsonConfig, err := action.applyConfig[0].ToJSON()
+	deleteBaseChainRuleJSONConfig, err := action.applyConfig[0].ToJSON()
 	Expect(err).NotTo(HaveOccurred())
 
-	expectedDeleteIfaceMatchRuleJsonConfig := `
+	expectedDeleteIfaceMatchRuleJSONConfig := `
             {"nftables": [
 				{"delete": {"rule": {
 					"family": "bridge",
@@ -157,7 +157,7 @@ func assertExpectedBaseChainRuleDeletionInTeardownConfig(action configurerStub) 
 					"comment": "macspoofchk-container99-net1"
 				}}}
 			]}`
-	Expect(string(deleteBaseChainRuleJsonConfig)).To(MatchJSON(expectedDeleteIfaceMatchRuleJsonConfig))
+	Expect(string(deleteBaseChainRuleJSONConfig)).To(MatchJSON(expectedDeleteIfaceMatchRuleJSONConfig))
 }
 
 func rowConfigWithRulesOnly() string {

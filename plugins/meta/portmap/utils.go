@@ -25,18 +25,11 @@ import (
 
 // fmtIpPort correctly formats ip:port literals for iptables and ip6tables -
 // need to wrap v6 literals in a []
-func fmtIpPort(ip net.IP, port int) string {
+func fmtIPPort(ip net.IP, port int) string {
 	if ip.To4() == nil {
 		return fmt.Sprintf("[%s]:%d", ip.String(), port)
 	}
 	return fmt.Sprintf("%s:%d", ip.String(), port)
-}
-
-func localhostIP(isV6 bool) string {
-	if isV6 {
-		return "::1"
-	}
-	return "127.0.0.1"
 }
 
 // getRoutableHostIF will try and determine which interface routes the container's

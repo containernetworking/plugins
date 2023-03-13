@@ -21,14 +21,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/testutils"
-
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/disk"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 )
 
 const LineBreak = "\r\n"
@@ -57,7 +57,7 @@ var _ = Describe("host-local Operations", func() {
 		ver := ver
 
 		It(fmt.Sprintf("[%s] allocates and releases addresses with ADD/DEL", ver), func() {
-			err := os.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
 			conf := fmt.Sprintf(`{
@@ -166,7 +166,7 @@ var _ = Describe("host-local Operations", func() {
 		It(fmt.Sprintf("[%s] allocates and releases addresses on specific interface with ADD/DEL", ver), func() {
 			const ifname1 string = "eth1"
 
-			err := os.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
 			conf0 := fmt.Sprintf(`{
@@ -356,7 +356,7 @@ var _ = Describe("host-local Operations", func() {
 		})
 
 		It(fmt.Sprintf("[%s] verify DEL works on backwards compatible allocate", ver), func() {
-			err := os.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
 			conf := fmt.Sprintf(`{
@@ -397,7 +397,7 @@ var _ = Describe("host-local Operations", func() {
 			contents, err := os.ReadFile(ipFilePath)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(contents)).To(Equal(args.ContainerID + LineBreak + ifname))
-			err = os.WriteFile(ipFilePath, []byte(strings.TrimSpace(args.ContainerID)), 0644)
+			err = os.WriteFile(ipFilePath, []byte(strings.TrimSpace(args.ContainerID)), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = testutils.CmdDelWithArgs(args, func() error {
@@ -504,7 +504,7 @@ var _ = Describe("host-local Operations", func() {
 				return cmdAdd(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(strings.Index(string(out), "Error retriving last reserved ip")).To(Equal(-1))
+			Expect(strings.Index(string(out), "Error retrieving last reserved ip")).To(Equal(-1))
 		})
 
 		It(fmt.Sprintf("[%s] allocates a custom IP when requested by config args", ver), func() {
@@ -546,7 +546,7 @@ var _ = Describe("host-local Operations", func() {
 		})
 
 		It(fmt.Sprintf("[%s] allocates custom IPs from multiple ranges", ver), func() {
-			err := os.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
 			conf := fmt.Sprintf(`{
@@ -594,7 +594,7 @@ var _ = Describe("host-local Operations", func() {
 		})
 
 		It(fmt.Sprintf("[%s] allocates custom IPs from multiple protocols", ver), func() {
-			err := os.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0644)
+			err := os.WriteFile(filepath.Join(tmpDir, "resolv.conf"), []byte("nameserver 192.0.2.3"), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
 			conf := fmt.Sprintf(`{

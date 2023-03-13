@@ -18,12 +18,12 @@ import (
 	"fmt"
 	"net"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	fakestore "github.com/containernetworking/plugins/plugins/ipam/host-local/backend/testing"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 )
 
 type AllocatorTestCase struct {
@@ -262,7 +262,6 @@ var _ = Describe("host-local ip allocator", func() {
 			res, err = alloc.Get("ID", "eth0", nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Address.String()).To(Equal("192.168.1.3/29"))
-
 		})
 
 		Context("when requesting a specific IP", func() {
@@ -301,7 +300,6 @@ var _ = Describe("host-local ip allocator", func() {
 				Expect(err).To(HaveOccurred())
 			})
 		})
-
 	})
 	Context("when out of ips", func() {
 		It("returns a meaningful error", func() {

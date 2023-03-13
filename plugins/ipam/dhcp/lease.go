@@ -34,13 +34,17 @@ import (
 
 // RFC 2131 suggests using exponential backoff, starting with 4sec
 // and randomized to +/- 1sec
-const resendDelay0 = 4 * time.Second
-const resendDelayMax = 62 * time.Second
+const (
+	resendDelay0   = 4 * time.Second
+	resendDelayMax = 62 * time.Second
+)
 
 // To speed up the retry for first few failures, we retry without
 // backoff for a few times
-const resendFastDelay = 2 * time.Second
-const resendFastMax = 4
+const (
+	resendFastDelay = 2 * time.Second
+	resendFastMax   = 4
+)
 
 const (
 	leaseStateBound = iota
@@ -79,9 +83,12 @@ var requestOptionsDefault = map[dhcp4.OptionCode]bool{
 	dhcp4.OptionSubnetMask: true,
 }
 
-func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequestOptions []RequestOption) (
-	optsRequesting map[dhcp4.OptionCode]bool, optsProviding map[dhcp4.OptionCode][]byte, err error) {
-
+func prepareOptions(cniArgs string, provideOptions []ProvideOption, requestOptions []RequestOption) (
+	map[dhcp4.OptionCode]bool, map[dhcp4.OptionCode][]byte, error,
+) {
+	var optsRequesting map[dhcp4.OptionCode]bool
+	var optsProviding map[dhcp4.OptionCode][]byte
+	var err error
 	// parse CNI args
 	cniArgsParsed := map[string]string{}
 	for _, argPair := range strings.Split(cniArgs, ";") {
@@ -94,23 +101,20 @@ func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequestOptio
 	// parse providing options map
 	var optParsed dhcp4.OptionCode
 	optsProviding = make(map[dhcp4.OptionCode][]byte)
-	for _, opt := range ProvideOptions {
+	for _, opt := range provideOptions {
 		optParsed, err = parseOptionName(string(opt.Option))
 		if err != nil {
-			err = fmt.Errorf("Can not parse option %q: %w", opt.Option, err)
-			return
+			return nil, nil, fmt.Errorf("Can not parse option %q: %w", opt.Option, err)
 		}
 		if len(opt.Value) > 0 {
 			if len(opt.Value) > 255 {
-				err = fmt.Errorf("value too long for option %q: %q", opt.Option, opt.Value)
-				return
+				return nil, nil, fmt.Errorf("value too long for option %q: %q", opt.Option, opt.Value)
 			}
 			optsProviding[optParsed] = []byte(opt.Value)
 		}
 		if value, ok := cniArgsParsed[opt.ValueFromCNIArg]; ok {
 			if len(value) > 255 {
-				err = fmt.Errorf("value too long for option %q from CNI_ARGS %q: %q", opt.Option, opt.ValueFromCNIArg, opt.Value)
-				return
+				return nil, nil, fmt.Errorf("value too long for option %q from CNI_ARGS %q: %q", opt.Option, opt.ValueFromCNIArg, opt.Value)
 			}
 			optsProviding[optParsed] = []byte(value)
 		}
@@ -119,14 +123,13 @@ func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequestOptio
 	// parse necessary options map
 	optsRequesting = make(map[dhcp4.OptionCode]bool)
 	skipRequireDefault := false
-	for _, opt := range RequestOptions {
+	for _, opt := range requestOptions {
 		if opt.SkipDefault {
 			skipRequireDefault = true
 		}
 		optParsed, err = parseOptionName(string(opt.Option))
 		if err != nil {
-			err = fmt.Errorf("Can not parse option %q: %w", opt.Option, err)
-			return
+			return nil, nil, fmt.Errorf("Can not parse option %q: %w", opt.Option, err)
 		}
 		optsRequesting[optParsed] = true
 	}
@@ -136,7 +139,7 @@ func prepareOptions(cniArgs string, ProvideOptions []ProvideOption, RequestOptio
 			optsRequesting[k] = v
 		}
 	}
-	return
+	return optsRequesting, optsProviding, err
 }
 
 // AcquireLease gets an DHCP lease and then maintains it in the background
@@ -206,7 +209,7 @@ func (l *DHCPLease) Check() {
 	l.check <- struct{}{}
 }
 
-func (l *DHCPLease) getOptionsWithClientId() dhcp4.Options {
+func (l *DHCPLease) getOptionsWithClientID() dhcp4.Options {
 	opts := make(dhcp4.Options)
 	opts[dhcp4.OptionClientIdentifier] = []byte(l.clientID)
 	// client identifier's first byte is "type"
@@ -217,7 +220,7 @@ func (l *DHCPLease) getOptionsWithClientId() dhcp4.Options {
 }
 
 func (l *DHCPLease) getAllOptions() dhcp4.Options {
-	opts := l.getOptionsWithClientId()
+	opts := l.getOptionsWithClientID()
 
 	for k, v := range l.optsProviding {
 		opts[k] = v
@@ -302,7 +305,7 @@ func (l *DHCPLease) maintain() {
 
 		switch state {
 		case leaseStateBound:
-			sleepDur = l.renewalTime.Sub(time.Now())
+			sleepDur = time.Until(l.renewalTime)
 			if sleepDur <= 0 {
 				log.Printf("%v: renewing lease", l.clientID)
 				state = leaseStateRenewing
@@ -394,7 +397,7 @@ func (l *DHCPLease) release() error {
 	}
 	defer c.Close()
 
-	opts := l.getOptionsWithClientId()
+	opts := l.getOptionsWithClientID()
 
 	if err = DhcpRelease(c, *l.ack, opts); err != nil {
 		return fmt.Errorf("failed to send DHCPRELEASE")
@@ -424,9 +427,9 @@ func (l *DHCPLease) Routes() []*types.Route {
 
 	// RFC 3442 states that if Classless Static Routes (option 121)
 	// exist, we ignore Static Routes (option 33) and the Router/Gateway.
-	opt121_routes := parseCIDRRoutes(l.opts)
-	if len(opt121_routes) > 0 {
-		return append(routes, opt121_routes...)
+	opt121Routes := parseCIDRRoutes(l.opts)
+	if len(opt121Routes) > 0 {
+		return append(routes, opt121Routes...)
 	}
 
 	// Append Static Routes
@@ -448,9 +451,9 @@ func jitter(span time.Duration) time.Duration {
 }
 
 func backoffRetry(resendMax time.Duration, f func() (*dhcp4.Packet, error)) (*dhcp4.Packet, error) {
-	var baseDelay time.Duration = resendDelay0
+	baseDelay := resendDelay0
 	var sleepTime time.Duration
-	var fastRetryLimit = resendFastMax
+	fastRetryLimit := resendFastMax
 	for {
 		pkt, err := f()
 		if err == nil {
