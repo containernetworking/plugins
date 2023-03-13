@@ -295,7 +295,7 @@ var _ = Describe("sbr test", func() {
 				LinkIndex: expNet1.Routes[0].LinkIndex,
 			})
 
-		Expect(len(newStatus.Rules)).To(Equal(1))
+		Expect(newStatus.Rules).To(HaveLen(1))
 		Expect(newStatus.Rules[0].Table).To(Equal(100))
 		Expect(newStatus.Rules[0].Src.String()).To(Equal("192.168.1.209/32"))
 		devNet1 := newStatus.Devices[0]
@@ -323,7 +323,7 @@ var _ = Describe("sbr test", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Check results. We expect the rule to have been removed.
-		Expect(len(retVal.Rules)).To(Equal(0))
+		Expect(retVal.Rules).To(BeEmpty())
 	})
 
 	It("Works with a default route already set", func() {
@@ -393,7 +393,7 @@ var _ = Describe("sbr test", func() {
 			}
 		}
 
-		Expect(len(newStatus.Rules)).To(Equal(1))
+		Expect(newStatus.Rules).To(HaveLen(1))
 		Expect(newStatus.Rules[0].Table).To(Equal(100))
 		Expect(newStatus.Rules[0].Src.String()).To(Equal("192.168.1.209/32"))
 		devNet1 := newStatus.Devices[0]
@@ -504,7 +504,7 @@ var _ = Describe("sbr test", func() {
 			})
 
 		// 2 Rules will be created for each IP address. (100, 101)
-		Expect(len(newStatus.Rules)).To(Equal(2))
+		Expect(newStatus.Rules).To(HaveLen(2))
 
 		// First entry corresponds to last table
 		Expect(newStatus.Rules[0].Table).To(Equal(101))

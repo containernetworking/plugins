@@ -141,7 +141,7 @@ func ipvlanAddCheckDelTest(conf, masterName string, originalNS, targetNS ns.NetN
 
 		addrs, err := netlink.AddrList(link, syscall.AF_INET)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(len(addrs)).To(Equal(1))
+		Expect(addrs).To(HaveLen(1))
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
@@ -230,9 +230,9 @@ func (t *testerV10x) verifyResult(result types.Result, name string) string {
 	r, err := types100.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(len(r.Interfaces)).To(Equal(1))
+	Expect(r.Interfaces).To(HaveLen(1))
 	Expect(r.Interfaces[0].Name).To(Equal(name))
-	Expect(len(r.IPs)).To(Equal(1))
+	Expect(r.IPs).To(HaveLen(1))
 
 	return r.Interfaces[0].Mac
 }
@@ -242,9 +242,9 @@ func (t *testerV04x) verifyResult(result types.Result, name string) string {
 	r, err := types040.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(len(r.Interfaces)).To(Equal(1))
+	Expect(r.Interfaces).To(HaveLen(1))
 	Expect(r.Interfaces[0].Name).To(Equal(name))
-	Expect(len(r.IPs)).To(Equal(1))
+	Expect(r.IPs).To(HaveLen(1))
 
 	return r.Interfaces[0].Mac
 }

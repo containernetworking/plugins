@@ -260,8 +260,8 @@ func (t *testerV10x) expectDpdkInterfaceIP(result types.Result, ipAddress string
 	// check that the result was sane
 	res, err := types100.NewResultFromResult(result)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(len(res.Interfaces)).To(Equal(0))
-	Expect(len(res.IPs)).To(Equal(1))
+	Expect(res.Interfaces).To(BeEmpty())
+	Expect(res.IPs).To(HaveLen(1))
 	Expect(res.IPs[0].Address.String()).To(Equal(ipAddress))
 }
 
@@ -282,8 +282,8 @@ func (t *testerV04x) expectDpdkInterfaceIP(result types.Result, ipAddress string
 	// check that the result was sane
 	res, err := types040.NewResultFromResult(result)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(len(res.Interfaces)).To(Equal(0))
-	Expect(len(res.IPs)).To(Equal(1))
+	Expect(res.Interfaces).To(BeEmpty())
+	Expect(res.IPs).To(HaveLen(1))
 	Expect(res.IPs[0].Address.String()).To(Equal(ipAddress))
 }
 
@@ -304,8 +304,8 @@ func (t *testerV03x) expectDpdkInterfaceIP(result types.Result, ipAddress string
 	// check that the result was sane
 	res, err := types040.NewResultFromResult(result)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(len(res.Interfaces)).To(Equal(0))
-	Expect(len(res.IPs)).To(Equal(1))
+	Expect(res.Interfaces).To(BeEmpty())
+	Expect(res.IPs).To(HaveLen(1))
 	Expect(res.IPs[0].Address.String()).To(Equal(ipAddress))
 }
 

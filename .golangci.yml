@@ -11,6 +11,7 @@ linters:
   enable:
     - contextcheck
     - gci
+    - ginkgolinter
     - gocritic
     - gofumpt
     - gosimple

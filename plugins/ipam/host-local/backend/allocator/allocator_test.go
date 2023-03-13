@@ -77,7 +77,7 @@ func (t AllocatorTestCase) run(idx int) (*current.IPConfig, error) {
 		p = append(p, Range{Subnet: types.IPNet(*subnet)})
 	}
 
-	Expect(p.Canonicalize()).To(BeNil())
+	Expect(p.Canonicalize()).To(Succeed())
 
 	store := fakestore.NewFakeStore(t.ipmap, map[string]net.IP{"rangeid": net.ParseIP(t.lastIP)})
 
@@ -330,7 +330,7 @@ var _ = Describe("host-local ip allocator", func() {
 			}
 			for idx, tc := range testCases {
 				_, err := tc.run(idx)
-				Expect(err).NotTo(BeNil())
+				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(HavePrefix("no IP addresses available in range set"))
 			}
 		})

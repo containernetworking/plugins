@@ -26,7 +26,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/040"
+	types040 "github.com/containernetworking/cni/pkg/types/040"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -107,27 +107,27 @@ func validateFullRuleset(bytes []byte) {
 		chains, err := ipt.ListChains("filter")
 		Expect(err).NotTo(HaveOccurred())
 		foundAdmin, foundPriv := findChains(chains)
-		Expect(foundAdmin).To(Equal(true))
-		Expect(foundPriv).To(Equal(true))
+		Expect(foundAdmin).To(BeTrue())
+		Expect(foundPriv).To(BeTrue())
 
 		// Look for the FORWARD chain jump rules to our custom chains
 		rules, err := ipt.List("filter", "FORWARD")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(rules)).Should(BeNumerically(">", 1))
 		_, foundPriv = findForwardJumpRules(rules)
-		Expect(foundPriv).To(Equal(true))
+		Expect(foundPriv).To(BeTrue())
 
 		// Look for the allow rules in our custom FORWARD chain
 		rules, err = ipt.List("filter", "CNI-FORWARD")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(rules)).Should(BeNumerically(">", 1))
 		foundAdmin, _ = findForwardJumpRules(rules)
-		Expect(foundAdmin).To(Equal(true))
+		Expect(foundAdmin).To(BeTrue())
 
 		// Look for the IP allow rules
 		foundOne, foundTwo := findForwardAllowRules(rules, ipString(ip.Address))
-		Expect(foundOne).To(Equal(true))
-		Expect(foundTwo).To(Equal(true))
+		Expect(foundOne).To(BeTrue())
+		Expect(foundTwo).To(BeTrue())
 	}
 }
 
@@ -142,25 +142,25 @@ func validateCleanedUp(bytes []byte) {
 		chains, err := ipt.ListChains("filter")
 		Expect(err).NotTo(HaveOccurred())
 		foundAdmin, foundPriv := findChains(chains)
-		Expect(foundAdmin).To(Equal(true))
-		Expect(foundPriv).To(Equal(true))
+		Expect(foundAdmin).To(BeTrue())
+		Expect(foundPriv).To(BeTrue())
 
 		// Look for the FORWARD chain jump rules to our custom chains
 		rules, err := ipt.List("filter", "FORWARD")
 		Expect(err).NotTo(HaveOccurred())
 		_, foundPriv = findForwardJumpRules(rules)
-		Expect(foundPriv).To(Equal(true))
+		Expect(foundPriv).To(BeTrue())
 
 		// Look for the allow rules in our custom FORWARD chain
 		rules, err = ipt.List("filter", "CNI-FORWARD")
 		Expect(err).NotTo(HaveOccurred())
 		foundAdmin, _ = findForwardJumpRules(rules)
-		Expect(foundAdmin).To(Equal(true))
+		Expect(foundAdmin).To(BeTrue())
 
 		// Expect no IP address rules for this IP
 		foundOne, foundTwo := findForwardAllowRules(rules, ipString(ip.Address))
-		Expect(foundOne).To(Equal(false))
-		Expect(foundTwo).To(Equal(false))
+		Expect(foundOne).To(BeFalse())
+		Expect(foundTwo).To(BeFalse())
 	}
 }
 
@@ -253,9 +253,9 @@ var _ = Describe("firewall plugin iptables backend", func() {
 				result, err := current.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(2))
+				Expect(result.IPs).To(HaveLen(2))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 				Expect(result.IPs[1].Address.String()).To(Equal("2001:db8:1:2::1/64"))
 				return nil
@@ -350,7 +350,7 @@ var _ = Describe("firewall plugin iptables backend", func() {
 							foundAdmin = true
 						}
 					}
-					Expect(foundAdmin).To(Equal(true))
+					Expect(foundAdmin).To(BeTrue())
 				}
 
 				return nil

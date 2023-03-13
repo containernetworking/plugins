@@ -124,7 +124,7 @@ var _ = Describe("IP Operations", func() {
 		}
 
 		for _, test := range testCases {
-			Expect(len(test.ip.ToIP())).To(Equal(test.expectedLen))
+			Expect(test.ip.ToIP()).To(HaveLen(test.expectedLen))
 			Expect(test.ip.ToIP()).To(Equal(test.expectedIP))
 		}
 	})

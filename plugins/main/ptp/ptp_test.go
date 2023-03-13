@@ -259,7 +259,7 @@ var _ = Describe("ptp Operations", func() {
 
 		t := newTesterByVersion(cniVersion)
 		ips, mac := t.verifyResult(result, IFNAME, targetNS.Path(), expectedDNSConf)
-		Expect(len(ips)).To(Equal(numIPs))
+		Expect(ips).To(HaveLen(numIPs))
 
 		// Make sure ptp link exists in the target namespace
 		// Then, ping the gateway
