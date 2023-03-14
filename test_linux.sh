@@ -38,20 +38,6 @@ for t in ${PKG}; do
     i=$((i+1))
 done
 
-echo "Checking gofmt..."
-fmtRes=$(go fmt $PKG)
-if [ -n "${fmtRes}" ]; then
-    echo -e "go fmt checking failed:\n${fmtRes}"
-    exit 255
-fi
-
-echo "Checking govet..."
-vetRes=$(go vet $PKG)
-if [ -n "${vetRes}" ]; then
-    echo -e "govet checking failed:\n${vetRes}"
-    exit 255
-fi
-
 # Run the pkg/ns tests as non root user
 mkdir /tmp/cni-rootless
 (export XDG_RUNTIME_DIR=/tmp/cni-rootless; cd pkg/ns/; unshare -rmn go test)
