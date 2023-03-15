@@ -75,12 +75,14 @@ func NewSpoofCheckerWithConfigurer(iface, macAddress, refID string, configurer N
 func (sc *SpoofChecker) Setup() error {
 	baseConfig := nft.NewConfig()
 
-	baseConfig.AddTable(&schema.Table{Family: schema.FamilyBridge, Name: natTableName})
+	bridgeTable := schema.Table{Family: schema.FamilyBridge, Name: natTableName}
+	baseConfig.AddTable(&bridgeTable)
 
-	baseConfig.AddChain(sc.baseChain())
-	ifaceChain := sc.ifaceChain()
+	baseBridgeChain := sc.baseChain(bridgeTable)
+	baseConfig.AddChain(baseBridgeChain)
+	ifaceChain := sc.ifaceChain(bridgeTable)
 	baseConfig.AddChain(ifaceChain)
-	macChain := sc.macChain(ifaceChain.Name)
+	macChain := sc.macChain(bridgeTable, ifaceChain.Name)
 	baseConfig.AddChain(macChain)
 
 	if err := sc.configurer.Apply(baseConfig); err != nil {
@@ -92,10 +94,10 @@ func (sc *SpoofChecker) Setup() error {
 	rulesConfig.FlushChain(ifaceChain)
 	rulesConfig.FlushChain(macChain)
 
-	rulesConfig.AddRule(sc.matchIfaceJumpToChainRule(postRoutingBaseChainName, ifaceChain.Name))
-	rulesConfig.AddRule(sc.jumpToChainRule(ifaceChain.Name, macChain.Name))
-	rulesConfig.AddRule(sc.matchMacRule(macChain.Name))
-	rulesConfig.AddRule(sc.dropRule(macChain.Name))
+	rulesConfig.AddRule(sc.matchIfaceJumpToChainRule(baseBridgeChain, ifaceChain))
+	rulesConfig.AddRule(sc.jumpToChainRule(ifaceChain, macChain))
+	rulesConfig.AddRule(sc.matchMacRule(macChain))
+	rulesConfig.AddRule(sc.dropRule(macChain))
 
 	if err := sc.configurer.Apply(rulesConfig); err != nil {
 		return fmt.Errorf("failed to setup spoof-check: %v", err)
@@ -108,10 +110,13 @@ func (sc *SpoofChecker) Setup() error {
 // The table and base-chain are expected to survive while the base-chain rule that matches the
 // interface is removed.
 func (sc *SpoofChecker) Teardown() error {
-	ifaceChain := sc.ifaceChain()
+	bridgeTable := schema.Table{Family: schema.FamilyBridge, Name: natTableName}
+	baseBridgeChain := sc.baseChain(bridgeTable)
+	ifaceChain := sc.ifaceChain(bridgeTable)
+
 	currentConfig, ifaceMatchRuleErr := sc.configurer.Read()
 	if ifaceMatchRuleErr == nil {
-		expectedRuleToFind := sc.matchIfaceJumpToChainRule(postRoutingBaseChainName, ifaceChain.Name)
+		expectedRuleToFind := sc.matchIfaceJumpToChainRule(baseBridgeChain, ifaceChain)
 		// It is safer to exclude the statement matching, avoiding cases where a current statement includes
 		// additional default entries (e.g. counters).
 		ruleToFindExcludingStatements := *expectedRuleToFind
@@ -132,7 +137,7 @@ func (sc *SpoofChecker) Teardown() error {
 
 	regularChainsConfig := nft.NewConfig()
 	regularChainsConfig.DeleteChain(ifaceChain)
-	regularChainsConfig.DeleteChain(sc.macChain(ifaceChain.Name))
+	regularChainsConfig.DeleteChain(sc.macChain(bridgeTable, ifaceChain.Name))
 
 	var regularChainsErr error
 	if err := sc.configurer.Apply(regularChainsConfig); err != nil {
@@ -145,40 +150,40 @@ func (sc *SpoofChecker) Teardown() error {
 	return nil
 }
 
-func (sc *SpoofChecker) matchIfaceJumpToChainRule(chain, toChain string) *schema.Rule {
+func (sc *SpoofChecker) matchIfaceJumpToChainRule(chain, toChain *schema.Chain) *schema.Rule {
 	return &schema.Rule{
-		Family: schema.FamilyBridge,
-		Table:  natTableName,
-		Chain:  chain,
+		Family: chain.Family,
+		Table:  chain.Table,
+		Chain:  chain.Name,
 		Expr: []schema.Statement{
 			{Match: &schema.Match{
 				Op:    schema.OperEQ,
 				Left:  schema.Expression{RowData: []byte(`{"meta":{"key":"oifname"}}`)},
 				Right: schema.Expression{String: &sc.iface},
 			}},
-			{Verdict: schema.Verdict{Jump: &schema.ToTarget{Target: toChain}}},
+			{Verdict: schema.Verdict{Jump: &schema.ToTarget{Target: toChain.Name}}},
 		},
 		Comment: ruleComment(sc.refID),
 	}
 }
 
-func (sc *SpoofChecker) jumpToChainRule(chain, toChain string) *schema.Rule {
+func (sc *SpoofChecker) jumpToChainRule(chain, toChain *schema.Chain) *schema.Rule {
 	return &schema.Rule{
-		Family: schema.FamilyBridge,
-		Table:  natTableName,
-		Chain:  chain,
+		Family: chain.Family,
+		Table:  chain.Table,
+		Chain:  chain.Name,
 		Expr: []schema.Statement{
-			{Verdict: schema.Verdict{Jump: &schema.ToTarget{Target: toChain}}},
+			{Verdict: schema.Verdict{Jump: &schema.ToTarget{Target: toChain.Name}}},
 		},
 		Comment: ruleComment(sc.refID),
 	}
 }
 
-func (sc *SpoofChecker) matchMacRule(chain string) *schema.Rule {
+func (sc *SpoofChecker) matchMacRule(chain *schema.Chain) *schema.Rule {
 	return &schema.Rule{
-		Family: schema.FamilyBridge,
-		Table:  natTableName,
-		Chain:  chain,
+		Family: chain.Family,
+		Table:  chain.Table,
+		Chain:  chain.Name,
 		Expr: []schema.Statement{
 			{Match: &schema.Match{
 				Op: schema.OperEQ,
@@ -194,12 +199,12 @@ func (sc *SpoofChecker) matchMacRule(chain string) *schema.Rule {
 	}
 }
 
-func (sc *SpoofChecker) dropRule(chain string) *schema.Rule {
+func (sc *SpoofChecker) dropRule(chain *schema.Chain) *schema.Rule {
 	macRulesIndex := nft.NewRuleIndex()
 	return &schema.Rule{
-		Family: schema.FamilyBridge,
-		Table:  natTableName,
-		Chain:  chain,
+		Family: chain.Family,
+		Table:  chain.Table,
+		Chain:  chain.Name,
 		Index:  macRulesIndex.Next(),
 		Expr: []schema.Statement{
 			{Verdict: schema.Verdict{SimpleVerdict: schema.SimpleVerdict{Drop: true}}},
@@ -208,11 +213,11 @@ func (sc *SpoofChecker) dropRule(chain string) *schema.Rule {
 	}
 }
 
-func (sc *SpoofChecker) baseChain() *schema.Chain {
+func (sc *SpoofChecker) baseChain(table schema.Table) *schema.Chain {
 	chainPriority := -300
 	return &schema.Chain{
-		Family: schema.FamilyBridge,
-		Table:  natTableName,
+		Family: table.Family,
+		Table:  table.Name,
 		Name:   postRoutingBaseChainName,
 		Type:   schema.TypeFilter,
 		Hook:   schema.HookPostRouting,
@@ -221,20 +226,20 @@ func (sc *SpoofChecker) baseChain() *schema.Chain {
 	}
 }
 
-func (sc *SpoofChecker) ifaceChain() *schema.Chain {
+func (sc *SpoofChecker) ifaceChain(table schema.Table) *schema.Chain {
 	ifaceChainName := "cni-br-iface-" + sc.refID
 	return &schema.Chain{
-		Family: schema.FamilyBridge,
-		Table:  natTableName,
+		Family: table.Family,
+		Table:  table.Name,
 		Name:   ifaceChainName,
 	}
 }
 
-func (sc *SpoofChecker) macChain(ifaceChainName string) *schema.Chain {
+func (sc *SpoofChecker) macChain(table schema.Table, ifaceChainName string) *schema.Chain {
 	macChainName := ifaceChainName + "-mac"
 	return &schema.Chain{
-		Family: schema.FamilyBridge,
-		Table:  natTableName,
+		Family: table.Family,
+		Table:  table.Name,
 		Name:   macChainName,
 	}
 }
