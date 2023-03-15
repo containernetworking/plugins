@@ -24,6 +24,7 @@ import (
 
 const (
 	natTableName             = "nat"
+	inetTableName            = "inet"
 	postRoutingBaseChainName = "POSTROUTING"
 )
 
@@ -80,10 +81,20 @@ func (sc *SpoofChecker) Setup() error {
 
 	baseBridgeChain := sc.baseChain(bridgeTable)
 	baseConfig.AddChain(baseBridgeChain)
-	ifaceChain := sc.ifaceChain(bridgeTable)
-	baseConfig.AddChain(ifaceChain)
-	macChain := sc.macChain(bridgeTable, ifaceChain.Name)
-	baseConfig.AddChain(macChain)
+	ifaceBridgeChain := sc.ifaceChain(bridgeTable)
+	baseConfig.AddChain(ifaceBridgeChain)
+	macBridgeChain := sc.macChain(bridgeTable, ifaceBridgeChain.Name)
+	baseConfig.AddChain(macBridgeChain)
+
+	ipTable := schema.Table{Family: schema.FamilyINET, Name: inetTableName}
+	baseConfig.AddTable(&ipTable)
+
+	baseIPChain := sc.baseChain(ipTable)
+	baseConfig.AddChain(baseIPChain)
+	ifaceIPChain := sc.ifaceChain(ipTable)
+	baseConfig.AddChain(ifaceIPChain)
+	macIPChain := sc.macChain(ipTable, ifaceIPChain.Name)
+	baseConfig.AddChain(macIPChain)
 
 	if err := sc.configurer.Apply(baseConfig); err != nil {
 		return fmt.Errorf("failed to setup spoof-check: %v", err)
@@ -91,13 +102,21 @@ func (sc *SpoofChecker) Setup() error {
 
 	rulesConfig := nft.NewConfig()
 
-	rulesConfig.FlushChain(ifaceChain)
-	rulesConfig.FlushChain(macChain)
+	rulesConfig.FlushChain(ifaceBridgeChain)
+	rulesConfig.FlushChain(macBridgeChain)
 
-	rulesConfig.AddRule(sc.matchIfaceJumpToChainRule(baseBridgeChain, ifaceChain))
-	rulesConfig.AddRule(sc.jumpToChainRule(ifaceChain, macChain))
-	rulesConfig.AddRule(sc.matchMacRule(macChain))
-	rulesConfig.AddRule(sc.dropRule(macChain))
+	rulesConfig.AddRule(sc.matchIfaceJumpToChainRule(baseBridgeChain, ifaceBridgeChain))
+	rulesConfig.AddRule(sc.jumpToChainRule(ifaceBridgeChain, macBridgeChain))
+	rulesConfig.AddRule(sc.matchMacRule(macBridgeChain))
+	rulesConfig.AddRule(sc.dropRule(macBridgeChain))
+
+	rulesConfig.FlushChain(ifaceIPChain)
+	rulesConfig.FlushChain(macIPChain)
+
+	rulesConfig.AddRule(sc.matchIfaceJumpToChainRule(baseIPChain, ifaceIPChain))
+	rulesConfig.AddRule(sc.jumpToChainRule(ifaceIPChain, macIPChain))
+	rulesConfig.AddRule(sc.matchMacRule(macIPChain))
+	rulesConfig.AddRule(sc.dropRule(macIPChain))
 
 	if err := sc.configurer.Apply(rulesConfig); err != nil {
 		return fmt.Errorf("failed to setup spoof-check: %v", err)
@@ -112,16 +131,24 @@ func (sc *SpoofChecker) Setup() error {
 func (sc *SpoofChecker) Teardown() error {
 	bridgeTable := schema.Table{Family: schema.FamilyBridge, Name: natTableName}
 	baseBridgeChain := sc.baseChain(bridgeTable)
-	ifaceChain := sc.ifaceChain(bridgeTable)
+	ifaceBridgeChain := sc.ifaceChain(bridgeTable)
+
+	ipTable := schema.Table{Family: schema.FamilyINET, Name: inetTableName}
+	baseIPChain := sc.baseChain(ipTable)
+	ifaceIPChain := sc.ifaceChain(ipTable)
 
 	currentConfig, ifaceMatchRuleErr := sc.configurer.Read()
 	if ifaceMatchRuleErr == nil {
-		expectedRuleToFind := sc.matchIfaceJumpToChainRule(baseBridgeChain, ifaceChain)
+		expectedBridgeRuleToFind := sc.matchIfaceJumpToChainRule(baseBridgeChain, ifaceBridgeChain)
+		expectedIPRuleToFind := sc.matchIfaceJumpToChainRule(baseIPChain, ifaceIPChain)
 		// It is safer to exclude the statement matching, avoiding cases where a current statement includes
 		// additional default entries (e.g. counters).
-		ruleToFindExcludingStatements := *expectedRuleToFind
+		ruleToFindExcludingStatements := *expectedBridgeRuleToFind
 		ruleToFindExcludingStatements.Expr = nil
 		rules := currentConfig.LookupRule(&ruleToFindExcludingStatements)
+		ruleToFindExcludingStatements = *expectedIPRuleToFind
+		ruleToFindExcludingStatements.Expr = nil
+		rules = append(rules, currentConfig.LookupRule(&ruleToFindExcludingStatements)...)
 		if len(rules) > 0 {
 			c := nft.NewConfig()
 			for _, rule := range rules {
@@ -131,13 +158,15 @@ func (sc *SpoofChecker) Teardown() error {
 				ifaceMatchRuleErr = fmt.Errorf("failed to delete iface match rule: %v", err)
 			}
 		} else {
-			fmt.Fprintf(os.Stderr, "spoofcheck/teardown: unable to detect iface match rule for deletion: %+v", expectedRuleToFind)
+			fmt.Fprintf(os.Stderr, "spoofcheck/teardown: unable to detect iface match rule for deletion: %+v", expectedBridgeRuleToFind)
 		}
 	}
 
 	regularChainsConfig := nft.NewConfig()
-	regularChainsConfig.DeleteChain(ifaceChain)
-	regularChainsConfig.DeleteChain(sc.macChain(bridgeTable, ifaceChain.Name))
+	regularChainsConfig.DeleteChain(ifaceBridgeChain)
+	regularChainsConfig.DeleteChain(sc.macChain(bridgeTable, ifaceBridgeChain.Name))
+	regularChainsConfig.DeleteChain(ifaceIPChain)
+	regularChainsConfig.DeleteChain(sc.macChain(ipTable, ifaceIPChain.Name))
 
 	var regularChainsErr error
 	if err := sc.configurer.Apply(regularChainsConfig); err != nil {

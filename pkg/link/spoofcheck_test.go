@@ -130,6 +130,16 @@ func assertExpectedRegularChainsDeletionInTeardownConfig(action configurerStub) 
 					"family": "bridge",
 					"table": "nat",
 					"name": "cni-br-iface-container99-net1-mac"
+				}}},
+				{"delete": {"chain": {
+					"family": "inet",
+					"table": "inet",
+					"name": "cni-br-iface-container99-net1"
+				}}},
+				{"delete": {"chain": {
+					"family": "inet",
+					"table": "inet",
+					"name": "cni-br-iface-container99-net1-mac"
 				}}}
 			]}`
 
@@ -145,6 +155,20 @@ func assertExpectedBaseChainRuleDeletionInTeardownConfig(action configurerStub) 
 				{"delete": {"rule": {
 					"family": "bridge",
 					"table": "nat",
+					"chain": "POSTROUTING",
+					"expr": [
+						{"match": {
+							"op": "==",
+							"left": {"meta": {"key": "oifname"}},
+							"right": "net0"
+						}},
+						{"jump": {"target": "cni-br-iface-container99-net1"}}
+					],
+					"comment": "macspoofchk-container99-net1"
+				}}},
+				{"delete": {"rule": {
+					"family": "inet",
+					"table": "inet",
 					"chain": "POSTROUTING",
 					"expr": [
 						{"match": {
@@ -187,6 +211,31 @@ func rowConfigWithRulesOnly() string {
                 {"rule":{"family":"bridge","table":"nat","chain":"cni-br-iface-container99-net1-mac",
                     "expr":[{"drop":null}],
                     "index":0,
+                    "comment":"macspoofchk-container99-net1"}},
+                {"rule":{"family":"inet","table":"inet","chain":"POSTROUTING",
+                    "expr":[
+                        {"match":{"op":"==","left":{"meta":{"key":"oifname"}},"right":"net0"}},
+                        {"jump":{"target":"cni-br-iface-container99-net1"}}
+                    ],
+                    "comment":"macspoofchk-container99-net1"}},
+                {"rule":{"family":"inet","table":"inet","chain":"cni-br-iface-container99-net1",
+                    "expr":[
+                        {"jump":{"target":"cni-br-iface-container99-net1-mac"}}
+                    ],
+                    "comment":"macspoofchk-container99-net1"}},
+                {"rule":{"family":"inet","table":"inet","chain":"cni-br-iface-container99-net1-mac",
+                    "expr":[
+                        {"match":{
+                            "op":"==",
+                            "left":{"payload":{"protocol":"ether","field":"saddr"}},
+                            "right":"02:00:00:00:12:34"
+                        }},
+                        {"return":null}
+                    ],
+                    "comment":"macspoofchk-container99-net1"}},
+                {"rule":{"family":"inet","table":"inet","chain":"cni-br-iface-container99-net1-mac",
+                    "expr":[{"drop":null}],
+                    "index":0,
                     "comment":"macspoofchk-container99-net1"}}
             ]}`
 }
@@ -216,6 +265,26 @@ func assertExpectedTableAndChainsInSetupConfig(c configurerStub) {
             {"chain": {
                 "family": "bridge",
                 "table": "nat",
+                "name": "cni-br-iface-container99-net1-mac"
+            }},
+            {"table": {"family": "inet", "name": "inet"}},
+            {"chain": {
+                "family": "inet",
+                "table": "inet",
+                "name": "POSTROUTING",
+                "type": "filter",
+                "hook": "postrouting",
+                "prio": -300,
+                "policy": "accept"
+            }},
+            {"chain": {
+                "family": "inet",
+                "table": "inet",
+                "name": "cni-br-iface-container99-net1"
+            }},
+            {"chain": {
+                "family": "inet",
+                "table": "inet",
                 "name": "cni-br-iface-container99-net1-mac"
             }}
         ]}`
@@ -253,6 +322,33 @@ func assertExpectedRulesInSetupConfig(c configurerStub) {
                     ],
                     "comment":"macspoofchk-container99-net1"}},
                 {"rule":{"family":"bridge","table":"nat","chain":"cni-br-iface-container99-net1-mac",
+                    "expr":[{"drop":null}],
+                    "index":0,
+                    "comment":"macspoofchk-container99-net1"}},
+                {"flush":{"chain":{"family":"inet","table":"inet","name":"cni-br-iface-container99-net1"}}},
+                {"flush":{"chain":{"family":"inet","table":"inet","name":"cni-br-iface-container99-net1-mac"}}},
+                {"rule":{"family":"inet","table":"inet","chain":"POSTROUTING",
+                    "expr":[
+                        {"match":{"op":"==","left":{"meta":{"key":"oifname"}},"right":"net0"}},
+                        {"jump":{"target":"cni-br-iface-container99-net1"}}
+                    ],
+                    "comment":"macspoofchk-container99-net1"}},
+                {"rule":{"family":"inet","table":"inet","chain":"cni-br-iface-container99-net1",
+                    "expr":[
+                        {"jump":{"target":"cni-br-iface-container99-net1-mac"}}
+                    ],
+                    "comment":"macspoofchk-container99-net1"}},
+                {"rule":{"family":"inet","table":"inet","chain":"cni-br-iface-container99-net1-mac",
+                    "expr":[
+                        {"match":{
+                            "op":"==",
+                            "left":{"payload":{"protocol":"ether","field":"saddr"}},
+                            "right":"02:00:00:00:12:34"
+                        }},
+                        {"return":null}
+                    ],
+                    "comment":"macspoofchk-container99-net1"}},
+                {"rule":{"family":"inet","table":"inet","chain":"cni-br-iface-container99-net1-mac",
                     "expr":[{"drop":null}],
                     "index":0,
                     "comment":"macspoofchk-container99-net1"}}
