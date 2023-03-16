@@ -299,9 +299,9 @@ func cmdCheck(args *skel.CmdArgs) error {
 	if bandwidth.IngressRate > 0 && bandwidth.IngressBurst > 0 {
 		rateInBytes := bandwidth.IngressRate / 8
 		burstInBytes := bandwidth.IngressBurst / 8
-		bufferInBytes := buffer(uint64(rateInBytes), uint32(burstInBytes))
+		bufferInBytes := buffer(rateInBytes, uint32(burstInBytes))
 		latency := latencyInUsec(latencyInMillis)
-		limitInBytes := limit(uint64(rateInBytes), latency, uint32(burstInBytes))
+		limitInBytes := limit(rateInBytes, latency, uint32(burstInBytes))
 
 		qdiscs, err := SafeQdiscList(link)
 		if err != nil {
@@ -316,13 +316,13 @@ func cmdCheck(args *skel.CmdArgs) error {
 			if !isTbf {
 				break
 			}
-			if tbf.Rate != uint64(rateInBytes) {
+			if tbf.Rate != rateInBytes {
 				return fmt.Errorf("Rate doesn't match")
 			}
-			if tbf.Limit != uint32(limitInBytes) {
+			if tbf.Limit != limitInBytes {
 				return fmt.Errorf("Limit doesn't match")
 			}
-			if tbf.Buffer != uint32(bufferInBytes) {
+			if tbf.Buffer != bufferInBytes {
 				return fmt.Errorf("Buffer doesn't match")
 			}
 		}
@@ -331,9 +331,9 @@ func cmdCheck(args *skel.CmdArgs) error {
 	if bandwidth.EgressRate > 0 && bandwidth.EgressBurst > 0 {
 		rateInBytes := bandwidth.EgressRate / 8
 		burstInBytes := bandwidth.EgressBurst / 8
-		bufferInBytes := buffer(uint64(rateInBytes), uint32(burstInBytes))
+		bufferInBytes := buffer(rateInBytes, uint32(burstInBytes))
 		latency := latencyInUsec(latencyInMillis)
-		limitInBytes := limit(uint64(rateInBytes), latency, uint32(burstInBytes))
+		limitInBytes := limit(rateInBytes, latency, uint32(burstInBytes))
 
 		ifbDeviceName := getIfbDeviceName(bwConf.Name, args.ContainerID)
 
@@ -355,13 +355,13 @@ func cmdCheck(args *skel.CmdArgs) error {
 			if !isTbf {
 				break
 			}
-			if tbf.Rate != uint64(rateInBytes) {
+			if tbf.Rate != rateInBytes {
 				return fmt.Errorf("Rate doesn't match")
 			}
-			if tbf.Limit != uint32(limitInBytes) {
+			if tbf.Limit != limitInBytes {
 				return fmt.Errorf("Limit doesn't match")
 			}
-			if tbf.Buffer != uint32(bufferInBytes) {
+			if tbf.Buffer != bufferInBytes {
 				return fmt.Errorf("Buffer doesn't match")
 			}
 		}

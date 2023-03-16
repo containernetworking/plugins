@@ -306,7 +306,7 @@ func (tc testCase) createCheckCmdArgs(targetNS ns.NetNS, config *Net, dataDir st
 		ContainerID: fmt.Sprintf("dummy-%d", counter),
 		Netns:       targetNS.Path(),
 		IfName:      IFNAME,
-		StdinData:   []byte(conf),
+		StdinData:   conf,
 	}
 }
 

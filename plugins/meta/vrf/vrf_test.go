@@ -587,7 +587,7 @@ var _ = Describe("vrf plugin", func() {
 			defer GinkgoRecover()
 			cniVersion := "0.4.0"
 			n := &VRFNetConf{}
-			err = json.Unmarshal([]byte(conf), &n)
+			err = json.Unmarshal(conf, &n)
 			_, confString, err := buildOneConfig("testConfig", cniVersion, n, prevRes)
 			Expect(err).NotTo(HaveOccurred())
 

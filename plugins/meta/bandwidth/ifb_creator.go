@@ -125,9 +125,9 @@ func createTBF(rateInBits, burstInBits uint64, linkIndex int) error {
 	}
 	rateInBytes := rateInBits / 8
 	burstInBytes := burstInBits / 8
-	bufferInBytes := buffer(uint64(rateInBytes), uint32(burstInBytes))
+	bufferInBytes := buffer(rateInBytes, uint32(burstInBytes))
 	latency := latencyInUsec(latencyInMillis)
-	limitInBytes := limit(uint64(rateInBytes), latency, uint32(burstInBytes))
+	limitInBytes := limit(rateInBytes, latency, uint32(burstInBytes))
 
 	qdisc := &netlink.Tbf{
 		QdiscAttrs: netlink.QdiscAttrs{
@@ -135,9 +135,9 @@ func createTBF(rateInBits, burstInBits uint64, linkIndex int) error {
 			Handle:    netlink.MakeHandle(1, 0),
 			Parent:    netlink.HANDLE_ROOT,
 		},
-		Limit:  uint32(limitInBytes),
-		Rate:   uint64(rateInBytes),
-		Buffer: uint32(bufferInBytes),
+		Limit:  limitInBytes,
+		Rate:   rateInBytes,
+		Buffer: bufferInBytes,
 	}
 	err := netlink.QdiscAdd(qdisc)
 	if err != nil {
@@ -147,7 +147,7 @@ func createTBF(rateInBits, burstInBits uint64, linkIndex int) error {
 }
 
 func time2Tick(time uint32) uint32 {
-	return uint32(float64(time) * float64(netlink.TickInUsec()))
+	return uint32(float64(time) * netlink.TickInUsec())
 }
 
 func buffer(rate uint64, burst uint32) uint32 {
