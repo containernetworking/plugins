@@ -43,6 +43,7 @@ import (
 var debugPostIPAMError error
 
 const defaultBrName = "cni0"
+const defaultPVID = 1
 
 type NetConf struct {
 	types.NetConf
@@ -370,6 +371,10 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 	}
 
 	if vlanID != 0 {
+		err = netlink.BridgeVlanDel(hostVeth, uint16(defaultPVID), true, true, false, true)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to delete default vlan tag on interface %q: %v", hostIface.Name, err)
+		}
 		err = netlink.BridgeVlanAdd(hostVeth, uint16(vlanID), true, true, false, true)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to setup vlan tag on interface %q: %v", hostIface.Name, err)

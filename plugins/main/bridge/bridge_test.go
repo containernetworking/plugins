@@ -39,10 +39,11 @@ import (
 )
 
 const (
-	BRNAME     = "bridge0"
-	BRNAMEVLAN = "bridge0.100"
-	IFNAME     = "eth0"
-	NAMESERVER = "192.0.2.0"
+	BRNAME      = "bridge0"
+	BRNAMEVLAN  = "bridge0.100"
+	IFNAME      = "eth0"
+	NAMESERVER  = "192.0.2.0"
+	DEFAULTPVID = 1
 )
 
 type Net struct {
@@ -582,6 +583,10 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+			// Check that the port is not subscribed to the default VLAN 1
+			if tc.vlan != DEFAULTPVID {
+				Expect(checkVlan(DEFAULTPVID, vlans)).To(BeFalse())
+			}
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -887,6 +892,10 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+			// Check that the port is not subscribed to the default VLAN 1
+			if tc.vlan != DEFAULTPVID {
+				Expect(checkVlan(DEFAULTPVID, vlans)).To(BeFalse())
+			}
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -1187,6 +1196,10 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+			// Check that the port is not subscribed to the default VLAN 1
+			if tc.vlan != DEFAULTPVID {
+				Expect(checkVlan(DEFAULTPVID, vlans)).To(BeFalse())
+			}
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -1480,6 +1493,10 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (types.Re
 			vlans, isExist := hostNSVlanMap[int32(peerIndex)]
 			Expect(isExist).To(BeTrue())
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+			// Check that the port is not subscribed to the default VLAN 1
+			if tc.vlan != DEFAULTPVID {
+				Expect(checkVlan(DEFAULTPVID, vlans)).To(BeFalse())
+			}
 		}
 
 		return nil
