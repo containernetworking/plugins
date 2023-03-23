@@ -532,8 +532,10 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		// Check the bridge vlan filtering equals true
 		if tc.vlan != 0 {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(true))
+			Expect(*link.(*netlink.Bridge).VlanDefaultPVID).To(Equal(uint16(0)))
 		} else {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(false))
+			Expect(*link.(*netlink.Bridge).VlanDefaultPVID).To(Equal(uint16(1)))
 		}
 
 		// Ensure bridge has expected gateway address(es)
@@ -837,8 +839,10 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		// Check the bridge vlan filtering equals true
 		if tc.vlan != 0 {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(true))
+			Expect(*link.(*netlink.Bridge).VlanDefaultPVID).To(Equal(uint16(0)))
 		} else {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(false))
+			Expect(*link.(*netlink.Bridge).VlanDefaultPVID).To(Equal(uint16(1)))
 		}
 
 		// Ensure bridge has expected gateway address(es)
@@ -1137,8 +1141,10 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		// Check the bridge vlan filtering equals true
 		if tc.vlan != 0 {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(true))
+			Expect(*link.(*netlink.Bridge).VlanDefaultPVID).To(Equal(uint16(0)))
 		} else {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(false))
+			Expect(*link.(*netlink.Bridge).VlanDefaultPVID).To(Equal(uint16(1)))
 		}
 
 		// Ensure bridge has expected gateway address(es)
@@ -1363,8 +1369,10 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (types.Re
 		// Check the bridge vlan filtering equals true
 		if tc.vlan != 0 {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(true))
+			Expect(*link.(*netlink.Bridge).VlanDefaultPVID).To(Equal(uint16(0)))
 		} else {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(Equal(false))
+			Expect(*link.(*netlink.Bridge).VlanDefaultPVID).To(Equal(uint16(1)))
 		}
 
 		// Ensure bridge has expected gateway address(es)
@@ -1659,6 +1667,7 @@ var _ = Describe("bridge Operations", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().Name).To(Equal(BRNAME))
 				Expect(link.Attrs().Promisc).To(Equal(0))
+				Expect(*link.(*netlink.Bridge).VlanDefaultPVID).To(Equal(uint16(1)))
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -1692,6 +1701,7 @@ var _ = Describe("bridge Operations", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().Name).To(Equal(BRNAME))
 				Expect(link.Attrs().Index).To(Equal(ifindex))
+				Expect(*link.(*netlink.Bridge).VlanDefaultPVID).To(Equal(uint16(1)))
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())

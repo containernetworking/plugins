@@ -256,6 +256,9 @@ func bridgeByName(name string) (*netlink.Bridge, error) {
 }
 
 func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*netlink.Bridge, error) {
+	// Set to 0 to remove the default native vlan
+	var defaultPVID uint16
+
 	br := &netlink.Bridge{
 		LinkAttrs: netlink.LinkAttrs{
 			Name: brName,
@@ -269,6 +272,7 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 	}
 	if vlanFiltering {
 		br.VlanFiltering = &vlanFiltering
+		br.VlanDefaultPVID = &defaultPVID
 	}
 
 	err := netlink.LinkAdd(br)
@@ -287,6 +291,14 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 	br, err = bridgeByName(brName)
 	if err != nil {
 		return nil, err
+	}
+
+	// Remove native vlan in case the bridge already exists and has one set
+	if vlanFiltering && *br.VlanDefaultPVID != defaultPVID {
+		err = netlink.BridgeSetVlanDefaultPVID(br, defaultPVID)
+		if err != nil {
+			return nil, fmt.Errorf("could not remove native vlan %q: %v", brName, err)
+		}
 	}
 
 	// we want to own the routes for this interface
