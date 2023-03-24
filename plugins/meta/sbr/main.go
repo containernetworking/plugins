@@ -164,7 +164,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// Do the actual work.
 	err = withLockAndNetNS(args.Netns, func(_ ns.NetNS) error {
-		return doRoutes(ipCfgs, conf.PrevResult.Routes, args.IfName)
+		return doRoutes(ipCfgs, args.IfName)
 	})
 	if err != nil {
 		return err
@@ -203,7 +203,7 @@ func getNextTableID(rules []netlink.Rule, routes []netlink.Route, candidateID in
 }
 
 // doRoutes does all the work to set up routes and rules during an add.
-func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface string) error {
+func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 	// Get a list of rules and routes ready.
 	rules, err := netlink.RuleList(netlink.FAMILY_ALL)
 	if err != nil {
@@ -398,6 +398,6 @@ func main() {
 	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("sbr"))
 }
 
-func cmdCheck(args *skel.CmdArgs) error {
+func cmdCheck(_ *skel.CmdArgs) error {
 	return nil
 }

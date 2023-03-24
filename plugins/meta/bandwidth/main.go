@@ -236,11 +236,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	ifbDeviceName := getIfbDeviceName(conf.Name, args.ContainerID)
 
-	if err := TeardownIfb(ifbDeviceName); err != nil {
-		return err
-	}
-
-	return nil
+	return TeardownIfb(ifbDeviceName)
 }
 
 func main() {

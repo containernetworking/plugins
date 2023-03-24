@@ -508,10 +508,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv4/conf/%s/arp_notify", args.IfName), "1")
 
 			// Add the IP to the interface
-			if err := ipam.ConfigureIface(args.IfName, result); err != nil {
-				return err
-			}
-			return nil
+			return ipam.ConfigureIface(args.IfName, result)
 		}); err != nil {
 			return err
 		}
@@ -953,7 +950,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 
 	// Check prevResults for ips, routes and dns against values found in the container
-	if err := netns.Do(func(_ ns.NetNS) error {
+	return netns.Do(func(_ ns.NetNS) error {
 		err = ip.ValidateExpectedInterfaceIPs(args.IfName, result.IPs)
 		if err != nil {
 			return err
@@ -964,11 +961,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 			return err
 		}
 		return nil
-	}); err != nil {
-		return err
-	}
-
-	return nil
+	})
 }
 
 func uniqueID(containerID, cniIface string) string {

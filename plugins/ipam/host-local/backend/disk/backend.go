@@ -95,7 +95,7 @@ func (s *Store) LastReservedIP(rangeID string) (net.IP, error) {
 	return net.ParseIP(string(data)), nil
 }
 
-func (s *Store) FindByKey(id string, ifname string, match string) (bool, error) {
+func (s *Store) FindByKey(match string) (bool, error) {
 	found := false
 
 	err := filepath.Walk(s.dataDir, func(path string, info os.FileInfo, err error) error {
@@ -120,18 +120,18 @@ func (s *Store) FindByID(id string, ifname string) bool {
 
 	found := false
 	match := strings.TrimSpace(id) + LineBreak + ifname
-	found, err := s.FindByKey(id, ifname, match)
+	found, err := s.FindByKey(match)
 
 	// Match anything created by this id
 	if !found && err == nil {
 		match := strings.TrimSpace(id)
-		found, _ = s.FindByKey(id, ifname, match)
+		found, _ = s.FindByKey(match)
 	}
 
 	return found
 }
 
-func (s *Store) ReleaseByKey(id string, ifname string, match string) (bool, error) {
+func (s *Store) ReleaseByKey(match string) (bool, error) {
 	found := false
 	err := filepath.Walk(s.dataDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
@@ -157,12 +157,12 @@ func (s *Store) ReleaseByKey(id string, ifname string, match string) (bool, erro
 func (s *Store) ReleaseByID(id string, ifname string) error {
 	found := false
 	match := strings.TrimSpace(id) + LineBreak + ifname
-	found, err := s.ReleaseByKey(id, ifname, match)
+	found, err := s.ReleaseByKey(match)
 
 	// For backwards compatibility, look for files written by a previous version
 	if !found && err == nil {
 		match := strings.TrimSpace(id)
-		_, err = s.ReleaseByKey(id, ifname, match)
+		_, err = s.ReleaseByKey(match)
 	}
 	return err
 }

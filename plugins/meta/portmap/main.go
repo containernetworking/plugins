@@ -130,10 +130,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	// We don't need to parse out whether or not we're using v6 or snat,
 	// deletion is idempotent
-	if err := unforwardPorts(netConf); err != nil {
-		return err
-	}
-	return nil
+	return unforwardPorts(netConf)
 }
 
 func main() {

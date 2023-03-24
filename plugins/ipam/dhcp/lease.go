@@ -234,7 +234,7 @@ func (l *DHCPLease) getAllOptions() dhcp4.Options {
 }
 
 func (l *DHCPLease) acquire() error {
-	c, err := newDHCPClient(l.link, l.clientID, l.timeout, l.broadcast)
+	c, err := newDHCPClient(l.link, l.timeout, l.broadcast)
 	if err != nil {
 		return err
 	}
@@ -362,7 +362,7 @@ func (l *DHCPLease) downIface() {
 }
 
 func (l *DHCPLease) renew() error {
-	c, err := newDHCPClient(l.link, l.clientID, l.timeout, l.broadcast)
+	c, err := newDHCPClient(l.link, l.timeout, l.broadcast)
 	if err != nil {
 		return err
 	}
@@ -391,7 +391,7 @@ func (l *DHCPLease) renew() error {
 func (l *DHCPLease) release() error {
 	log.Printf("%v: releasing lease", l.clientID)
 
-	c, err := newDHCPClient(l.link, l.clientID, l.timeout, l.broadcast)
+	c, err := newDHCPClient(l.link, l.timeout, l.broadcast)
 	if err != nil {
 		return err
 	}
@@ -485,7 +485,7 @@ func backoffRetry(resendMax time.Duration, f func() (*dhcp4.Packet, error)) (*dh
 }
 
 func newDHCPClient(
-	link netlink.Link, clientID string,
+	link netlink.Link,
 	timeout time.Duration,
 	broadcast bool,
 ) (*dhcp4client.Client, error) {

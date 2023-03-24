@@ -987,7 +987,7 @@ var _ = Describe("bandwidth test", func() {
 							StdinData:   newCheckBytes,
 						}
 
-						err = testutils.CmdCheck(containerWithTbfNS.Path(), args.ContainerID, "", newCheckBytes, func() error { return cmdCheck(args) })
+						err = testutils.CmdCheck(containerWithTbfNS.Path(), args.ContainerID, "", func() error { return cmdCheck(args) })
 						Expect(err).NotTo(HaveOccurred())
 					}
 

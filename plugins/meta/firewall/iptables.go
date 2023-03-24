@@ -74,11 +74,7 @@ func (ib *iptablesBackend) setupChains(ipt *iptables.IPTables) error {
 	}
 
 	// Ensure our admin override chain rule exists in our private chain
-	if err := ensureFirstChainRule(ipt, ib.privChainName, adminRule); err != nil {
-		return err
-	}
-
-	return nil
+	return ensureFirstChainRule(ipt, ib.privChainName, adminRule)
 }
 
 func protoForIP(ip net.IPNet) iptables.Protocol {
@@ -88,7 +84,7 @@ func protoForIP(ip net.IPNet) iptables.Protocol {
 	return iptables.ProtocolIPv6
 }
 
-func (ib *iptablesBackend) addRules(conf *FirewallNetConf, result *current.Result, ipt *iptables.IPTables, proto iptables.Protocol) error {
+func (ib *iptablesBackend) addRules(_ *FirewallNetConf, result *current.Result, ipt *iptables.IPTables, proto iptables.Protocol) error {
 	rules := make([][]string, 0)
 	for _, ip := range result.IPs {
 		if protoForIP(ip.Address) == proto {
@@ -120,7 +116,7 @@ func (ib *iptablesBackend) addRules(conf *FirewallNetConf, result *current.Resul
 	return nil
 }
 
-func (ib *iptablesBackend) delRules(conf *FirewallNetConf, result *current.Result, ipt *iptables.IPTables, proto iptables.Protocol) error {
+func (ib *iptablesBackend) delRules(_ *FirewallNetConf, result *current.Result, ipt *iptables.IPTables, proto iptables.Protocol) error {
 	rules := make([][]string, 0)
 	for _, ip := range result.IPs {
 		if protoForIP(ip.Address) == proto {
@@ -135,7 +131,7 @@ func (ib *iptablesBackend) delRules(conf *FirewallNetConf, result *current.Resul
 	return nil
 }
 
-func (ib *iptablesBackend) checkRules(conf *FirewallNetConf, result *current.Result, ipt *iptables.IPTables, proto iptables.Protocol) error {
+func (ib *iptablesBackend) checkRules(_ *FirewallNetConf, result *current.Result, ipt *iptables.IPTables, proto iptables.Protocol) error {
 	rules := make([][]string, 0)
 	for _, ip := range result.IPs {
 		if protoForIP(ip.Address) == proto {

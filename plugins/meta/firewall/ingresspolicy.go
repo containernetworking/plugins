@@ -62,7 +62,7 @@ func setupIngressPolicySameBridge(conf *FirewallNetConf, prevResult *types100.Re
 	return nil
 }
 
-func teardownIngressPolicy(conf *FirewallNetConf, prevResult *types100.Result) error {
+func teardownIngressPolicy(conf *FirewallNetConf) error {
 	switch conf.IngressPolicy {
 	case "", IngressPolicyOpen:
 		// NOP
@@ -151,11 +151,7 @@ func setupIsolationChains(ipt *iptables.IPTables, bridgeName string) error {
 		return err
 	}
 	stage2Return := withDefaultComment([]string{"-j", "RETURN"})
-	if err := utils.InsertUnique(ipt, filterTableName, stage2Chain, false, stage2Return); err != nil {
-		return err
-	}
-
-	return nil
+	return utils.InsertUnique(ipt, filterTableName, stage2Chain, false, stage2Return)
 }
 
 func isolationStage1BridgeRule(bridgeName, stage2Chain string) []string {

@@ -250,7 +250,7 @@ func (t *testerV04x) verifyResult(result types.Result, name string) string {
 }
 
 // verifyResult minimally verifies the Result and returns the interface's MAC address
-func (t *testerV02x) verifyResult(result types.Result, name string) string {
+func (t *testerV02x) verifyResult(result types.Result, _ string) string {
 	r, err := types020.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 

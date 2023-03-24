@@ -153,7 +153,7 @@ func main() {
 	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("TODO"))
 }
 
-func cmdCheck(args *skel.CmdArgs) error {
+func cmdCheck(_ *skel.CmdArgs) error {
 	// TODO: implement
 	return fmt.Errorf("not implemented")
 }

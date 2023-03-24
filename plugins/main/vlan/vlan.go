@@ -308,14 +308,14 @@ func cmdCheck(args *skel.CmdArgs) error {
 		return fmt.Errorf("Sandbox in prevResult %s doesn't match configured netns: %s",
 			contMap.Sandbox, args.Netns)
 	}
-	var m netlink.Link
+
 	if conf.LinkContNs {
 		err = netns.Do(func(_ ns.NetNS) error {
-			m, err = netlink.LinkByName(conf.Master)
+			_, err = netlink.LinkByName(conf.Master)
 			return err
 		})
 	} else {
-		m, err = netlink.LinkByName(conf.Master)
+		_, err = netlink.LinkByName(conf.Master)
 	}
 
 	if err != nil {
@@ -326,7 +326,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	// Check prevResults for ips, routes and dns against values found in the container
 	if err := netns.Do(func(_ ns.NetNS) error {
 		// Check interface against values found in the container
-		err := validateCniContainerInterface(contMap, m.Attrs().Index, conf.VlanID, conf.MTU)
+		err := validateCniContainerInterface(contMap, conf.VlanID, conf.MTU)
 		if err != nil {
 			return err
 		}
@@ -348,7 +348,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	return nil
 }
 
-func validateCniContainerInterface(intf current.Interface, masterIndex int, vlanID int, mtu int) error {
+func validateCniContainerInterface(intf current.Interface, vlanID int, mtu int) error {
 	var link netlink.Link
 	var err error
 

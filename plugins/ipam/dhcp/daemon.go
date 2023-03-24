@@ -115,7 +115,7 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 
 // Release stops maintenance of the lease acquired in Allocate()
 // and sends a release msg to the DHCP server.
-func (d *DHCP) Release(args *skel.CmdArgs, reply *struct{}) error {
+func (d *DHCP) Release(args *skel.CmdArgs, _ *struct{}) error {
 	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("error parsing netconf: %v", err)

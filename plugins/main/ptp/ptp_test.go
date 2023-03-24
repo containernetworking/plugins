@@ -186,7 +186,7 @@ func (t *testerV03x) verifyResult(result types.Result, expectedIfName, expectedS
 }
 
 // verifyResult minimally verifies the Result and returns the interface's IP addresses and MAC address
-func (t *testerV01xOr02x) verifyResult(result types.Result, expectedIfName, expectedSandbox string, expectedDNS types.DNS) ([]resultIP, string) {
+func (t *testerV01xOr02x) verifyResult(result types.Result, _, _ string, _ types.DNS) ([]resultIP, string) {
 	r, err := types020.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
