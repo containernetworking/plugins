@@ -118,7 +118,6 @@ func (s *Store) FindByID(id string, ifname string) bool {
 	s.Lock()
 	defer s.Unlock()
 
-	found := false
 	match := strings.TrimSpace(id) + LineBreak + ifname
 	found, err := s.FindByKey(match)
 
@@ -155,7 +154,6 @@ func (s *Store) ReleaseByKey(match string) (bool, error) {
 // N.B. This function eats errors to be tolerant and
 // release as much as possible
 func (s *Store) ReleaseByID(id string, ifname string) error {
-	found := false
 	match := strings.TrimSpace(id) + LineBreak + ifname
 	found, err := s.ReleaseByKey(match)
 
