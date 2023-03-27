@@ -71,7 +71,7 @@ func isFirewalldRunning() bool {
 	return true
 }
 
-func newFirewalldBackend(conf *FirewallNetConf) (FirewallBackend, error) {
+func newFirewalldBackend() (FirewallBackend, error) {
 	conn, err := getConn()
 	if err != nil {
 		return nil, err

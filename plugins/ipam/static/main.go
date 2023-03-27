@@ -276,7 +276,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	return types.PrintResult(result, confVersion)
 }
 
-func cmdDel(args *skel.CmdArgs) error {
+func cmdDel(_ *skel.CmdArgs) error {
 	// Nothing required because of no resource allocation in static plugin.
 	return nil
 }

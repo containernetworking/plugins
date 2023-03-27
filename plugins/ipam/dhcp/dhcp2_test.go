@@ -16,7 +16,6 @@ package main
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"sync"
@@ -39,11 +38,10 @@ var _ = Describe("DHCP Multiple Lease Operations", func() {
 	var clientCmd *exec.Cmd
 	var socketPath string
 	var tmpDir string
-	var serverIP net.IPNet
 	var err error
 
 	BeforeEach(func() {
-		dhcpServerStopCh, serverIP, socketPath, originalNS, targetNS, err = dhcpSetupOriginalNS()
+		dhcpServerStopCh, socketPath, originalNS, targetNS, err = dhcpSetupOriginalNS()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Move the container side to the container's NS
@@ -63,7 +61,7 @@ var _ = Describe("DHCP Multiple Lease Operations", func() {
 		})
 
 		// Start the DHCP server
-		dhcpServerDone, err = dhcpServerStart(originalNS, net.IPv4(192, 168, 1, 5), serverIP.IP, 2, dhcpServerStopCh)
+		dhcpServerDone, err = dhcpServerStart(originalNS, 2, dhcpServerStopCh)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start the DHCP client daemon

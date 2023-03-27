@@ -158,10 +158,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	if !cfg.DPDKMode {
 		err = containerNs.Do(func(_ ns.NetNS) error {
-			if err := ipam.ConfigureIface(args.IfName, newResult); err != nil {
-				return err
-			}
-			return nil
+			return ipam.ConfigureIface(args.IfName, newResult)
 		})
 		if err != nil {
 			return err

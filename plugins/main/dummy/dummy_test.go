@@ -151,7 +151,7 @@ func (t *testerV03x) verifyResult(result types.Result, name string) string {
 }
 
 // verifyResult minimally verifies the Result and returns the interface's MAC address
-func (t *testerV01xOr02x) verifyResult(result types.Result, name string) string {
+func (t *testerV01xOr02x) verifyResult(result types.Result, _ string) string {
 	r, err := types020.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -210,17 +210,11 @@ var _ = Describe("dummy Operations", func() {
 		ver := ver
 
 		It(fmt.Sprintf("[%s] creates an dummy link in a non-default namespace", ver), func() {
-			conf := &types.NetConf{
-				CNIVersion: ver,
-				Name:       "testConfig",
-				Type:       "dummy",
-			}
-
 			// Create dummy in other namespace
 			err := originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
-				_, err := createDummy(conf, "foobar0", targetNS)
+				_, err := createDummy("foobar0", targetNS)
 				Expect(err).NotTo(HaveOccurred())
 				return nil
 			})

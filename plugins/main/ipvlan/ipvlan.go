@@ -294,10 +294,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	err = netns.Do(func(_ ns.NetNS) error {
 		_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv4/conf/%s/arp_notify", args.IfName), "1")
 
-		if err := ipam.ConfigureIface(args.IfName, result); err != nil {
-			return err
-		}
-		return nil
+		return ipam.ConfigureIface(args.IfName, result)
 	})
 	if err != nil {
 		return err
@@ -405,14 +402,13 @@ func cmdCheck(args *skel.CmdArgs) error {
 			contMap.Sandbox, args.Netns)
 	}
 
-	var m netlink.Link
 	if n.LinkContNs {
 		err = netns.Do(func(_ ns.NetNS) error {
-			m, err = netlink.LinkByName(n.Master)
+			_, err = netlink.LinkByName(n.Master)
 			return err
 		})
 	} else {
-		m, err = netlink.LinkByName(n.Master)
+		_, err = netlink.LinkByName(n.Master)
 	}
 
 	if err != nil {
@@ -422,7 +418,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	// Check prevResults for ips, routes and dns against values found in the container
 	if err := netns.Do(func(_ ns.NetNS) error {
 		// Check interface against values found in the container
-		err := validateCniContainerInterface(contMap, m.Attrs().Index, n.Mode)
+		err := validateCniContainerInterface(contMap, n.Mode)
 		if err != nil {
 			return err
 		}
@@ -444,7 +440,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	return nil
 }
 
-func validateCniContainerInterface(intf current.Interface, masterIndex int, modeExpected string) error {
+func validateCniContainerInterface(intf current.Interface, modeExpected string) error {
 	var link netlink.Link
 	var err error
 

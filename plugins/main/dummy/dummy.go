@@ -40,7 +40,7 @@ func parseNetConf(bytes []byte) (*types.NetConf, error) {
 	return conf, nil
 }
 
-func createDummy(conf *types.NetConf, ifName string, netns ns.NetNS) (*current.Interface, error) {
+func createDummy(ifName string, netns ns.NetNS) (*current.Interface, error) {
 	dummy := &current.Interface{}
 
 	dm := &netlink.Dummy{
@@ -90,7 +90,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	dummyInterface, err := createDummy(conf, args.IfName, netns)
+	dummyInterface, err := createDummy(args.IfName, netns)
 	if err != nil {
 		return err
 	}
@@ -134,10 +134,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	result.Interfaces = []*current.Interface{dummyInterface}
 
 	err = netns.Do(func(_ ns.NetNS) error {
-		if err := ipam.ConfigureIface(args.IfName, result); err != nil {
-			return err
-		}
-		return nil
+		return ipam.ConfigureIface(args.IfName, result)
 	})
 
 	if err != nil {

@@ -118,10 +118,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 func cmdDel(args *skel.CmdArgs) error {
 	result := struct{}{}
-	if err := rpcCall("DHCP.Release", args, &result); err != nil {
-		return err
-	}
-	return nil
+	return rpcCall("DHCP.Release", args, &result)
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
@@ -134,11 +131,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 
 	result := &current.Result{CNIVersion: current.ImplementedSpecVersion}
-	if err := rpcCall("DHCP.Allocate", args, result); err != nil {
-		return err
-	}
-
-	return nil
+	return rpcCall("DHCP.Allocate", args, result)
 }
 
 func getSocketPath(stdinData []byte) (string, error) {

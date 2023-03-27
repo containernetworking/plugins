@@ -168,7 +168,7 @@ func (t *testerV03x) verifyResult(result types.Result, err error, name string, n
 }
 
 // verifyResult minimally verifies the Result and returns the interface's MAC address
-func (t *testerV01xOr02x) verifyResult(result types.Result, err error, name string, numAddrs int) string {
+func (t *testerV01xOr02x) verifyResult(result types.Result, err error, _ string, numAddrs int) string {
 	if result == nil && numAddrs == 0 {
 		Expect(err).To(MatchError("cannot convert: no valid IP addresses"))
 		return ""

@@ -296,7 +296,7 @@ func (tc testCase) createCmdArgs(targetNS ns.NetNS, dataDir string) *skel.CmdArg
 
 // createCheckCmdArgs generates network configuration and creates command
 // arguments for a Check test case.
-func (tc testCase) createCheckCmdArgs(targetNS ns.NetNS, config *Net, dataDir string) *skel.CmdArgs {
+func (tc testCase) createCheckCmdArgs(targetNS ns.NetNS, config *Net) *skel.CmdArgs {
 	conf, err := json.Marshal(config)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -660,9 +660,9 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 	return result, nil
 }
 
-func (tester *testerV10x) cmdCheckTest(tc testCase, conf *Net, dataDir string) {
+func (tester *testerV10x) cmdCheckTest(tc testCase, conf *Net, _ string) {
 	// Generate network config and command arguments
-	tester.args = tc.createCheckCmdArgs(tester.targetNS, conf, dataDir)
+	tester.args = tc.createCheckCmdArgs(tester.targetNS, conf)
 
 	// Execute cmdCHECK on the plugin
 	err := tester.testNS.Do(func(ns.NetNS) error {
@@ -960,9 +960,9 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 	return result, nil
 }
 
-func (tester *testerV04x) cmdCheckTest(tc testCase, conf *Net, dataDir string) {
+func (tester *testerV04x) cmdCheckTest(tc testCase, conf *Net, _ string) {
 	// Generate network config and command arguments
-	tester.args = tc.createCheckCmdArgs(tester.targetNS, conf, dataDir)
+	tester.args = tc.createCheckCmdArgs(tester.targetNS, conf)
 
 	// Execute cmdCHECK on the plugin
 	err := tester.testNS.Do(func(ns.NetNS) error {
@@ -1258,10 +1258,10 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 	return result, nil
 }
 
-func (tester *testerV03x) cmdCheckTest(tc testCase, conf *Net, dataDir string) {
+func (tester *testerV03x) cmdCheckTest(_ testCase, _ *Net, _ string) {
 }
 
-func (tester *testerV03x) cmdDelTest(tc testCase, dataDir string) {
+func (tester *testerV03x) cmdDelTest(_ testCase, _ string) {
 	err := tester.testNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
@@ -1488,10 +1488,10 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (types.Re
 	return nil, nil
 }
 
-func (tester *testerV01xOr02x) cmdCheckTest(tc testCase, conf *Net, dataDir string) {
+func (tester *testerV01xOr02x) cmdCheckTest(_ testCase, _ *Net, _ string) {
 }
 
-func (tester *testerV01xOr02x) cmdDelTest(tc testCase, dataDir string) {
+func (tester *testerV01xOr02x) cmdDelTest(tc testCase, _ string) {
 	err := tester.testNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
