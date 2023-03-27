@@ -86,7 +86,7 @@ var _ = Describe("Echosvr", func() {
 		It("connects successfully using echo client", func() {
 			Eventually(session.Out).Should(gbytes.Say("\n"))
 			serverAddress := strings.TrimSpace(string(session.Out.Contents()))
-			fmt.Println("Server address", string(serverAddress))
+			fmt.Println("Server address", serverAddress)
 
 			cmd := exec.Command(clientBinaryPath, "-target", serverAddress, "-message", "hello")
 			clientSession, err := gexec.Start(cmd, GinkgoWriter, GinkgoWriter)

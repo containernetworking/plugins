@@ -253,7 +253,7 @@ var _ = Describe("tuning plugin", func() {
 
 				if testutils.SpecVersionHasCHECK(ver) {
 					n := &TuningConf{}
-					err = json.Unmarshal([]byte(conf), &n)
+					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
 					_, confString, err := buildOneConfig("testConfig", ver, n, r)
@@ -395,7 +395,7 @@ var _ = Describe("tuning plugin", func() {
 
 				if testutils.SpecVersionHasCHECK(ver) {
 					n := &TuningConf{}
-					err = json.Unmarshal([]byte(conf), &n)
+					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
 					_, confString, err := buildOneConfig("testConfig", ver, n, r)
@@ -541,7 +541,7 @@ var _ = Describe("tuning plugin", func() {
 
 				if testutils.SpecVersionHasCHECK(ver) {
 					n := &TuningConf{}
-					err = json.Unmarshal([]byte(conf), &n)
+					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
 					_, confString, err := buildOneConfig("testConfig", ver, n, r)
@@ -687,7 +687,7 @@ var _ = Describe("tuning plugin", func() {
 
 				if testutils.SpecVersionHasCHECK(ver) {
 					n := &TuningConf{}
-					err = json.Unmarshal([]byte(conf), &n)
+					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
 					_, confString, err := buildOneConfig("testConfig", ver, n, r)
@@ -839,7 +839,7 @@ var _ = Describe("tuning plugin", func() {
 
 				if testutils.SpecVersionHasCHECK(ver) {
 					n := &TuningConf{}
-					err = json.Unmarshal([]byte(conf), &n)
+					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
 					_, confString, err := buildOneConfig("testConfig", ver, n, r)
@@ -918,7 +918,7 @@ var _ = Describe("tuning plugin", func() {
 
 				if testutils.SpecVersionHasCHECK(ver) {
 					n := &TuningConf{}
-					err = json.Unmarshal([]byte(conf), &n)
+					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
 					_, confString, err := buildOneConfig("testConfig", ver, n, r)

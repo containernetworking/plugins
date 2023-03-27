@@ -10,6 +10,7 @@ issues:
 linters:
   enable:
     - contextcheck
+    - durationcheck
     - gci
     - gocritic
     - gofumpt
@@ -17,8 +18,12 @@ linters:
     - ineffassign
     - misspell
     - nonamedreturns
+    - predeclared
     - revive
     - staticcheck
+    - unconvert
+    - unused
+    - wastedassign
   disable:
     - errcheck
 

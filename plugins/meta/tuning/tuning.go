@@ -256,7 +256,7 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 	}
 
 	config := configToRestore{}
-	if err = json.Unmarshal([]byte(file), &config); err != nil {
+	if err = json.Unmarshal(file, &config); err != nil {
 		return nil
 	}
 

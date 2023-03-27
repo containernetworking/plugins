@@ -82,7 +82,7 @@ func spawnSessionDbus(wg *sync.WaitGroup) (string, *exec.Cmd) {
 	// Wait for dbus-daemon to print the bus address
 	bytes, err := bufio.NewReader(stdout).ReadString('\n')
 	Expect(err).NotTo(HaveOccurred())
-	busAddr := strings.TrimSpace(string(bytes))
+	busAddr := strings.TrimSpace(bytes)
 	Expect(strings.HasPrefix(busAddr, "unix:abstract")).To(BeTrue())
 
 	var startWg sync.WaitGroup
@@ -197,9 +197,9 @@ var _ = Describe("firewalld test", func() {
 				ContainerID: "dummy",
 				Netns:       targetNs.Path(),
 				IfName:      ifname,
-				StdinData:   []byte(conf),
+				StdinData:   conf,
 			}
-			_, _, err := testutils.CmdAdd(targetNs.Path(), args.ContainerID, ifname, []byte(conf), func() error {
+			_, _, err := testutils.CmdAdd(targetNs.Path(), args.ContainerID, ifname, conf, func() error {
 				return cmdAdd(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -223,9 +223,9 @@ var _ = Describe("firewalld test", func() {
 				ContainerID: "dummy",
 				Netns:       targetNs.Path(),
 				IfName:      ifname,
-				StdinData:   []byte(conf),
+				StdinData:   conf,
 			}
-			_, _, err := testutils.CmdAdd(targetNs.Path(), args.ContainerID, ifname, []byte(conf), func() error {
+			_, _, err := testutils.CmdAdd(targetNs.Path(), args.ContainerID, ifname, conf, func() error {
 				return cmdAdd(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -241,9 +241,9 @@ var _ = Describe("firewalld test", func() {
 				ContainerID: "dummy",
 				Netns:       targetNs.Path(),
 				IfName:      ifname,
-				StdinData:   []byte(conf),
+				StdinData:   conf,
 			}
-			r, _, err := testutils.CmdAdd(targetNs.Path(), args.ContainerID, ifname, []byte(conf), func() error {
+			r, _, err := testutils.CmdAdd(targetNs.Path(), args.ContainerID, ifname, conf, func() error {
 				return cmdAdd(args)
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -265,7 +265,7 @@ var _ = Describe("firewalld test", func() {
 				ContainerID: "dummy",
 				Netns:       targetNs.Path(),
 				IfName:      ifname,
-				StdinData:   []byte(conf),
+				StdinData:   conf,
 			}
 			r, _, err := testutils.CmdAddWithArgs(args, func() error {
 				return cmdAdd(args)
