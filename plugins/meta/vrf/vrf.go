@@ -104,6 +104,19 @@ func addInterface(vrf *netlink.Vrf, intf string) error {
 	if err != nil {
 		return fmt.Errorf("failed getting ipv6 addresses for %s", intf)
 	}
+
+	// Save all routes that are not local and connected, before setting master,
+	// because otherwise those routes will be deleted after interface is moved.
+	filter := &netlink.Route{
+		LinkIndex: i.Attrs().Index,
+		Scope:     netlink.SCOPE_UNIVERSE, // Exclude local and connected routes
+	}
+	filterMask := netlink.RT_FILTER_IIF | netlink.RT_FILTER_SCOPE // Filter based on link index and scope
+	routes, err := netlink.RouteListFiltered(netlink.FAMILY_ALL, filter, filterMask)
+	if err != nil {
+		return fmt.Errorf("failed getting all routes for %s", intf)
+	}
+
 	err = netlink.LinkSetMaster(i, vrf)
 	if err != nil {
 		return fmt.Errorf("could not set vrf %s as master of %s: %v", vrf.Name, intf, err)
@@ -127,6 +140,18 @@ CONTINUE:
 		err = netlink.AddrAdd(i, &toFind)
 		if err != nil {
 			return fmt.Errorf("could not restore address %s to %s @ %s: %v", toFind, intf, vrf.Name, err)
+		}
+	}
+
+	// Apply all saved routes for the interface that was moved to the VRF
+	for _, route := range routes {
+		r := route
+		// Modify original table to vrf one,
+		r.Table = int(vrf.Table)
+		// equivalent of 'ip route replace <address> table <int>'.
+		err = netlink.RouteReplace(&r)
+		if err != nil {
+			return fmt.Errorf("could not add route '%s': %v", r, err)
 		}
 	}
 
