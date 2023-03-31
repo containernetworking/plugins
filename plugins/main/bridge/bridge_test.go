@@ -65,21 +65,22 @@ type Net struct {
 // testCase defines the CNI network configuration and the expected
 // bridge addresses for a test case.
 type testCase struct {
-	cniVersion  string      // CNI Version
-	subnet      string      // Single subnet config: Subnet CIDR
-	gateway     string      // Single subnet config: Gateway
-	ranges      []rangeInfo // Ranges list (multiple subnets config)
-	resolvConf  string      // host-local resolvConf file path
-	isGW        bool
-	isLayer2    bool
-	expGWCIDRs  []string // Expected gateway addresses in CIDR form
-	vlan        int
-	ipMasq      bool
-	macspoofchk bool
-	AddErr020   string
-	DelErr020   string
-	AddErr010   string
-	DelErr010   string
+	cniVersion        string      // CNI Version
+	subnet            string      // Single subnet config: Subnet CIDR
+	gateway           string      // Single subnet config: Gateway
+	ranges            []rangeInfo // Ranges list (multiple subnets config)
+	resolvConf        string      // host-local resolvConf file path
+	isGW              bool
+	isLayer2          bool
+	expGWCIDRs        []string // Expected gateway addresses in CIDR form
+	vlan              int
+	removeDefaultVlan bool
+	ipMasq            bool
+	macspoofchk       bool
+	AddErr020         string
+	DelErr020         string
+	AddErr010         string
+	DelErr010         string
 
 	envArgs       string // CNI_ARGS
 	runtimeConfig struct {
@@ -128,6 +129,9 @@ const (
 
 	vlan = `,
 	"vlan": %d`
+
+	preserveDefaultVlan = `,
+	"preserveDefaultVlan": false`
 
 	netDefault = `,
 	"isDefaultGateway": true`
@@ -191,6 +195,10 @@ func (tc testCase) netConfJSON(dataDir string) string {
 	conf := fmt.Sprintf(netConfStr, tc.cniVersion, BRNAME)
 	if tc.vlan != 0 {
 		conf += fmt.Sprintf(vlan, tc.vlan)
+
+		if tc.removeDefaultVlan {
+			conf += preserveDefaultVlan
+		}
 	}
 	if tc.ipMasq {
 		conf += tc.ipMasqConfig()
@@ -527,6 +535,9 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			vlans, isExist := interfaceMap[int32(peerLink.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+			if tc.removeDefaultVlan {
+				Expect(vlans).To(HaveLen(1))
+			}
 		}
 
 		// Check the bridge vlan filtering equals true
@@ -582,6 +593,9 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+			if tc.removeDefaultVlan {
+				Expect(vlans).To(HaveLen(1))
+			}
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -832,6 +846,9 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			vlans, isExist := interfaceMap[int32(peerLink.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+			if tc.removeDefaultVlan {
+				Expect(vlans).To(HaveLen(1))
+			}
 		}
 
 		// Check the bridge vlan filtering equals true
@@ -887,6 +904,9 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+			if tc.removeDefaultVlan {
+				Expect(vlans).To(HaveLen(1))
+			}
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -1132,6 +1152,9 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			vlans, isExist := interfaceMap[int32(peerLink.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+			if tc.removeDefaultVlan {
+				Expect(vlans).To(HaveLen(1))
+			}
 		}
 
 		// Check the bridge vlan filtering equals true
@@ -1187,6 +1210,9 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+			if tc.removeDefaultVlan {
+				Expect(vlans).To(HaveLen(1))
+			}
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -1358,6 +1384,9 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (types.Re
 			vlans, isExist := interfaceMap[int32(peerLink.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+			if tc.removeDefaultVlan {
+				Expect(vlans).To(HaveLen(1))
+			}
 		}
 
 		// Check the bridge vlan filtering equals true
@@ -1480,6 +1509,9 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (types.Re
 			vlans, isExist := hostNSVlanMap[int32(peerIndex)]
 			Expect(isExist).To(BeTrue())
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+			if tc.removeDefaultVlan {
+				Expect(vlans).To(HaveLen(1))
+			}
 		}
 
 		return nil
@@ -1772,6 +1804,18 @@ var _ = Describe("bridge Operations", func() {
 			cmdAddDelTest(originalNS, targetNS, tc, dataDir)
 		})
 
+		It(fmt.Sprintf("[%s] configures and deconfigures a l2 bridge with vlan id 100 and no default vlan using ADD/DEL", ver), func() {
+			tc := testCase{
+				cniVersion:        ver,
+				isLayer2:          true,
+				vlan:              100,
+				removeDefaultVlan: true,
+				AddErr020:         "cannot convert: no valid IP addresses",
+				AddErr010:         "cannot convert: no valid IP addresses",
+			}
+			cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+		})
+
 		for i, tc := range []testCase{
 			{
 				// IPv4 only
@@ -1820,6 +1864,11 @@ var _ = Describe("bridge Operations", func() {
 			i := i
 			It(fmt.Sprintf("[%s] (%d) configures and deconfigures a bridge, veth with default route and vlanID 100 with ADD/DEL", ver, i), func() {
 				tc.cniVersion = ver
+				cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+			})
+			It(fmt.Sprintf("[%s] (%d) configures and deconfigures a bridge, veth with default route and vlanID 100 and no default vlan with ADD/DEL", ver, i), func() {
+				tc.cniVersion = ver
+				tc.removeDefaultVlan = true
 				cmdAddDelTest(originalNS, targetNS, tc, dataDir)
 			})
 		}
