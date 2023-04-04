@@ -12,6 +12,7 @@ linters:
     - contextcheck
     - durationcheck
     - gci
+    - ginkgolinter
     - gocritic
     - gofumpt
     - gosimple

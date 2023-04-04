@@ -28,7 +28,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/100"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
@@ -187,9 +187,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				Expect("/tmp/tuning-test/dummy_dummy0.json").ShouldNot(BeAnExistingFile())
@@ -242,9 +242,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -323,9 +323,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -384,9 +384,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -465,9 +465,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -527,9 +527,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				Expect(result.Interfaces[0].Mac).To(Equal(mac))
@@ -611,9 +611,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -674,9 +674,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -756,9 +756,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -822,9 +822,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -907,9 +907,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -988,9 +988,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -1108,9 +1108,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				err = testutils.CmdDel(originalNS.Path(),

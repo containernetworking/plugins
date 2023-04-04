@@ -140,9 +140,9 @@ var _ = Describe("vrf plugin", func() {
 			result, err := current.GetResult(r)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(len(result.Interfaces)).To(Equal(1))
+			Expect(result.Interfaces).To(HaveLen(1))
 			Expect(result.Interfaces[0].Name).To(Equal(IF0Name))
-			Expect(len(result.IPs)).To(Equal(1))
+			Expect(result.IPs).To(HaveLen(1))
 			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 			return nil
 		})
@@ -298,7 +298,7 @@ var _ = Describe("vrf plugin", func() {
 					Expect(err).NotTo(HaveOccurred())
 					addresses, err := netlink.AddrList(link, netlink.FAMILY_ALL)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(len(addresses)).To(Equal(1))
+					Expect(addresses).To(HaveLen(1))
 					Expect(addresses[0].IP.Equal(addr0.IP)).To(BeTrue())
 					Expect(addresses[0].Mask).To(Equal(addr0.Mask))
 					return nil
@@ -316,7 +316,7 @@ var _ = Describe("vrf plugin", func() {
 
 					addresses, err := netlink.AddrList(link, netlink.FAMILY_ALL)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(len(addresses)).To(Equal(1))
+					Expect(addresses).To(HaveLen(1))
 					Expect(addresses[0].IP.Equal(addr1.IP)).To(BeTrue())
 					Expect(addresses[0].Mask).To(Equal(addr1.Mask))
 					return nil
@@ -524,7 +524,7 @@ var _ = Describe("vrf plugin", func() {
 			targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 				_, err := netlink.LinkByName(VRF0Name)
-				Expect(err).NotTo(BeNil())
+				Expect(err).To(HaveOccurred())
 				return nil
 			})
 		})
@@ -569,9 +569,9 @@ var _ = Describe("vrf plugin", func() {
 			result, err := current.GetResult(prevRes)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(len(result.Interfaces)).To(Equal(1))
+			Expect(result.Interfaces).To(HaveLen(1))
 			Expect(result.Interfaces[0].Name).To(Equal(IF0Name))
-			Expect(len(result.IPs)).To(Equal(1))
+			Expect(result.IPs).To(HaveLen(1))
 			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 			return nil
 		})

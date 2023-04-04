@@ -251,9 +251,9 @@ var _ = Describe("firewalld test", func() {
 			result, err := current.GetResult(r)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(len(result.Interfaces)).To(Equal(1))
+			Expect(result.Interfaces).To(HaveLen(1))
 			Expect(result.Interfaces[0].Name).To(Equal("eth0"))
-			Expect(len(result.IPs)).To(Equal(1))
+			Expect(result.IPs).To(HaveLen(1))
 			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 		})
 

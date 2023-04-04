@@ -114,7 +114,7 @@ var _ = Describe("host-local Operations", func() {
 					Gateway: net.ParseIP("2001:db8:1::1"),
 				},
 			))
-			Expect(len(result.IPs)).To(Equal(2))
+			Expect(result.IPs).To(HaveLen(2))
 
 			for _, expectedRoute := range []*types.Route{
 				{Dst: mustCIDR("0.0.0.0/0"), GW: nil},
@@ -310,7 +310,7 @@ var _ = Describe("host-local Operations", func() {
 
 			result0, err := types100.GetResult(r0)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(result0.IPs)).Should(Equal(1))
+			Expect(result0.IPs).Should(HaveLen(1))
 			Expect(result0.IPs[0].Address.String()).Should(Equal("10.1.2.2/24"))
 
 			// Allocate the IP with the same container ID
@@ -330,7 +330,7 @@ var _ = Describe("host-local Operations", func() {
 
 			result1, err := types100.GetResult(r1)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(result1.IPs)).Should(Equal(1))
+			Expect(result1.IPs).Should(HaveLen(1))
 			Expect(result1.IPs[0].Address.String()).Should(Equal("10.1.2.3/24"))
 
 			// Allocate the IP with the same container ID again

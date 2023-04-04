@@ -167,7 +167,7 @@ var _ = Describe("chain tests", func() {
 		rules, err := ipt.List(TABLE, testChain.name)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(len(rules)).To(Equal(3))
+		Expect(rules).To(HaveLen(3))
 	})
 
 	It("deletes chains idempotently", func() {

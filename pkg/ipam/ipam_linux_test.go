@@ -142,12 +142,12 @@ var _ = Describe("ConfigureIface", func() {
 
 			v4addrs, err := netlink.AddrList(link, syscall.AF_INET)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(v4addrs)).To(Equal(1))
-			Expect(ipNetEqual(v4addrs[0].IPNet, ipv4)).To(Equal(true))
+			Expect(v4addrs).To(HaveLen(1))
+			Expect(ipNetEqual(v4addrs[0].IPNet, ipv4)).To(BeTrue())
 
 			v6addrs, err := netlink.AddrList(link, syscall.AF_INET6)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(v6addrs)).To(Equal(2))
+			Expect(v6addrs).To(HaveLen(2))
 
 			var found bool
 			for _, a := range v6addrs {
@@ -156,7 +156,7 @@ var _ = Describe("ConfigureIface", func() {
 					break
 				}
 			}
-			Expect(found).To(Equal(true))
+			Expect(found).To(BeTrue())
 
 			// Ensure the v4 route, v6 route, and subnet route
 			routes, err := netlink.RouteList(link, 0)
@@ -176,8 +176,8 @@ var _ = Describe("ConfigureIface", func() {
 					break
 				}
 			}
-			Expect(v4found).To(Equal(true))
-			Expect(v6found).To(Equal(true))
+			Expect(v4found).To(BeTrue())
+			Expect(v6found).To(BeTrue())
 
 			return nil
 		})
@@ -215,8 +215,8 @@ var _ = Describe("ConfigureIface", func() {
 					break
 				}
 			}
-			Expect(v4found).To(Equal(true))
-			Expect(v6found).To(Equal(true))
+			Expect(v4found).To(BeTrue())
+			Expect(v6found).To(BeTrue())
 
 			return nil
 		})

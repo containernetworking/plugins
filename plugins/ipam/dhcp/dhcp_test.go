@@ -271,7 +271,7 @@ var _ = Describe("DHCP Operations", func() {
 
 				addResult, err = types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(len(addResult.IPs)).To(Equal(1))
+				Expect(addResult.IPs).To(HaveLen(1))
 				Expect(addResult.IPs[0].Address.String()).To(Equal("192.168.1.5/24"))
 				return nil
 			})
@@ -314,7 +314,7 @@ var _ = Describe("DHCP Operations", func() {
 
 				addResult, err = types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(len(addResult.IPs)).To(Equal(1))
+				Expect(addResult.IPs).To(HaveLen(1))
 				Expect(addResult.IPs[0].Address.String()).To(Equal("192.168.1.5/24"))
 				return nil
 			})
@@ -588,7 +588,7 @@ var _ = Describe("DHCP Lease Unavailable Operations", func() {
 
 				addResult, err = types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(len(addResult.IPs)).To(Equal(1))
+				Expect(addResult.IPs).To(HaveLen(1))
 				Expect(addResult.IPs[0].Address.String()).To(Equal("192.168.1.5/24"))
 				return nil
 			})
