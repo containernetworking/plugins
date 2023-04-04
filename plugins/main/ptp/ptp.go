@@ -43,8 +43,9 @@ func init() {
 
 type NetConf struct {
 	types.NetConf
-	IPMasq bool `json:"ipMasq"`
-	MTU    int  `json:"mtu"`
+	IPMasq        bool    `json:"ipMasq"`
+	IPMasqBackend *string `json:"ipMasqBackend,omitempty"`
+	MTU           int     `json:"mtu"`
 }
 
 func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Result) (*current.Interface, *current.Interface, error) {
@@ -229,7 +230,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	if conf.IPMasq {
 		for _, ipc := range result.IPs {
-			if err = ip.SetupIPMasq(&ipc.Address, conf.Name, args.ContainerID); err != nil {
+			if err = ip.SetupIPMasq(conf.IPMasqBackend, &ipc.Address, conf.Name, args.ContainerID); err != nil {
 				return err
 			}
 		}

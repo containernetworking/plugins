@@ -51,6 +51,7 @@ type NetConf struct {
 	IsDefaultGW         bool         `json:"isDefaultGateway"`
 	ForceAddress        bool         `json:"forceAddress"`
 	IPMasq              bool         `json:"ipMasq"`
+	IPMasqBackend       *string      `json:"ipMasqBackend,omitempty"`
 	MTU                 int          `json:"mtu"`
 	HairpinMode         bool         `json:"hairpinMode"`
 	PromiscMode         bool         `json:"promiscMode"`
@@ -672,7 +673,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		if n.IPMasq {
 			for _, ipc := range result.IPs {
-				if err = ip.SetupIPMasq(&ipc.Address, n.Name, args.ContainerID); err != nil {
+				if err = ip.SetupIPMasq(n.IPMasqBackend, &ipc.Address, n.Name, args.ContainerID); err != nil {
 					return err
 				}
 			}
