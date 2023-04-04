@@ -914,7 +914,7 @@ var _ = Describe("tuning plugin", func() {
 
 				link, err := netlink.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(link.Attrs().RawFlags&unix.IFF_ALLMULTI != 0).To(BeTrue())
+				Expect(link.Attrs().RawFlags & unix.IFF_ALLMULTI).NotTo(BeZero())
 
 				if testutils.SpecVersionHasCHECK(ver) {
 					n := &TuningConf{}
@@ -995,7 +995,7 @@ var _ = Describe("tuning plugin", func() {
 
 				link, err := netlink.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(link.Attrs().RawFlags&unix.IFF_ALLMULTI != 0).To(BeTrue())
+				Expect(link.Attrs().RawFlags & unix.IFF_ALLMULTI).NotTo(BeZero())
 
 				err = testutils.CmdDel(originalNS.Path(),
 					args.ContainerID, "", func() error { return cmdDel(args) })

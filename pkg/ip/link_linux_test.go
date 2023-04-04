@@ -283,7 +283,7 @@ var _ = Describe("Link", func() {
 			// this will delete the host endpoint too
 			addr, err := ip.DelLinkByNameAddr(containerVethName)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(addr).To(HaveLen(0))
+			Expect(addr).To(BeEmpty())
 			return nil
 		})
 	})
