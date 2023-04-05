@@ -14,13 +14,13 @@ require (
 	github.com/d2g/dhcp4server v0.0.0-20181031114812-7d4a0a7f59a5
 	github.com/godbus/dbus/v5 v5.1.0
 	github.com/mattn/go-shellwords v1.0.12
-	github.com/networkplumbing/go-nft v0.2.0
+	github.com/networkplumbing/go-nft v0.2.1-0.20230316134149-d47cc2e42bdd
 	github.com/onsi/ginkgo/v2 v2.7.0
 	github.com/onsi/gomega v1.26.0
 	github.com/opencontainers/selinux v1.8.2
-	github.com/safchain/ethtool v0.2.0
+	github.com/safchain/ethtool v0.3.0
 	github.com/vishvananda/netlink v1.2.1-beta.2
-	golang.org/x/sys v0.5.0
+	golang.org/x/sys v0.6.0
 )
 
 require (
