@@ -161,15 +161,12 @@ var _ = Describe("Basic PTP using cnitool", func() {
 			Expect(basicBridgeIP).To(ContainSubstring("10.11.2."))
 
 			var chainedBridgeBandwidthPort, basicBridgePort int
-			var err error
 
 			By(fmt.Sprintf("starting echo server in %s\n\n", contNS1.ShortName()))
-			chainedBridgeBandwidthPort, chainedBridgeBandwidthSession, err = startEchoServerInNamespace(contNS1)
-			Expect(err).ToNot(HaveOccurred())
+			chainedBridgeBandwidthPort, chainedBridgeBandwidthSession = startEchoServerInNamespace(contNS1)
 
 			By(fmt.Sprintf("starting echo server in %s\n\n", contNS2.ShortName()))
-			basicBridgePort, basicBridgeSession, err = startEchoServerInNamespace(contNS2)
-			Expect(err).ToNot(HaveOccurred())
+			basicBridgePort, basicBridgeSession = startEchoServerInNamespace(contNS2)
 
 			packetInBytes := 20000 // The shaper needs to 'warm'. Send enough to cause it to throttle,
 			// balanced by run time.
@@ -242,7 +239,7 @@ func makeTCPClientInNS(netns string, address string, port int, numBytes int) {
 	Expect(string(out)).To(Equal(message))
 }
 
-func startEchoServerInNamespace(netNS Namespace) (int, *gexec.Session, error) {
+func startEchoServerInNamespace(netNS Namespace) (int, *gexec.Session) {
 	session, err := startInNetNS(echoServerBinaryPath, netNS)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -259,7 +256,7 @@ func startEchoServerInNamespace(netNS Namespace) (int, *gexec.Session, error) {
 		io.Copy(GinkgoWriter, io.MultiReader(session.Out, session.Err))
 	}()
 
-	return port, session, nil
+	return port, session
 }
 
 func startInNetNS(binPath string, namespace Namespace) (*gexec.Session, error) {

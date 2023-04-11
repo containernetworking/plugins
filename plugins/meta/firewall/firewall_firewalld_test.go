@@ -45,18 +45,21 @@ func (f *fakeFirewalld) clear() {
 	f.source = ""
 }
 
+//nolint:unparam
 func (f *fakeFirewalld) AddSource(zone, source string) (string, *dbus.Error) {
 	f.zone = zone
 	f.source = source
 	return "", nil
 }
 
+//nolint:unparam
 func (f *fakeFirewalld) RemoveSource(zone, source string) (string, *dbus.Error) {
 	f.zone = zone
 	f.source = source
 	return "", nil
 }
 
+//nolint:unparam
 func (f *fakeFirewalld) QuerySource(zone, source string) (bool, *dbus.Error) {
 	if f.zone != zone {
 		return false, nil
@@ -101,7 +104,7 @@ func spawnSessionDbus(wg *sync.WaitGroup) (string, *exec.Cmd) {
 	return busAddr, cmd
 }
 
-func makeFirewalldConf(ver, ifname string, ns ns.NetNS) []byte {
+func makeFirewalldConf(ver string, ns ns.NetNS) []byte {
 	return []byte(fmt.Sprintf(`{
 	  "cniVersion": "%s",
 	  "name": "firewalld-test",
@@ -111,7 +114,7 @@ func makeFirewalldConf(ver, ifname string, ns ns.NetNS) []byte {
 	  "prevResult": {
 	    "cniVersion": "%s",
 	    "interfaces": [
-	      {"name": "%s", "sandbox": "%s"}
+	      {"name": "eth0", "sandbox": "%s"}
 	    ],
 	    "ips": [
 	      {
@@ -122,7 +125,7 @@ func makeFirewalldConf(ver, ifname string, ns ns.NetNS) []byte {
 	      }
 	    ]
 	  }
-	}`, ver, ver, ifname, ns.Path()))
+	}`, ver, ver, ns.Path()))
 }
 
 var _ = Describe("firewalld test", func() {
@@ -192,7 +195,7 @@ var _ = Describe("firewalld test", func() {
 		It(fmt.Sprintf("[%s] works with a config", ver), func() {
 			Expect(isFirewalldRunning()).To(BeTrue())
 
-			conf := makeFirewalldConf(ver, ifname, targetNs)
+			conf := makeFirewalldConf(ver, targetNs)
 			args := &skel.CmdArgs{
 				ContainerID: "dummy",
 				Netns:       targetNs.Path(),
@@ -218,7 +221,7 @@ var _ = Describe("firewalld test", func() {
 		It(fmt.Sprintf("[%s] defaults to the firewalld backend", ver), func() {
 			Expect(isFirewalldRunning()).To(BeTrue())
 
-			conf := makeFirewalldConf(ver, ifname, targetNs)
+			conf := makeFirewalldConf(ver, targetNs)
 			args := &skel.CmdArgs{
 				ContainerID: "dummy",
 				Netns:       targetNs.Path(),
@@ -236,7 +239,7 @@ var _ = Describe("firewalld test", func() {
 		It(fmt.Sprintf("[%s] passes through the prevResult", ver), func() {
 			Expect(isFirewalldRunning()).To(BeTrue())
 
-			conf := makeFirewalldConf(ver, ifname, targetNs)
+			conf := makeFirewalldConf(ver, targetNs)
 			args := &skel.CmdArgs{
 				ContainerID: "dummy",
 				Netns:       targetNs.Path(),
@@ -260,7 +263,7 @@ var _ = Describe("firewalld test", func() {
 		It(fmt.Sprintf("[%s] works with Check", ver), func() {
 			Expect(isFirewalldRunning()).To(BeTrue())
 
-			conf := makeFirewalldConf(ver, ifname, targetNs)
+			conf := makeFirewalldConf(ver, targetNs)
 			args := &skel.CmdArgs{
 				ContainerID: "dummy",
 				Netns:       targetNs.Path(),

@@ -116,19 +116,16 @@ func (ib *iptablesBackend) addRules(_ *FirewallNetConf, result *current.Result, 
 	return nil
 }
 
-func (ib *iptablesBackend) delRules(_ *FirewallNetConf, result *current.Result, ipt *iptables.IPTables, proto iptables.Protocol) error {
+func (ib *iptablesBackend) delRules(_ *FirewallNetConf, result *current.Result, ipt *iptables.IPTables, proto iptables.Protocol) {
 	rules := make([][]string, 0)
 	for _, ip := range result.IPs {
 		if protoForIP(ip.Address) == proto {
 			rules = append(rules, getPrivChainRules(ipString(ip.Address))...)
 		}
 	}
-
 	if len(rules) > 0 {
 		cleanupRules(ipt, ib.privChainName, rules)
 	}
-
-	return nil
 }
 
 func (ib *iptablesBackend) checkRules(_ *FirewallNetConf, result *current.Result, ipt *iptables.IPTables, proto iptables.Protocol) error {

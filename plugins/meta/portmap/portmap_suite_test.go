@@ -65,7 +65,7 @@ func startInNetNS(binPath string, netNS ns.NetNS) (*gexec.Session, error) {
 	return session, err
 }
 
-func StartEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session, error) {
+func StartEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session) {
 	session, err := startInNetNS(echoServerBinaryPath, netNS)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -76,5 +76,5 @@ func StartEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session, error) {
 
 	port, err := strconv.Atoi(portString)
 	Expect(err).NotTo(HaveOccurred())
-	return port, session, nil
+	return port, session
 }

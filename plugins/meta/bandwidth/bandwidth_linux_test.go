@@ -35,7 +35,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
 
-func buildOneConfig(name, cniVersion string, orig *PluginConf, prevResult types.Result) (*PluginConf, []byte, error) {
+func buildOneConfig(name, cniVersion string, orig *PluginConf, prevResult types.Result) ([]byte, error) {
 	var err error
 
 	inject := map[string]interface{}{
@@ -54,12 +54,12 @@ func buildOneConfig(name, cniVersion string, orig *PluginConf, prevResult types.
 
 	confBytes, err := json.Marshal(orig)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	err = json.Unmarshal(confBytes, &config)
 	if err != nil {
-		return nil, nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
+		return nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
 	}
 
 	for key, value := range inject {
@@ -68,15 +68,15 @@ func buildOneConfig(name, cniVersion string, orig *PluginConf, prevResult types.
 
 	newBytes, err := json.Marshal(config)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	conf := &PluginConf{}
 	if err := json.Unmarshal(newBytes, &conf); err != nil {
-		return nil, nil, fmt.Errorf("error parsing configuration: %s", err)
+		return nil, fmt.Errorf("error parsing configuration: %s", err)
 	}
 
-	return conf, newBytes, nil
+	return newBytes, nil
 }
 
 var _ = Describe("bandwidth test", func() {
@@ -950,7 +950,7 @@ var _ = Describe("bandwidth test", func() {
 						EgressRate:   rateInBits,
 					}
 					tbfPluginConf.Type = "bandwidth"
-					_, newConfBytes, err := buildOneConfig("myBWnet", ver, tbfPluginConf, containerWithTbfResult)
+					newConfBytes, err := buildOneConfig("myBWnet", ver, tbfPluginConf, containerWithTbfResult)
 					Expect(err).NotTo(HaveOccurred())
 
 					args := &skel.CmdArgs{
@@ -977,7 +977,7 @@ var _ = Describe("bandwidth test", func() {
 						}
 						checkConf.Type = "bandwidth"
 
-						_, newCheckBytes, err := buildOneConfig("myBWnet", ver, checkConf, result)
+						newCheckBytes, err := buildOneConfig("myBWnet", ver, checkConf, result)
 						Expect(err).NotTo(HaveOccurred())
 
 						args = &skel.CmdArgs{
@@ -995,10 +995,8 @@ var _ = Describe("bandwidth test", func() {
 				})).To(Succeed())
 
 				By("starting a tcp server on both containers")
-				portServerWithTbf, echoServerWithTbf, err = startEchoServerInNamespace(containerWithTbfNS)
-				Expect(err).NotTo(HaveOccurred())
-				portServerWithoutTbf, echoServerWithoutTbf, err = startEchoServerInNamespace(containerWithoutTbfNS)
-				Expect(err).NotTo(HaveOccurred())
+				portServerWithTbf, echoServerWithTbf = startEchoServerInNamespace(containerWithTbfNS)
+				portServerWithoutTbf, echoServerWithoutTbf = startEchoServerInNamespace(containerWithoutTbfNS)
 			})
 
 			AfterEach(func() {

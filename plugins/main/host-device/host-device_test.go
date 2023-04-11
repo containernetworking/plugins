@@ -86,14 +86,14 @@ func canonicalizeIP(ip *net.IP) error {
 // LoadIPAMConfig creates IPAMConfig using json encoded configuration provided
 // as `bytes`. At the moment values provided in envArgs are ignored so there
 // is no possibility to overload the json configuration using envArgs
-func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
+func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, error) {
 	n := Net{}
 	if err := json.Unmarshal(bytes, &n); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	if n.IPAM == nil {
-		return nil, "", fmt.Errorf("IPAM config missing 'ipam' key")
+		return nil, fmt.Errorf("IPAM config missing 'ipam' key")
 	}
 
 	// Validate all ranges
@@ -103,13 +103,13 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	for i := range n.IPAM.Addresses {
 		ip, addr, err := net.ParseCIDR(n.IPAM.Addresses[i].AddressStr)
 		if err != nil {
-			return nil, "", fmt.Errorf("invalid CIDR %s: %s", n.IPAM.Addresses[i].AddressStr, err)
+			return nil, fmt.Errorf("invalid CIDR %s: %s", n.IPAM.Addresses[i].AddressStr, err)
 		}
 		n.IPAM.Addresses[i].Address = *addr
 		n.IPAM.Addresses[i].Address.IP = ip
 
 		if err := canonicalizeIP(&n.IPAM.Addresses[i].Address.IP); err != nil {
-			return nil, "", fmt.Errorf("invalid address %d: %s", i, err)
+			return nil, fmt.Errorf("invalid address %d: %s", i, err)
 		}
 
 		if n.IPAM.Addresses[i].Address.IP.To4() != nil {
@@ -123,7 +123,7 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		e := IPAMEnvArgs{}
 		err := types.LoadArgs(envArgs, &e)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 
 		if e.IP != "" {
@@ -132,7 +132,7 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 
 				ip, subnet, err := net.ParseCIDR(ipstr)
 				if err != nil {
-					return nil, "", fmt.Errorf("invalid CIDR %s: %s", ipstr, err)
+					return nil, fmt.Errorf("invalid CIDR %s: %s", ipstr, err)
 				}
 
 				addr := Address{Address: net.IPNet{IP: ip, Mask: subnet.Mask}}
@@ -149,7 +149,7 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 			for _, item := range strings.Split(string(e.GATEWAY), ",") {
 				gwip := net.ParseIP(strings.TrimSpace(item))
 				if gwip == nil {
-					return nil, "", fmt.Errorf("invalid gateway address: %s", item)
+					return nil, fmt.Errorf("invalid gateway address: %s", item)
 				}
 
 				for i := range n.IPAM.Addresses {
@@ -164,14 +164,14 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	// CNI spec 0.2.0 and below supported only one v4 and v6 address
 	if numV4 > 1 || numV6 > 1 {
 		if ok, _ := version.GreaterThanOrEqualTo(n.CNIVersion, "0.3.0"); !ok {
-			return nil, "", fmt.Errorf("CNI version %v does not support more than 1 address per family", n.CNIVersion)
+			return nil, fmt.Errorf("CNI version %v does not support more than 1 address per family", n.CNIVersion)
 		}
 	}
 
 	// Copy net name into IPAM so not to drag Net struct around
 	n.IPAM.Name = n.Name
 
-	return n.IPAM, n.CNIVersion, nil
+	return n.IPAM, nil
 }
 
 func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result) (*Net, error) {
@@ -868,7 +868,7 @@ var _ = Describe("base functionality", func() {
 			err = json.Unmarshal([]byte(conf), &n)
 			Expect(err).NotTo(HaveOccurred())
 
-			n.IPAM, _, err = LoadIPAMConfig([]byte(conf), "")
+			n.IPAM, err = LoadIPAMConfig([]byte(conf), "")
 			Expect(err).NotTo(HaveOccurred())
 
 			if testutils.SpecVersionHasCHECK(ver) {
@@ -984,7 +984,7 @@ var _ = Describe("base functionality", func() {
 			err = json.Unmarshal([]byte(conf), &n)
 			Expect(err).NotTo(HaveOccurred())
 
-			n.IPAM, _, err = LoadIPAMConfig([]byte(conf), "")
+			n.IPAM, err = LoadIPAMConfig([]byte(conf), "")
 			Expect(err).NotTo(HaveOccurred())
 
 			if testutils.SpecVersionHasCHECK(ver) {

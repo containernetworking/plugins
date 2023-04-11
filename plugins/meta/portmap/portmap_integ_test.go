@@ -83,8 +83,7 @@ var _ = Describe("portmap integration tests", func() {
 		fmt.Fprintln(GinkgoWriter, "namespace:", targetNS.Path())
 
 		// Start an echo server and get the port
-		containerPort, session, err = StartEchoServerInNamespace(targetNS)
-		Expect(err).NotTo(HaveOccurred())
+		containerPort, session = StartEchoServerInNamespace(targetNS)
 	})
 
 	AfterEach(func() {
@@ -329,8 +328,7 @@ var _ = Describe("portmap integration tests", func() {
 				fmt.Fprintln(GinkgoWriter, "namespace:", targetNS2.Path())
 
 				// Start an echo server and get the port
-				containerPort, session2, err := StartEchoServerInNamespace(targetNS2)
-				Expect(err).NotTo(HaveOccurred())
+				containerPort, session2 := StartEchoServerInNamespace(targetNS2)
 
 				runtimeConfig2 := libcni.RuntimeConf{
 					ContainerID: fmt.Sprintf("unit-test2-%d", hostPort),

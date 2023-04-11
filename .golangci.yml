@@ -8,6 +8,8 @@ issues:
       text: " and that stutters;"
 
 linters:
+  disable:
+    - errcheck
   enable:
     - contextcheck
     - durationcheck
@@ -16,6 +18,7 @@ linters:
     - gocritic
     - gofumpt
     - gosimple
+    - govet
     - ineffassign
     - misspell
     - nonamedreturns
@@ -23,10 +26,9 @@ linters:
     - revive
     - staticcheck
     - unconvert
+    - unparam
     - unused
     - wastedassign
-  disable:
-    - errcheck
 
 linters-settings:
   gci:

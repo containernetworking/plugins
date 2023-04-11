@@ -33,11 +33,11 @@ import (
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
 
-func buildOneConfig(name, cniVersion string, orig *TuningConf, prevResult types.Result) (*TuningConf, []byte, error) {
+func buildOneConfig(cniVersion string, orig *TuningConf, prevResult types.Result) ([]byte, error) {
 	var err error
 
 	inject := map[string]interface{}{
-		"name":       name,
+		"name":       "testConfig",
 		"cniVersion": cniVersion,
 	}
 	// Add previous plugin result
@@ -50,12 +50,12 @@ func buildOneConfig(name, cniVersion string, orig *TuningConf, prevResult types.
 
 	confBytes, err := json.Marshal(orig)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	err = json.Unmarshal(confBytes, &config)
 	if err != nil {
-		return nil, nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
+		return nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
 	}
 
 	for key, value := range inject {
@@ -64,15 +64,15 @@ func buildOneConfig(name, cniVersion string, orig *TuningConf, prevResult types.
 
 	newBytes, err := json.Marshal(config)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	conf := &TuningConf{}
 	if err := json.Unmarshal(newBytes, &conf); err != nil {
-		return nil, nil, fmt.Errorf("error parsing configuration: %s", err)
+		return nil, fmt.Errorf("error parsing configuration: %s", err)
 	}
 
-	return conf, newBytes, nil
+	return newBytes, nil
 }
 
 func createSysctlAllowFile(sysctls []string) error {
@@ -256,7 +256,7 @@ var _ = Describe("tuning plugin", func() {
 					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					confString, err := buildOneConfig(ver, n, r)
 					Expect(err).NotTo(HaveOccurred())
 
 					args.StdinData = confString
@@ -398,7 +398,7 @@ var _ = Describe("tuning plugin", func() {
 					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					confString, err := buildOneConfig(ver, n, r)
 					Expect(err).NotTo(HaveOccurred())
 
 					args.StdinData = confString
@@ -544,7 +544,7 @@ var _ = Describe("tuning plugin", func() {
 					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					confString, err := buildOneConfig(ver, n, r)
 					Expect(err).NotTo(HaveOccurred())
 
 					args.StdinData = confString
@@ -690,7 +690,7 @@ var _ = Describe("tuning plugin", func() {
 					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					confString, err := buildOneConfig(ver, n, r)
 					Expect(err).NotTo(HaveOccurred())
 
 					args.StdinData = confString
@@ -842,7 +842,7 @@ var _ = Describe("tuning plugin", func() {
 					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					confString, err := buildOneConfig(ver, n, r)
 					Expect(err).NotTo(HaveOccurred())
 
 					args.StdinData = confString
@@ -921,7 +921,7 @@ var _ = Describe("tuning plugin", func() {
 					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					confString, err := buildOneConfig(ver, n, r)
 					Expect(err).NotTo(HaveOccurred())
 
 					args.StdinData = confString
