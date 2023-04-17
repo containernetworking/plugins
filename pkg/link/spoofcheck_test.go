@@ -254,7 +254,6 @@ func assertExpectedRulesInSetupConfig(c configurerStub) {
                     "comment":"macspoofchk-container99-net1"}},
                 {"rule":{"family":"bridge","table":"nat","chain":"cni-br-iface-container99-net1-mac",
                     "expr":[{"drop":null}],
-                    "index":0,
                     "comment":"macspoofchk-container99-net1"}}
             ]}`
 	ExpectWithOffset(1, string(jsonConfig)).To(MatchJSON(expectedConfig))

@@ -195,12 +195,10 @@ func (sc *SpoofChecker) matchMacRule(chain string) *schema.Rule {
 }
 
 func (sc *SpoofChecker) dropRule(chain string) *schema.Rule {
-	macRulesIndex := nft.NewRuleIndex()
 	return &schema.Rule{
 		Family: schema.FamilyBridge,
 		Table:  natTableName,
 		Chain:  chain,
-		Index:  macRulesIndex.Next(),
 		Expr: []schema.Statement{
 			{Verdict: schema.Verdict{SimpleVerdict: schema.SimpleVerdict{Drop: true}}},
 		},
