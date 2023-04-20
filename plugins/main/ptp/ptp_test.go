@@ -368,7 +368,7 @@ var _ = Describe("ptp Operations", func() {
 			doTest(conf, ver, 1, dnsConf, targetNS)
 		})
 
-		It(fmt.Sprintf("[%s] configures and deconfigures a dual-stack ptp link with ADD/DEL", ver), func() {
+		It(fmt.Sprintf("[%s] configures and deconfigures a dual-stack ptp link + routes with ADD/DEL", ver), func() {
 			conf := fmt.Sprintf(`{
 			    "cniVersion": "%s",
 			    "name": "mynet",
@@ -380,6 +380,11 @@ var _ = Describe("ptp Operations", func() {
 				"ranges": [
 					[{ "subnet": "10.1.2.0/24"}],
 					[{ "subnet": "2001:db8:1::0/66"}]
+				],
+				"routes": [
+				  { "dst": "0.0.0.0/0" },
+				  { "dst": "192.168.0.0/16" },
+				  { "dst": "1.2.3.4/32" }
 				],
 				"dataDir": "%s"
 			    }
