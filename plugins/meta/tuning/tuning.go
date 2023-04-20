@@ -334,22 +334,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		for key, value := range tuningConf.SysCtl {
-			key = strings.ReplaceAll(key, ".", string(os.PathSeparator))
-
-			// If the key contains `IFNAME` - substitute it with args.IfName
-			// to allow setting sysctls on a particular interface, on which
-			// other operations (like mac/mtu setting) are performed
-			key = strings.Replace(key, "IFNAME", args.IfName, 1)
-
-			fileName := filepath.Join("/proc/sys", key)
-
-			// Refuse to modify sysctl parameters that don't belong
-			// to the network subsystem.
-			if !strings.HasPrefix(fileName, "/proc/sys/net/") {
-				return fmt.Errorf("invalid net sysctl key: %q", key)
+			fileName, err := getSysctlFilename(key, args.IfName)
+			if err != nil {
+				return err
 			}
+
 			content := []byte(value)
-			err := os.WriteFile(fileName, content, 0o644)
+			err = os.WriteFile(fileName, content, 0o644)
 			if err != nil {
 				return err
 			}
@@ -439,7 +430,10 @@ func cmdCheck(args *skel.CmdArgs) error {
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		// Check each configured value vs what's currently in the container
 		for key, confValue := range tuningConf.SysCtl {
-			fileName := filepath.Join("/proc/sys", strings.ReplaceAll(key, ".", "/"))
+			fileName, err := getSysctlFilename(key, args.IfName)
+			if err != nil {
+				return err
+			}
 
 			contents, err := os.ReadFile(fileName)
 			if err != nil {
@@ -582,4 +576,23 @@ func validateArgs(args *skel.CmdArgs) error {
 		return fmt.Errorf("Interface name (%s) contains an invalid character %s", args.IfName, string(os.PathSeparator))
 	}
 	return nil
+}
+
+func getSysctlFilename(key, ifName string) (string, error) {
+	key = strings.ReplaceAll(key, ".", string(os.PathSeparator))
+
+	// If the key contains `IFNAME` - substitute it with args.IfName
+	// to allow setting sysctls on a particular interface, on which
+	// other operations (like mac/mtu setting) are performed
+	key = strings.Replace(key, "IFNAME", ifName, 1)
+
+	fileName := filepath.Join("/proc/sys", key)
+
+	// Refuse to modify sysctl parameters that don't belong
+	// to the network subsystem.
+	if !strings.HasPrefix(fileName, "/proc/sys/net/") {
+		return "", fmt.Errorf("invalid net sysctl key: %q", key)
+	}
+
+	return fileName, nil
 }
