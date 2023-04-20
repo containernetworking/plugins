@@ -15,8 +15,10 @@
 package link
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/networkplumbing/go-nft/nft"
 	"github.com/networkplumbing/go-nft/nft/schema"
@@ -46,7 +48,10 @@ func (dnc defaultNftConfigurer) Apply(cfg *nft.Config) error {
 }
 
 func (dnc defaultNftConfigurer) Read(filterCommands ...string) (*nft.Config, error) {
-	return nft.ReadConfig(filterCommands...)
+	const timeout = 55 * time.Second
+	ctxWithTimeout, cancelFunc := context.WithTimeout(context.Background(), timeout)
+	defer cancelFunc()
+	return nft.ReadConfigContext(ctxWithTimeout, filterCommands...)
 }
 
 func NewSpoofChecker(iface, macAddress, refID string) *SpoofChecker {
