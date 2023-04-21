@@ -17,7 +17,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -179,7 +178,7 @@ var _ = Describe("Add, check, remove tap plugin", func() {
 		targetNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
-		dataDir, err = ioutil.TempDir("", "dummy")
+		dataDir, err = os.MkdirTemp("", "dummy")
 		Expect(err).NotTo(HaveOccurred())
 	})
 

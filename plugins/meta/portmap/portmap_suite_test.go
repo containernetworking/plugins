@@ -15,7 +15,6 @@
 package main
 
 import (
-	"math/rand"
 	"net"
 	"os/exec"
 	"path/filepath"
@@ -32,8 +31,6 @@ import (
 )
 
 func TestPortmap(t *testing.T) {
-	rand.Seed(GinkgoRandomSeed())
-
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "plugins/meta/portmap")
 }
