@@ -28,9 +28,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 )
 
-var (
-	ErrLinkNotFound = errors.New("link not found")
-)
+var ErrLinkNotFound = errors.New("link not found")
 
 // makeVethPair is called from within the container's network namespace
 func makeVethPair(name, peer string, mtu int, mac string, hostNS ns.NetNS) (netlink.Link, error) {
@@ -69,38 +67,37 @@ func peerExists(name string) bool {
 	return true
 }
 
-func makeVeth(name, vethPeerName string, mtu int, mac string, hostNS ns.NetNS) (peerName string, veth netlink.Link, err error) {
+func makeVeth(name, vethPeerName string, mtu int, mac string, hostNS ns.NetNS) (string, netlink.Link, error) {
+	var peerName string
+	var veth netlink.Link
+	var err error
 	for i := 0; i < 10; i++ {
 		if vethPeerName != "" {
 			peerName = vethPeerName
 		} else {
 			peerName, err = RandomVethName()
 			if err != nil {
-				return
+				return peerName, nil, err
 			}
 		}
 
 		veth, err = makeVethPair(name, peerName, mtu, mac, hostNS)
 		switch {
 		case err == nil:
-			return
+			return peerName, veth, nil
 
 		case os.IsExist(err):
 			if peerExists(peerName) && vethPeerName == "" {
 				continue
 			}
-			err = fmt.Errorf("container veth name provided (%v) already exists", name)
-			return
-
+			return peerName, veth, fmt.Errorf("container veth name provided (%v) already exists", name)
 		default:
-			err = fmt.Errorf("failed to make veth pair: %v", err)
-			return
+			return peerName, veth, fmt.Errorf("failed to make veth pair: %v", err)
 		}
 	}
 
 	// should really never be hit
-	err = fmt.Errorf("failed to find a unique veth name")
-	return
+	return peerName, nil, fmt.Errorf("failed to find a unique veth name")
 }
 
 // RandomVethName returns string "veth" with random prefix (hashed from entropy)

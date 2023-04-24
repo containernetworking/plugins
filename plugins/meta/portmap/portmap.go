@@ -21,10 +21,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/containernetworking/plugins/pkg/utils"
-	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/plugins/pkg/utils"
+	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 )
 
 // This creates the chains to be added to iptables. The basic structure is
@@ -292,7 +293,7 @@ func fillDnatRules(c *chain, config *PortMapConf, containerNet net.IPNet) {
 		copy(dnatRule, ruleBase)
 		dnatRule = append(dnatRule,
 			"-j", "DNAT",
-			"--to-destination", fmtIpPort(containerNet.IP, entry.ContainerPort),
+			"--to-destination", fmtIPPort(containerNet.IP, entry.ContainerPort),
 		)
 		c.rules = append(c.rules, dnatRule)
 	}

@@ -22,6 +22,10 @@ import (
 	"strings"
 	"syscall"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	types020 "github.com/containernetworking/cni/pkg/types/020"
@@ -29,16 +33,13 @@ import (
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-
-	"github.com/vishvananda/netlink"
-
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
-const MASTER_NAME = "eth0"
-const MASTER_NAME_INCONTAINER = "eth1"
+const (
+	MASTER_NAME             = "eth0"
+	MASTER_NAME_INCONTAINER = "eth1"
+)
 
 type Net struct {
 	Name       string                `json:"name"`
@@ -47,10 +48,10 @@ type Net struct {
 	Master     string                `json:"master"`
 	Mode       string                `json:"mode"`
 	IPAM       *allocator.IPAMConfig `json:"ipam"`
-	//RuntimeConfig struct {    // The capability arg
+	// RuntimeConfig struct {    // The capability arg
 	//	IPRanges []RangeSet `json:"ipRanges,omitempty"`
-	//} `json:"runtimeConfig,omitempty"`
-	//Args *struct {
+	// Args *struct {
+	// } `json:"runtimeConfig,omitempty"`
 	//	A *IPAMArgs `json:"cni"`
 	DNS           types.DNS              `json:"dns"`
 	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
@@ -98,7 +99,6 @@ func buildOneConfig(netName string, cniVersion string, orig *Net, prevResult typ
 	}
 
 	return conf, nil
-
 }
 
 type tester interface {
@@ -108,10 +108,12 @@ type tester interface {
 
 type testerBase struct{}
 
-type testerV10x testerBase
-type testerV04x testerBase
-type testerV03x testerBase
-type testerV01xOr02x testerBase
+type (
+	testerV10x      testerBase
+	testerV04x      testerBase
+	testerV03x      testerBase
+	testerV01xOr02x testerBase
+)
 
 func newTesterByVersion(version string) tester {
 	switch {
@@ -134,9 +136,9 @@ func (t *testerV10x) verifyResult(result types.Result, err error, name string, n
 	r, err := types100.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(len(r.Interfaces)).To(Equal(1))
+	Expect(r.Interfaces).To(HaveLen(1))
 	Expect(r.Interfaces[0].Name).To(Equal(name))
-	Expect(len(r.IPs)).To(Equal(numAddrs))
+	Expect(r.IPs).To(HaveLen(numAddrs))
 
 	return r.Interfaces[0].Mac
 }
@@ -148,9 +150,9 @@ func verify0403(result types.Result, err error, name string, numAddrs int) strin
 	r, err := types040.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(len(r.Interfaces)).To(Equal(1))
+	Expect(r.Interfaces).To(HaveLen(1))
 	Expect(r.Interfaces[0].Name).To(Equal(name))
-	Expect(len(r.IPs)).To(Equal(numAddrs))
+	Expect(r.IPs).To(HaveLen(numAddrs))
 
 	return r.Interfaces[0].Mac
 }
@@ -166,7 +168,7 @@ func (t *testerV03x) verifyResult(result types.Result, err error, name string, n
 }
 
 // verifyResult minimally verifies the Result and returns the interface's MAC address
-func (t *testerV01xOr02x) verifyResult(result types.Result, err error, name string, numAddrs int) string {
+func (t *testerV01xOr02x) verifyResult(result types.Result, err error, _ string, numAddrs int) string {
 	if result == nil && numAddrs == 0 {
 		Expect(err).To(MatchError("cannot convert: no valid IP addresses"))
 		return ""
@@ -346,7 +348,7 @@ var _ = Describe("macvlan Operations", func() {
 
 					addrs, err := netlink.AddrList(link, syscall.AF_INET)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(len(addrs)).To(Equal(1))
+					Expect(addrs).To(HaveLen(1))
 					return nil
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -407,7 +409,6 @@ var _ = Describe("macvlan Operations", func() {
 					return nil
 				})
 				Expect(err).NotTo(HaveOccurred())
-
 			})
 
 			It(fmt.Sprintf("[%s] configures and deconfigures a l2 macvlan link with ADD/DEL", ver), func() {
@@ -459,7 +460,7 @@ var _ = Describe("macvlan Operations", func() {
 
 					addrs, err := netlink.AddrList(link, syscall.AF_INET)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(len(addrs)).To(Equal(0))
+					Expect(addrs).To(BeEmpty())
 					return nil
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -545,7 +546,7 @@ var _ = Describe("macvlan Operations", func() {
 
 					addrs, err := netlink.AddrList(link, syscall.AF_INET)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(len(addrs)).To(Equal(1))
+					Expect(addrs).To(HaveLen(1))
 					return nil
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -637,8 +638,8 @@ var _ = Describe("macvlan Operations", func() {
 					err = netlink.LinkSetUp(link)
 					Expect(err).NotTo(HaveOccurred())
 
-					var address = &net.IPNet{IP: net.IPv4(192, 0, 0, 1), Mask: net.CIDRMask(24, 32)}
-					var addr = &netlink.Addr{IPNet: address}
+					address := &net.IPNet{IP: net.IPv4(192, 0, 0, 1), Mask: net.CIDRMask(24, 32)}
+					addr := &netlink.Addr{IPNet: address}
 					err = netlink.AddrAdd(link, addr)
 					Expect(err).NotTo(HaveOccurred())
 
@@ -685,7 +686,7 @@ var _ = Describe("macvlan Operations", func() {
 
 					addrs, err := netlink.AddrList(link, syscall.AF_INET)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(len(addrs)).To(Equal(1))
+					Expect(addrs).To(HaveLen(1))
 					return nil
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -767,7 +768,7 @@ var _ = Describe("macvlan Operations", func() {
 
 					addrs, err := netlink.AddrList(link, syscall.AF_INET)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(len(addrs)).To(Equal(0))
+					Expect(addrs).To(BeEmpty())
 					return nil
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -852,7 +853,7 @@ var _ = Describe("macvlan Operations", func() {
 
 					addrs, err := netlink.AddrList(link, syscall.AF_INET)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(len(addrs)).To(Equal(0))
+					Expect(addrs).To(BeEmpty())
 					return nil
 				})
 				Expect(err).NotTo(HaveOccurred())

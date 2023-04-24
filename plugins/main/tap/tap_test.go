@@ -17,15 +17,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"strings"
 	"syscall"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
 	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -92,7 +90,6 @@ func buildOneConfig(netName string, cniVersion string, orig *Net, prevResult typ
 	}
 
 	return conf, nil
-
 }
 
 type tester interface {
@@ -102,10 +99,12 @@ type tester interface {
 
 type testerBase struct{}
 
-type testerV10x testerBase
-type testerV04x testerBase
-type testerV03x testerBase
-type testerV01xOr02x testerBase
+type (
+	testerV10x      testerBase
+	testerV04x      testerBase
+	testerV03x      testerBase
+	testerV01xOr02x testerBase
+)
 
 func newTesterByVersion(version string) tester {
 	switch {
@@ -125,9 +124,9 @@ func (t *testerV10x) verifyResult(result types.Result, name string) string {
 	r, err := types100.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(len(r.Interfaces)).To(Equal(1))
+	Expect(r.Interfaces).To(HaveLen(1))
 	Expect(r.Interfaces[0].Name).To(Equal(name))
-	Expect(len(r.IPs)).To(Equal(1))
+	Expect(r.IPs).To(HaveLen(1))
 
 	return r.Interfaces[0].Mac
 }
@@ -136,9 +135,9 @@ func verify0403(result types.Result, name string) string {
 	r, err := types040.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(len(r.Interfaces)).To(Equal(1))
+	Expect(r.Interfaces).To(HaveLen(1))
 	Expect(r.Interfaces[0].Name).To(Equal(name))
-	Expect(len(r.IPs)).To(Equal(1))
+	Expect(r.IPs).To(HaveLen(1))
 
 	return r.Interfaces[0].Mac
 }
@@ -154,7 +153,7 @@ func (t *testerV03x) verifyResult(result types.Result, name string) string {
 }
 
 // verifyResult minimally verifies the Result and returns the interface's MAC address
-func (t *testerV01xOr02x) verifyResult(result types.Result, name string) string {
+func (t *testerV01xOr02x) verifyResult(result types.Result, _ string) string {
 	r, err := types020.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -179,7 +178,7 @@ var _ = Describe("Add, check, remove tap plugin", func() {
 		targetNS, err = testutils.NewNS()
 		Expect(err).NotTo(HaveOccurred())
 
-		dataDir, err = ioutil.TempDir("", "dummy")
+		dataDir, err = os.MkdirTemp("", "dummy")
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -249,7 +248,7 @@ var _ = Describe("Add, check, remove tap plugin", func() {
 				}
 				addrs, err := netlink.AddrList(link, syscall.AF_INET)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(len(addrs)).To(Equal(1))
+				Expect(addrs).To(HaveLen(1))
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())

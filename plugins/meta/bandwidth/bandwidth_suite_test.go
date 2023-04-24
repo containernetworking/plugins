@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,14 +24,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/containernetworking/plugins/pkg/ns"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
-
 	"github.com/vishvananda/netlink"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/containernetworking/plugins/pkg/ns"
 )
 
 func TestTBF(t *testing.T) {
@@ -67,7 +66,7 @@ func startInNetNS(binPath string, netNS ns.NetNS) (*gexec.Session, error) {
 	return session, err
 }
 
-func startEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session, error) {
+func startEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session) {
 	session, err := startInNetNS(echoServerBinaryPath, netNS)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -84,10 +83,10 @@ func startEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session, error) {
 		io.Copy(GinkgoWriter, io.MultiReader(session.Out, session.Err))
 	}()
 
-	return port, session, nil
+	return port, session
 }
 
-func makeTcpClientInNS(netns string, address string, port int, numBytes int) {
+func makeTCPClientInNS(netns string, address string, port int, numBytes int) {
 	payload := bytes.Repeat([]byte{'a'}, numBytes)
 	message := string(payload)
 

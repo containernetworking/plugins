@@ -18,8 +18,9 @@ import (
 	"fmt"
 	"strings"
 
-	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/godbus/dbus/v5"
+
+	current "github.com/containernetworking/cni/pkg/types/100"
 )
 
 const (
@@ -70,7 +71,7 @@ func isFirewalldRunning() bool {
 	return true
 }
 
-func newFirewalldBackend(conf *FirewallNetConf) (FirewallBackend, error) {
+func newFirewalldBackend() (FirewallBackend, error) {
 	conn, err := getConn()
 	if err != nil {
 		return nil, err

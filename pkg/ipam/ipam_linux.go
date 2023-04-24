@@ -19,11 +19,11 @@ import (
 	"net"
 	"os"
 
+	"github.com/vishvananda/netlink"
+
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
-
-	"github.com/vishvananda/netlink"
 )
 
 const (
@@ -44,7 +44,7 @@ func ConfigureIface(ifName string, res *current.Result) error {
 	}
 
 	var v4gw, v6gw net.IP
-	var has_enabled_ipv6 bool = false
+	hasEnabledIpv6 := false
 	for _, ipc := range res.IPs {
 		if ipc.Interface == nil {
 			continue
@@ -57,7 +57,7 @@ func ConfigureIface(ifName string, res *current.Result) error {
 
 		// Make sure sysctl "disable_ipv6" is 0 if we are about to add
 		// an IPv6 address to the interface
-		if !has_enabled_ipv6 && ipc.Address.IP.To4() == nil {
+		if !hasEnabledIpv6 && ipc.Address.IP.To4() == nil {
 			// Enabled IPv6 for loopback "lo" and the interface
 			// being configured
 			for _, iface := range [2]string{"lo", ifName} {
@@ -79,7 +79,7 @@ func ConfigureIface(ifName string, res *current.Result) error {
 					return fmt.Errorf("failed to enable IPv6 for interface %q (%s=%s): %v", iface, ipv6SysctlValueName, value, err)
 				}
 			}
-			has_enabled_ipv6 = true
+			hasEnabledIpv6 = true
 		}
 
 		addr := &netlink.Addr{IPNet: &ipc.Address, Label: ""}

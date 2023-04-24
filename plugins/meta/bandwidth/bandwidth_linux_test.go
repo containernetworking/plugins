@@ -22,6 +22,9 @@ import (
 	"os"
 	"time"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gexec"
 	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/cni/pkg/invoke"
@@ -30,13 +33,9 @@ import (
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/gexec"
 )
 
-func buildOneConfig(name, cniVersion string, orig *PluginConf, prevResult types.Result) (*PluginConf, []byte, error) {
+func buildOneConfig(name, cniVersion string, orig *PluginConf, prevResult types.Result) ([]byte, error) {
 	var err error
 
 	inject := map[string]interface{}{
@@ -55,12 +54,12 @@ func buildOneConfig(name, cniVersion string, orig *PluginConf, prevResult types.
 
 	confBytes, err := json.Marshal(orig)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	err = json.Unmarshal(confBytes, &config)
 	if err != nil {
-		return nil, nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
+		return nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
 	}
 
 	for key, value := range inject {
@@ -69,16 +68,15 @@ func buildOneConfig(name, cniVersion string, orig *PluginConf, prevResult types.
 
 	newBytes, err := json.Marshal(config)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	conf := &PluginConf{}
 	if err := json.Unmarshal(newBytes, &conf); err != nil {
-		return nil, nil, fmt.Errorf("error parsing configuration: %s", err)
+		return nil, fmt.Errorf("error parsing configuration: %s", err)
 	}
 
-	return conf, newBytes, nil
-
+	return newBytes, nil
 }
 
 var _ = Describe("bandwidth test", func() {
@@ -221,7 +219,6 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 					return nil
 				})).To(Succeed())
-
 			})
 
 			It(fmt.Sprintf("[%s] does not apply ingress when disabled", ver), func() {
@@ -289,7 +286,6 @@ var _ = Describe("bandwidth test", func() {
 
 					return nil
 				})).To(Succeed())
-
 			})
 
 			It(fmt.Sprintf("[%s] does not apply egress when disabled", ver), func() {
@@ -359,7 +355,6 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(35)))
 					return nil
 				})).To(Succeed())
-
 			})
 
 			It(fmt.Sprintf("[%s] fails an invalid ingress config", ver), func() {
@@ -507,7 +502,6 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 					return nil
 				})).To(Succeed())
-
 			})
 
 			It(fmt.Sprintf("[%s] should apply static config when both static config and runtime config exist", ver), func() {
@@ -620,7 +614,6 @@ var _ = Describe("bandwidth test", func() {
 
 					return nil
 				})).To(Succeed())
-
 			})
 		})
 
@@ -730,7 +723,6 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 					return nil
 				})).To(Succeed())
-
 			})
 
 			It(fmt.Sprintf("[%s] should fail when container interface has no veth peer", ver), func() {
@@ -958,7 +950,7 @@ var _ = Describe("bandwidth test", func() {
 						EgressRate:   rateInBits,
 					}
 					tbfPluginConf.Type = "bandwidth"
-					_, newConfBytes, err := buildOneConfig("myBWnet", ver, tbfPluginConf, containerWithTbfResult)
+					newConfBytes, err := buildOneConfig("myBWnet", ver, tbfPluginConf, containerWithTbfResult)
 					Expect(err).NotTo(HaveOccurred())
 
 					args := &skel.CmdArgs{
@@ -985,7 +977,7 @@ var _ = Describe("bandwidth test", func() {
 						}
 						checkConf.Type = "bandwidth"
 
-						_, newCheckBytes, err := buildOneConfig("myBWnet", ver, checkConf, result)
+						newCheckBytes, err := buildOneConfig("myBWnet", ver, checkConf, result)
 						Expect(err).NotTo(HaveOccurred())
 
 						args = &skel.CmdArgs{
@@ -995,7 +987,7 @@ var _ = Describe("bandwidth test", func() {
 							StdinData:   newCheckBytes,
 						}
 
-						err = testutils.CmdCheck(containerWithTbfNS.Path(), args.ContainerID, "", newCheckBytes, func() error { return cmdCheck(args) })
+						err = testutils.CmdCheck(containerWithTbfNS.Path(), args.ContainerID, "", func() error { return cmdCheck(args) })
 						Expect(err).NotTo(HaveOccurred())
 					}
 
@@ -1003,10 +995,8 @@ var _ = Describe("bandwidth test", func() {
 				})).To(Succeed())
 
 				By("starting a tcp server on both containers")
-				portServerWithTbf, echoServerWithTbf, err = startEchoServerInNamespace(containerWithTbfNS)
-				Expect(err).NotTo(HaveOccurred())
-				portServerWithoutTbf, echoServerWithoutTbf, err = startEchoServerInNamespace(containerWithoutTbfNS)
-				Expect(err).NotTo(HaveOccurred())
+				portServerWithTbf, echoServerWithTbf = startEchoServerInNamespace(containerWithTbfNS)
+				portServerWithoutTbf, echoServerWithoutTbf = startEchoServerInNamespace(containerWithoutTbfNS)
 			})
 
 			AfterEach(func() {
@@ -1035,7 +1025,7 @@ var _ = Describe("bandwidth test", func() {
 						result, err := types100.GetResult(containerWithTbfRes)
 						Expect(err).NotTo(HaveOccurred())
 
-						makeTcpClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithTbf, packetInBytes)
+						makeTCPClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithTbf, packetInBytes)
 					})
 				})
 
@@ -1044,7 +1034,7 @@ var _ = Describe("bandwidth test", func() {
 						result, err := types100.GetResult(containerWithoutTbfRes)
 						Expect(err).NotTo(HaveOccurred())
 
-						makeTcpClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithoutTbf, packetInBytes)
+						makeTCPClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithoutTbf, packetInBytes)
 					})
 				})
 

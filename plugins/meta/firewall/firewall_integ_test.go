@@ -22,12 +22,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
 	"github.com/containernetworking/cni/libcni"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
 // The integration tests expect the "firewall" binary to be present in $PATH.

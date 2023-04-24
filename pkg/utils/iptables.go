@@ -133,7 +133,6 @@ func InsertUnique(ipt *iptables.IPTables, table, chain string, prepend bool, rul
 
 	if prepend {
 		return ipt.Insert(table, chain, 1, rule...)
-	} else {
-		return ipt.Append(table, chain, rule...)
 	}
+	return ipt.Append(table, chain, rule...)
 }

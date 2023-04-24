@@ -22,6 +22,10 @@ import (
 	"strings"
 	"syscall"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	types020 "github.com/containernetworking/cni/pkg/types/020"
@@ -29,16 +33,13 @@ import (
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-
-	"github.com/vishvananda/netlink"
-
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
-const MASTER_NAME = "eth0"
-const MASTER_NAME_INCONTAINER = "eth1"
+const (
+	MASTER_NAME             = "eth0"
+	MASTER_NAME_INCONTAINER = "eth1"
+)
 
 type Net struct {
 	Name          string                 `json:"name"`
@@ -92,7 +93,6 @@ func buildOneConfig(cniVersion string, master string, orig *Net, prevResult type
 	}
 
 	return conf, nil
-
 }
 
 func ipvlanAddCheckDelTest(conf, masterName string, originalNS, targetNS ns.NetNS) {
@@ -141,7 +141,7 @@ func ipvlanAddCheckDelTest(conf, masterName string, originalNS, targetNS ns.NetN
 
 		addrs, err := netlink.AddrList(link, syscall.AF_INET)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(len(addrs)).To(Equal(1))
+		Expect(addrs).To(HaveLen(1))
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
@@ -206,9 +206,11 @@ type tester interface {
 
 type testerBase struct{}
 
-type testerV10x testerBase
-type testerV04x testerBase
-type testerV02x testerBase
+type (
+	testerV10x testerBase
+	testerV04x testerBase
+	testerV02x testerBase
+)
 
 func newTesterByVersion(version string) tester {
 	switch {
@@ -228,9 +230,9 @@ func (t *testerV10x) verifyResult(result types.Result, name string) string {
 	r, err := types100.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(len(r.Interfaces)).To(Equal(1))
+	Expect(r.Interfaces).To(HaveLen(1))
 	Expect(r.Interfaces[0].Name).To(Equal(name))
-	Expect(len(r.IPs)).To(Equal(1))
+	Expect(r.IPs).To(HaveLen(1))
 
 	return r.Interfaces[0].Mac
 }
@@ -240,15 +242,15 @@ func (t *testerV04x) verifyResult(result types.Result, name string) string {
 	r, err := types040.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(len(r.Interfaces)).To(Equal(1))
+	Expect(r.Interfaces).To(HaveLen(1))
 	Expect(r.Interfaces[0].Name).To(Equal(name))
-	Expect(len(r.IPs)).To(Equal(1))
+	Expect(r.IPs).To(HaveLen(1))
 
 	return r.Interfaces[0].Mac
 }
 
 // verifyResult minimally verifies the Result and returns the interface's MAC address
-func (t *testerV02x) verifyResult(result types.Result, name string) string {
+func (t *testerV02x) verifyResult(result types.Result, _ string) string {
 	r, err := types020.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -324,7 +326,7 @@ var _ = Describe("ipvlan Operations", func() {
 		if inContainer {
 			masterInterface = MASTER_NAME_INCONTAINER
 		}
-		//for _, ver := range testutils.AllSpecVersions {
+		// for _, ver := range testutils.AllSpecVersions {
 		for _, ver := range [...]string{"1.0.0"} {
 			// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
 			// See Gingkgo's "Patterns for dynamically generating tests" documentation.
@@ -471,8 +473,8 @@ var _ = Describe("ipvlan Operations", func() {
 					err = netlink.LinkSetUp(link)
 					Expect(err).NotTo(HaveOccurred())
 
-					var address = &net.IPNet{IP: net.IPv4(192, 0, 0, 1), Mask: net.CIDRMask(24, 32)}
-					var addr = &netlink.Addr{IPNet: address}
+					address := &net.IPNet{IP: net.IPv4(192, 0, 0, 1), Mask: net.CIDRMask(24, 32)}
+					addr := &netlink.Addr{IPNet: address}
 					err = netlink.AddrAdd(link, addr)
 					Expect(err).NotTo(HaveOccurred())
 

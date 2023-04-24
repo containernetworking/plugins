@@ -104,7 +104,6 @@ func TeardownIPMasq(ipn *net.IPNet, chain string, comment string) error {
 	err = ipt.ClearChain("nat", chain)
 	if err != nil && !isNotExist(err) {
 		return err
-
 	}
 
 	err = ipt.DeleteChain("nat", chain)

@@ -15,27 +15,22 @@
 package main
 
 import (
-	"math/rand"
 	"net"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"testing"
 
-	"github.com/containernetworking/plugins/pkg/ns"
-
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
 
-	"testing"
+	"github.com/containernetworking/plugins/pkg/ns"
 )
 
 func TestPortmap(t *testing.T) {
-	rand.Seed(config.GinkgoConfig.RandomSeed)
-
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "plugins/meta/portmap")
 }
@@ -67,7 +62,7 @@ func startInNetNS(binPath string, netNS ns.NetNS) (*gexec.Session, error) {
 	return session, err
 }
 
-func StartEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session, error) {
+func StartEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session) {
 	session, err := startInNetNS(echoServerBinaryPath, netNS)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -78,5 +73,5 @@ func StartEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session, error) {
 
 	port, err := strconv.Atoi(portString)
 	Expect(err).NotTo(HaveOccurred())
-	return port, session, nil
+	return port, session
 }

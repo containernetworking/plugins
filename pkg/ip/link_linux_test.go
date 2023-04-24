@@ -20,21 +20,14 @@ import (
 	"fmt"
 	"net"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-
-	"github.com/vishvananda/netlink"
 )
-
-func getHwAddr(linkname string) string {
-	veth, err := netlink.LinkByName(linkname)
-	Expect(err).NotTo(HaveOccurred())
-	return fmt.Sprintf("%s", veth.Attrs().HardwareAddr)
-}
 
 var _ = Describe("Link", func() {
 	const (
@@ -64,7 +57,7 @@ var _ = Describe("Link", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fakeBytes := make([]byte, 20)
-		//to be reset in AfterEach block
+		// to be reset in AfterEach block
 		rand.Reader = bytes.NewReader(fakeBytes)
 
 		_ = containerNetNS.Do(func(ns.NetNS) error {
@@ -181,7 +174,7 @@ var _ = Describe("Link", func() {
 
 	Context("when there is no name available for the host-side", func() {
 		BeforeEach(func() {
-			//adding different interface to container ns
+			// adding different interface to container ns
 			containerVethName += "0"
 		})
 		It("returns useful error", func() {
@@ -197,7 +190,7 @@ var _ = Describe("Link", func() {
 
 	Context("when there is no name conflict for the host or container interfaces", func() {
 		BeforeEach(func() {
-			//adding different interface to container and host ns
+			// adding different interface to container and host ns
 			containerVethName += "0"
 			rand.Reader = originalRandReader
 		})
@@ -211,7 +204,7 @@ var _ = Describe("Link", func() {
 				return nil
 			})
 
-			//verify veths are in different namespaces
+			// verify veths are in different namespaces
 			_ = containerNetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
@@ -290,7 +283,7 @@ var _ = Describe("Link", func() {
 			// this will delete the host endpoint too
 			addr, err := ip.DelLinkByNameAddr(containerVethName)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(addr).To(HaveLen(0))
+			Expect(addr).To(BeEmpty())
 			return nil
 		})
 	})

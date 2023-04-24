@@ -21,13 +21,13 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/vishvananda/netlink"
+
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/vishvananda/netlink"
 )
 
 func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) error {
-
 	// Ensure ips
 	for _, ips := range resultIPs {
 		ourAddr := netlink.Addr{IPNet: &ips.Address}
@@ -49,12 +49,15 @@ func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) 
 				break
 			}
 		}
-		if match == false {
+		if !match {
 			return fmt.Errorf("Failed to match addr %v on interface %v", ourAddr, ifName)
 		}
 
 		// Convert the host/prefixlen to just prefix for route lookup.
 		_, ourPrefix, err := net.ParseCIDR(ourAddr.String())
+		if err != nil {
+			return err
+		}
 
 		findGwy := &netlink.Route{Dst: ourPrefix}
 		routeFilter := netlink.RT_FILTER_DST
@@ -77,11 +80,13 @@ func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) 
 }
 
 func ValidateExpectedRoute(resultRoutes []*types.Route) error {
-
 	// Ensure that each static route in prevResults is found in the routing table
 	for _, route := range resultRoutes {
 		find := &netlink.Route{Dst: &route.Dst, Gw: route.GW}
-		routeFilter := netlink.RT_FILTER_DST | netlink.RT_FILTER_GW
+		routeFilter := netlink.RT_FILTER_DST
+		if route.GW != nil {
+			routeFilter |= netlink.RT_FILTER_GW
+		}
 		var family int
 
 		switch {

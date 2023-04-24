@@ -35,14 +35,15 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
-const defaultDataDir = "/run/cni/tuning"
-const defaultAllowlistDir = "/etc/cni/tuning/"
-const defaultAllowlistFile = "allowlist.conf"
+const (
+	defaultDataDir       = "/run/cni/tuning"
+	defaultAllowlistDir  = "/etc/cni/tuning/"
+	defaultAllowlistFile = "allowlist.conf"
+)
 
 // TuningConf represents the network tuning configuration.
 type TuningConf struct {
@@ -225,7 +226,7 @@ func createBackup(ifName, containerID, backupPath string, tuningConf *TuningConf
 	}
 
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
-		if err = os.MkdirAll(backupPath, 0600); err != nil {
+		if err = os.MkdirAll(backupPath, 0o600); err != nil {
 			return fmt.Errorf("failed to create backup directory: %v", err)
 		}
 	}
@@ -234,7 +235,7 @@ func createBackup(ifName, containerID, backupPath string, tuningConf *TuningConf
 	if err != nil {
 		return fmt.Errorf("failed to marshall data for %q: %v", ifName, err)
 	}
-	if err = os.WriteFile(path.Join(backupPath, containerID+"_"+ifName+".json"), data, 0600); err != nil {
+	if err = os.WriteFile(path.Join(backupPath, containerID+"_"+ifName+".json"), data, 0o600); err != nil {
 		return fmt.Errorf("failed to save file %s.json: %v", ifName, err)
 	}
 
@@ -255,7 +256,7 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 	}
 
 	config := configToRestore{}
-	if err = json.Unmarshal([]byte(file), &config); err != nil {
+	if err = json.Unmarshal(file, &config); err != nil {
 		return nil
 	}
 
@@ -333,7 +334,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		for key, value := range tuningConf.SysCtl {
-			key = strings.Replace(key, ".", string(os.PathSeparator), -1)
+			key = strings.ReplaceAll(key, ".", string(os.PathSeparator))
 
 			// If the key contains `IFNAME` - substitute it with args.IfName
 			// to allow setting sysctls on a particular interface, on which
@@ -348,7 +349,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return fmt.Errorf("invalid net sysctl key: %q", key)
 			}
 			content := []byte(value)
-			err := os.WriteFile(fileName, content, 0644)
+			err := os.WriteFile(fileName, content, 0o644)
 			if err != nil {
 				return err
 			}
@@ -368,7 +369,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			updateResultsMacAddr(tuningConf, args.IfName, tuningConf.Mac)
 		}
 
-		if tuningConf.Promisc != false {
+		if tuningConf.Promisc {
 			if err = changePromisc(args.IfName, true); err != nil {
 				return err
 			}
@@ -438,7 +439,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		// Check each configured value vs what's currently in the container
 		for key, confValue := range tuningConf.SysCtl {
-			fileName := filepath.Join("/proc/sys", strings.Replace(key, ".", "/", -1))
+			fileName := filepath.Join("/proc/sys", strings.ReplaceAll(key, ".", "/"))
 
 			contents, err := os.ReadFile(fileName)
 			if err != nil {
@@ -507,13 +508,13 @@ func validateSysctlConf(tuningConf *TuningConf) error {
 	if !isPresent {
 		return nil
 	}
-	for sysctl, _ := range tuningConf.SysCtl {
+	for sysctl := range tuningConf.SysCtl {
 		match, err := contains(sysctl, allowlist)
 		if err != nil {
 			return err
 		}
 		if !match {
-			return errors.New(fmt.Sprintf("Sysctl %s is not allowed. Only the following sysctls are allowed: %+v", sysctl, allowlist))
+			return fmt.Errorf("Sysctl %s is not allowed. Only the following sysctls are allowed: %+v", sysctl, allowlist)
 		}
 	}
 	return nil
@@ -578,7 +579,7 @@ func validateSysctlConflictingKeys(data []byte) error {
 
 func validateArgs(args *skel.CmdArgs) error {
 	if strings.Contains(args.IfName, string(os.PathSeparator)) {
-		return errors.New(fmt.Sprintf("Interface name (%s) contains an invalid character %s", args.IfName, string(os.PathSeparator)))
+		return fmt.Errorf("Interface name (%s) contains an invalid character %s", args.IfName, string(os.PathSeparator))
 	}
 	return nil
 }

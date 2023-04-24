@@ -23,6 +23,10 @@ import (
 	"strings"
 	"syscall"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	types020 "github.com/containernetworking/cni/pkg/types/020"
@@ -31,11 +35,6 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
-
-	"github.com/vishvananda/netlink"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
 const MASTER_NAME = "eth0"
@@ -89,7 +88,6 @@ func buildOneConfig(netName string, cniVersion string, orig *Net, prevResult typ
 	}
 
 	return conf, nil
-
 }
 
 type tester interface {
@@ -99,10 +97,12 @@ type tester interface {
 
 type testerBase struct{}
 
-type testerV10x testerBase
-type testerV04x testerBase
-type testerV03x testerBase
-type testerV01xOr02x testerBase
+type (
+	testerV10x      testerBase
+	testerV04x      testerBase
+	testerV03x      testerBase
+	testerV01xOr02x testerBase
+)
 
 func newTesterByVersion(version string) tester {
 	switch {
@@ -122,9 +122,9 @@ func (t *testerV10x) verifyResult(result types.Result, name string) string {
 	r, err := types100.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(len(r.Interfaces)).To(Equal(1))
+	Expect(r.Interfaces).To(HaveLen(1))
 	Expect(r.Interfaces[0].Name).To(Equal(name))
-	Expect(len(r.IPs)).To(Equal(1))
+	Expect(r.IPs).To(HaveLen(1))
 
 	return r.Interfaces[0].Mac
 }
@@ -133,9 +133,9 @@ func verify0403(result types.Result, name string) string {
 	r, err := types040.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(len(r.Interfaces)).To(Equal(1))
+	Expect(r.Interfaces).To(HaveLen(1))
 	Expect(r.Interfaces[0].Name).To(Equal(name))
-	Expect(len(r.IPs)).To(Equal(1))
+	Expect(r.IPs).To(HaveLen(1))
 
 	return r.Interfaces[0].Mac
 }
@@ -151,7 +151,7 @@ func (t *testerV03x) verifyResult(result types.Result, name string) string {
 }
 
 // verifyResult minimally verifies the Result and returns the interface's MAC address
-func (t *testerV01xOr02x) verifyResult(result types.Result, name string) string {
+func (t *testerV01xOr02x) verifyResult(result types.Result, _ string) string {
 	r, err := types020.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -210,17 +210,11 @@ var _ = Describe("dummy Operations", func() {
 		ver := ver
 
 		It(fmt.Sprintf("[%s] creates an dummy link in a non-default namespace", ver), func() {
-			conf := &types.NetConf{
-				CNIVersion: ver,
-				Name:       "testConfig",
-				Type:       "dummy",
-			}
-
 			// Create dummy in other namespace
 			err := originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
-				_, err := createDummy(conf, "foobar0", targetNS)
+				_, err := createDummy("foobar0", targetNS)
 				Expect(err).NotTo(HaveOccurred())
 				return nil
 			})
@@ -292,7 +286,7 @@ var _ = Describe("dummy Operations", func() {
 
 				addrs, err := netlink.AddrList(link, syscall.AF_INET)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(len(addrs)).To(Equal(1))
+				Expect(addrs).To(HaveLen(1))
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())

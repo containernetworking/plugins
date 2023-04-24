@@ -31,16 +31,13 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
-var (
-	sysBusPCI = "/sys/bus/pci/devices"
-)
+var sysBusPCI = "/sys/bus/pci/devices"
 
 // Array of different linux drivers bound to network device needed for DPDK
 var userspaceDrivers = []string{"vfio-pci", "uio_pci_generic", "igb_uio"}
@@ -161,10 +158,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	if !cfg.DPDKMode {
 		err = containerNs.Do(func(_ ns.NetNS) error {
-			if err := ipam.ConfigureIface(args.IfName, newResult); err != nil {
-				return err
-			}
-			return nil
+			return ipam.ConfigureIface(args.IfName, newResult)
 		})
 		if err != nil {
 			return err
@@ -325,10 +319,11 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to list node links: %v", err)
 	}
+	switch {
 
-	if len(devname) > 0 {
+	case len(devname) > 0:
 		return netlink.LinkByName(devname)
-	} else if len(hwaddr) > 0 {
+	case len(hwaddr) > 0:
 		hwAddr, err := net.ParseMAC(hwaddr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse MAC address %q: %v", hwaddr, err)
@@ -339,7 +334,7 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) 
 				return link, nil
 			}
 		}
-	} else if len(kernelpath) > 0 {
+	case len(kernelpath) > 0:
 		if !filepath.IsAbs(kernelpath) || !strings.HasPrefix(kernelpath, "/sys/devices/") {
 			return nil, fmt.Errorf("kernel device path %q must be absolute and begin with /sys/devices/", kernelpath)
 		}
@@ -358,7 +353,7 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) 
 				}
 			}
 		}
-	} else if len(pciaddr) > 0 {
+	case len(pciaddr) > 0:
 		netDir := filepath.Join(sysBusPCI, pciaddr, "net")
 		if _, err := os.Lstat(netDir); err != nil {
 			virtioNetDir := filepath.Join(sysBusPCI, pciaddr, "virtio*", "net")
@@ -386,7 +381,6 @@ func main() {
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
-
 	cfg, err := loadConf(args.StdinData)
 	if err != nil {
 		return err
@@ -443,7 +437,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 	//
 	// Check prevResults for ips, routes and dns against values found in the container
 	if err := netns.Do(func(_ ns.NetNS) error {
-
 		// Check interface against values found in the container
 		err := validateCniContainerInterface(contMap)
 		if err != nil {
@@ -469,7 +462,6 @@ func cmdCheck(args *skel.CmdArgs) error {
 }
 
 func validateCniContainerInterface(intf current.Interface) error {
-
 	var link netlink.Link
 	var err error
 

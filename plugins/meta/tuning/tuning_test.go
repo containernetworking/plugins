@@ -21,24 +21,23 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/testutils"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
-	"github.com/vishvananda/netlink"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/containernetworking/cni/pkg/types"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 )
 
-func buildOneConfig(name, cniVersion string, orig *TuningConf, prevResult types.Result) (*TuningConf, []byte, error) {
+func buildOneConfig(cniVersion string, orig *TuningConf, prevResult types.Result) ([]byte, error) {
 	var err error
 
 	inject := map[string]interface{}{
-		"name":       name,
+		"name":       "testConfig",
 		"cniVersion": cniVersion,
 	}
 	// Add previous plugin result
@@ -51,12 +50,12 @@ func buildOneConfig(name, cniVersion string, orig *TuningConf, prevResult types.
 
 	confBytes, err := json.Marshal(orig)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	err = json.Unmarshal(confBytes, &config)
 	if err != nil {
-		return nil, nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
+		return nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
 	}
 
 	for key, value := range inject {
@@ -65,20 +64,19 @@ func buildOneConfig(name, cniVersion string, orig *TuningConf, prevResult types.
 
 	newBytes, err := json.Marshal(config)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	conf := &TuningConf{}
 	if err := json.Unmarshal(newBytes, &conf); err != nil {
-		return nil, nil, fmt.Errorf("error parsing configuration: %s", err)
+		return nil, fmt.Errorf("error parsing configuration: %s", err)
 	}
 
-	return conf, newBytes, nil
-
+	return newBytes, nil
 }
 
 func createSysctlAllowFile(sysctls []string) error {
-	err := os.MkdirAll(defaultAllowlistDir, 0755)
+	err := os.MkdirAll(defaultAllowlistDir, 0o755)
 	if err != nil {
 		return err
 	}
@@ -189,9 +187,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				Expect("/tmp/tuning-test/dummy_dummy0.json").ShouldNot(BeAnExistingFile())
@@ -244,9 +242,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -255,10 +253,10 @@ var _ = Describe("tuning plugin", func() {
 
 				if testutils.SpecVersionHasCHECK(ver) {
 					n := &TuningConf{}
-					err = json.Unmarshal([]byte(conf), &n)
+					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					confString, err := buildOneConfig(ver, n, r)
 					Expect(err).NotTo(HaveOccurred())
 
 					args.StdinData = confString
@@ -325,9 +323,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -386,9 +384,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -397,10 +395,10 @@ var _ = Describe("tuning plugin", func() {
 
 				if testutils.SpecVersionHasCHECK(ver) {
 					n := &TuningConf{}
-					err = json.Unmarshal([]byte(conf), &n)
+					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					confString, err := buildOneConfig(ver, n, r)
 					Expect(err).NotTo(HaveOccurred())
 
 					args.StdinData = confString
@@ -467,9 +465,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -529,9 +527,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				Expect(result.Interfaces[0].Mac).To(Equal(mac))
@@ -543,10 +541,10 @@ var _ = Describe("tuning plugin", func() {
 
 				if testutils.SpecVersionHasCHECK(ver) {
 					n := &TuningConf{}
-					err = json.Unmarshal([]byte(conf), &n)
+					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					confString, err := buildOneConfig(ver, n, r)
 					Expect(err).NotTo(HaveOccurred())
 
 					args.StdinData = confString
@@ -613,9 +611,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -676,9 +674,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -689,10 +687,10 @@ var _ = Describe("tuning plugin", func() {
 
 				if testutils.SpecVersionHasCHECK(ver) {
 					n := &TuningConf{}
-					err = json.Unmarshal([]byte(conf), &n)
+					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					confString, err := buildOneConfig(ver, n, r)
 					Expect(err).NotTo(HaveOccurred())
 
 					args.StdinData = confString
@@ -758,9 +756,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -824,9 +822,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
@@ -841,10 +839,10 @@ var _ = Describe("tuning plugin", func() {
 
 				if testutils.SpecVersionHasCHECK(ver) {
 					n := &TuningConf{}
-					err = json.Unmarshal([]byte(conf), &n)
+					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					confString, err := buildOneConfig(ver, n, r)
 					Expect(err).NotTo(HaveOccurred())
 
 					args.StdinData = confString
@@ -909,21 +907,21 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(link.Attrs().RawFlags&unix.IFF_ALLMULTI != 0).To(BeTrue())
+				Expect(link.Attrs().RawFlags & unix.IFF_ALLMULTI).NotTo(BeZero())
 
 				if testutils.SpecVersionHasCHECK(ver) {
 					n := &TuningConf{}
-					err = json.Unmarshal([]byte(conf), &n)
+					err = json.Unmarshal(conf, &n)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, confString, err := buildOneConfig("testConfig", ver, n, r)
+					confString, err := buildOneConfig(ver, n, r)
 					Expect(err).NotTo(HaveOccurred())
 
 					args.StdinData = confString
@@ -990,14 +988,14 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				link, err := netlink.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(link.Attrs().RawFlags&unix.IFF_ALLMULTI != 0).To(BeTrue())
+				Expect(link.Attrs().RawFlags & unix.IFF_ALLMULTI).NotTo(BeZero())
 
 				err = testutils.CmdDel(originalNS.Path(),
 					args.ContainerID, "", func() error { return cmdDel(args) })
@@ -1110,9 +1108,9 @@ var _ = Describe("tuning plugin", func() {
 				result, err := types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(len(result.Interfaces)).To(Equal(1))
+				Expect(result.Interfaces).To(HaveLen(1))
 				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
-				Expect(len(result.IPs)).To(Equal(1))
+				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				err = testutils.CmdDel(originalNS.Path(),
