@@ -84,7 +84,7 @@ func makeVeth(name, vethPeerName string, mtu int, mac string, hostNS ns.NetNS) (
 		veth, err = makeVethPair(name, peerName, mtu, mac, hostNS)
 		switch {
 		case err == nil:
-			return peerName, veth, err
+			return peerName, veth, nil
 
 		case os.IsExist(err):
 			if peerExists(peerName) && vethPeerName == "" {

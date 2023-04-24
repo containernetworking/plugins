@@ -66,7 +66,7 @@ func startInNetNS(binPath string, netNS ns.NetNS) (*gexec.Session, error) {
 	return session, err
 }
 
-func startEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session, error) {
+func startEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session) {
 	session, err := startInNetNS(echoServerBinaryPath, netNS)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -83,7 +83,7 @@ func startEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session, error) {
 		io.Copy(GinkgoWriter, io.MultiReader(session.Out, session.Err))
 	}()
 
-	return port, session, nil
+	return port, session
 }
 
 func makeTCPClientInNS(netns string, address string, port int, numBytes int) {
