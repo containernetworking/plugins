@@ -21,6 +21,7 @@ package exec
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -41,8 +42,13 @@ const (
 // ReadConfig loads the nftables configuration from the system and
 // returns it as a nftables config structure.
 // The system is expected to have the `nft` executable deployed and nftables enabled in the kernel.
-func ReadConfig() (*nftconfig.Config, error) {
-	stdout, err := execCommand(cmdJSON, cmdList, cmdRuleset)
+func ReadConfig(ctx context.Context, filterCommands ...string) (*nftconfig.Config, error) {
+
+	whatToList := cmdRuleset
+	if len(filterCommands) > 0 {
+		whatToList = strings.Join(filterCommands, " ")
+	}
+	stdout, err := execCommand(ctx, cmdJSON, cmdList, whatToList)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +63,7 @@ func ReadConfig() (*nftconfig.Config, error) {
 
 // ApplyConfig applies the given nftables config on the system.
 // The system is expected to have the `nft` executable deployed and nftables enabled in the kernel.
-func ApplyConfig(c *nftconfig.Config) error {
+func ApplyConfig(ctx context.Context, c *nftconfig.Config) error {
 	data, err := c.ToJSON()
 	if err != nil {
 		return err
@@ -77,15 +83,15 @@ func ApplyConfig(c *nftconfig.Config) error {
 		return fmt.Errorf("failed to close temporary file: %v", err)
 	}
 
-	if _, err := execCommand(cmdJSON, cmdFile, tmpFile.Name()); err != nil {
+	if _, err := execCommand(ctx, cmdJSON, cmdFile, tmpFile.Name()); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func execCommand(args ...string) (*bytes.Buffer, error) {
-	cmd := exec.Command(cmdBin, args...)
+func execCommand(ctx context.Context, args ...string) (*bytes.Buffer, error) {
+	cmd := exec.CommandContext(ctx, cmdBin, args...)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stderr = &stderr

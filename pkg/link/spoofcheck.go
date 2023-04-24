@@ -15,8 +15,10 @@
 package link
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/networkplumbing/go-nft/nft"
 	"github.com/networkplumbing/go-nft/nft/schema"
@@ -29,7 +31,7 @@ const (
 
 type NftConfigurer interface {
 	Apply(*nft.Config) error
-	Read() (*nft.Config, error)
+	Read(filterCommands ...string) (*nft.Config, error)
 }
 
 type SpoofChecker struct {
@@ -45,8 +47,11 @@ func (dnc defaultNftConfigurer) Apply(cfg *nft.Config) error {
 	return nft.ApplyConfig(cfg)
 }
 
-func (dnc defaultNftConfigurer) Read() (*nft.Config, error) {
-	return nft.ReadConfig()
+func (dnc defaultNftConfigurer) Read(filterCommands ...string) (*nft.Config, error) {
+	const timeout = 55 * time.Second
+	ctxWithTimeout, cancelFunc := context.WithTimeout(context.Background(), timeout)
+	defer cancelFunc()
+	return nft.ReadConfigContext(ctxWithTimeout, filterCommands...)
 }
 
 func NewSpoofChecker(iface, macAddress, refID string) *SpoofChecker {
@@ -109,7 +114,7 @@ func (sc *SpoofChecker) Setup() error {
 // interface is removed.
 func (sc *SpoofChecker) Teardown() error {
 	ifaceChain := sc.ifaceChain()
-	currentConfig, ifaceMatchRuleErr := sc.configurer.Read()
+	currentConfig, ifaceMatchRuleErr := sc.configurer.Read(listChainBridgeNatPrerouting()...)
 	if ifaceMatchRuleErr == nil {
 		expectedRuleToFind := sc.matchIfaceJumpToChainRule(preRoutingBaseChainName, ifaceChain.Name)
 		// It is safer to exclude the statement matching, avoiding cases where a current statement includes
@@ -240,4 +245,8 @@ func (sc *SpoofChecker) macChain(ifaceChainName string) *schema.Chain {
 func ruleComment(id string) string {
 	const refIDPrefix = "macspoofchk-"
 	return refIDPrefix + id
+}
+
+func listChainBridgeNatPrerouting() []string {
+	return []string{"chain", "bridge", natTableName, preRoutingBaseChainName}
 }

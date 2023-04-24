@@ -288,7 +288,7 @@ func (a *configurerStub) Apply(c *nft.Config) error {
 	return nil
 }
 
-func (a *configurerStub) Read() (*nft.Config, error) {
+func (a *configurerStub) Read(_ ...string) (*nft.Config, error) {
 	if a.failReadConfig {
 		return nil, fmt.Errorf(errorReadText)
 	}
