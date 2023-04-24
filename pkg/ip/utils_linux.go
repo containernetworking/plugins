@@ -83,7 +83,10 @@ func ValidateExpectedRoute(resultRoutes []*types.Route) error {
 	// Ensure that each static route in prevResults is found in the routing table
 	for _, route := range resultRoutes {
 		find := &netlink.Route{Dst: &route.Dst, Gw: route.GW}
-		routeFilter := netlink.RT_FILTER_DST | netlink.RT_FILTER_GW
+		routeFilter := netlink.RT_FILTER_DST
+		if route.GW != nil {
+			routeFilter |= netlink.RT_FILTER_GW
+		}
 		var family int
 
 		switch {
