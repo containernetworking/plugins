@@ -15,7 +15,6 @@
 package ns_test
 
 import (
-	"math/rand"
 	"runtime"
 	"testing"
 
@@ -24,7 +23,6 @@ import (
 )
 
 func TestNs(t *testing.T) {
-	rand.Seed(GinkgoRandomSeed())
 	runtime.LockOSThread()
 
 	RegisterFailHandler(Fail)
