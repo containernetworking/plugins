@@ -113,6 +113,25 @@ var _ = Describe("spoofcheck", func() {
 			)))
 		})
 	})
+
+	Context("echo", func() {
+		It("succeeds, no read called", func() {
+			c := configurerStub{}
+			sc := link.NewSpoofCheckerWithConfigurer(iface, mac, id, &c)
+			Expect(sc.Setup()).To(Succeed())
+			Expect(sc.Teardown()).To(Succeed())
+			Expect(c.readCalled).To(BeFalse())
+		})
+
+		It("succeeds, fall back to config read", func() {
+			c := configurerStub{applyReturnNil: true}
+			sc := link.NewSpoofCheckerWithConfigurer(iface, mac, id, &c)
+			Expect(sc.Setup()).To(Succeed())
+			c.readConfig = c.applyConfig[0]
+			Expect(sc.Teardown()).To(Succeed())
+			Expect(c.readCalled).To(BeTrue())
+		})
+	})
 })
 
 func assertExpectedRegularChainsDeletionInTeardownConfig(action configurerStub) {
@@ -274,21 +293,28 @@ type configurerStub struct {
 	failFirstApplyConfig  bool
 	failSecondApplyConfig bool
 	failReadConfig        bool
+
+	applyReturnNil bool
+	readCalled     bool
 }
 
-func (a *configurerStub) Apply(c *nft.Config) error {
+func (a *configurerStub) Apply(c *nft.Config) (*nft.Config, error) {
 	a.applyCounter++
 	if a.failFirstApplyConfig && a.applyCounter == 1 {
-		return fmt.Errorf(errorFirstApplyText)
+		return nil, fmt.Errorf(errorFirstApplyText)
 	}
 	if a.failSecondApplyConfig && a.applyCounter == 2 {
-		return fmt.Errorf(errorSecondApplyText)
+		return nil, fmt.Errorf(errorSecondApplyText)
 	}
 	a.applyConfig = append(a.applyConfig, c)
-	return nil
+	if a.applyReturnNil {
+		return nil, nil
+	}
+	return c, nil
 }
 
 func (a *configurerStub) Read(_ ...string) (*nft.Config, error) {
+	a.readCalled = true
 	if a.failReadConfig {
 		return nil, fmt.Errorf(errorReadText)
 	}
