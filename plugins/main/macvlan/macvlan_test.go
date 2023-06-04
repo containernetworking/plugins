@@ -880,6 +880,98 @@ var _ = Describe("macvlan Operations", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 			})
+			if testutils.SpecVersionHasChaining(ver) {
+				It(fmt.Sprintf("[%s] configures and deconfigures an l2 macvlan link with ADD/DEL when chained", ver), func() {
+					const IFNAME = "macvl0"
+					conf := fmt.Sprintf(`{
+						"cniVersion": "%s",
+						"name": "mynet",
+						"type": "macvlan",
+						%s
+						"prevResult": {
+							"interfaces": [
+								{
+									"name": "%s"
+								}
+							],
+							"ips": [
+								{
+									"version": "4",
+									"address": "10.1.2.2/24",
+									"gateway": "10.1.2.1",
+									"interface": 0
+								}
+							],
+							"routes": []
+						}
+					}`, ver, linkInContainer, masterInterface)
+					args := &skel.CmdArgs{
+						ContainerID: "dummy",
+						Netns:       targetNS.Path(),
+						IfName:      IFNAME,
+						StdinData:   []byte(conf),
+					}
+
+					var macAddress string
+					err := originalNS.Do(func(ns.NetNS) error {
+						defer GinkgoRecover()
+
+						result, _, err := testutils.CmdAddWithArgs(args, func() error {
+							return cmdAdd(args)
+						})
+
+						t := newTesterByVersion(ver)
+						macAddress = t.verifyResult(result, err, IFNAME, 0)
+						return nil
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					// Make sure macvlan link exists in the target namespace
+					err = targetNS.Do(func(ns.NetNS) error {
+						defer GinkgoRecover()
+
+						link, err := netlink.LinkByName(IFNAME)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(link.Attrs().Name).To(Equal(IFNAME))
+
+						if macAddress != "" {
+							hwaddr, err := net.ParseMAC(macAddress)
+							Expect(err).NotTo(HaveOccurred())
+							Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
+						}
+
+						addrs, err := netlink.AddrList(link, syscall.AF_INET)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(addrs).To(BeEmpty())
+						return nil
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					err = originalNS.Do(func(ns.NetNS) error {
+						defer GinkgoRecover()
+
+						err := testutils.CmdDelWithArgs(args, func() error {
+							return cmdDel(args)
+						})
+						Expect(err).NotTo(HaveOccurred())
+						return nil
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					// Make sure macvlan link has been deleted
+					err = targetNS.Do(func(ns.NetNS) error {
+						defer GinkgoRecover()
+
+						link, err := netlink.LinkByName(IFNAME)
+						Expect(err).To(HaveOccurred())
+						Expect(link).To(BeNil())
+						return nil
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+				})
+			}
+
 		}
 	}
 })
