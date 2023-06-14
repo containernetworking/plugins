@@ -332,9 +332,17 @@ var _ = Describe("DHCP Operations", func() {
 					started.Done()
 					started.Wait()
 
-					err = originalNS.Do(func(ns.NetNS) error {
+					err := originalNS.Do(func(ns.NetNS) error {
 						return testutils.CmdDelWithArgs(args, func() error {
-							return cmdDel(args)
+							copiedArgs := &skel.CmdArgs{
+								ContainerID: args.ContainerID,
+								Netns:       args.Netns,
+								IfName:      args.IfName,
+								StdinData:   args.StdinData,
+								Path:        args.Path,
+								Args:        args.Args,
+							}
+							return cmdDel(copiedArgs)
 						})
 					})
 					Expect(err).NotTo(HaveOccurred())

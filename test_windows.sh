@@ -17,4 +17,4 @@ for d in $PLUGINS; do
 done
 
 echo "testing packages $PKGS"
-go test -v $PKGS -ginkgo.randomizeAllSpecs -ginkgo.failOnPending -ginkgo.progress
+go test -race -v $PKGS -ginkgo.randomizeAllSpecs -ginkgo.failOnPending -ginkgo.progress
