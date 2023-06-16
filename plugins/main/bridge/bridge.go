@@ -60,6 +60,7 @@ type NetConf struct {
 	PreserveDefaultVlan bool         `json:"preserveDefaultVlan"`
 	MacSpoofChk         bool         `json:"macspoofchk,omitempty"`
 	EnableDad           bool         `json:"enabledad,omitempty"`
+	EnableSLAAC         bool         `json:"enableSlaac"`
 
 	Args struct {
 		Cni BridgeArgs `json:"cni,omitempty"`
@@ -391,7 +392,7 @@ func ensureVlanInterface(br *netlink.Bridge, vlanID int, preserveDefaultVlan boo
 			return nil, fmt.Errorf("faild to find host namespace: %v", err)
 		}
 
-		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanID, nil, preserveDefaultVlan, "")
+		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanID, nil, preserveDefaultVlan, "", true)
 		if err != nil {
 			return nil, fmt.Errorf("faild to create vlan gateway %q: %v", name, err)
 		}
@@ -410,7 +411,7 @@ func ensureVlanInterface(br *netlink.Bridge, vlanID int, preserveDefaultVlan boo
 	return brGatewayVeth, nil
 }
 
-func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairpinMode bool, vlanID int, vlans []int, preserveDefaultVlan bool, mac string) (*current.Interface, *current.Interface, error) {
+func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairpinMode bool, vlanID int, vlans []int, preserveDefaultVlan bool, mac string, enableSlaac bool) (*current.Interface, *current.Interface, error) {
 	contIface := &current.Interface{}
 	hostIface := &current.Interface{}
 
@@ -424,6 +425,14 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 		contIface.Mac = containerVeth.HardwareAddr.String()
 		contIface.Sandbox = netns.Path()
 		hostIface.Name = hostVeth.Name
+
+		// disable SLAAC, we want to control the containers IP addresses and routes
+		if enableSlaac == false {
+			_, _ = sysctl.Sysctl("net/ipv6/conf/all/accept_ra", "0")
+			_, _ = sysctl.Sysctl("net/ipv6/conf/default/accept_ra", "0")
+			_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv6/conf/%s/accept_ra", contIface.Name), "0")
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -549,7 +558,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan, n.vlans, n.PreserveDefaultVlan, n.mac)
+	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan, n.vlans, n.PreserveDefaultVlan, n.mac, n.EnableSLAAC)
 	if err != nil {
 		return err
 	}
