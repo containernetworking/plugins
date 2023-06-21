@@ -53,6 +53,7 @@ type TuningConf struct {
 	Mac      string            `json:"mac,omitempty"`
 	Promisc  bool              `json:"promisc,omitempty"`
 	Mtu      int               `json:"mtu,omitempty"`
+	TxQLen   *int              `json:"txQLen,omitempty"`
 	Allmulti *bool             `json:"allmulti,omitempty"`
 
 	RuntimeConfig struct {
@@ -69,6 +70,7 @@ type IPAMArgs struct {
 	Promisc  *bool              `json:"promisc,omitempty"`
 	Mtu      *int               `json:"mtu,omitempty"`
 	Allmulti *bool              `json:"allmulti,omitempty"`
+	TxQLen   *int               `json:"txQLen,omitempty"`
 }
 
 // configToRestore will contain interface attributes that should be restored on cmdDel
@@ -77,6 +79,7 @@ type configToRestore struct {
 	Promisc  *bool  `json:"promisc,omitempty"`
 	Mtu      int    `json:"mtu,omitempty"`
 	Allmulti *bool  `json:"allmulti,omitempty"`
+	TxQLen   *int   `json:"txQLen,omitempty"`
 }
 
 // MacEnvArgs represents CNI_ARG
@@ -135,6 +138,10 @@ func parseConf(data []byte, envArgs string) (*TuningConf, error) {
 
 		if conf.Args.A.Allmulti != nil {
 			conf.Allmulti = conf.Args.A.Allmulti
+		}
+
+		if conf.Args.A.TxQLen != nil {
+			conf.TxQLen = conf.Args.A.TxQLen
 		}
 	}
 
@@ -204,6 +211,14 @@ func changeAllmulti(ifName string, val bool) error {
 	return netlink.LinkSetAllmulticastOff(link)
 }
 
+func changeTxQLen(ifName string, txQLen int) error {
+	link, err := netlink.LinkByName(ifName)
+	if err != nil {
+		return fmt.Errorf("failed to get %q: %v", ifName, err)
+	}
+	return netlink.LinkSetTxQLen(link, txQLen)
+}
+
 func createBackup(ifName, containerID, backupPath string, tuningConf *TuningConf) error {
 	config := configToRestore{}
 	link, err := netlink.LinkByName(ifName)
@@ -223,6 +238,10 @@ func createBackup(ifName, containerID, backupPath string, tuningConf *TuningConf
 	if tuningConf.Allmulti != nil {
 		config.Allmulti = new(bool)
 		*config.Allmulti = (link.Attrs().RawFlags&unix.IFF_ALLMULTI != 0)
+	}
+	if tuningConf.TxQLen != nil {
+		qlen := link.Attrs().TxQLen
+		config.TxQLen = &qlen
 	}
 
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
@@ -292,6 +311,13 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 		}
 	}
 
+	if config.TxQLen != nil {
+		if err = changeTxQLen(ifName, *config.TxQLen); err != nil {
+			err = fmt.Errorf("failed to restore transmit queue length: %v", err)
+			errStr = append(errStr, err.Error())
+		}
+	}
+
 	if len(errStr) > 0 {
 		return fmt.Errorf(strings.Join(errStr, "; "))
 	}
@@ -346,7 +372,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 
-		if tuningConf.Mac != "" || tuningConf.Mtu != 0 || tuningConf.Promisc || tuningConf.Allmulti != nil {
+		if tuningConf.Mac != "" || tuningConf.Mtu != 0 || tuningConf.Promisc || tuningConf.Allmulti != nil || tuningConf.TxQLen != nil {
 			if err = createBackup(args.IfName, args.ContainerID, tuningConf.DataDir, tuningConf); err != nil {
 				return err
 			}
@@ -374,6 +400,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		if tuningConf.Allmulti != nil {
 			if err = changeAllmulti(args.IfName, *tuningConf.Allmulti); err != nil {
+				return err
+			}
+		}
+
+		if tuningConf.TxQLen != nil {
+			if err = changeTxQLen(args.IfName, *tuningConf.TxQLen); err != nil {
 				return err
 			}
 		}
@@ -481,6 +513,13 @@ func cmdCheck(args *skel.CmdArgs) error {
 			if allmulti != *tuningConf.Allmulti {
 				return fmt.Errorf("Error: Tuning configured all-multicast mode of %s is %v, current value is %v",
 					args.IfName, tuningConf.Allmulti, allmulti)
+			}
+		}
+
+		if tuningConf.TxQLen != nil {
+			if *tuningConf.TxQLen != link.Attrs().TxQLen {
+				return fmt.Errorf("Error: Tuning configured Transmit Queue Length of %s is %d, current value is %d",
+					args.IfName, tuningConf.TxQLen, link.Attrs().TxQLen)
 			}
 		}
 		return nil
