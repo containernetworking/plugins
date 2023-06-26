@@ -230,14 +230,14 @@ func createBackup(ifName, containerID, backupPath string, tuningConf *TuningConf
 	}
 	if tuningConf.Promisc {
 		config.Promisc = new(bool)
-		*config.Promisc = (link.Attrs().Promisc != 0)
+		*config.Promisc = link.Attrs().Promisc != 0
 	}
 	if tuningConf.Mtu != 0 {
 		config.Mtu = link.Attrs().MTU
 	}
 	if tuningConf.Allmulti != nil {
 		config.Allmulti = new(bool)
-		*config.Allmulti = (link.Attrs().RawFlags&unix.IFF_ALLMULTI != 0)
+		*config.Allmulti = link.Attrs().RawFlags&unix.IFF_ALLMULTI != 0
 	}
 	if tuningConf.TxQLen != nil {
 		qlen := link.Attrs().TxQLen
@@ -283,7 +283,7 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 
 	_, err = netlink.LinkByName(ifName)
 	if err != nil {
-		return nil
+		return fmt.Errorf("failed to get %q: %v", ifName, err)
 	}
 
 	if config.Mtu != 0 {
@@ -509,7 +509,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 		}
 
 		if tuningConf.Allmulti != nil {
-			allmulti := (link.Attrs().RawFlags&unix.IFF_ALLMULTI != 0)
+			allmulti := link.Attrs().RawFlags&unix.IFF_ALLMULTI != 0
 			if allmulti != *tuningConf.Allmulti {
 				return fmt.Errorf("Error: Tuning configured all-multicast mode of %s is %v, current value is %v",
 					args.IfName, tuningConf.Allmulti, allmulti)
@@ -578,7 +578,7 @@ func readAllowlist() (bool, []string, error) {
 	}
 
 	lines := strings.Split(string(dat), "\n")
-	allowList := []string{}
+	var allowList []string
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if len(line) > 0 {
@@ -597,7 +597,7 @@ type sysctlCheck struct {
 var sysctlDuplicatesMap = map[sysctlKey]interface{}{}
 
 func (d *sysctlKey) UnmarshalText(data []byte) error {
-	key := sysctlKey(string(data))
+	key := sysctlKey(data)
 	if _, exists := sysctlDuplicatesMap[key]; exists {
 		return errors.New("duplicated sysctl keys are not allowed")
 	}
