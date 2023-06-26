@@ -125,6 +125,8 @@ var _ = Describe("tuning plugin", func() {
 			*beforeConf.Promisc = (link.Attrs().Promisc != 0)
 			beforeConf.Allmulti = new(bool)
 			*beforeConf.Allmulti = (link.Attrs().RawFlags&unix.IFF_ALLMULTI != 0)
+			beforeConf.TxQLen = new(int)
+			*beforeConf.TxQLen = link.Attrs().TxQLen
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -487,6 +489,138 @@ var _ = Describe("tuning plugin", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It(fmt.Sprintf("[%s] configures and deconfigures tx queue len with ADD/DEL", ver), func() {
+			conf := []byte(fmt.Sprintf(`{
+				"name": "test",
+				"type": "iplink",
+				"cniVersion": "%s",
+				"txQLen": 20000,
+				"prevResult": {
+					"interfaces": [
+						{"name": "dummy0", "sandbox":"netns"}
+					],
+					"ips": [
+						{
+							"version": "4",
+							"address": "10.0.0.2/24",
+							"gateway": "10.0.0.1",
+							"interface": 0
+						}
+					]
+				}
+			}`, ver))
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       originalNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   conf,
+			}
+
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				link, err := netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().TxQLen).To(Equal(20000))
+
+				if testutils.SpecVersionHasCHECK(ver) {
+					n := &TuningConf{}
+					Expect(json.Unmarshal(conf, &n)).NotTo(HaveOccurred())
+
+					confString, err := buildOneConfig(ver, n, r)
+					Expect(err).NotTo(HaveOccurred())
+
+					args.StdinData = confString
+
+					Expect(testutils.CmdCheckWithArgs(args, func() error {
+						return cmdCheck(args)
+					})).NotTo(HaveOccurred())
+				}
+
+				err = testutils.CmdDel(originalNS.Path(),
+					args.ContainerID, "", func() error { return cmdDel(args) })
+				Expect(err).NotTo(HaveOccurred())
+
+				link, err = netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().TxQLen).To(Equal(*beforeConf.TxQLen))
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It(fmt.Sprintf("[%s] configures and deconfigures tx queue len from args with ADD/DEL", ver), func() {
+			conf := []byte(fmt.Sprintf(`{
+				"name": "test",
+				"type": "iplink",
+				"cniVersion": "%s",
+				"args": {
+				    "cni": {
+					"txQLen": 20000
+				    }
+				},
+				"prevResult": {
+					"interfaces": [
+						{"name": "dummy0", "sandbox":"netns"}
+					],
+					"ips": [
+						{
+							"version": "4",
+							"address": "10.0.0.2/24",
+							"gateway": "10.0.0.1",
+							"interface": 0
+						}
+					]
+				}
+			}`, ver))
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       originalNS.Path(),
+				IfName:      IFNAME,
+				StdinData:   conf,
+			}
+
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				result, err := types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(result.Interfaces).To(HaveLen(1))
+				Expect(result.Interfaces[0].Name).To(Equal(IFNAME))
+				Expect(result.IPs).To(HaveLen(1))
+				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
+
+				link, err := netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().TxQLen).To(Equal(20000))
+
+				err = testutils.CmdDel(originalNS.Path(),
+					args.ContainerID, "", func() error { return cmdDel(args) })
+				Expect(err).NotTo(HaveOccurred())
+
+				link, err = netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().TxQLen).To(Equal(*beforeConf.TxQLen))
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 		It(fmt.Sprintf("[%s] configures and deconfigures mac address (from conf file) with ADD/DEL", ver), func() {
 			mac := "c2:11:22:33:44:55"
 			conf := []byte(fmt.Sprintf(`{
@@ -780,7 +914,7 @@ var _ = Describe("tuning plugin", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It(fmt.Sprintf("[%s] configures and deconfigures mac address, promisc mode and MTU (from conf file) with custom dataDir", ver), func() {
+		It(fmt.Sprintf("[%s] configures and deconfigures mac address, promisc mode, MTU and tx queue len (from conf file) with custom dataDir", ver), func() {
 			conf := []byte(fmt.Sprintf(`{
 				"name": "test",
 				"type": "iplink",
@@ -788,6 +922,7 @@ var _ = Describe("tuning plugin", func() {
 				"mac": "c2:11:22:33:44:77",
 				"promisc": true,
 				"mtu": 4000,
+				"txQLen": 20000,
 				"dataDir": "/tmp/tuning-test",
 				"prevResult": {
 					"interfaces": [
@@ -834,6 +969,7 @@ var _ = Describe("tuning plugin", func() {
 				Expect(link.Attrs().HardwareAddr).To(Equal(hw))
 				Expect(link.Attrs().Promisc).To(Equal(1))
 				Expect(link.Attrs().MTU).To(Equal(4000))
+				Expect(link.Attrs().TxQLen).To(Equal(20000))
 
 				Expect("/tmp/tuning-test/dummy_dummy0.json").Should(BeAnExistingFile())
 
@@ -862,6 +998,7 @@ var _ = Describe("tuning plugin", func() {
 				Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
 				Expect(link.Attrs().MTU).To(Equal(beforeConf.Mtu))
 				Expect(link.Attrs().Promisc != 0).To(Equal(*beforeConf.Promisc))
+				Expect(link.Attrs().TxQLen).To(Equal(*beforeConf.TxQLen))
 
 				return nil
 			})
