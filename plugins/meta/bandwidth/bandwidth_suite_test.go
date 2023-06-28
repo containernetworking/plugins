@@ -33,7 +33,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 )
 
-func TestTBF(t *testing.T) {
+func TestHTB(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "plugins/meta/bandwidth")
 }
