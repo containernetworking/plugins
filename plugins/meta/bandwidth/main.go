@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net"
 
 	"github.com/vishvananda/netlink"
 
@@ -39,8 +40,9 @@ const (
 // BandwidthEntry corresponds to a single entry in the bandwidth argument,
 // see CONVENTIONS.md
 type BandwidthEntry struct {
-	IngressRate  uint64 `json:"ingressRate"`  // Bandwidth rate in bps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
-	IngressBurst uint64 `json:"ingressBurst"` // Bandwidth burst in bits for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
+	NonShapedSubnets []string `json:"nonShapedSubnets"` // Ipv4/ipv6 subnets to be excluded from traffic shaping
+	IngressRate      uint64   `json:"ingressRate"`      // Bandwidth rate in bps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
+	IngressBurst     uint64   `json:"ingressBurst"`     // Bandwidth burst in bits for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
 
 	EgressRate  uint64 `json:"egressRate"`  // Bandwidth rate in bps for traffic through container. 0 for no limit. If egressRate is set, egressBurst must also be set
 	EgressBurst uint64 `json:"egressBurst"` // Bandwidth burst in bits for traffic through container. 0 for no limit. If egressBurst is set, egressRate must also be set
@@ -96,10 +98,16 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 }
 
 func getBandwidth(conf *PluginConf) *BandwidthEntry {
-	if conf.BandwidthEntry == nil && conf.RuntimeConfig.Bandwidth != nil {
-		return conf.RuntimeConfig.Bandwidth
+	bw := conf.BandwidthEntry
+	if bw == nil && conf.RuntimeConfig.Bandwidth != nil {
+		bw = conf.RuntimeConfig.Bandwidth
 	}
-	return conf.BandwidthEntry
+
+	if bw != nil && bw.NonShapedSubnets == nil {
+		bw.NonShapedSubnets = make([]string, 0)
+	}
+
+	return bw
 }
 
 func validateRateAndBurst(rate, burst uint64) error {
@@ -119,13 +127,13 @@ func getIfbDeviceName(networkName string, containerID string) string {
 	return utils.MustFormatHashWithPrefix(maxIfbDeviceLength, ifbDevicePrefix, networkName+containerID)
 }
 
-func getMTU(deviceName string) (int, error) {
+func getMTUAndQLen(deviceName string) (int, int, error) {
 	link, err := netlink.LinkByName(deviceName)
 	if err != nil {
-		return -1, err
+		return -1, -1, err
 	}
 
-	return link.Attrs().MTU, nil
+	return link.Attrs().MTU, link.Attrs().TxQLen, nil
 }
 
 // get the veth peer of container interface in host namespace
@@ -159,6 +167,16 @@ func getHostInterface(interfaces []*current.Interface, containerIfName string, n
 	return nil, fmt.Errorf("no veth peer of container interface found in host ns")
 }
 
+func validateSubnets(subnets []string) error {
+	for _, subnet := range subnets {
+		_, _, err := net.ParseCIDR(subnet)
+		if err != nil {
+			return fmt.Errorf("bad subnet %q provided, details %s", subnet, err)
+		}
+	}
+	return nil
+}
+
 func cmdAdd(args *skel.CmdArgs) error {
 	conf, err := parseConfig(args.StdinData)
 	if err != nil {
@@ -168,6 +186,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 	bandwidth := getBandwidth(conf)
 	if bandwidth == nil || bandwidth.isZero() {
 		return types.PrintResult(conf.PrevResult, conf.CNIVersion)
+	}
+
+	if err = validateSubnets(bandwidth.NonShapedSubnets); err != nil {
+		return err
 	}
 
 	if conf.PrevResult == nil {
@@ -191,21 +213,22 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	if bandwidth.IngressRate > 0 && bandwidth.IngressBurst > 0 {
-		err = CreateIngressQdisc(bandwidth.IngressRate, bandwidth.IngressBurst, hostInterface.Name)
+		err = CreateIngressQdisc(bandwidth.IngressRate, bandwidth.IngressBurst,
+			bandwidth.NonShapedSubnets, hostInterface.Name)
 		if err != nil {
 			return err
 		}
 	}
 
 	if bandwidth.EgressRate > 0 && bandwidth.EgressBurst > 0 {
-		mtu, err := getMTU(hostInterface.Name)
+		mtu, qlen, err := getMTUAndQLen(hostInterface.Name)
 		if err != nil {
 			return err
 		}
 
 		ifbDeviceName := getIfbDeviceName(conf.Name, args.ContainerID)
 
-		err = CreateIfb(ifbDeviceName, mtu)
+		err = CreateIfb(ifbDeviceName, mtu, qlen)
 		if err != nil {
 			return err
 		}
@@ -219,7 +242,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 			Name: ifbDeviceName,
 			Mac:  ifbDevice.Attrs().HardwareAddr.String(),
 		})
-		err = CreateEgressQdisc(bandwidth.EgressRate, bandwidth.EgressBurst, hostInterface.Name, ifbDeviceName)
+		err = CreateEgressQdisc(bandwidth.EgressRate, bandwidth.EgressBurst,
+			bandwidth.NonShapedSubnets, hostInterface.Name, ifbDeviceName)
 		if err != nil {
 			return err
 		}
@@ -292,75 +316,98 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	bandwidth := getBandwidth(bwConf)
 
+	err = validateSubnets(bandwidth.NonShapedSubnets)
+	if err != nil {
+		return fmt.Errorf("failed to check subnets, details %s", err)
+	}
+
 	if bandwidth.IngressRate > 0 && bandwidth.IngressBurst > 0 {
 		rateInBytes := bandwidth.IngressRate / 8
 		burstInBytes := bandwidth.IngressBurst / 8
 		bufferInBytes := buffer(rateInBytes, uint32(burstInBytes))
-		latency := latencyInUsec(latencyInMillis)
-		limitInBytes := limit(rateInBytes, latency, uint32(burstInBytes))
-
-		qdiscs, err := SafeQdiscList(link)
+		err = checkHTB(link, rateInBytes, bufferInBytes)
 		if err != nil {
 			return err
 		}
-		if len(qdiscs) == 0 {
-			return fmt.Errorf("Failed to find qdisc")
-		}
-
-		for _, qdisc := range qdiscs {
-			tbf, isTbf := qdisc.(*netlink.Tbf)
-			if !isTbf {
-				break
-			}
-			if tbf.Rate != rateInBytes {
-				return fmt.Errorf("Rate doesn't match")
-			}
-			if tbf.Limit != limitInBytes {
-				return fmt.Errorf("Limit doesn't match")
-			}
-			if tbf.Buffer != bufferInBytes {
-				return fmt.Errorf("Buffer doesn't match")
-			}
-		}
 	}
-
 	if bandwidth.EgressRate > 0 && bandwidth.EgressBurst > 0 {
 		rateInBytes := bandwidth.EgressRate / 8
 		burstInBytes := bandwidth.EgressBurst / 8
 		bufferInBytes := buffer(rateInBytes, uint32(burstInBytes))
-		latency := latencyInUsec(latencyInMillis)
-		limitInBytes := limit(rateInBytes, latency, uint32(burstInBytes))
-
 		ifbDeviceName := getIfbDeviceName(bwConf.Name, args.ContainerID)
-
 		ifbDevice, err := netlink.LinkByName(ifbDeviceName)
 		if err != nil {
 			return fmt.Errorf("get ifb device: %s", err)
 		}
-
-		qdiscs, err := SafeQdiscList(ifbDevice)
+		err = checkHTB(ifbDevice, rateInBytes, bufferInBytes)
 		if err != nil {
 			return err
 		}
-		if len(qdiscs) == 0 {
-			return fmt.Errorf("Failed to find qdisc")
+	}
+	return nil
+}
+
+func checkHTB(link netlink.Link, rateInBytes uint64, bufferInBytes uint32) error {
+	qdiscs, err := SafeQdiscList(link)
+	if err != nil {
+		return err
+	}
+	if len(qdiscs) == 0 {
+		return fmt.Errorf("Failed to find qdisc")
+	}
+	foundHTB := false
+	for _, qdisc := range qdiscs {
+		htb, isHtb := qdisc.(*netlink.Htb)
+		if !isHtb {
+			continue
 		}
 
-		for _, qdisc := range qdiscs {
-			tbf, isTbf := qdisc.(*netlink.Tbf)
-			if !isTbf {
-				break
+		if foundHTB {
+			return fmt.Errorf("Several htb qdisc found for device %s", link.Attrs().Name)
+		}
+
+		foundHTB = true
+		if htb.Defcls != DefaultClassMinorID {
+			return fmt.Errorf("Default class does not match")
+		}
+
+		classes, err := netlink.ClassList(link, htb.Handle)
+		if err != nil {
+			return fmt.Errorf("Unable to list classes bound to htb qdisc for device %s. Details %s",
+				link.Attrs().Name, err)
+		}
+		if len(classes) != 2 {
+			return fmt.Errorf("Number of htb classes does not match for device %s (%d != 2)",
+				link.Attrs().Name, len(classes))
+		}
+
+		for _, c := range classes {
+			htbClass, isHtb := c.(*netlink.HtbClass)
+			if !isHtb {
+				return fmt.Errorf("Unexpected class for parent htb qdisc bound to device %s", link.Attrs().Name)
 			}
-			if tbf.Rate != rateInBytes {
-				return fmt.Errorf("Rate doesn't match")
-			}
-			if tbf.Limit != limitInBytes {
-				return fmt.Errorf("Limit doesn't match")
-			}
-			if tbf.Buffer != bufferInBytes {
-				return fmt.Errorf("Buffer doesn't match")
+			if htbClass.Handle == htb.Defcls {
+				if htbClass.Rate != rateInBytes {
+					return fmt.Errorf("Rate does not match for the default class for device %s (%d != %d)",
+						link.Attrs().Name, htbClass.Rate, rateInBytes)
+				}
+
+				if htbClass.Buffer != bufferInBytes {
+					return fmt.Errorf("Burst buffer size does not match for the default class for device %s (%d != %d)",
+						link.Attrs().Name, htbClass.Buffer, bufferInBytes)
+				}
+			} else if htbClass.Handle == netlink.MakeHandle(1, 1) {
+				if htbClass.Rate != UncappedRate {
+					return fmt.Errorf("Rate does not match for the uncapped class for device %s (%d != %d)",
+						link.Attrs().Name, htbClass.Rate, UncappedRate)
+				}
 			}
 		}
+
+		// TODO: check non shaped subnet filters
+		// if bandwidth.NonShapedSubnets {
+		// 	filters, err := netlink.FilterList(link, htb.Handle)
+		// }
 	}
 
 	return nil
