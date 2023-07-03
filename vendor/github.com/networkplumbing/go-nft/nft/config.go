@@ -67,3 +67,10 @@ func ApplyConfig(c *Config) error {
 func ApplyConfigContext(ctx context.Context, c *Config) error {
 	return nftexec.ApplyConfig(ctx, c)
 }
+
+// ApplyConfigEcho applies the given nftables config on the system, echoing
+// back the added elements with their assigned handles
+// The system is expected to have the `nft` executable deployed and nftables enabled in the kernel.
+func ApplyConfigEcho(ctx context.Context, c *Config) (*Config, error) {
+	return nftexec.ApplyConfigEcho(ctx, c)
+}
