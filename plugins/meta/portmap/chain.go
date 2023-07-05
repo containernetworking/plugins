@@ -103,7 +103,7 @@ func (c *chain) teardown(ipt *iptables.IPTables) error {
 
 // check the chain.
 func (c *chain) check(ipt *iptables.IPTables) error {
-	exists, err := utils.ChainExists(ipt, c.table, c.name)
+	exists, err := ipt.ChainExists(c.table, c.name)
 	if err != nil {
 		return err
 	}
