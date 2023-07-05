@@ -67,13 +67,27 @@ func (c *chain) setup(ipt *iptables.IPTables) error {
 // teardown idempotently deletes a chain. It will not error if the chain doesn't exist.
 // It will first delete all references to this chain in the entryChains.
 func (c *chain) teardown(ipt *iptables.IPTables) error {
-	// flush the chain
-	// This will succeed *and create the chain* if it does not exist.
-	// If the chain doesn't exist, the next checks will fail.
-	if err := utils.ClearChain(ipt, c.table, c.name); err != nil {
-		return err
+	// nothing to do if the custom chain doesn't exist to begin with
+	exists, err := ipt.ChainExists(c.table, c.name)
+	if err == nil && !exists {
+		return nil
+	}
+	// delete references created by setup()
+	for _, entryChain := range c.entryChains {
+		for _, rule := range c.entryRules {
+			r := []string{}
+			r = append(r, rule...)
+			r = append(r, "-j", c.name)
+
+			ipt.Delete(c.table, entryChain, r...)
+		}
+	}
+	// if chain deletion succeeds now, all references are gone
+	if err := ipt.ClearAndDeleteChain(c.table, c.name); err == nil {
+		return nil
 	}
 
+	// find references the hard way
 	for _, entryChain := range c.entryChains {
 		entryChainRules, err := ipt.List(c.table, entryChain)
 		if err != nil || len(entryChainRules) < 1 {
@@ -98,7 +112,7 @@ func (c *chain) teardown(ipt *iptables.IPTables) error {
 		}
 	}
 
-	return utils.DeleteChain(ipt, c.table, c.name)
+	return ipt.ClearAndDeleteChain(c.table, c.name)
 }
 
 // check the chain.
