@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-PLUGINS=$(cat plugins/windows_only.txt)
+PLUGINS=$(cat plugins/windows.txt)
 for d in $PLUGINS; do
 	if [ -d "$d" ]; then
 	    plugin="$(basename "$d").exe"

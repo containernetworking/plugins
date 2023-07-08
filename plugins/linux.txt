@@ -1,0 +1,1 @@
+all except plugins in plugins/main/windows dir.
