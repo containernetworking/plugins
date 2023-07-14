@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
-	"golang.org/x/sys/unix"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -270,10 +269,164 @@ var _ = Describe("vrf plugin", func() {
 		err = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 			checkInterfaceOnVRF(VRF0Name, IF0Name)
-			checkRoutesOnVRF(VRF0Name, IF0Name, "10.10.10.0/24", "1111:dddd::/80")
+			checkRoutesOnVRF(VRF0Name, IF0Name, "10.0.0.2", "10.10.10.0/24", "1111:dddd::/80")
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("filters the correct routes to import to new VRF", func() {
+		_ = configWithRouteFor("test0", IF0Name, VRF0Name, "10.0.0.2/24", "10.10.10.0/24")
+		conf1 := configWithRouteFor("test1", IF1Name, VRF1Name, "10.0.0.3/24", "10.11.10.0/24")
+
+		By("Setting custom routing for IF0Name", func() {
+			err := targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				ipv4, err := types.ParseCIDR("10.0.0.2/24")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ipv4).NotTo(BeNil())
+
+				_, routev4, err := net.ParseCIDR("10.10.10.0/24")
+				Expect(err).NotTo(HaveOccurred())
+
+				ipv6, err := types.ParseCIDR("abcd:1234:ffff::cdde/64")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ipv6).NotTo(BeNil())
+
+				_, routev6, err := net.ParseCIDR("1111:dddd::/80")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(routev6).NotTo(BeNil())
+
+				link, err := netlink.LinkByName(IF0Name)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Add IP addresses for network reachability
+				netlink.AddrAdd(link, &netlink.Addr{IPNet: ipv4})
+				netlink.AddrAdd(link, &netlink.Addr{IPNet: ipv6})
+
+				ipAddrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+				Expect(err).NotTo(HaveOccurred())
+				// Check if address was assigned properly
+				Expect(ipAddrs[0].IP.String()).To(Equal("10.0.0.2"))
+
+				// Set interface UP, otherwise local route to 10.0.0.0/24 is not present
+				err = netlink.LinkSetUp(link)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Add additional route to 10.10.10.0/24 via 10.0.0.1 gateway
+				r := netlink.Route{
+					LinkIndex: link.Attrs().Index,
+					Dst:       routev4,
+					Gw:        net.ParseIP("10.0.0.1"),
+				}
+				err = netlink.RouteAdd(&r)
+				Expect(err).NotTo(HaveOccurred())
+
+				r6 := netlink.Route{
+					LinkIndex: link.Attrs().Index,
+					Src:       ipv6.IP,
+					Dst:       routev6,
+					Gw:        net.ParseIP("abcd:1234:ffff::1"),
+				}
+				err = netlink.RouteAdd(&r6)
+				Expect(err).NotTo(HaveOccurred())
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Setting custom routing for IF1Name", func() {
+			err := targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				ipv4, err := types.ParseCIDR("10.0.0.3/24")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ipv4).NotTo(BeNil())
+
+				_, routev4, err := net.ParseCIDR("10.11.10.0/24")
+				Expect(err).NotTo(HaveOccurred())
+
+				ipv6, err := types.ParseCIDR("abcd:1234:ffff::cddf/64")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ipv6).NotTo(BeNil())
+
+				_, routev6, err := net.ParseCIDR("1111:ddde::/80")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(routev6).NotTo(BeNil())
+
+				link, err := netlink.LinkByName(IF1Name)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Add IP addresses for network reachability
+				netlink.AddrAdd(link, &netlink.Addr{IPNet: ipv4})
+				netlink.AddrAdd(link, &netlink.Addr{IPNet: ipv6})
+
+				ipAddrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+				Expect(err).NotTo(HaveOccurred())
+				// Check if address was assigned properly
+				Expect(ipAddrs[0].IP.String()).To(Equal("10.0.0.3"))
+
+				// Set interface UP, otherwise local route to 10.0.0.0/24 is not present
+				err = netlink.LinkSetUp(link)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Add additional route to 10.11.10.0/24 via 10.0.0.1 gateway
+				r := netlink.Route{
+					LinkIndex: link.Attrs().Index,
+					Dst:       routev4,
+					Gw:        net.ParseIP("10.0.0.1"),
+					Priority:  100,
+				}
+				err = netlink.RouteAdd(&r)
+				Expect(err).NotTo(HaveOccurred())
+
+				r6 := netlink.Route{
+					LinkIndex: link.Attrs().Index,
+					Src:       ipv6.IP,
+					Dst:       routev6,
+					Gw:        net.ParseIP("abcd:1234:ffff::1"),
+				}
+				err = netlink.RouteAdd(&r6)
+				Expect(err).NotTo(HaveOccurred())
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Adding if1 to the VRF", func() {
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				args := &skel.CmdArgs{
+					ContainerID: "dummy",
+					Netns:       targetNS.Path(),
+					IfName:      IF1Name,
+					StdinData:   conf1,
+				}
+				_, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking routes are moved correctly to VRF", func() {
+			err := targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				checkInterfaceOnVRF(VRF1Name, IF1Name)
+				checkRoutesOnVRF(VRF1Name, IF1Name, "10.0.0.3", "10.11.10.0/24", "1111:ddde::/80")
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
 	It("fails if the interface already has a master set", func() {
@@ -831,10 +984,13 @@ func checkInterfaceOnVRF(vrfName, intfName string) {
 	Expect(master.Attrs().Name).To(Equal(vrfName))
 }
 
-func checkRoutesOnVRF(vrfName, intfName string, routesToCheck ...string) {
-	vrf, err := netlink.LinkByName(vrfName)
+func checkRoutesOnVRF(vrfName, intfName string, addrStr string, routesToCheck ...string) {
+	l, err := netlink.LinkByName(vrfName)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(vrf).To(BeAssignableToTypeOf(&netlink.Vrf{}))
+	Expect(l).To(BeAssignableToTypeOf(&netlink.Vrf{}))
+
+	vrf, ok := l.(*netlink.Vrf)
+	Expect(ok).To(BeTrue())
 
 	link, err := netlink.LinkByName(intfName)
 	Expect(err).NotTo(HaveOccurred())
@@ -845,26 +1001,28 @@ func checkRoutesOnVRF(vrfName, intfName string, routesToCheck ...string) {
 	ipAddrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(ipAddrs).To(HaveLen(1))
-	Expect(ipAddrs[0].IP.String()).To(Equal("10.0.0.2"))
+	Expect(ipAddrs[0].IP.String()).To(Equal(addrStr))
 
-	// Need to read all tables, so cannot use RouteList
 	routeFilter := &netlink.Route{
-		LinkIndex: link.Attrs().Index,
-		Table:     unix.RT_TABLE_UNSPEC,
+		Table: int(vrf.Table),
 	}
 
 	routes, err := netlink.RouteListFiltered(netlink.FAMILY_ALL,
 		routeFilter,
-		netlink.RT_FILTER_OIF|netlink.RT_FILTER_TABLE)
+		netlink.RT_FILTER_TABLE)
 	Expect(err).NotTo(HaveOccurred())
 
 	routesRead := []string{}
 	for _, route := range routes {
 		routesRead = append(routesRead, route.String())
-		Expect(uint32(route.Table)).To(Equal(vrf.(*netlink.Vrf).Table))
+		Expect(uint32(route.Table)).To(Equal(vrf.Table))
 	}
 	routesStr := strings.Join(routesRead, "\n")
 	for _, route := range routesToCheck {
 		Expect(routesStr).To(ContainSubstring(route))
+	}
+
+	for _, route := range routes {
+		Expect(route.LinkIndex).To(Equal(link.Attrs().Index))
 	}
 }

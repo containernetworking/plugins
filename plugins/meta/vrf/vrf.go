@@ -111,7 +111,7 @@ func addInterface(vrf *netlink.Vrf, intf string) error {
 		LinkIndex: i.Attrs().Index,
 		Scope:     netlink.SCOPE_UNIVERSE, // Exclude local and connected routes
 	}
-	filterMask := netlink.RT_FILTER_IIF | netlink.RT_FILTER_SCOPE // Filter based on link index and scope
+	filterMask := netlink.RT_FILTER_OIF | netlink.RT_FILTER_SCOPE // Filter based on link index and scope
 	routes, err := netlink.RouteListFiltered(netlink.FAMILY_ALL, filter, filterMask)
 	if err != nil {
 		return fmt.Errorf("failed getting all routes for %s", intf)
