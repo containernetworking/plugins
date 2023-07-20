@@ -65,12 +65,10 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Install test binaries
-        env:
-          GO111MODULE: off
         run: |
-          go get github.com/containernetworking/cni/cnitool
-          go get github.com/mattn/goveralls
-          go get github.com/modocache/gover
+          go install github.com/containernetworking/cni/cnitool@latest
+          go install github.com/mattn/goveralls@latest
+          go install github.com/modocache/gover@latest
 
       - name: test
         run: PATH=$PATH:$(go env GOPATH)/bin COVERALLS=1 ./test_linux.sh
