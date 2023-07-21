@@ -15,7 +15,7 @@ source ./build_linux.sh
 echo "Running tests"
 
 function testrun {
-    sudo -E bash -c "umask 0; PATH=${GOPATH}/bin:$(pwd)/bin:${PATH} go test $@"
+    sudo -E bash -c "umask 0; PATH=${GOPATH}/bin:$(pwd)/bin:${PATH} go test -race $@"
 }
 
 COVERALLS=${COVERALLS:-""}
@@ -31,7 +31,7 @@ PKG=${PKG:-$(go list ./... | xargs echo)}
 i=0
 for t in ${PKG}; do
     if [ -n "${COVERALLS}" ]; then
-        COVERFLAGS="-covermode set -coverprofile ${i}.coverprofile"
+        COVERFLAGS="-covermode atomic -coverprofile ${i}.coverprofile"
     fi
     echo "${t}"
     testrun "${COVERFLAGS:-""} ${t}"
