@@ -39,5 +39,5 @@ for t in ${PKG}; do
 done
 
 # Run the pkg/ns tests as non root user
-mkdir /tmp/cni-rootless
+mkdir -p /tmp/cni-rootless
 (export XDG_RUNTIME_DIR=/tmp/cni-rootless; cd pkg/ns/; unshare -rmn go test)
