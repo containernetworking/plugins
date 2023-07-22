@@ -21,6 +21,8 @@ import (
 	"strings"
 
 	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 )
 
 // fmtIpPort correctly formats ip:port literals for iptables and ip6tables -
@@ -50,6 +52,14 @@ func getRoutableHostIF(containerIP net.IP) string {
 	}
 
 	return ""
+}
+
+// enableLocalnetRouting tells the kernel not to treat 127/8 as a martian,
+// so that connections with a source ip of 127/8 can cross a routing boundary.
+func enableLocalnetRouting(ifName string) error {
+	routeLocalnetPath := "net/ipv4/conf/" + ifName + "/route_localnet"
+	_, err := sysctl.Sysctl(routeLocalnetPath, "1")
+	return err
 }
 
 // groupByProto groups port numbers by protocol
