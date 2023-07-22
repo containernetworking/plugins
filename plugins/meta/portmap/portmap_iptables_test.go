@@ -23,7 +23,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 )
 
-var _ = Describe("portmapping configuration", func() {
+var _ = Describe("portmapping configuration (iptables)", func() {
 	netName := "testNetName"
 	containerID := "icee6giejonei6sohng6ahngee7laquohquee9shiGo7fohferakah3Feiyoolu2pei7ciPhoh7shaoX6vai3vuf0ahfaeng8yohb9ceu0daez5hashee8ooYai5wa3y"
 
@@ -59,8 +59,8 @@ var _ = Describe("portmapping configuration", func() {
 							]
 						},
 						"snat": true,
-						"conditionsV4": ["a", "b"],
-						"conditionsV6": ["c", "d"]
+						"conditionsV4": ["-a", "b"],
+						"conditionsV6": ["-c", "d"]
 					}`, ver))
 
 					conf, _, err := parseConfig(configBytes, "foo")
@@ -85,7 +85,7 @@ var _ = Describe("portmapping configuration", func() {
 							"-m", "multiport",
 							"-p", "tcp",
 							"--destination-ports", "8080,8081,8083,8084,8085,8086",
-							"a", "b",
+							"-a", "b",
 						},
 						{
 							"-m", "comment", "--comment",
@@ -93,7 +93,7 @@ var _ = Describe("portmapping configuration", func() {
 							"-m", "multiport",
 							"-p", "udp",
 							"--destination-ports", "8080,8082",
-							"a", "b",
+							"-a", "b",
 						},
 					}))
 
@@ -185,8 +185,8 @@ var _ = Describe("portmapping configuration", func() {
 							]
 						},
 						"externalSetMarkChain": "PLZ-SET-MARK",
-						"conditionsV4": ["a", "b"],
-						"conditionsV6": ["c", "d"]
+						"conditionsV4": ["-a", "b"],
+						"conditionsV6": ["-c", "d"]
 					}`, ver))
 
 					conf, _, err := parseConfig(configBytes, "foo")
