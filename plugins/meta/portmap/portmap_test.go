@@ -35,6 +35,7 @@ var _ = Describe("portmapping configuration", func() {
 					"name": "test",
 					"type": "portmap",
 					"cniVersion": "%s",
+					"backend": "iptables",
 					"runtimeConfig": {
 						"portMappings": [
 							{ "hostPort": 8080, "containerPort": 80, "protocol": "tcp"},
@@ -94,6 +95,7 @@ var _ = Describe("portmapping configuration", func() {
 					"name": "test",
 					"type": "portmap",
 					"cniVersion": "%s",
+					"backend": "iptables",
 					"snat": false,
 					"conditionsV4": ["-s", "1.2.3.4"],
 					"conditionsV6": ["-s", "12::34"]
@@ -113,6 +115,7 @@ var _ = Describe("portmapping configuration", func() {
 					"name": "test",
 					"type": "portmap",
 					"cniVersion": "%s",
+					"backend": "iptables",
 					"snat": false,
 					"conditionsV4": ["-s", "1.2.3.4"],
 					"conditionsV6": ["-s", "12::34"],
@@ -124,6 +127,82 @@ var _ = Describe("portmapping configuration", func() {
 				}`, ver))
 				_, _, err := parseConfig(configBytes, "container")
 				Expect(err).To(MatchError("Invalid host port number: 0"))
+			})
+
+			It(fmt.Sprintf("[%s] defaults to iptables when backend is not specified", ver), func() {
+				// "defaults to iptables" is only true if iptables is installed
+				// (or if neither iptables nor nftables is installed), but the
+				// other unit tests would fail if iptables wasn't installed, so
+				// we know it must be.
+				configBytes := []byte(fmt.Sprintf(`{
+					"name": "test",
+					"type": "portmap",
+					"cniVersion": "%s"
+				}`, ver))
+				c, _, err := parseConfig(configBytes, "container")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(c.CNIVersion).To(Equal(ver))
+				Expect(c.Backend).To(Equal(&iptablesBackend))
+				Expect(c.Name).To(Equal("test"))
+			})
+
+			It(fmt.Sprintf("[%s] uses nftables if requested", ver), func() {
+				configBytes := []byte(fmt.Sprintf(`{
+					"name": "test",
+					"type": "portmap",
+					"cniVersion": "%s",
+					"backend": "nftables"
+				}`, ver))
+				c, _, err := parseConfig(configBytes, "container")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(c.CNIVersion).To(Equal(ver))
+				Expect(c.Backend).To(Equal(&nftablesBackend))
+				Expect(c.Name).To(Equal("test"))
+			})
+
+			It(fmt.Sprintf("[%s] allows nftables conditions if nftables is requested", ver), func() {
+				configBytes := []byte(fmt.Sprintf(`{
+					"name": "test",
+					"type": "portmap",
+					"cniVersion": "%s",
+					"backend": "nftables",
+					"conditionsV4": ["ip", "saddr", "1.2.3.4"],
+					"conditionsV6": ["ip6", "saddr", "12::34"]
+				}`, ver))
+				c, _, err := parseConfig(configBytes, "container")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(c.CNIVersion).To(Equal(ver))
+				Expect(c.Backend).To(Equal(&nftablesBackend))
+				Expect(c.ConditionsV4).To(Equal(&[]string{"ip", "saddr", "1.2.3.4"}))
+				Expect(c.ConditionsV6).To(Equal(&[]string{"ip6", "saddr", "12::34"}))
+				Expect(c.Name).To(Equal("test"))
+			})
+
+			It(fmt.Sprintf("[%s] rejects nftables options with 'backend: iptables'", ver), func() {
+				configBytes := []byte(fmt.Sprintf(`{
+					"name": "test",
+					"type": "portmap",
+					"cniVersion": "%s",
+					"backend": "iptables",
+					"conditionsV4": ["ip", "saddr", "1.2.3.4"],
+					"conditionsV6": ["ip6", "saddr", "12::34"]
+				}`, ver))
+				_, _, err := parseConfig(configBytes, "container")
+				Expect(err).To(MatchError("iptables backend was requested but configuration contains nftables-specific options [conditionsV4 conditionsV6]"))
+			})
+
+			It(fmt.Sprintf("[%s] rejects iptables options with 'backend: nftables'", ver), func() {
+				configBytes := []byte(fmt.Sprintf(`{
+					"name": "test",
+					"type": "portmap",
+					"cniVersion": "%s",
+					"backend": "nftables",
+					"externalSetMarkChain": "KUBE-MARK-MASQ",
+					"conditionsV4": ["-s", "1.2.3.4"],
+					"conditionsV6": ["-s", "12::34"]
+				}`, ver))
+				_, _, err := parseConfig(configBytes, "container")
+				Expect(err).To(MatchError("nftables backend was requested but configuration contains iptables-specific options [externalSetMarkChain conditionsV4 conditionsV6]"))
 			})
 
 			It(fmt.Sprintf("[%s] does not fail on missing prevResult interface index", ver), func() {
