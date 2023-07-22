@@ -37,6 +37,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/containernetworking/plugins/pkg/utils"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
@@ -45,6 +46,12 @@ type PortMapper interface {
 	checkPorts(config *PortMapConf, containerNet net.IPNet) error
 	unforwardPorts(config *PortMapConf) error
 }
+
+// These are vars rather than consts so we can "&" them
+var (
+	iptablesBackend = "iptables"
+	nftablesBackend = "nftables"
+)
 
 // PortMapEntry corresponds to a single entry in the port_mappings argument,
 // see CONVENTIONS.md
@@ -61,6 +68,7 @@ type PortMapConf struct {
 	mapper PortMapper
 
 	// Generic config
+	Backend       *string   `json:"backend,omitempty"`
 	SNAT          *bool     `json:"snat,omitempty"`
 	ConditionsV4  *[]string `json:"conditionsV4"`
 	ConditionsV6  *[]string `json:"conditionsV6"`
@@ -234,6 +242,21 @@ func parseConfig(stdin []byte, ifName string) (*PortMapConf, *current.Result, er
 		return nil, nil, fmt.Errorf("MasqMarkBit must be between 0 and 31")
 	}
 
+	err := validateBackend(&conf)
+	if err != nil {
+		return nil, nil, err
+	}
+	switch *conf.Backend {
+	case iptablesBackend:
+		conf.mapper = &portMapperIPTables{}
+
+	case nftablesBackend:
+		conf.mapper = &portMapperNFTables{}
+
+	default:
+		return nil, nil, fmt.Errorf("unrecognized backend %q", *conf.Backend)
+	}
+
 	// Reject invalid port numbers
 	for _, pm := range conf.RuntimeConfig.PortMaps {
 		if pm.ContainerPort <= 0 {
@@ -272,4 +295,59 @@ func parseConfig(stdin []byte, ifName string) (*PortMapConf, *current.Result, er
 	}
 
 	return &conf, result, nil
+}
+
+// validateBackend validates and/or sets conf.Backend
+func validateBackend(conf *PortMapConf) error {
+	backendConfig := make(map[string][]string)
+
+	if conf.ExternalSetMarkChain != nil {
+		backendConfig[iptablesBackend] = append(backendConfig[iptablesBackend], "externalSetMarkChain")
+	}
+	if conditionsBackend := detectBackendOfConditions(conf.ConditionsV4); conditionsBackend != "" {
+		backendConfig[conditionsBackend] = append(backendConfig[conditionsBackend], "conditionsV4")
+	}
+	if conditionsBackend := detectBackendOfConditions(conf.ConditionsV6); conditionsBackend != "" {
+		backendConfig[conditionsBackend] = append(backendConfig[conditionsBackend], "conditionsV6")
+	}
+
+	// If backend wasn't requested explicitly, default to iptables, unless it is not
+	// available (and nftables is). FIXME: flip this default at some point.
+	if conf.Backend == nil {
+		if !utils.SupportsIPTables() && utils.SupportsNFTables() {
+			conf.Backend = &nftablesBackend
+		} else {
+			conf.Backend = &iptablesBackend
+		}
+	}
+
+	// Make sure we dont have config for the wrong backend
+	var wrongBackend string
+	if *conf.Backend == iptablesBackend {
+		wrongBackend = nftablesBackend
+	} else {
+		wrongBackend = iptablesBackend
+	}
+	if len(backendConfig[wrongBackend]) > 0 {
+		return fmt.Errorf("%s backend was requested but configuration contains %s-specific options %v", *conf.Backend, wrongBackend, backendConfig[wrongBackend])
+	}
+
+	// OK
+	return nil
+}
+
+// detectBackendOfConditions returns "iptables" if conditions contains iptables
+// conditions, "nftables" if it contains nftables conditions, and "" if it is empty.
+func detectBackendOfConditions(conditions *[]string) string {
+	if conditions == nil || len(*conditions) == 0 || (*conditions)[0] == "" {
+		return ""
+	}
+
+	// The first token of any iptables condition would start with a hyphen (e.g. "-d",
+	// "--sport", "-m"). No nftables condition would start that way. (An nftables
+	// condition might include a negative number, but not as the first token.)
+	if (*conditions)[0][0] == '-' {
+		return iptablesBackend
+	}
+	return nftablesBackend
 }
