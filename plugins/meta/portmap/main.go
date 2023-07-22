@@ -40,6 +40,12 @@ import (
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
+type PortMapper interface {
+	forwardPorts(config *PortMapConf, containerNet net.IPNet) error
+	checkPorts(config *PortMapConf, containerNet net.IPNet) error
+	unforwardPorts(config *PortMapConf) error
+}
+
 // PortMapEntry corresponds to a single entry in the port_mappings argument,
 // see CONVENTIONS.md
 type PortMapEntry struct {
@@ -51,15 +57,21 @@ type PortMapEntry struct {
 
 type PortMapConf struct {
 	types.NetConf
-	SNAT                 *bool     `json:"snat,omitempty"`
-	ConditionsV4         *[]string `json:"conditionsV4"`
-	ConditionsV6         *[]string `json:"conditionsV6"`
-	MasqAll              bool      `json:"masqAll,omitempty"`
-	MarkMasqBit          *int      `json:"markMasqBit"`
-	ExternalSetMarkChain *string   `json:"externalSetMarkChain"`
-	RuntimeConfig        struct {
+
+	mapper PortMapper
+
+	// Generic config
+	SNAT          *bool     `json:"snat,omitempty"`
+	ConditionsV4  *[]string `json:"conditionsV4"`
+	ConditionsV6  *[]string `json:"conditionsV6"`
+	MasqAll       bool      `json:"masqAll,omitempty"`
+	MarkMasqBit   *int      `json:"markMasqBit"`
+	RuntimeConfig struct {
 		PortMaps []PortMapEntry `json:"portMappings,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
+
+	// iptables-backend-specific config
+	ExternalSetMarkChain *string `json:"externalSetMarkChain"`
 
 	// These are fields parsed out of the config or the environment;
 	// included here for convenience
@@ -89,7 +101,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	netConf.ContainerID = args.ContainerID
 
 	if netConf.ContIPv4.IP != nil {
-		if err := forwardPorts(netConf, netConf.ContIPv4); err != nil {
+		if err := netConf.mapper.forwardPorts(netConf, netConf.ContIPv4); err != nil {
 			return err
 		}
 		// Delete conntrack entries for UDP to avoid conntrack blackholing traffic
@@ -98,10 +110,21 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if err := deletePortmapStaleConnections(netConf.RuntimeConfig.PortMaps, unix.AF_INET); err != nil {
 			log.Printf("failed to delete stale UDP conntrack entries for %s: %v", netConf.ContIPv4.IP, err)
 		}
+
+		if *netConf.SNAT {
+			// Set the route_localnet bit on the host interface, so that
+			// 127/8 can cross a routing boundary.
+			hostIfName := getRoutableHostIF(netConf.ContIPv4.IP)
+			if hostIfName != "" {
+				if err := enableLocalnetRouting(hostIfName); err != nil {
+					return fmt.Errorf("unable to enable route_localnet: %v", err)
+				}
+			}
+		}
 	}
 
 	if netConf.ContIPv6.IP != nil {
-		if err := forwardPorts(netConf, netConf.ContIPv6); err != nil {
+		if err := netConf.mapper.forwardPorts(netConf, netConf.ContIPv6); err != nil {
 			return err
 		}
 		// Delete conntrack entries for UDP to avoid conntrack blackholing traffic
@@ -130,7 +153,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	// We don't need to parse out whether or not we're using v6 or snat,
 	// deletion is idempotent
-	return unforwardPorts(netConf)
+	return netConf.mapper.unforwardPorts(netConf)
 }
 
 func main() {
@@ -155,13 +178,13 @@ func cmdCheck(args *skel.CmdArgs) error {
 	conf.ContainerID = args.ContainerID
 
 	if conf.ContIPv4.IP != nil {
-		if err := checkPorts(conf, conf.ContIPv4); err != nil {
+		if err := conf.mapper.checkPorts(conf, conf.ContIPv4); err != nil {
 			return err
 		}
 	}
 
 	if conf.ContIPv6.IP != nil {
-		if err := checkPorts(conf, conf.ContIPv6); err != nil {
+		if err := conf.mapper.checkPorts(conf, conf.ContIPv6); err != nil {
 			return err
 		}
 	}
@@ -190,6 +213,8 @@ func parseConfig(stdin []byte, ifName string) (*PortMapConf, *current.Result, er
 			return nil, nil, fmt.Errorf("could not convert result to current version: %v", err)
 		}
 	}
+
+	conf.mapper = &portMapperIPTables{}
 
 	if conf.SNAT == nil {
 		tvar := true

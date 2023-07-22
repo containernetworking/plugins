@@ -25,7 +25,6 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/plugins/pkg/utils"
-	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 )
 
 // This creates the chains to be added to iptables. The basic structure is
@@ -52,9 +51,11 @@ const (
 	OldTopLevelSNATChainName = "CNI-HOSTPORT-SNAT"
 )
 
+type portMapperIPTables struct{}
+
 // forwardPorts establishes port forwarding to a given container IP.
 // containerNet.IP can be either v4 or v6.
-func forwardPorts(config *PortMapConf, containerNet net.IPNet) error {
+func (*portMapperIPTables) forwardPorts(config *PortMapConf, containerNet net.IPNet) error {
 	isV6 := (containerNet.IP.To4() == nil)
 
 	var ipt *iptables.IPTables
@@ -87,17 +88,6 @@ func forwardPorts(config *PortMapConf, containerNet net.IPNet) error {
 				return fmt.Errorf("unable to create chain %s: %v", setMarkChain.name, err)
 			}
 		}
-
-		if !isV6 {
-			// Set the route_localnet bit on the host interface, so that
-			// 127/8 can cross a routing boundary.
-			hostIfName := getRoutableHostIF(containerNet.IP)
-			if hostIfName != "" {
-				if err := enableLocalnetRouting(hostIfName); err != nil {
-					return fmt.Errorf("unable to enable route_localnet: %v", err)
-				}
-			}
-		}
 	}
 
 	// Generate the DNAT (actual port forwarding) rules
@@ -117,7 +107,7 @@ func forwardPorts(config *PortMapConf, containerNet net.IPNet) error {
 	return nil
 }
 
-func checkPorts(config *PortMapConf, containerNet net.IPNet) error {
+func (*portMapperIPTables) checkPorts(config *PortMapConf, containerNet net.IPNet) error {
 	isV6 := (containerNet.IP.To4() == nil)
 	dnatChain := genDnatChain(config.Name, config.ContainerID)
 	fillDnatRules(&dnatChain, config, containerNet)
@@ -344,14 +334,6 @@ func genMarkMasqChain(markBit int) chain {
 	return ch
 }
 
-// enableLocalnetRouting tells the kernel not to treat 127/8 as a martian,
-// so that connections with a source ip of 127/8 can cross a routing boundary.
-func enableLocalnetRouting(ifName string) error {
-	routeLocalnetPath := "net/ipv4/conf/" + ifName + "/route_localnet"
-	_, err := sysctl.Sysctl(routeLocalnetPath, "1")
-	return err
-}
-
 // genOldSnatChain is no longer used, but used to be created. We'll try and
 // tear it down in case the plugin version changed between ADD and DEL
 func genOldSnatChain(netName, containerID string) chain {
@@ -372,7 +354,7 @@ func genOldSnatChain(netName, containerID string) chain {
 // don't know which protocols were used.
 // So, we first check that iptables is "generally OK" by doing a check. If
 // not, we ignore the error, unless neither v4 nor v6 are OK.
-func unforwardPorts(config *PortMapConf) error {
+func (*portMapperIPTables) unforwardPorts(config *PortMapConf) error {
 	dnatChain := genDnatChain(config.Name, config.ContainerID)
 
 	// Might be lying around from old versions
