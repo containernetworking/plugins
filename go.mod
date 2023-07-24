@@ -3,7 +3,7 @@ module github.com/containernetworking/plugins
 go 1.20
 
 require (
-	github.com/Microsoft/hcsshim v0.9.9
+	github.com/Microsoft/hcsshim v0.9.10
 	github.com/alexflint/go-filemutex v1.2.0
 	github.com/buger/jsonparser v1.1.1
 	github.com/containernetworking/cni v1.1.2
