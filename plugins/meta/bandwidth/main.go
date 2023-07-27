@@ -40,12 +40,12 @@ const (
 // BandwidthEntry corresponds to a single entry in the bandwidth argument,
 // see CONVENTIONS.md
 type BandwidthEntry struct {
-	NonShapedSubnets []string `json:"nonShapedSubnets"` // Ipv4/ipv6 subnets to be excluded from traffic shaping
-	IngressRate      uint64   `json:"ingressRate"`      // Bandwidth rate in bps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
-	IngressBurst     uint64   `json:"ingressBurst"`     // Bandwidth burst in bits for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
-
-	EgressRate  uint64 `json:"egressRate"`  // Bandwidth rate in bps for traffic through container. 0 for no limit. If egressRate is set, egressBurst must also be set
-	EgressBurst uint64 `json:"egressBurst"` // Bandwidth burst in bits for traffic through container. 0 for no limit. If egressBurst is set, egressRate must also be set
+	UnshapedSubnets []string `json:"unshapedSubnets"` // Ipv4/ipv6 subnets to be excluded from traffic shaping. UnshapedSubnets and ShapedSubnets parameters are mutually exlusive
+	ShapedSubnets   []string `json:"shapedSubnets"`   // Ipv4/ipv6 subnets to be included in traffic shaping. UnshapedSubnets and ShapedSubnets parameters are mutually exlusive
+	IngressRate     uint64   `json:"ingressRate"`     // Bandwidth rate in bps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
+	IngressBurst    uint64   `json:"ingressBurst"`    // Bandwidth burst in bits for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
+	EgressRate      uint64   `json:"egressRate"`      // Bandwidth rate in bps for traffic through container. 0 for no limit. If egressRate is set, egressBurst must also be set
+	EgressBurst     uint64   `json:"egressBurst"`     // Bandwidth burst in bits for traffic through container. 0 for no limit. If egressBurst is set, egressRate must also be set
 }
 
 func (bw *BandwidthEntry) isZero() bool {
@@ -103,8 +103,13 @@ func getBandwidth(conf *PluginConf) *BandwidthEntry {
 		bw = conf.RuntimeConfig.Bandwidth
 	}
 
-	if bw != nil && bw.NonShapedSubnets == nil {
-		bw.NonShapedSubnets = make([]string, 0)
+	if bw != nil {
+		if bw.UnshapedSubnets == nil {
+			bw.UnshapedSubnets = make([]string, 0)
+		}
+		if bw.ShapedSubnets == nil {
+			bw.ShapedSubnets = make([]string, 0)
+		}
 	}
 
 	return bw
@@ -167,13 +172,25 @@ func getHostInterface(interfaces []*current.Interface, containerIfName string, n
 	return nil, fmt.Errorf("no veth peer of container interface found in host ns")
 }
 
-func validateSubnets(subnets []string) error {
-	for _, subnet := range subnets {
+func validateSubnets(unshapedSubnets []string, shapedSubnets []string) error {
+	if len(unshapedSubnets) > 0 && len(shapedSubnets) > 0 {
+		return fmt.Errorf("unshapedSubnets and shapedSubnets cannot be both specified, one of them should be discarded")
+	}
+
+	for _, subnet := range unshapedSubnets {
 		_, _, err := net.ParseCIDR(subnet)
 		if err != nil {
 			return fmt.Errorf("bad subnet %q provided, details %s", subnet, err)
 		}
 	}
+
+	for _, subnet := range shapedSubnets {
+		_, _, err := net.ParseCIDR(subnet)
+		if err != nil {
+			return fmt.Errorf("bad subnet %q provided, details %s", subnet, err)
+		}
+	}
+
 	return nil
 }
 
@@ -188,7 +205,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return types.PrintResult(conf.PrevResult, conf.CNIVersion)
 	}
 
-	if err = validateSubnets(bandwidth.NonShapedSubnets); err != nil {
+	if err = validateSubnets(bandwidth.UnshapedSubnets, bandwidth.ShapedSubnets); err != nil {
 		return err
 	}
 
@@ -214,7 +231,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	if bandwidth.IngressRate > 0 && bandwidth.IngressBurst > 0 {
 		err = CreateIngressQdisc(bandwidth.IngressRate, bandwidth.IngressBurst,
-			bandwidth.NonShapedSubnets, hostInterface.Name)
+			bandwidth.UnshapedSubnets, bandwidth.ShapedSubnets, hostInterface.Name)
 		if err != nil {
 			return err
 		}
@@ -243,7 +260,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 			Mac:  ifbDevice.Attrs().HardwareAddr.String(),
 		})
 		err = CreateEgressQdisc(bandwidth.EgressRate, bandwidth.EgressBurst,
-			bandwidth.NonShapedSubnets, hostInterface.Name, ifbDeviceName)
+			bandwidth.UnshapedSubnets, bandwidth.ShapedSubnets, hostInterface.Name,
+			ifbDeviceName)
 		if err != nil {
 			return err
 		}
@@ -316,8 +334,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	bandwidth := getBandwidth(bwConf)
 
-	err = validateSubnets(bandwidth.NonShapedSubnets)
-	if err != nil {
+	if err = validateSubnets(bandwidth.UnshapedSubnets, bandwidth.ShapedSubnets); err != nil {
 		return fmt.Errorf("failed to check subnets, details %s", err)
 	}
 
@@ -325,7 +342,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 		rateInBytes := bandwidth.IngressRate / 8
 		burstInBytes := bandwidth.IngressBurst / 8
 		bufferInBytes := buffer(rateInBytes, uint32(burstInBytes))
-		err = checkHTB(link, rateInBytes, bufferInBytes)
+		err = checkHTB(link, rateInBytes, bufferInBytes, bandwidth.ShapedSubnets)
 		if err != nil {
 			return err
 		}
@@ -339,7 +356,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 		if err != nil {
 			return fmt.Errorf("get ifb device: %s", err)
 		}
-		err = checkHTB(ifbDevice, rateInBytes, bufferInBytes)
+		err = checkHTB(ifbDevice, rateInBytes, bufferInBytes, bandwidth.ShapedSubnets)
 		if err != nil {
 			return err
 		}
@@ -347,7 +364,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	return nil
 }
 
-func checkHTB(link netlink.Link, rateInBytes uint64, bufferInBytes uint32) error {
+func checkHTB(link netlink.Link, rateInBytes uint64, bufferInBytes uint32, shapedSubnets []string) error {
 	qdiscs, err := SafeQdiscList(link)
 	if err != nil {
 		return err
@@ -367,7 +384,12 @@ func checkHTB(link netlink.Link, rateInBytes uint64, bufferInBytes uint32) error
 		}
 
 		foundHTB = true
-		if htb.Defcls != DefaultClassMinorID {
+		defaultClassMinorID := ShapedClassMinorID
+		if len(shapedSubnets) > 0 {
+			defaultClassMinorID = UnShapedClassMinorID
+		}
+
+		if htb.Defcls != uint32(defaultClassMinorID) {
 			return fmt.Errorf("Default class does not match")
 		}
 
@@ -404,10 +426,7 @@ func checkHTB(link netlink.Link, rateInBytes uint64, bufferInBytes uint32) error
 			}
 		}
 
-		// TODO: check non shaped subnet filters
-		// if bandwidth.NonShapedSubnets {
-		// 	filters, err := netlink.FilterList(link, htb.Handle)
-		// }
+		// TODO: check subnet filters
 	}
 
 	return nil

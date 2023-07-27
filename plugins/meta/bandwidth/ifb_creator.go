@@ -27,9 +27,10 @@ import (
 )
 
 const (
-	latencyInMillis            = 25
-	UncappedRate        uint64 = 100_000_000_000
-	DefaultClassMinorID        = 48
+	latencyInMillis             = 25
+	UncappedRate         uint64 = 100_000_000_000
+	ShapedClassMinorID   uint16 = 48
+	UnShapedClassMinorID uint16 = 1
 )
 
 func CreateIfb(ifbDeviceName string, mtu int, qlen int) error {
@@ -60,15 +61,24 @@ func TeardownIfb(deviceName string) error {
 	return err
 }
 
-func CreateIngressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string, hostDeviceName string) error {
+func CreateIngressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string, includeSubnets []string, hostDeviceName string) error {
 	hostDevice, err := netlink.LinkByName(hostDeviceName)
 	if err != nil {
 		return fmt.Errorf("get host device: %s", err)
 	}
-	return createHTB(rateInBits, burstInBits, hostDevice.Attrs().Index, excludeSubnets)
+
+	subnets := includeSubnets
+	exclude := false
+
+	if len(excludeSubnets) > 0 {
+		subnets = excludeSubnets
+		exclude = true
+	}
+
+	return createHTB(rateInBits, burstInBits, hostDevice.Attrs().Index, subnets, exclude)
 }
 
-func CreateEgressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string, hostDeviceName string, ifbDeviceName string) error {
+func CreateEgressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string, includeSubnets []string, hostDeviceName string, ifbDeviceName string) error {
 	ifbDevice, err := netlink.LinkByName(ifbDeviceName)
 	if err != nil {
 		return fmt.Errorf("get ifb device: %s", err)
@@ -115,8 +125,16 @@ func CreateEgressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string, 
 		return fmt.Errorf("add filter: %s", err)
 	}
 
+	subnets := excludeSubnets
+	exclude := true
+
+	if len(includeSubnets) > 0 {
+		subnets = includeSubnets
+		exclude = false
+	}
+
 	// throttle traffic on ifb device
-	err = createHTB(rateInBits, burstInBits, ifbDevice.Attrs().Index, excludeSubnets)
+	err = createHTB(rateInBits, burstInBits, ifbDevice.Attrs().Index, subnets, exclude)
 	if err != nil {
 		// egress from the container/netns pov = ingress from the main netns/host pov
 		return fmt.Errorf("create htb container egress qos rules: %s", err)
@@ -124,8 +142,14 @@ func CreateEgressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string, 
 	return nil
 }
 
-func createHTB(rateInBits, burstInBits uint64, linkIndex int, excludeSubnets []string) error {
+func createHTB(rateInBits, burstInBits uint64, linkIndex int, subnets []string, excludeSubnets bool) error {
 	// Netlink struct fields are not clear, let's use shell
+
+	defaultClassID := UnShapedClassMinorID
+	// If no subnets are specified, then shaping should apply to everything
+	if len(subnets) == 0 || excludeSubnets {
+		defaultClassID = ShapedClassMinorID
+	}
 
 	// Step 1 qdisc
 	// cmd := exec.Command("/usr/sbin/tc", "qdisc", "add", "dev", interfaceName, "root", "handle", "1:", "htb", "default", "30")
@@ -135,7 +159,7 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, excludeSubnets []s
 			Handle:    netlink.MakeHandle(1, 0),
 			Parent:    netlink.HANDLE_ROOT,
 		},
-		Defcls: DefaultClassMinorID,
+		Defcls: uint32(defaultClassID),
 		// No idea what these are so let's keep the default values from source code...
 		Version:      3,
 		Rate2Quantum: 10,
@@ -151,13 +175,13 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, excludeSubnets []s
 	burstInBytes := burstInBits / 8
 	bufferInBytes := buffer(rateInBytes, uint32(burstInBytes))
 
-	// The capped class for all but excluded subnets
+	// The capped class for shaped traffic (included subnets or all but excluded subnets)
 	// cmd = exec.Command("/usr/sbin/tc", "class", "add", "dev", interfaceName, "parent", "1:", "classid", "1:30", "htb", "rate",
 	//       fmt.Sprintf("%d", rateInBits), "burst", fmt.Sprintf("%d", burstInBits))
-	defClass := &netlink.HtbClass{
+	shapedClass := &netlink.HtbClass{
 		ClassAttrs: netlink.ClassAttrs{
 			LinkIndex: linkIndex,
-			Handle:    netlink.MakeHandle(1, DefaultClassMinorID),
+			Handle:    netlink.MakeHandle(1, ShapedClassMinorID),
 			Parent:    netlink.MakeHandle(1, 0),
 		},
 		Rate:   rateInBytes,
@@ -167,19 +191,19 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, excludeSubnets []s
 		Cbuffer: bufferInBytes,
 	}
 
-	err = netlink.ClassAdd(defClass)
+	err = netlink.ClassAdd(shapedClass)
 	if err != nil {
 		return fmt.Errorf("error while creating htb default class: %s", err)
 	}
 
-	// The uncapped class for the excluded subnets
+	// The uncapped class for non shaped traffic (either all but included subnets or excluded subnets only)
 	// cmd = exec.Command("/usr/sbin/tc", "class", "add", "dev", interfaceName, "parent", "1:", "classid", "1:1", "htb",
 	// 	"rate", "100000000000")
 	bigRate := UncappedRate
-	uncappedClass := &netlink.HtbClass{
+	unshapedClass := &netlink.HtbClass{
 		ClassAttrs: netlink.ClassAttrs{
 			LinkIndex: linkIndex,
-			Handle:    netlink.MakeHandle(1, 1),
+			Handle:    netlink.MakeHandle(1, UnShapedClassMinorID),
 			Parent:    qdisc.Handle,
 		},
 		Rate: bigRate,
@@ -187,14 +211,14 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, excludeSubnets []s
 		// No need for any burst, the minimum buffer size in q_htb.c should be enough to handle the rate which
 		// is already more than enough
 	}
-	err = netlink.ClassAdd(uncappedClass)
+	err = netlink.ClassAdd(unshapedClass)
 	if err != nil {
 		return fmt.Errorf("error while creating htb uncapped class: %s", err)
 	}
 
-	// Now add filters to redirect excluded subnets to the class 1 instead of the default one (30)
+	// Now add filters to redirect subnets to the class 1 if excluded instead of the default one (30)
 
-	for _, subnet := range excludeSubnets {
+	for _, subnet := range subnets {
 
 		// cmd = exec.Command("/usr/sbin/tc", "filter", "add", "dev", interfaceName, "parent", "1:", "protocol", protocol,
 		// "prio", "16", "u32", "match", "ip", "dst", subnet, "flowid", "1:1")
@@ -224,8 +248,6 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, excludeSubnets []s
 			prio = 16
 
 		}
-
-		// protocol := syscall.ETH_P_ALL
 
 		if len(maskBytes) < keepBytes {
 			return fmt.Errorf("error with net lib, unexpected count of bytes for ipv4 mask (%d < %d)",
@@ -296,6 +318,11 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, excludeSubnets []s
 			}
 		}
 
+		classID := shapedClass.Handle
+		if excludeSubnets {
+			classID = unshapedClass.Handle
+		}
+
 		tcFilter := netlink.U32{
 			FilterAttrs: netlink.FilterAttrs{
 				LinkIndex: linkIndex,
@@ -303,7 +330,7 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, excludeSubnets []s
 				Priority:  prio,
 				Protocol:  uint16(protocol),
 			},
-			ClassId: uncappedClass.Handle,
+			ClassId: classID,
 			Sel:     selector,
 		}
 
