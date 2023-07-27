@@ -38,8 +38,10 @@ import (
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
 
-func buildOneConfig(name, cniVersion string, orig *PluginConf, prevResult types.Result) ([]byte, error) {
+func buildOneConfig(cniVersion string, orig *PluginConf, prevResult types.Result) ([]byte, error) {
 	var err error
+
+	name := "myBWnet"
 
 	inject := map[string]interface{}{
 		"name":       name,
@@ -190,7 +192,7 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs).To(HaveLen(1))
 					Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(ifbLink.Attrs().Index))
 					Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Htb{}))
-					Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(DefaultClassMinorID)))
+					Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(ShapedClassMinorID)))
 
 					classes, err := netlink.ClassList(ifbLink, qdiscs[0].Attrs().Handle)
 
@@ -243,7 +245,7 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs).To(HaveLen(2))
 					Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(vethLink.Attrs().Index))
 					Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Htb{}))
-					Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(DefaultClassMinorID)))
+					Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(ShapedClassMinorID)))
 
 					classes, err := netlink.ClassList(vethLink, qdiscs[0].Attrs().Handle)
 
@@ -283,7 +285,7 @@ var _ = Describe("bandwidth test", func() {
 				"ingressBurst": 8,
 				"egressRate": 16,
 				"egressBurst": 12,
-				"nonShapedSubnets": [
+				"unshapedSubnets": [
 					"10.0.0.0/8",
 					"fd00:db8:abcd:1234:e000::/68"
 				],
@@ -339,7 +341,7 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs).To(HaveLen(1))
 					Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(ifbLink.Attrs().Index))
 					Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Htb{}))
-					Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(DefaultClassMinorID)))
+					Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(ShapedClassMinorID)))
 
 					classes, err := netlink.ClassList(ifbLink, qdiscs[0].Attrs().Handle)
 
@@ -445,7 +447,7 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs).To(HaveLen(2))
 					Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(vethLink.Attrs().Index))
 					Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Htb{}))
-					Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(DefaultClassMinorID)))
+					Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(ShapedClassMinorID)))
 
 					classes, err := netlink.ClassList(vethLink, qdiscs[0].Attrs().Handle)
 
@@ -531,6 +533,262 @@ var _ = Describe("bandwidth test", func() {
 			})
 		})
 
+		It(fmt.Sprintf("[%s] works with a Veth pair with some ipv4 and ipv6 shaped traffic for specific subnets", ver), func() {
+			conf := fmt.Sprintf(`{
+			"cniVersion": "%s",
+			"name": "cni-plugin-bandwidth-test",
+			"type": "bandwidth",
+			"ingressRate": 8,
+			"ingressBurst": 8,
+			"egressRate": 16,
+			"egressBurst": 12,
+			"shapedSubnets": [
+				"10.0.0.0/8",
+				"fd00:db8:abcd:1234:e000::/68"
+			],
+			"prevResult": {
+				"interfaces": [
+					{
+						"name": "%s",
+						"sandbox": ""
+					},
+					{
+						"name": "%s",
+						"sandbox": "%s"
+					}
+				],
+				"ips": [
+					{
+						"version": "4",
+						"address": "%s/24",
+						"gateway": "10.0.0.1",
+						"interface": 1
+					}
+				],
+				"routes": []
+			}
+		}`, ver, hostIfname, containerIfname, containerNs.Path(), containerIP.String())
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       containerNs.Path(),
+				IfName:      containerIfname,
+				StdinData:   []byte(conf),
+			}
+
+			// Container egress (host ingress)
+			Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				defer GinkgoRecover()
+				r, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
+				Expect(err).NotTo(HaveOccurred(), string(out))
+				result, err := types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(result.Interfaces).To(HaveLen(3))
+				Expect(result.Interfaces[2].Name).To(Equal(ifbDeviceName))
+				Expect(result.Interfaces[2].Sandbox).To(Equal(""))
+
+				ifbLink, err := netlink.LinkByName(ifbDeviceName)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ifbLink.Attrs().MTU).To(Equal(hostIfaceMTU))
+
+				qdiscs, err := netlink.QdiscList(ifbLink)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(qdiscs).To(HaveLen(1))
+				Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(ifbLink.Attrs().Index))
+				Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Htb{}))
+				Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(UnShapedClassMinorID)))
+
+				classes, err := netlink.ClassList(ifbLink, qdiscs[0].Attrs().Handle)
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(classes).To(HaveLen(2))
+
+				// Uncapped class
+				Expect(classes[0]).To(BeAssignableToTypeOf(&netlink.HtbClass{}))
+				Expect(classes[0].(*netlink.HtbClass).Handle).To(Equal(netlink.MakeHandle(1, UnShapedClassMinorID)))
+				Expect(classes[0].(*netlink.HtbClass).Rate).To(Equal(UncappedRate))
+				Expect(classes[0].(*netlink.HtbClass).Buffer).To(Equal(uint32(0)))
+				Expect(classes[0].(*netlink.HtbClass).Ceil).To(Equal(UncappedRate))
+				Expect(classes[0].(*netlink.HtbClass).Cbuffer).To(Equal(uint32(0)))
+
+				// Class with traffic shapping settings
+				Expect(classes[1]).To(BeAssignableToTypeOf(&netlink.HtbClass{}))
+				Expect(classes[1].(*netlink.HtbClass).Handle).To(Equal(netlink.MakeHandle(1, ShapedClassMinorID)))
+				Expect(classes[1].(*netlink.HtbClass).Rate).To(Equal(uint64(2)))
+				// Expect(classes[1].(*netlink.HtbClass).Buffer).To(Equal(uint32(7812500)))
+				Expect(classes[1].(*netlink.HtbClass).Ceil).To(Equal(uint64(4)))
+				// Expect(classes[1].(*netlink.HtbClass).Cbuffer).To(Equal(uint32(0)))
+
+				filters, err := netlink.FilterList(ifbLink, qdiscs[0].Attrs().Handle)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(filters).To(HaveLen(2))
+
+				// traffic to fd00:db8:abcd:1234:e000::/68 redirected to uncapped class
+				Expect(filters[0]).To(BeAssignableToTypeOf(&netlink.U32{}))
+				Expect(filters[0].(*netlink.U32).Actions).To(BeEmpty())
+				Expect(filters[0].Attrs().Protocol).To(Equal(uint16(syscall.ETH_P_IPV6)))
+				Expect(filters[0].Attrs().LinkIndex).To(Equal(ifbLink.Attrs().Index))
+				Expect(filters[0].Attrs().Priority).To(Equal(uint16(15)))
+				Expect(filters[0].Attrs().Parent).To(Equal(qdiscs[0].Attrs().Handle))
+				Expect(filters[0].(*netlink.U32).ClassId).To(Equal(netlink.MakeHandle(1, ShapedClassMinorID)))
+
+				filterSel := filters[0].(*netlink.U32).Sel
+				Expect(filterSel).To(BeAssignableToTypeOf(&netlink.TcU32Sel{}))
+				Expect(filterSel.Flags).To(Equal(uint8(netlink.TC_U32_TERMINAL)))
+				Expect(filterSel.Keys).To(HaveLen(3))
+				Expect(filterSel.Nkeys).To(Equal(uint8(3)))
+
+				// The filter should match to fd00:db8:abcd:1234:e000::/68 dst address in other words it should be:
+				// match 0xfd000db8/0xffffffff at 24
+				// match 0xabcd1234/0xffffffff at 28
+				// match 0xe0000000/0xf0000000 at 32
+				// (and last match discarded because it would be equivalent to a matchall/true condition at 36)
+				Expect(filterSel.Keys[0].Off).To(Equal(int32(24)))
+				Expect(filterSel.Keys[0].Val).To(Equal(uint32(4244639160)))
+				Expect(filterSel.Keys[0].Mask).To(Equal(uint32(4294967295)))
+
+				Expect(filterSel.Keys[1].Off).To(Equal(int32(28)))
+				Expect(filterSel.Keys[1].Val).To(Equal(uint32(2882343476)))
+				Expect(filterSel.Keys[1].Mask).To(Equal(uint32(4294967295)))
+
+				Expect(filterSel.Keys[2].Off).To(Equal(int32(32)))
+				Expect(filterSel.Keys[2].Val).To(Equal(uint32(3758096384)))
+				Expect(filterSel.Keys[2].Mask).To(Equal(uint32(4026531840)))
+
+				// traffic to 10.0.0.0/8 redirected to uncapped class
+				Expect(filters[1]).To(BeAssignableToTypeOf(&netlink.U32{}))
+				Expect(filters[1].(*netlink.U32).Actions).To(BeEmpty())
+				Expect(filters[1].Attrs().Protocol).To(Equal(uint16(syscall.ETH_P_IP)))
+				Expect(filters[1].Attrs().LinkIndex).To(Equal(ifbLink.Attrs().Index))
+				Expect(filters[1].Attrs().Priority).To(Equal(uint16(16)))
+				Expect(filters[1].Attrs().Parent).To(Equal(qdiscs[0].Attrs().Handle))
+				Expect(filters[1].(*netlink.U32).ClassId).To(Equal(netlink.MakeHandle(1, ShapedClassMinorID)))
+
+				filterSel = filters[1].(*netlink.U32).Sel
+				Expect(filterSel).To(BeAssignableToTypeOf(&netlink.TcU32Sel{}))
+				Expect(filterSel.Flags).To(Equal(uint8(netlink.TC_U32_TERMINAL)))
+				Expect(filterSel.Keys).To(HaveLen(1))
+				Expect(filterSel.Nkeys).To(Equal(uint8(1)))
+
+				// The filter should match to 10.0.0.0/8 dst address in other words it should be:
+				// match 0a000000/ff000000 at 16
+				selKey := filterSel.Keys[0]
+				Expect(selKey.Val).To(Equal(uint32(10 * math.Pow(256, 3))))
+				Expect(selKey.Off).To(Equal(int32(16)))
+				Expect(selKey.Mask).To(Equal(uint32(255 * math.Pow(256, 3))))
+
+				hostVethLink, err := netlink.LinkByName(hostIfname)
+				Expect(err).NotTo(HaveOccurred())
+
+				qdiscFilters, err := netlink.FilterList(hostVethLink, netlink.MakeHandle(0xffff, 0))
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(qdiscFilters).To(HaveLen(1))
+				Expect(qdiscFilters[0].(*netlink.U32).Actions[0].(*netlink.MirredAction).Ifindex).To(Equal(ifbLink.Attrs().Index))
+
+				return nil
+			})).To(Succeed())
+
+			// Container ingress (host egress)
+			Expect(hostNs.Do(func(n ns.NetNS) error {
+				defer GinkgoRecover()
+
+				vethLink, err := netlink.LinkByName(hostIfname)
+				Expect(err).NotTo(HaveOccurred())
+
+				qdiscs, err := netlink.QdiscList(vethLink)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(qdiscs).To(HaveLen(2))
+				Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(vethLink.Attrs().Index))
+				Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Htb{}))
+				Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(UnShapedClassMinorID)))
+
+				classes, err := netlink.ClassList(vethLink, qdiscs[0].Attrs().Handle)
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(classes).To(HaveLen(2))
+
+				// Uncapped class
+				Expect(classes[0]).To(BeAssignableToTypeOf(&netlink.HtbClass{}))
+				Expect(classes[0].(*netlink.HtbClass).Handle).To(Equal(netlink.MakeHandle(1, UnShapedClassMinorID)))
+				Expect(classes[0].(*netlink.HtbClass).Rate).To(Equal(UncappedRate))
+				Expect(classes[0].(*netlink.HtbClass).Buffer).To(Equal(uint32(0)))
+				Expect(classes[0].(*netlink.HtbClass).Ceil).To(Equal(UncappedRate))
+				Expect(classes[0].(*netlink.HtbClass).Cbuffer).To(Equal(uint32(0)))
+
+				// Class with traffic shapping settings
+				Expect(classes[1]).To(BeAssignableToTypeOf(&netlink.HtbClass{}))
+				Expect(classes[1].(*netlink.HtbClass).Handle).To(Equal(netlink.MakeHandle(1, ShapedClassMinorID)))
+				Expect(classes[1].(*netlink.HtbClass).Rate).To(Equal(uint64(1)))
+				// Expect(classes[1].(*netlink.HtbClass).Buffer).To(Equal(uint32(15625000)))
+				Expect(classes[1].(*netlink.HtbClass).Ceil).To(Equal(uint64(2)))
+				// Expect(classes[1].(*netlink.HtbClass).Cbuffer).To(Equal(uint32(0)))
+
+				filters, err := netlink.FilterList(vethLink, qdiscs[0].Attrs().Handle)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(filters).To(HaveLen(2))
+
+				// traffic to fd00:db8:abcd:1234:e000::/68 redirected to uncapped class
+				Expect(filters[0]).To(BeAssignableToTypeOf(&netlink.U32{}))
+				Expect(filters[0].(*netlink.U32).Actions).To(BeEmpty())
+				Expect(filters[0].Attrs().Protocol).To(Equal(uint16(syscall.ETH_P_IPV6)))
+				Expect(filters[0].Attrs().LinkIndex).To(Equal(vethLink.Attrs().Index))
+				Expect(filters[0].Attrs().Priority).To(Equal(uint16(15)))
+				Expect(filters[0].Attrs().Parent).To(Equal(qdiscs[0].Attrs().Handle))
+				Expect(filters[0].(*netlink.U32).ClassId).To(Equal(netlink.MakeHandle(1, ShapedClassMinorID)))
+
+				filterSel := filters[0].(*netlink.U32).Sel
+				Expect(filterSel).To(BeAssignableToTypeOf(&netlink.TcU32Sel{}))
+				Expect(filterSel.Flags).To(Equal(uint8(netlink.TC_U32_TERMINAL)))
+				Expect(filterSel.Keys).To(HaveLen(3))
+				Expect(filterSel.Nkeys).To(Equal(uint8(3)))
+
+				// The filter should match to fd00:db8:abcd:1234:e000::/68 dst address in other words it should be:
+				// match 0xfd000db8/0xffffffff at 24
+				// match 0xabcd1234/0xffffffff at 28
+				// match 0xe0000000/0xf0000000 at 32
+				// (and last match discarded because it would be equivalent to a matchall/true condition at 36)
+				Expect(filterSel.Keys[0].Off).To(Equal(int32(24)))
+				Expect(filterSel.Keys[0].Val).To(Equal(uint32(4244639160)))
+				Expect(filterSel.Keys[0].Mask).To(Equal(uint32(4294967295)))
+
+				Expect(filterSel.Keys[1].Off).To(Equal(int32(28)))
+				Expect(filterSel.Keys[1].Val).To(Equal(uint32(2882343476)))
+				Expect(filterSel.Keys[1].Mask).To(Equal(uint32(4294967295)))
+
+				Expect(filterSel.Keys[2].Off).To(Equal(int32(32)))
+				Expect(filterSel.Keys[2].Val).To(Equal(uint32(3758096384)))
+				Expect(filterSel.Keys[2].Mask).To(Equal(uint32(4026531840)))
+
+				// traffic to 10.0.0.0/8 redirected to uncapped class
+				Expect(filters[1]).To(BeAssignableToTypeOf(&netlink.U32{}))
+				Expect(filters[1].(*netlink.U32).Actions).To(BeEmpty())
+				Expect(filters[1].Attrs().Protocol).To(Equal(uint16(syscall.ETH_P_IP)))
+				Expect(filters[1].Attrs().LinkIndex).To(Equal(vethLink.Attrs().Index))
+				Expect(filters[1].Attrs().Priority).To(Equal(uint16(16)))
+				Expect(filters[1].Attrs().Parent).To(Equal(qdiscs[0].Attrs().Handle))
+				Expect(filters[1].(*netlink.U32).ClassId).To(Equal(netlink.MakeHandle(1, ShapedClassMinorID)))
+
+				filterSel = filters[1].(*netlink.U32).Sel
+				Expect(filterSel).To(BeAssignableToTypeOf(&netlink.TcU32Sel{}))
+				Expect(filterSel.Flags).To(Equal(uint8(netlink.TC_U32_TERMINAL)))
+				Expect(filterSel.Keys).To(HaveLen(1))
+				Expect(filterSel.Nkeys).To(Equal(uint8(1)))
+
+				// The filter should match to 10.0.0.0/8 dst address in other words it should be:
+				// match 0a000000/ff000000 at 16
+				selKey := filterSel.Keys[0]
+				Expect(selKey.Val).To(Equal(uint32(10 * math.Pow(256, 3))))
+				Expect(selKey.Off).To(Equal(int32(16)))
+				Expect(selKey.Mask).To(Equal(uint32(255 * math.Pow(256, 3))))
+
+				return nil
+			})).To(Succeed())
+		})
+
 		It(fmt.Sprintf("[%s] does not apply ingress when disabled", ver), func() {
 			conf := fmt.Sprintf(`{
 			"cniVersion": "%s",
@@ -540,7 +798,7 @@ var _ = Describe("bandwidth test", func() {
 			"ingressBurst": 0,
 			"egressRate": 8000,
 			"egressBurst": 80,
-			"nonShapedSubnets": [
+			"unshapedSubnets": [
 					"10.0.0.0/8",
 					"fd00:db8:abcd:1234:e000::/68"
 			],
@@ -590,7 +848,7 @@ var _ = Describe("bandwidth test", func() {
 				Expect(qdiscs).To(HaveLen(1))
 				Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(ifbLink.Attrs().Index))
 				Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Htb{}))
-				Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(DefaultClassMinorID)))
+				Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(ShapedClassMinorID)))
 				classes, err := netlink.ClassList(ifbLink, qdiscs[0].Attrs().Handle)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(classes).To(HaveLen(2))
@@ -605,7 +863,7 @@ var _ = Describe("bandwidth test", func() {
 
 				// Class with traffic shapping settings
 				Expect(classes[1]).To(BeAssignableToTypeOf(&netlink.HtbClass{}))
-				Expect(classes[1].(*netlink.HtbClass).Handle).To(Equal(netlink.MakeHandle(1, uint16(DefaultClassMinorID))))
+				Expect(classes[1].(*netlink.HtbClass).Handle).To(Equal(netlink.MakeHandle(1, ShapedClassMinorID)))
 				Expect(classes[1].(*netlink.HtbClass).Rate).To(Equal(uint64(1000)))
 				// Expect(classes[1].(*netlink.HtbClass).Buffer).To(Equal(uint32(7812500)))
 				Expect(classes[1].(*netlink.HtbClass).Ceil).To(Equal(uint64(2000)))
@@ -766,7 +1024,7 @@ var _ = Describe("bandwidth test", func() {
 				Expect(qdiscs).To(HaveLen(1))
 				Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(containerIfLink.Attrs().Index))
 				Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Htb{}))
-				Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(DefaultClassMinorID)))
+				Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(ShapedClassMinorID)))
 
 				classes, err := netlink.ClassList(containerIfLink, qdiscs[0].Attrs().Handle)
 
@@ -798,6 +1056,154 @@ var _ = Describe("bandwidth test", func() {
 				qdiscFilters, err := netlink.FilterList(containerIfLink, netlink.MakeHandle(0xffff, 0))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(qdiscFilters).To(BeEmpty())
+				return nil
+			})).To(Succeed())
+		})
+
+		It(fmt.Sprintf("[%s] fails with invalid UnshapedSubnets", ver), func() {
+			conf := fmt.Sprintf(`{
+			"cniVersion": "%s",
+			"name": "cni-plugin-bandwidth-test",
+			"type": "bandwidth",
+			"ingressRate": 123,
+			"ingressBurst": 123,
+			"egressRate": 123,
+			"egressBurst": 123,
+			"unshapedSubnets": ["10.0.0.0/8", "hello"],
+			"prevResult": {
+				"interfaces": [
+					{
+						"name": "%s",
+						"sandbox": ""
+					},
+					{
+						"name": "%s",
+						"sandbox": "%s"
+					}
+				],
+				"ips": [
+					{
+						"version": "4",
+						"address": "%s/24",
+						"gateway": "10.0.0.1",
+						"interface": 1
+					}
+				],
+				"routes": []
+			}
+		}`, ver, hostIfname, containerIfname, containerNs.Path(), containerIP.String())
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       containerNs.Path(),
+				IfName:      "eth0",
+				StdinData:   []byte(conf),
+			}
+
+			Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				defer GinkgoRecover()
+
+				_, _, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
+				Expect(err).To(MatchError("bad subnet \"hello\" provided, details invalid CIDR address: hello"))
+				return nil
+			})).To(Succeed())
+		})
+
+		It(fmt.Sprintf("[%s] fails with invalid ShapedSubnets", ver), func() {
+			conf := fmt.Sprintf(`{
+			"cniVersion": "%s",
+			"name": "cni-plugin-bandwidth-test",
+			"type": "bandwidth",
+			"ingressRate": 123,
+			"ingressBurst": 123,
+			"egressRate": 123,
+			"egressBurst": 123,
+			"ShapedSubnets": ["10.0.0.0/8", "hello"],
+			"prevResult": {
+				"interfaces": [
+					{
+						"name": "%s",
+						"sandbox": ""
+					},
+					{
+						"name": "%s",
+						"sandbox": "%s"
+					}
+				],
+				"ips": [
+					{
+						"version": "4",
+						"address": "%s/24",
+						"gateway": "10.0.0.1",
+						"interface": 1
+					}
+				],
+				"routes": []
+			}
+		}`, ver, hostIfname, containerIfname, containerNs.Path(), containerIP.String())
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       containerNs.Path(),
+				IfName:      "eth0",
+				StdinData:   []byte(conf),
+			}
+
+			Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				defer GinkgoRecover()
+
+				_, _, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
+				Expect(err).To(MatchError("bad subnet \"hello\" provided, details invalid CIDR address: hello"))
+				return nil
+			})).To(Succeed())
+		})
+
+		It(fmt.Sprintf("[%s] fails with both ShapedSubnets and UnShapedSubnets specified", ver), func() {
+			conf := fmt.Sprintf(`{
+			"cniVersion": "%s",
+			"name": "cni-plugin-bandwidth-test",
+			"type": "bandwidth",
+			"ingressRate": 123,
+			"ingressBurst": 123,
+			"egressRate": 123,
+			"egressBurst": 123,
+			"ShapedSubnets": ["10.0.0.0/8"],
+			"UnShapedSubnets": ["192.168.0.0/16"],
+			"prevResult": {
+				"interfaces": [
+					{
+						"name": "%s",
+						"sandbox": ""
+					},
+					{
+						"name": "%s",
+						"sandbox": "%s"
+					}
+				],
+				"ips": [
+					{
+						"version": "4",
+						"address": "%s/24",
+						"gateway": "10.0.0.1",
+						"interface": 1
+					}
+				],
+				"routes": []
+			}
+		}`, ver, hostIfname, containerIfname, containerNs.Path(), containerIP.String())
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       containerNs.Path(),
+				IfName:      "eth0",
+				StdinData:   []byte(conf),
+			}
+
+			Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				defer GinkgoRecover()
+
+				_, _, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
+				Expect(err).To(MatchError("unshapedSubnets and shapedSubnets cannot be both specified, one of them should be discarded"))
 				return nil
 			})).To(Succeed())
 		})
@@ -909,7 +1315,7 @@ var _ = Describe("bandwidth test", func() {
 					"ingressBurst": 8,
 					"egressRate": 16,
 					"egressBurst": 9,
-					"nonShapedSubnets": ["192.168.0.0/24"]
+					"unshapedSubnets": ["192.168.0.0/24"]
 				}
 			},
 			"prevResult": {
@@ -963,7 +1369,7 @@ var _ = Describe("bandwidth test", func() {
 				Expect(qdiscs).To(HaveLen(1))
 				Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(ifbLink.Attrs().Index))
 				Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Htb{}))
-				Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(DefaultClassMinorID)))
+				Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(ShapedClassMinorID)))
 
 				classes, err := netlink.ClassList(ifbLink, qdiscs[0].Attrs().Handle)
 
@@ -1037,7 +1443,7 @@ var _ = Describe("bandwidth test", func() {
 				Expect(qdiscs).To(HaveLen(2))
 				Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(vethLink.Attrs().Index))
 				Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Htb{}))
-				Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(DefaultClassMinorID)))
+				Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(ShapedClassMinorID)))
 
 				classes, err := netlink.ClassList(vethLink, qdiscs[0].Attrs().Handle)
 
@@ -1099,14 +1505,14 @@ var _ = Describe("bandwidth test", func() {
 			"ingressBurst": 0,
 			"egressRate": 123,
 			"egressBurst": 123,
-			"nonShapedSubnets": ["192.168.0.0/24"],
+			"unshapedSubnets": ["192.168.0.0/24"],
 			"runtimeConfig": {
 				"bandWidth": {
 					"ingressRate": 8,
 					"ingressBurst": 8,
 					"egressRate": 16,
 					"egressBurst": 9,
-					"nonShapedSubnets": ["10.0.0.0/8", "fd00:db8:abcd:1234:e000::/68"]
+					"unshapedSubnets": ["10.0.0.0/8", "fd00:db8:abcd:1234:e000::/68"]
 				}
 			},
 			"prevResult": {
@@ -1160,7 +1566,7 @@ var _ = Describe("bandwidth test", func() {
 				Expect(qdiscs).To(HaveLen(1))
 				Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(ifbLink.Attrs().Index))
 				Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Htb{}))
-				Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(DefaultClassMinorID)))
+				Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(ShapedClassMinorID)))
 
 				classes, err := netlink.ClassList(ifbLink, qdiscs[0].Attrs().Handle)
 
@@ -1509,7 +1915,7 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs).To(HaveLen(1))
 					Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(ifbLink.Attrs().Index))
 					Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Htb{}))
-					Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(DefaultClassMinorID)))
+					Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(ShapedClassMinorID)))
 
 					classes, err := netlink.ClassList(ifbLink, qdiscs[0].Attrs().Handle)
 
@@ -1561,7 +1967,7 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs).To(HaveLen(2))
 					Expect(qdiscs[0].Attrs().LinkIndex).To(Equal(vethLink.Attrs().Index))
 					Expect(qdiscs[0]).To(BeAssignableToTypeOf(&netlink.Htb{}))
-					Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(DefaultClassMinorID)))
+					Expect(qdiscs[0].(*netlink.Htb).Defcls).To(Equal(uint32(ShapedClassMinorID)))
 
 					classes, err := netlink.ClassList(vethLink, qdiscs[0].Attrs().Handle)
 
@@ -1822,7 +2228,7 @@ var _ = Describe("bandwidth test", func() {
 							EgressRate:   rateInBits,
 						}
 						bandwidthPluginConf.Type = "bandwidth"
-						newConfBytes, err := buildOneConfig("myBWnet", ver, bandwidthPluginConf, containerWithQoSResult)
+						newConfBytes, err := buildOneConfig(ver, bandwidthPluginConf, containerWithQoSResult)
 						Expect(err).NotTo(HaveOccurred())
 
 						args := &skel.CmdArgs{
@@ -1849,7 +2255,7 @@ var _ = Describe("bandwidth test", func() {
 							}
 							checkConf.Type = "bandwidth"
 
-							newCheckBytes, err := buildOneConfig("myBWnet", ver, checkConf, result)
+							newCheckBytes, err := buildOneConfig(ver, checkConf, result)
 							Expect(err).NotTo(HaveOccurred())
 
 							args = &skel.CmdArgs{
@@ -1917,6 +2323,566 @@ var _ = Describe("bandwidth test", func() {
 				})
 			})
 		})
+
+		Context(fmt.Sprintf("[%s] when chaining bandwidth plugin with PTP and excluding specific subnets from traffic", ver), func() {
+			var ptpConf string
+			var rateInBits uint64
+			var burstInBits uint64
+			var packetInBytes int
+			var containerWithoutQoSNS ns.NetNS
+			var containerWithQoSNS ns.NetNS
+			var portServerWithQoS int
+			var portServerWithoutQoS int
+
+			var containerWithQoSRes types.Result
+			var containerWithoutQoSRes types.Result
+			var echoServerWithQoS *gexec.Session
+			var echoServerWithoutQoS *gexec.Session
+			var dataDir string
+
+			BeforeEach(func() {
+				rateInBytes := 1000
+				rateInBits = uint64(rateInBytes * 8)
+				burstInBits = rateInBits * 2
+				unshapedSubnets := []string{"10.1.2.0/24"}
+				// NOTE: Traffic shapping is not that precise at low rates, would be better to use higher rates + simple time+netcat for data transfer, rather than the provided
+				// client/server bin (limited to small amount of data)
+				packetInBytes = rateInBytes * 3
+
+				var err error
+				dataDir, err = os.MkdirTemp("", "bandwidth_linux_test")
+				Expect(err).NotTo(HaveOccurred())
+
+				ptpConf = fmt.Sprintf(`{
+					"cniVersion": "%s",
+					"name": "myBWnet",
+					"type": "ptp",
+					"ipMasq": true,
+					"mtu": 512,
+					"ipam": {
+					"type": "host-local",
+					"subnet": "10.1.2.0/24",
+					"dataDir": "%s"
+					}
+				}`, ver, dataDir)
+
+				const (
+					containerWithQoSIFName    = "ptp0"
+					containerWithoutQoSIFName = "ptp1"
+				)
+
+				containerWithQoSNS, err = testutils.NewNS()
+				Expect(err).NotTo(HaveOccurred())
+
+				containerWithoutQoSNS, err = testutils.NewNS()
+				Expect(err).NotTo(HaveOccurred())
+
+				By("create two containers, and use the bandwidth plugin on one of them")
+				Expect(hostNs.Do(func(ns.NetNS) error {
+					defer GinkgoRecover()
+
+					containerWithQoSRes, _, err = testutils.CmdAdd(containerWithQoSNS.Path(), "dummy", containerWithQoSIFName, []byte(ptpConf), func() error {
+						r, err := invoke.DelegateAdd(context.TODO(), "ptp", []byte(ptpConf), nil)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(r.Print()).To(Succeed())
+
+						return err
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					containerWithoutQoSRes, _, err = testutils.CmdAdd(containerWithoutQoSNS.Path(), "dummy2", containerWithoutQoSIFName, []byte(ptpConf), func() error {
+						r, err := invoke.DelegateAdd(context.TODO(), "ptp", []byte(ptpConf), nil)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(r.Print()).To(Succeed())
+
+						return err
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					containerWithQoSResult, err := types100.GetResult(containerWithQoSRes)
+					Expect(err).NotTo(HaveOccurred())
+
+					bandwidthPluginConf := &PluginConf{}
+					err = json.Unmarshal([]byte(ptpConf), &bandwidthPluginConf)
+					Expect(err).NotTo(HaveOccurred())
+
+					bandwidthPluginConf.RuntimeConfig.Bandwidth = &BandwidthEntry{
+						IngressBurst:    burstInBits,
+						IngressRate:     rateInBits,
+						EgressBurst:     burstInBits,
+						EgressRate:      rateInBits,
+						UnshapedSubnets: unshapedSubnets,
+					}
+					bandwidthPluginConf.Type = "bandwidth"
+					newConfBytes, err := buildOneConfig(ver, bandwidthPluginConf, containerWithQoSResult)
+					Expect(err).NotTo(HaveOccurred())
+
+					args := &skel.CmdArgs{
+						ContainerID: "dummy3",
+						Netns:       containerWithQoSNS.Path(),
+						IfName:      containerWithQoSIFName,
+						StdinData:   newConfBytes,
+					}
+
+					result, out, err := testutils.CmdAdd(containerWithQoSNS.Path(), args.ContainerID, "", newConfBytes, func() error { return cmdAdd(args) })
+					Expect(err).NotTo(HaveOccurred(), string(out))
+
+					if testutils.SpecVersionHasCHECK(ver) {
+						// Do CNI Check
+						checkConf := &PluginConf{}
+						err = json.Unmarshal([]byte(ptpConf), &checkConf)
+						Expect(err).NotTo(HaveOccurred())
+
+						checkConf.RuntimeConfig.Bandwidth = &BandwidthEntry{
+							IngressBurst:    burstInBits,
+							IngressRate:     rateInBits,
+							EgressBurst:     burstInBits,
+							EgressRate:      rateInBits,
+							UnshapedSubnets: unshapedSubnets,
+						}
+						checkConf.Type = "bandwidth"
+
+						newCheckBytes, err := buildOneConfig(ver, checkConf, result)
+						Expect(err).NotTo(HaveOccurred())
+
+						args = &skel.CmdArgs{
+							ContainerID: "dummy3",
+							Netns:       containerWithQoSNS.Path(),
+							IfName:      containerWithQoSIFName,
+							StdinData:   newCheckBytes,
+						}
+
+						err = testutils.CmdCheck(containerWithQoSNS.Path(), args.ContainerID, "", func() error { return cmdCheck(args) })
+						Expect(err).NotTo(HaveOccurred())
+					}
+
+					return nil
+				})).To(Succeed())
+
+				By("starting a tcp server on both containers")
+				portServerWithQoS, echoServerWithQoS = startEchoServerInNamespace(containerWithQoSNS)
+				portServerWithoutQoS, echoServerWithoutQoS = startEchoServerInNamespace(containerWithoutQoSNS)
+			})
+
+			AfterEach(func() {
+				Expect(os.RemoveAll(dataDir)).To(Succeed())
+
+				Expect(containerWithQoSNS.Close()).To(Succeed())
+				Expect(testutils.UnmountNS(containerWithQoSNS)).To(Succeed())
+				Expect(containerWithoutQoSNS.Close()).To(Succeed())
+				Expect(testutils.UnmountNS(containerWithoutQoSNS)).To(Succeed())
+
+				if echoServerWithoutQoS != nil {
+					echoServerWithoutQoS.Kill()
+				}
+				if echoServerWithQoS != nil {
+					echoServerWithQoS.Kill()
+				}
+			})
+
+			It("does not limits ingress traffic on veth device coming from 10.1.2.0/24", func() {
+				var runtimeWithLimit time.Duration
+				var runtimeWithoutLimit time.Duration
+
+				By("gather timing statistics about both containers")
+
+				By("sending tcp traffic to the container that has traffic shaped", func() {
+					start := time.Now()
+					result, err := types100.GetResult(containerWithQoSRes)
+					Expect(err).NotTo(HaveOccurred())
+					makeTCPClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithQoS, packetInBytes)
+					end := time.Now()
+					runtimeWithLimit = end.Sub(start)
+					log.Printf("Elapsed with qos %.2f", runtimeWithLimit.Seconds())
+				})
+
+				By("sending tcp traffic to the container that does not have traffic shaped", func() {
+					start := time.Now()
+					result, err := types100.GetResult(containerWithoutQoSRes)
+					Expect(err).NotTo(HaveOccurred())
+					makeTCPClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithoutQoS, packetInBytes)
+					end := time.Now()
+					runtimeWithoutLimit = end.Sub(start)
+					log.Printf("Elapsed without qos %.2f", runtimeWithoutLimit.Seconds())
+				})
+
+				Expect(runtimeWithLimit - runtimeWithoutLimit).To(BeNumerically("<", 100*time.Millisecond))
+			})
+		})
+
+		Context(fmt.Sprintf("[%s] when chaining bandwidth plugin with PTP and only including specific subnets in traffic shapping (not including the main ns one)", ver), func() {
+			var ptpConf string
+			var rateInBits uint64
+			var burstInBits uint64
+			var packetInBytes int
+			var containerWithoutQoSNS ns.NetNS
+			var containerWithQoSNS ns.NetNS
+			var portServerWithQoS int
+			var portServerWithoutQoS int
+
+			var containerWithQoSRes types.Result
+			var containerWithoutQoSRes types.Result
+			var echoServerWithQoS *gexec.Session
+			var echoServerWithoutQoS *gexec.Session
+			var dataDir string
+
+			BeforeEach(func() {
+				rateInBytes := 1000
+				rateInBits = uint64(rateInBytes * 8)
+				burstInBits = rateInBits * 2
+				shapedSubnets := []string{"10.2.2.0/24"}
+				// NOTE: Traffic shapping is not that precise at low rates, would be better to use higher rates + simple time+netcat for data transfer, rather than the provided
+				// client/server bin (limited to small amount of data)
+				packetInBytes = rateInBytes * 3
+
+				var err error
+				dataDir, err = os.MkdirTemp("", "bandwidth_linux_test")
+				Expect(err).NotTo(HaveOccurred())
+
+				ptpConf = fmt.Sprintf(`{
+					"cniVersion": "%s",
+					"name": "myBWnet",
+					"type": "ptp",
+					"ipMasq": true,
+					"mtu": 512,
+					"ipam": {
+					"type": "host-local",
+					"subnet": "10.1.2.0/24",
+					"dataDir": "%s"
+					}
+				}`, ver, dataDir)
+
+				const (
+					containerWithQoSIFName    = "ptp0"
+					containerWithoutQoSIFName = "ptp1"
+				)
+
+				containerWithQoSNS, err = testutils.NewNS()
+				Expect(err).NotTo(HaveOccurred())
+
+				containerWithoutQoSNS, err = testutils.NewNS()
+				Expect(err).NotTo(HaveOccurred())
+
+				By("create two containers, and use the bandwidth plugin on one of them")
+
+				Expect(hostNs.Do(func(ns.NetNS) error {
+					defer GinkgoRecover()
+
+					containerWithQoSRes, _, err = testutils.CmdAdd(containerWithQoSNS.Path(), "dummy", containerWithQoSIFName, []byte(ptpConf), func() error {
+						r, err := invoke.DelegateAdd(context.TODO(), "ptp", []byte(ptpConf), nil)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(r.Print()).To(Succeed())
+
+						return err
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					containerWithoutQoSRes, _, err = testutils.CmdAdd(containerWithoutQoSNS.Path(), "dummy2", containerWithoutQoSIFName, []byte(ptpConf), func() error {
+						r, err := invoke.DelegateAdd(context.TODO(), "ptp", []byte(ptpConf), nil)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(r.Print()).To(Succeed())
+
+						return err
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					containerWithQoSResult, err := types100.GetResult(containerWithQoSRes)
+					Expect(err).NotTo(HaveOccurred())
+
+					bandwidthPluginConf := &PluginConf{}
+					err = json.Unmarshal([]byte(ptpConf), &bandwidthPluginConf)
+					Expect(err).NotTo(HaveOccurred())
+
+					bandwidthPluginConf.RuntimeConfig.Bandwidth = &BandwidthEntry{
+						IngressBurst:  burstInBits,
+						IngressRate:   rateInBits,
+						EgressBurst:   burstInBits,
+						EgressRate:    rateInBits,
+						ShapedSubnets: shapedSubnets,
+					}
+					bandwidthPluginConf.Type = "bandwidth"
+					newConfBytes, err := buildOneConfig(ver, bandwidthPluginConf, containerWithQoSResult)
+					Expect(err).NotTo(HaveOccurred())
+
+					args := &skel.CmdArgs{
+						ContainerID: "dummy3",
+						Netns:       containerWithQoSNS.Path(),
+						IfName:      containerWithQoSIFName,
+						StdinData:   newConfBytes,
+					}
+
+					result, out, err := testutils.CmdAdd(containerWithQoSNS.Path(), args.ContainerID, "", newConfBytes, func() error { return cmdAdd(args) })
+					Expect(err).NotTo(HaveOccurred(), string(out))
+
+					if testutils.SpecVersionHasCHECK(ver) {
+						// Do CNI Check
+						checkConf := &PluginConf{}
+						err = json.Unmarshal([]byte(ptpConf), &checkConf)
+						Expect(err).NotTo(HaveOccurred())
+
+						checkConf.RuntimeConfig.Bandwidth = &BandwidthEntry{
+							IngressBurst:  burstInBits,
+							IngressRate:   rateInBits,
+							EgressBurst:   burstInBits,
+							EgressRate:    rateInBits,
+							ShapedSubnets: shapedSubnets,
+						}
+						checkConf.Type = "bandwidth"
+
+						newCheckBytes, err := buildOneConfig(ver, checkConf, result)
+						Expect(err).NotTo(HaveOccurred())
+
+						args = &skel.CmdArgs{
+							ContainerID: "dummy3",
+							Netns:       containerWithQoSNS.Path(),
+							IfName:      containerWithQoSIFName,
+							StdinData:   newCheckBytes,
+						}
+
+						err = testutils.CmdCheck(containerWithQoSNS.Path(), args.ContainerID, "", func() error { return cmdCheck(args) })
+						Expect(err).NotTo(HaveOccurred())
+					}
+
+					return nil
+				})).To(Succeed())
+
+				By("starting a tcp server on both containers")
+				portServerWithQoS, echoServerWithQoS = startEchoServerInNamespace(containerWithQoSNS)
+				portServerWithoutQoS, echoServerWithoutQoS = startEchoServerInNamespace(containerWithoutQoSNS)
+			})
+
+			AfterEach(func() {
+				Expect(os.RemoveAll(dataDir)).To(Succeed())
+
+				Expect(containerWithQoSNS.Close()).To(Succeed())
+				Expect(testutils.UnmountNS(containerWithQoSNS)).To(Succeed())
+				Expect(containerWithoutQoSNS.Close()).To(Succeed())
+				Expect(testutils.UnmountNS(containerWithoutQoSNS)).To(Succeed())
+
+				if echoServerWithoutQoS != nil {
+					echoServerWithoutQoS.Kill()
+				}
+				if echoServerWithQoS != nil {
+					echoServerWithQoS.Kill()
+				}
+			})
+
+			It("does not limit ingress traffic on veth device coming from non included subnets", func() {
+				var runtimeWithLimit time.Duration
+				var runtimeWithoutLimit time.Duration
+
+				By("gather timing statistics about both containers")
+
+				By("sending tcp traffic to the container that has traffic shaped", func() {
+					start := time.Now()
+					result, err := types100.GetResult(containerWithQoSRes)
+					Expect(err).NotTo(HaveOccurred())
+					makeTCPClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithQoS, packetInBytes)
+					end := time.Now()
+					runtimeWithLimit = end.Sub(start)
+					log.Printf("Elapsed with qos %.2f", runtimeWithLimit.Seconds())
+				})
+
+				By("sending tcp traffic to the container that does not have traffic shaped", func() {
+					start := time.Now()
+					result, err := types100.GetResult(containerWithoutQoSRes)
+					Expect(err).NotTo(HaveOccurred())
+					makeTCPClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithoutQoS, packetInBytes)
+					end := time.Now()
+					runtimeWithoutLimit = end.Sub(start)
+					log.Printf("Elapsed without qos %.2f", runtimeWithoutLimit.Seconds())
+				})
+
+				Expect(runtimeWithLimit - runtimeWithoutLimit).To(BeNumerically("<", 100*time.Millisecond))
+			})
+		})
+
+		Context(fmt.Sprintf("[%s] when chaining bandwidth plugin with PTP and only including specific subnets in traffic shapping (including the main ns one)", ver), func() {
+			var ptpConf string
+			var rateInBits uint64
+			var burstInBits uint64
+			var packetInBytes int
+			var containerWithoutQoSNS ns.NetNS
+			var containerWithQoSNS ns.NetNS
+			var portServerWithQoS int
+			var portServerWithoutQoS int
+
+			var containerWithQoSRes types.Result
+			var containerWithoutQoSRes types.Result
+			var echoServerWithQoS *gexec.Session
+			var echoServerWithoutQoS *gexec.Session
+			var dataDir string
+
+			BeforeEach(func() {
+				rateInBytes := 1000
+				rateInBits = uint64(rateInBytes * 8)
+				burstInBits = rateInBits * 2
+				shapedSubnets := []string{"10.1.2.1/32"}
+				// NOTE: Traffic shapping is not that precise at low rates, would be better to use higher rates + simple time+netcat for data transfer, rather than the provided
+				// client/server bin (limited to small amount of data)
+				packetInBytes = rateInBytes * 3
+
+				var err error
+				dataDir, err = os.MkdirTemp("", "bandwidth_linux_test")
+				Expect(err).NotTo(HaveOccurred())
+
+				ptpConf = fmt.Sprintf(`{
+					"cniVersion": "%s",
+					"name": "myBWnet",
+					"type": "ptp",
+					"ipMasq": true,
+					"mtu": 512,
+					"ipam": {
+					"type": "host-local",
+					"subnet": "10.1.2.0/24",
+					"dataDir": "%s"
+					}
+				}`, ver, dataDir)
+
+				const (
+					containerWithQoSIFName    = "ptp0"
+					containerWithoutQoSIFName = "ptp1"
+				)
+
+				containerWithQoSNS, err = testutils.NewNS()
+				Expect(err).NotTo(HaveOccurred())
+
+				containerWithoutQoSNS, err = testutils.NewNS()
+				Expect(err).NotTo(HaveOccurred())
+
+				By("create two containers, and use the bandwidth plugin on one of them")
+
+				Expect(hostNs.Do(func(ns.NetNS) error {
+					defer GinkgoRecover()
+
+					containerWithQoSRes, _, err = testutils.CmdAdd(containerWithQoSNS.Path(), "dummy", containerWithQoSIFName, []byte(ptpConf), func() error {
+						r, err := invoke.DelegateAdd(context.TODO(), "ptp", []byte(ptpConf), nil)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(r.Print()).To(Succeed())
+
+						return err
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					containerWithoutQoSRes, _, err = testutils.CmdAdd(containerWithoutQoSNS.Path(), "dummy2", containerWithoutQoSIFName, []byte(ptpConf), func() error {
+						r, err := invoke.DelegateAdd(context.TODO(), "ptp", []byte(ptpConf), nil)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(r.Print()).To(Succeed())
+
+						return err
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					containerWithQoSResult, err := types100.GetResult(containerWithQoSRes)
+					Expect(err).NotTo(HaveOccurred())
+
+					bandwidthPluginConf := &PluginConf{}
+					err = json.Unmarshal([]byte(ptpConf), &bandwidthPluginConf)
+					Expect(err).NotTo(HaveOccurred())
+
+					bandwidthPluginConf.RuntimeConfig.Bandwidth = &BandwidthEntry{
+						IngressBurst:  burstInBits,
+						IngressRate:   rateInBits,
+						EgressBurst:   burstInBits,
+						EgressRate:    rateInBits,
+						ShapedSubnets: shapedSubnets,
+					}
+					bandwidthPluginConf.Type = "bandwidth"
+					newConfBytes, err := buildOneConfig(ver, bandwidthPluginConf, containerWithQoSResult)
+					Expect(err).NotTo(HaveOccurred())
+
+					args := &skel.CmdArgs{
+						ContainerID: "dummy3",
+						Netns:       containerWithQoSNS.Path(),
+						IfName:      containerWithQoSIFName,
+						StdinData:   newConfBytes,
+					}
+
+					result, out, err := testutils.CmdAdd(containerWithQoSNS.Path(), args.ContainerID, "", newConfBytes, func() error { return cmdAdd(args) })
+					Expect(err).NotTo(HaveOccurred(), string(out))
+
+					if testutils.SpecVersionHasCHECK(ver) {
+						// Do CNI Check
+						checkConf := &PluginConf{}
+						err = json.Unmarshal([]byte(ptpConf), &checkConf)
+						Expect(err).NotTo(HaveOccurred())
+
+						checkConf.RuntimeConfig.Bandwidth = &BandwidthEntry{
+							IngressBurst:  burstInBits,
+							IngressRate:   rateInBits,
+							EgressBurst:   burstInBits,
+							EgressRate:    rateInBits,
+							ShapedSubnets: shapedSubnets,
+						}
+						checkConf.Type = "bandwidth"
+
+						newCheckBytes, err := buildOneConfig(ver, checkConf, result)
+						Expect(err).NotTo(HaveOccurred())
+
+						args = &skel.CmdArgs{
+							ContainerID: "dummy3",
+							Netns:       containerWithQoSNS.Path(),
+							IfName:      containerWithQoSIFName,
+							StdinData:   newCheckBytes,
+						}
+
+						err = testutils.CmdCheck(containerWithQoSNS.Path(), args.ContainerID, "", func() error { return cmdCheck(args) })
+						Expect(err).NotTo(HaveOccurred())
+					}
+
+					return nil
+				})).To(Succeed())
+
+				By("starting a tcp server on both containers")
+				portServerWithQoS, echoServerWithQoS = startEchoServerInNamespace(containerWithQoSNS)
+				portServerWithoutQoS, echoServerWithoutQoS = startEchoServerInNamespace(containerWithoutQoSNS)
+			})
+
+			AfterEach(func() {
+				Expect(os.RemoveAll(dataDir)).To(Succeed())
+
+				Expect(containerWithQoSNS.Close()).To(Succeed())
+				Expect(testutils.UnmountNS(containerWithQoSNS)).To(Succeed())
+				Expect(containerWithoutQoSNS.Close()).To(Succeed())
+				Expect(testutils.UnmountNS(containerWithoutQoSNS)).To(Succeed())
+
+				if echoServerWithoutQoS != nil {
+					echoServerWithoutQoS.Kill()
+				}
+				if echoServerWithQoS != nil {
+					echoServerWithQoS.Kill()
+				}
+			})
+
+			It("limits ingress traffic on veth device coming from included subnets", func() {
+				var runtimeWithLimit time.Duration
+				var runtimeWithoutLimit time.Duration
+
+				By("gather timing statistics about both containers")
+
+				By("sending tcp traffic to the container that has traffic shaped", func() {
+					start := time.Now()
+					result, err := types100.GetResult(containerWithQoSRes)
+					Expect(err).NotTo(HaveOccurred())
+					makeTCPClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithQoS, packetInBytes)
+					end := time.Now()
+					runtimeWithLimit = end.Sub(start)
+					log.Printf("Elapsed with qos %.2f", runtimeWithLimit.Seconds())
+				})
+
+				By("sending tcp traffic to the container that does not have traffic shaped", func() {
+					start := time.Now()
+					result, err := types100.GetResult(containerWithoutQoSRes)
+					Expect(err).NotTo(HaveOccurred())
+					makeTCPClientInNS(hostNs.Path(), result.IPs[0].Address.IP.String(), portServerWithoutQoS, packetInBytes)
+					end := time.Now()
+					runtimeWithoutLimit = end.Sub(start)
+					log.Printf("Elapsed without qos %.2f", runtimeWithoutLimit.Seconds())
+				})
+
+				Expect(runtimeWithLimit).To(BeNumerically(">", runtimeWithoutLimit+1000*time.Millisecond))
+			})
+		})
 	}
 
 	Describe("Validating input", func() {
@@ -1931,6 +2897,21 @@ var _ = Describe("bandwidth test", func() {
 			Expect(err).To(HaveOccurred())
 			err = validateRateAndBurst(0, 0)
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("Should fail if both ShapedSubnets and UnshapedSubnets are specified", func() {
+			err := validateSubnets([]string{"10.0.0.0/8"}, []string{"192.168.0.0/24"})
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("Should fail if specified UnshapedSubnets are not valid CIDRs", func() {
+			err := validateSubnets([]string{"10.0.0.0/8", "hello"}, []string{})
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("Should fail if specified ShapedSubnets are not valid CIDRs", func() {
+			err := validateSubnets([]string{}, []string{"10.0.0.0/8", "hello"})
+			Expect(err).To(HaveOccurred())
 		})
 	})
 })
