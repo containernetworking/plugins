@@ -12,6 +12,7 @@ require (
 	github.com/d2g/dhcp4 v0.0.0-20170904100407-a1d1b6c41b1c
 	github.com/d2g/dhcp4client v1.0.0
 	github.com/d2g/dhcp4server v0.0.0-20181031114812-7d4a0a7f59a5
+	github.com/danwinship/nftables v0.0.8
 	github.com/godbus/dbus/v5 v5.1.0
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/networkplumbing/go-nft v0.4.0
