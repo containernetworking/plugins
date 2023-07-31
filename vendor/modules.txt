@@ -272,3 +272,6 @@ google.golang.org/protobuf/types/known/anypb
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
+# sigs.k8s.io/knftables v0.0.16
+## explicit; go 1.20
+sigs.k8s.io/knftables
