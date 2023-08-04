@@ -56,6 +56,8 @@ type NetConf struct {
 	HairpinMode         bool         `json:"hairpinMode"`
 	PromiscMode         bool         `json:"promiscMode"`
 	Vlan                int          `json:"vlan"`
+	PVID                int          `json:"pvid,omitempty"`
+	UntaggedIDs         []*VlanTrunk `json:"untaggedIDs,omitempty"`
 	VlanTrunk           []*VlanTrunk `json:"vlanTrunk,omitempty"`
 	PreserveDefaultVlan bool         `json:"preserveDefaultVlan"`
 	MacSpoofChk         bool         `json:"macspoofchk,omitempty"`
@@ -94,6 +96,12 @@ type gwInfo struct {
 	defaultRouteFound bool
 }
 
+type trunkConfig struct {
+	pvid         int
+	untaggedVids map[int]struct{}
+	allowedVlans []int
+}
+
 func init() {
 	// this ensures that main runs only on main thread (thread group leader).
 	// since namespace ops (unshare, setns) are done for a single thread, we
@@ -113,6 +121,10 @@ func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 	if n.Vlan < 0 || n.Vlan > 4094 {
 		return nil, "", fmt.Errorf("invalid VLAN ID %d (must be between 0 and 4094)", n.Vlan)
 	}
+	if n.PVID < 0 || n.PVID > 4094 {
+		return nil, "", fmt.Errorf("invalid PVID %d (must be between 0 and 4094)", n.PVID)
+	}
+
 	var err error
 	n.vlans, err = collectVlanTrunk(n.VlanTrunk)
 	if err != nil {
@@ -147,13 +159,9 @@ func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 	return n, n.CNIVersion, nil
 }
 
-// This method is copied from https://github.com/k8snetworkplumbingwg/ovs-cni/blob/v0.27.2/pkg/plugin/plugin.go
-func collectVlanTrunk(vlanTrunk []*VlanTrunk) ([]int, error) {
-	if vlanTrunk == nil {
-		return nil, nil
-	}
-
-	vlanMap := make(map[int]struct{})
+// collectVlans builds a map of vlans based on ID and range configuration
+func collectVlans(vlanTrunk []*VlanTrunk) (map[int]struct{}, error) {
+	vlanMap := make(map[int]struct{}, 4094)
 	for _, item := range vlanTrunk {
 		var minID int
 		var maxID int
@@ -180,7 +188,6 @@ func collectVlanTrunk(vlanTrunk []*VlanTrunk) ([]int, error) {
 		case item.MinID != nil && item.MaxID == nil:
 			return nil, errors.New("minID and maxID should be configured simultaneously, maxID is missing")
 		}
-
 		// single vid
 		if item.ID != nil {
 			ID = *item.ID
@@ -190,7 +197,18 @@ func collectVlanTrunk(vlanTrunk []*VlanTrunk) ([]int, error) {
 			vlanMap[ID] = struct{}{}
 		}
 	}
+	return vlanMap, nil
+}
 
+// This method is copied from https://github.com/k8snetworkplumbingwg/ovs-cni/blob/v0.27.2/pkg/plugin/plugin.go
+func collectVlanTrunk(vlanTrunk []*VlanTrunk) ([]int, error) {
+	if vlanTrunk == nil {
+		return nil, nil
+	}
+	vlanMap, err := collectVlans(vlanTrunk)
+	if err != nil {
+		return nil, err
+	}
 	if len(vlanMap) == 0 {
 		return nil, nil
 	}
@@ -391,7 +409,7 @@ func ensureVlanInterface(br *netlink.Bridge, vlanID int, preserveDefaultVlan boo
 			return nil, fmt.Errorf("faild to find host namespace: %v", err)
 		}
 
-		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanID, nil, preserveDefaultVlan, "")
+		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanID, trunkConfig{}, preserveDefaultVlan, "")
 		if err != nil {
 			return nil, fmt.Errorf("faild to create vlan gateway %q: %v", name, err)
 		}
@@ -410,7 +428,7 @@ func ensureVlanInterface(br *netlink.Bridge, vlanID int, preserveDefaultVlan boo
 	return brGatewayVeth, nil
 }
 
-func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairpinMode bool, vlanID int, vlans []int, preserveDefaultVlan bool, mac string) (*current.Interface, *current.Interface, error) {
+func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairpinMode bool, vlanID int, trunkCfg trunkConfig, preserveDefaultVlan bool, mac string) (*current.Interface, *current.Interface, error) {
 	contIface := &current.Interface{}
 	hostIface := &current.Interface{}
 
@@ -447,14 +465,14 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 		return nil, nil, fmt.Errorf("failed to setup hairpin mode for %v: %v", hostVeth.Attrs().Name, err)
 	}
 
-	if (vlanID != 0 || len(vlans) > 0) && !preserveDefaultVlan {
+	if (vlanID != 0 || len(trunkCfg.allowedVlans) > 0) && !preserveDefaultVlan {
 		err = removeDefaultVlan(hostVeth)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to remove default vlan on interface %q: %v", hostIface.Name, err)
 		}
 	}
 
-	// Currently bridge CNI only support access port(untagged only) or trunk port(tagged only)
+	// access port configuration (pvid and untagged, single vlan)
 	if vlanID != 0 {
 		err = netlink.BridgeVlanAdd(hostVeth, uint16(vlanID), true, true, false, true)
 		if err != nil {
@@ -462,10 +480,16 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 		}
 	}
 
-	for _, v := range vlans {
-		err = netlink.BridgeVlanAdd(hostVeth, uint16(v), false, false, false, true)
+	// trunk configuration
+	for _, v := range trunkCfg.allowedVlans {
+		_, untagged := trunkCfg.untaggedVids[v]
+		pvid := trunkCfg.pvid == v
+		err = netlink.BridgeVlanAdd(hostVeth, uint16(v), pvid, untagged, false, true)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to setup vlan tag on interface %q: %w", hostIface.Name, err)
+			return nil, nil, fmt.Errorf(
+				"failed to setup vlan tag %d untagged: %v pvid: %v on interface %q: %w",
+				v, untagged, pvid, hostIface.Name, err,
+			)
 		}
 	}
 
@@ -543,13 +567,24 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	trunkCfg := trunkConfig{
+		pvid:         n.PVID,
+		allowedVlans: n.vlans,
+	}
+
+	untaggeds, err := collectVlans(n.UntaggedIDs)
+	if err != nil {
+		return fmt.Errorf("Failed to collect untagged vlan ids: %w", err)
+	}
+	trunkCfg.untaggedVids = untaggeds
+
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
 	}
 	defer netns.Close()
 
-	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan, n.vlans, n.PreserveDefaultVlan, n.mac)
+	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan, trunkCfg, n.PreserveDefaultVlan, n.mac)
 	if err != nil {
 		return err
 	}

@@ -73,6 +73,8 @@ type testCase struct {
 	isGW              bool
 	isLayer2          bool
 	expGWCIDRs        []string // Expected gateway addresses in CIDR form
+	pvid              int
+	untaggedIDs       []*VlanTrunk
 	vlan              int
 	vlanTrunk         []*VlanTrunk
 	removeDefaultVlan bool
@@ -128,8 +130,14 @@ const (
 	"type": "bridge",
 	"bridge": "%s"`
 
+	pvidStr = `,
+	"pvid": %d`
+
 	vlan = `,
 	"vlan": %d`
+
+	untaggedListStartStr = `,
+	"untaggedIDs": [`
 
 	vlanTrunkStartStr = `,
 	"vlanTrunk": [`
@@ -217,6 +225,24 @@ func (tc testCase) netConfJSON(dataDir string) string {
 		if tc.removeDefaultVlan {
 			conf += preserveDefaultVlan
 		}
+	}
+	if tc.pvid != 0 {
+		conf += fmt.Sprintf(pvidStr, tc.pvid)
+	}
+	if tc.untaggedIDs != nil {
+		conf += untaggedListStartStr
+		for i, vlan := range tc.untaggedIDs {
+			if i > 0 {
+				conf += ","
+			}
+			if vlan.ID != nil {
+				conf += fmt.Sprintf(vlanTrunk, *vlan.ID)
+			}
+			if vlan.MinID != nil && vlan.MaxID != nil {
+				conf += fmt.Sprintf(vlanTrunkRange, *vlan.MinID, *vlan.MaxID)
+			}
+		}
+		conf += vlanTrunkEndStr
 	}
 
 	if tc.isLayer2 && tc.vlanTrunk != nil {
@@ -463,6 +489,26 @@ func checkVlan(vlanID int, bridgeVlanInfo []*nl.BridgeVlanInfo) bool {
 	return false
 }
 
+func checkVlanPVID(vlanID int, bridgeVlanInfo []*nl.BridgeVlanInfo) bool {
+	for _, vlan := range bridgeVlanInfo {
+		if vlan.Vid == uint16(vlanID) {
+			return vlan.PortVID()
+		}
+	}
+	return false
+}
+
+func checkVlanUntagged(vlanIDs map[int]struct{}, bridgeVlanInfo []*nl.BridgeVlanInfo) bool {
+	for _, vlan := range bridgeVlanInfo {
+		if _, ok := vlanIDs[int(vlan.Vid)]; ok {
+			if !vlan.EngressUntag() {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 type cmdAddDelTester interface {
 	cmdAddTest(tc testCase, dataDir string) (types.Result, error)
 	cmdCheckTest(tc testCase, conf *Net, dataDir string)
@@ -573,6 +619,8 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			if tc.removeDefaultVlan {
 				Expect(vlans).To(HaveLen(1))
 			}
+			Expect(checkVlanPVID(tc.vlan, vlans)).To(BeTrue())
+			Expect(checkVlanUntagged(map[int]struct{}{tc.vlan: {}}, vlans)).To(BeTrue())
 		}
 
 		// Check the bridge vlan filtering equals true
@@ -631,6 +679,8 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			if tc.removeDefaultVlan {
 				Expect(vlans).To(HaveLen(1))
 			}
+			Expect(checkVlanPVID(tc.vlan, vlans)).To(BeTrue())
+			Expect(checkVlanUntagged(map[int]struct{}{tc.vlan: {}}, vlans)).To(BeTrue())
 		}
 
 		// check VlanTrunks exist on the veth interface
@@ -639,6 +689,15 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			Expect(err).NotTo(HaveOccurred())
 			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
+
+			if tc.pvid != 0 {
+				Expect(checkVlanPVID(tc.pvid, vlans)).To(BeTrue())
+			} else if !tc.removeDefaultVlan {
+				Expect(checkVlanPVID(1, vlans)).To(BeTrue())
+			}
+			untaggeds, err := collectVlans(tc.untaggedIDs)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(checkVlanUntagged(untaggeds, vlans)).To(BeTrue())
 
 			for _, vlanEntry := range tc.vlanTrunk {
 				if vlanEntry.ID != nil {
@@ -902,7 +961,11 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
 			if tc.removeDefaultVlan {
 				Expect(vlans).To(HaveLen(1))
+			} else {
+				Expect(checkVlanPVID(tc.vlan, vlans)).To(BeTrue())
 			}
+			Expect(checkVlanUntagged(map[int]struct{}{tc.vlan: {}}, vlans)).To(BeTrue())
+
 		}
 
 		// Check the bridge vlan filtering equals true
@@ -960,7 +1023,10 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
 			if tc.removeDefaultVlan {
 				Expect(vlans).To(HaveLen(1))
+			} else {
+				Expect(checkVlanPVID(tc.vlan, vlans)).To(BeTrue())
 			}
+			Expect(checkVlanUntagged(map[int]struct{}{tc.vlan: {}}, vlans)).To(BeTrue())
 		}
 
 		// check VlanTrunks exist on the veth interface
@@ -969,6 +1035,15 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			Expect(err).NotTo(HaveOccurred())
 			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
+
+			if tc.pvid != 0 {
+				Expect(checkVlanPVID(tc.pvid, vlans)).To(BeTrue())
+			} else if !tc.removeDefaultVlan {
+				Expect(checkVlanPVID(1, vlans)).To(BeTrue())
+			}
+			untaggeds, err := collectVlans(tc.untaggedIDs)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(checkVlanUntagged(untaggeds, vlans)).To(BeTrue())
 
 			for _, vlanEntry := range tc.vlanTrunk {
 				if vlanEntry.ID != nil {
@@ -1227,7 +1302,10 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
 			if tc.removeDefaultVlan {
 				Expect(vlans).To(HaveLen(1))
+			} else {
+				Expect(checkVlanPVID(tc.vlan, vlans)).To(BeTrue())
 			}
+			Expect(checkVlanUntagged(map[int]struct{}{tc.vlan: {}}, vlans)).To(BeTrue())
 		}
 
 		// Check the bridge vlan filtering equals true
@@ -1285,7 +1363,10 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
 			if tc.removeDefaultVlan {
 				Expect(vlans).To(HaveLen(1))
+			} else {
+				Expect(checkVlanPVID(tc.vlan, vlans)).To(BeTrue())
 			}
+			Expect(checkVlanUntagged(map[int]struct{}{tc.vlan: {}}, vlans)).To(BeTrue())
 		}
 
 		// check VlanTrunks exist on the veth interface
@@ -1294,6 +1375,15 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			Expect(err).NotTo(HaveOccurred())
 			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
 			Expect(isExist).To(BeTrue())
+
+			if tc.pvid != 0 {
+				Expect(checkVlanPVID(tc.pvid, vlans)).To(BeTrue())
+			} else if !tc.removeDefaultVlan {
+				Expect(checkVlanPVID(1, vlans)).To(BeTrue())
+			}
+			untaggeds, err := collectVlans(tc.untaggedIDs)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(checkVlanUntagged(untaggeds, vlans)).To(BeTrue())
 
 			for _, vlanEntry := range tc.vlanTrunk {
 				if vlanEntry.ID != nil {
@@ -1478,7 +1568,10 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (types.Re
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
 			if tc.removeDefaultVlan {
 				Expect(vlans).To(HaveLen(1))
+			} else {
+				Expect(checkVlanPVID(tc.vlan, vlans)).To(BeTrue())
 			}
+			Expect(checkVlanUntagged(map[int]struct{}{tc.vlan: {}}, vlans)).To(BeTrue())
 		}
 
 		// Check the bridge vlan filtering equals true
@@ -1603,7 +1696,10 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (types.Re
 			Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
 			if tc.removeDefaultVlan {
 				Expect(vlans).To(HaveLen(1))
+			} else {
+				Expect(checkVlanPVID(tc.vlan, vlans)).To(BeTrue())
 			}
+			Expect(checkVlanUntagged(map[int]struct{}{tc.vlan: {}}, vlans)).To(BeTrue())
 		}
 
 		return nil
@@ -1978,6 +2074,32 @@ var _ = Describe("bridge Operations", func() {
 				removeDefaultVlan: true,
 				AddErr020:         "cannot convert: no valid IP addresses",
 				AddErr010:         "cannot convert: no valid IP addresses",
+			}
+			cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+		})
+
+		It(fmt.Sprintf("[%s] configures and deconfigures a l2 bridge with vlan id 1001, vlanTrunk 2001~2010 using ADD/DEL with untagged and pvid", ver), func() {
+			id, minID, maxID, minUntagged, maxUntagged := 1001, 2001, 2010, 2002, 2004
+			tc := testCase{
+				cniVersion: ver,
+				isLayer2:   true,
+				pvid:       2009,
+				untaggedIDs: []*VlanTrunk{
+					{ID: &minID},
+					{
+						MinID: &minUntagged,
+						MaxID: &maxUntagged,
+					},
+				},
+				vlanTrunk: []*VlanTrunk{
+					{ID: &id},
+					{
+						MinID: &minID,
+						MaxID: &maxID,
+					},
+				},
+				AddErr020: "cannot convert: no valid IP addresses",
+				AddErr010: "cannot convert: no valid IP addresses",
 			}
 			cmdAddDelTest(originalNS, targetNS, tc, dataDir)
 		})
