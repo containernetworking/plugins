@@ -217,12 +217,10 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, subnets []string, 
 	}
 
 	// Now add filters to redirect subnets to the class 1 if excluded instead of the default one (30)
-
 	for _, subnet := range subnets {
 
 		// cmd = exec.Command("/usr/sbin/tc", "filter", "add", "dev", interfaceName, "parent", "1:", "protocol", protocol,
 		// "prio", "16", "u32", "match", "ip", "dst", subnet, "flowid", "1:1")
-
 		_, nw, err := net.ParseCIDR(subnet)
 		if err != nil {
 			return fmt.Errorf("bad subnet %s: %s", subnet, err)
@@ -246,7 +244,6 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, subnets []string, 
 			keepBytes = 4
 			// prio/pref needs to be changed if we change the protocol, looks like we cannot mix protocols with the same pref
 			prio = 16
-
 		}
 
 		if len(maskBytes) < keepBytes {

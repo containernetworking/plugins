@@ -15,6 +15,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -30,6 +31,7 @@ import (
 	"github.com/onsi/gomega/gexec"
 	"github.com/vishvananda/netlink"
 
+	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/plugins/pkg/ns"
 )
 
@@ -242,4 +244,48 @@ func createMacvlan(netNS ns.NetNS, master, macvlanName string) {
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
+}
+
+func buildOneConfig(cniVersion string, orig *PluginConf, prevResult types.Result) ([]byte, error) {
+	var err error
+
+	inject := map[string]interface{}{
+		"name":       "myBWnet",
+		"cniVersion": cniVersion,
+	}
+	// Add previous plugin result
+	if prevResult != nil {
+		r, err := prevResult.GetAsVersion(cniVersion)
+		Expect(err).NotTo(HaveOccurred())
+		inject["prevResult"] = r
+	}
+
+	// Ensure every config uses the same name and version
+	config := make(map[string]interface{})
+
+	confBytes, err := json.Marshal(orig)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(confBytes, &config)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
+	}
+
+	for key, value := range inject {
+		config[key] = value
+	}
+
+	newBytes, err := json.Marshal(config)
+	if err != nil {
+		return nil, err
+	}
+
+	conf := &PluginConf{}
+	if err := json.Unmarshal(newBytes, &conf); err != nil {
+		return nil, fmt.Errorf("error parsing configuration: %s", err)
+	}
+
+	return newBytes, nil
 }
