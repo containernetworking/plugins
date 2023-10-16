@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 #
 # Run CNI plugin tests.
 # 
@@ -10,12 +10,12 @@ set -e
 cd "$(dirname "$0")"
 
 # Build all plugins before testing
-source ./build_linux.sh
+. ./build_linux.sh
 
 echo "Running tests"
 
-function testrun {
-    sudo -E bash -c "umask 0; PATH=${GOPATH}/bin:$(pwd)/bin:${PATH} go test -race $@"
+testrun() {
+    sudo -E sh -c "umask 0; PATH=${GOPATH}/bin:$(pwd)/bin:${PATH} go test -race $*"
 }
 
 COVERALLS=${COVERALLS:-""}

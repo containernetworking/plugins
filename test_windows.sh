@@ -1,11 +1,11 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 #
 # Run CNI plugin tests.
 #
 set -e
 cd "$(dirname "$0")"
 
-source ./build_windows.sh
+. ./build_windows.sh
 
 echo "Running tests"
 

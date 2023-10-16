@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 set -xe
 
 SRC_DIR="${SRC_DIR:-$PWD}"
