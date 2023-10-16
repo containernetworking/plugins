@@ -20,7 +20,7 @@ require (
 	github.com/opencontainers/selinux v1.11.0
 	github.com/safchain/ethtool v0.3.0
 	github.com/vishvananda/netlink v1.2.1-beta.2
-	golang.org/x/sys v0.10.0
+	golang.org/x/sys v0.13.0
 )
 
 require (
