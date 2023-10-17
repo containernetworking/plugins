@@ -1,3 +1,37 @@
+## 1.28.0
+
+### Features
+- Add VerifyHost handler to ghttp (#698) [0b03b36]
+
+### Fixes
+- Read Body for Newer Responses in HaveHTTPBodyMatcher (#686) [18d6673]
+
+### Maintenance
+- Bump github.com/onsi/ginkgo/v2 from 2.11.0 to 2.12.0 (#693) [55a33f3]
+- Typo in matchers.go (#691) [de68e8f]
+- Bump commonmarker from 0.23.9 to 0.23.10 in /docs (#690) [ab17f5e]
+- chore: update test matrix for Go 1.21 (#689) [5069017]
+- Bump golang.org/x/net from 0.12.0 to 0.14.0 (#688) [babe25f]
+
+## 1.27.10
+
+### Fixes
+- fix: go 1.21 adding goroutine ID to creator+location (#685) [bdc7803]
+
+## 1.27.9
+
+### Fixes
+- Prevent nil-dereference in format.Object for boxed nil error (#681) [3b31fc3]
+
+### Maintenance
+- Bump golang.org/x/net from 0.11.0 to 0.12.0 (#679) [360849b]
+- chore: use String() instead of fmt.Sprintf (#678) [86f3659]
+- Bump golang.org/x/net from 0.10.0 to 0.11.0 (#674) [642ead0]
+- chore: unnecessary use of fmt.Sprintf (#677) [ceb9ca6]
+- Bump github.com/onsi/ginkgo/v2 from 2.10.0 to 2.11.0 (#675) [a2087d8]
+- docs: fix ContainSubstring references (#673) [fc9a89f]
+- Bump github.com/onsi/ginkgo/v2 from 2.9.7 to 2.10.0 (#671) [9076019]
+
 ## 1.27.8
 
 ### Fixes
