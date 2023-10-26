@@ -67,7 +67,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if err != nil {
 			return err
 		}
-		result.DNS = *dns
+		result.DNS = dns
 	}
 
 	store, err := disk.New(ipamConf.Name, ipamConf.DataDir)
