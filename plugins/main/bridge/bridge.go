@@ -729,7 +729,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	// Use incoming DNS settings if provided, otherwise use the
-	// settings that were already configued by the IPAM plugin
+	// settings that were already configured by the IPAM plugin
 	if dnsConfSet(n.DNS) {
 		result.DNS = n.DNS
 	}
