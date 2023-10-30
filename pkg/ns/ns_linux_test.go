@@ -182,7 +182,7 @@ var _ = Describe("Linux namespace operations", func() {
 				testNsInode, err := getInodeNS(targetNetNS)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(testNsInode).NotTo(Equal(0))
+				Expect(testNsInode).NotTo(Equal(uint64(0)))
 				Expect(testNsInode).NotTo(Equal(origNSInode))
 			})
 
