@@ -3,7 +3,7 @@ module github.com/containernetworking/plugins
 go 1.20
 
 require (
-	github.com/Microsoft/hcsshim v0.11.1
+	github.com/Microsoft/hcsshim v0.11.2
 	github.com/alexflint/go-filemutex v1.2.0
 	github.com/buger/jsonparser v1.1.1
 	github.com/containernetworking/cni v1.1.2
@@ -15,8 +15,8 @@ require (
 	github.com/godbus/dbus/v5 v5.1.0
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/networkplumbing/go-nft v0.4.0
-	github.com/onsi/ginkgo/v2 v2.12.0
-	github.com/onsi/gomega v1.28.0
+	github.com/onsi/ginkgo/v2 v2.13.0
+	github.com/onsi/gomega v1.29.0
 	github.com/opencontainers/selinux v1.11.0
 	github.com/safchain/ethtool v0.3.0
 	github.com/vishvananda/netlink v1.2.1-beta.2
@@ -33,7 +33,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
-	github.com/google/go-cmp v0.5.9 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/pprof v0.0.0-20230323073829-e72429f035bd // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
