@@ -263,7 +263,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	result := &current.Result{
 		CNIVersion: current.ImplementedSpecVersion,
-		DNS:        ipamConf.DNS,
+		DNS:        &ipamConf.DNS,
 		Routes:     ipamConf.Routes,
 	}
 	for _, v := range ipamConf.Addresses {

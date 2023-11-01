@@ -734,20 +734,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// Use incoming DNS settings if provided, otherwise use the
 	// settings that were already configued by the IPAM plugin
-	if dnsConfSet(n.DNS) {
+	if n.DNS != nil {
 		result.DNS = n.DNS
 	}
 
 	success = true
 
 	return types.PrintResult(result, cniVersion)
-}
-
-func dnsConfSet(dnsConf types.DNS) bool {
-	return dnsConf.Nameservers != nil ||
-		dnsConf.Search != nil ||
-		dnsConf.Options != nil ||
-		dnsConf.Domain != ""
 }
 
 func cmdDel(args *skel.CmdArgs) error {
