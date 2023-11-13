@@ -293,6 +293,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	err = netns.Do(func(_ ns.NetNS) error {
 		_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv4/conf/%s/arp_notify", args.IfName), "1")
+		_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv6/conf/%s/ndisc_notify", args.IfName), "1")
 
 		return ipam.ConfigureIface(args.IfName, result)
 	})
