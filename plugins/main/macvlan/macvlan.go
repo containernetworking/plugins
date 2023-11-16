@@ -383,13 +383,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
-	n, _, err := loadConf(args, args.Args)
+	var n NetConf
+	err := json.Unmarshal(args.StdinData, &n)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load netConf: %v", err)
 	}
 
 	isLayer3 := n.IPAM.Type != ""
-
 	if isLayer3 {
 		err = ipam.ExecDel(n.IPAM.Type, args.StdinData)
 		if err != nil {
