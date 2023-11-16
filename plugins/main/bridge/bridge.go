@@ -240,7 +240,7 @@ func calcGateways(result *current.Result, n *NetConf) (*gwInfo, *gwInfo, error) 
 
 		// Add a default route for this family using the current
 		// gateway address if necessary.
-		if n.IsDefaultGW {
+		if n.IsDefaultGW && !gws.defaultRouteFound {
 			for _, route := range result.Routes {
 				if route.GW != nil && defaultNet.String() == route.Dst.String() {
 					gws.defaultRouteFound = true
