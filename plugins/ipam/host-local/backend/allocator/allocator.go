@@ -63,21 +63,20 @@ func (a *IPAllocator) GetByPodNsAndName(id string, ifname string, requestedIP ne
 				Address: *reservedIP,
 				Gateway: gw,
 			}, nil
-		} else {
-			// reserve ip for new pod
-			ipCfg, err := a.Get(id, ifname, requestedIP)
+		}
+		// reserve ip for new pod
+		ipCfg, err := a.Get(id, ifname, requestedIP)
+		if err != nil {
+			return ipCfg, err
+		}
+
+		if ipCfg != nil {
+			_, err := a.store.ReservePodInfo(id, ipCfg.Address.IP, podNs, podName, podIPIsExist)
 			if err != nil {
 				return ipCfg, err
 			}
-
-			if ipCfg != nil {
-				_, err := a.store.ReservePodInfo(id, ipCfg.Address.IP, podNs, podName, podIPIsExist)
-				if err != nil {
-					return ipCfg, err
-				}
-			}
-			return ipCfg, nil
 		}
+		return ipCfg, nil
 	}
 
 	return a.Get(id, ifname, requestedIP)

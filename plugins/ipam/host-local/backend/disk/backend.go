@@ -235,34 +235,31 @@ func (s *Store) ReservePodInfo(id string, ip net.IP, podNs, podName string, podI
 	if podIPIsExist {
 		// pod Ns/Name file is exist, update ip file with new container id.
 		fname := GetEscapedPath(s.dataDir, ip.String())
-		err := os.WriteFile(fname, []byte(strings.TrimSpace(id)), 0644)
+		err := os.WriteFile(fname, []byte(strings.TrimSpace(id)), 0o644)
 		if err != nil {
 			return false, err
 		}
-	} else {
+	} else if len(podName) != 0 {
 		// for new pod, create a new file named "PodIP_PodNs_PodName",
 		// if there is already file named with prefix "ip_", rename the old file with new PodNs and PodName.
-		if len(podName) != 0 {
-			podIPNsNameFile := GetEscapedPath(s.dataDir, podFileName(ip.String(), podNs, podName))
-			podIPNsNameFileName, err := s.findPodFileName(ip.String(), "", "")
+		podIPNsNameFile := GetEscapedPath(s.dataDir, podFileName(ip.String(), podNs, podName))
+		podIPNsNameFileName, err := s.findPodFileName(ip.String(), "", "")
+		if err != nil {
+			return false, err
+		}
+
+		if len(podIPNsNameFileName) != 0 {
+			oldPodIPNsNameFile := GetEscapedPath(s.dataDir, podIPNsNameFileName)
+			err = os.Rename(oldPodIPNsNameFile, podIPNsNameFile)
 			if err != nil {
 				return false, err
 			}
+			return true, nil
+		}
 
-			if len(podIPNsNameFileName) != 0 {
-				oldPodIPNsNameFile := GetEscapedPath(s.dataDir, podIPNsNameFileName)
-				err = os.Rename(oldPodIPNsNameFile, podIPNsNameFile)
-				if err != nil {
-					return false, err
-				} else {
-					return true, nil
-				}
-			}
-
-			err = os.WriteFile(podIPNsNameFile, []byte{}, 0644)
-			if err != nil {
-				return false, err
-			}
+		err = os.WriteFile(podIPNsNameFile, []byte{}, 0o644)
+		if err != nil {
+			return false, err
 		}
 	}
 
@@ -277,24 +274,29 @@ func podFileName(ip, ns, name string) string {
 	return name
 }
 
-func resolvePodFileName(fName string) (ip, ns, name string) {
+func resolvePodFileName(fName string) (string, string, string) {
 	parts := strings.Split(fName, "_")
+	ip := ""
+	ns := ""
+	name := ""
 	if len(parts) == 3 {
 		ip = parts[0]
 		ns = parts[1]
 		name = parts[2]
 	}
 
-	return
+	return ip, ns, name
 }
 
 func (s *Store) findPodFileName(ip, ns, name string) (string, error) {
 	var pattern string
-	if len(ip) != 0 {
+
+	switch {
+	case len(ip) != 0:
 		pattern = fmt.Sprintf("%s_*", ip)
-	} else if len(ns) != 0 && len(name) != 0 {
+	case len(ns) != 0 && len(name) != 0:
 		pattern = fmt.Sprintf("*_%s_%s", ns, name)
-	} else {
+	default:
 		return "", nil
 	}
 	pattern = GetEscapedPath(s.dataDir, pattern)

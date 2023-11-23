@@ -140,7 +140,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		ipConf, err := allocator.GetByPodNsAndName(args.ContainerID, args.IfName, requestedIP, podNs, podName)
-
 		if err != nil {
 			// Deallocate all already allocated IPs
 			for _, alloc := range allocs {

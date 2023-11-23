@@ -39,7 +39,7 @@ type EndpointInfo struct {
 	NetworkId    string
 	Gateway      net.IP
 	IpAddress    net.IP
-	MacAddress  string
+	MacAddress   string
 }
 
 // GetSandboxContainerID returns the sandbox ID of this pod.
@@ -205,7 +205,8 @@ func ConstructHnsResult(hnsNetwork *hcsshim.HNSNetwork, hnsEndpoint *hcsshim.HNS
 	resultIPConfig := &current.IPConfig{
 		Address: net.IPNet{
 			IP:   hnsEndpoint.IPAddress,
-			Mask: ipSubnet.Mask},
+			Mask: ipSubnet.Mask,
+		},
 		Gateway: net.ParseIP(hnsEndpoint.GatewayAddress),
 	}
 	result := &current.Result{
@@ -249,7 +250,7 @@ func GenerateHcnEndpoint(epInfo *EndpointInfo, n *NetConf) (*hcn.HostComputeEndp
 			Minor: 0,
 		},
 		Name:               epInfo.EndpointName,
-		MacAddress: epInfo.MacAddress,
+		MacAddress:         epInfo.MacAddress,
 		HostComputeNetwork: epInfo.NetworkId,
 		Dns: hcn.Dns{
 			Domain:     epInfo.DNS.Domain,
@@ -289,7 +290,7 @@ func RemoveHcnEndpoint(epName string) error {
 	if epNamespace != nil {
 		err = hcn.RemoveNamespaceEndpoint(hcnEndpoint.HostComputeNamespace, hcnEndpoint.Id)
 		if err != nil && !hcn.IsNotFoundError(err) {
-			return errors.Annotatef(err,"error removing endpoint: %s from namespace", epName)
+			return errors.Annotatef(err, "error removing endpoint: %s from namespace", epName)
 		}
 	}
 
@@ -361,7 +362,8 @@ func ConstructHcnResult(hcnNetwork *hcn.HostComputeNetwork, hcnEndpoint *hcn.Hos
 	resultIPConfig := &current.IPConfig{
 		Address: net.IPNet{
 			IP:   ipAddress,
-			Mask: ipSubnet.Mask},
+			Mask: ipSubnet.Mask,
+		},
 		Gateway: net.ParseIP(hcnEndpoint.Routes[0].NextHop),
 	}
 	result := &current.Result{
