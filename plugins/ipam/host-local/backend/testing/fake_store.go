@@ -102,6 +102,6 @@ func (s *FakeStore) HasReservedIP(podNs, podName string) (bool, net.IP) {
 	return false, ip
 }
 
-func (s *FakeStore) ReservePodInfo(id string, ip net.IP, podName string, podIsExist bool) (bool, error) {
+func (s *FakeStore) ReservePodInfo(id string, ip net.IP, podNs, podName string, podIsExist bool) (bool, error) {
 	return true, nil
 }
