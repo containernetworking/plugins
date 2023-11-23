@@ -24,4 +24,6 @@ type Store interface {
 	LastReservedIP(rangeID string) (net.IP, error)
 	ReleaseByID(id string, ifname string) error
 	GetByID(id string, ifname string) []net.IP
+	HasReservedIP(podNs, podName string) (bool, net.IP)
+	ReservePodInfo(id string, ip net.IP, podNs, podName string, podIPIsExist bool) (bool, error)
 }

@@ -15,6 +15,7 @@
 package disk
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -199,4 +200,116 @@ func GetEscapedPath(dataDir string, fname string) string {
 		fname = strings.ReplaceAll(fname, ":", "_")
 	}
 	return filepath.Join(dataDir, fname)
+}
+
+// HasReservedIP verify the pod already had reserved ip or not.
+// and return the reserved ip on the other hand.
+func (s *Store) HasReservedIP(podNs, podName string) (bool, net.IP) {
+	ip := net.IP{}
+	if len(podName) == 0 {
+		return false, ip
+	}
+
+	// Pod, ip mapping info are recorded with file name: PodIP_PodNs_PodName
+	podIPNsNameFileName, err := s.findPodFileName("", podNs, podName)
+	if err != nil {
+		return false, ip
+	}
+
+	if len(podIPNsNameFileName) != 0 {
+		ipStr, ns, name := resolvePodFileName(podIPNsNameFileName)
+		if ns == podNs && name == podName {
+			ip = net.ParseIP(ipStr)
+			if ip != nil {
+				return true, ip
+			}
+		}
+	}
+
+	return false, ip
+}
+
+// ReservePodInfo create podName file for storing ip or update ip file with container id
+// in terms of podIPIsExist
+func (s *Store) ReservePodInfo(id string, ip net.IP, podNs, podName string, podIPIsExist bool) (bool, error) {
+	if podIPIsExist {
+		// pod Ns/Name file is exist, update ip file with new container id.
+		fname := GetEscapedPath(s.dataDir, ip.String())
+		err := os.WriteFile(fname, []byte(strings.TrimSpace(id)), 0644)
+		if err != nil {
+			return false, err
+		}
+	} else {
+		// for new pod, create a new file named "PodIP_PodNs_PodName",
+		// if there is already file named with prefix "ip_", rename the old file with new PodNs and PodName.
+		if len(podName) != 0 {
+			podIPNsNameFile := GetEscapedPath(s.dataDir, podFileName(ip.String(), podNs, podName))
+			podIPNsNameFileName, err := s.findPodFileName(ip.String(), "", "")
+			if err != nil {
+				return false, err
+			}
+
+			if len(podIPNsNameFileName) != 0 {
+				oldPodIPNsNameFile := GetEscapedPath(s.dataDir, podIPNsNameFileName)
+				err = os.Rename(oldPodIPNsNameFile, podIPNsNameFile)
+				if err != nil {
+					return false, err
+				} else {
+					return true, nil
+				}
+			}
+
+			err = os.WriteFile(podIPNsNameFile, []byte{}, 0644)
+			if err != nil {
+				return false, err
+			}
+		}
+	}
+
+	return true, nil
+}
+
+func podFileName(ip, ns, name string) string {
+	if len(ip) != 0 && len(ns) != 0 {
+		return fmt.Sprintf("%s_%s_%s", ip, ns, name)
+	}
+
+	return name
+}
+
+func resolvePodFileName(fName string) (ip, ns, name string) {
+	parts := strings.Split(fName, "_")
+	if len(parts) == 3 {
+		ip = parts[0]
+		ns = parts[1]
+		name = parts[2]
+	}
+
+	return
+}
+
+func (s *Store) findPodFileName(ip, ns, name string) (string, error) {
+	var pattern string
+	if len(ip) != 0 {
+		pattern = fmt.Sprintf("%s_*", ip)
+	} else if len(ns) != 0 && len(name) != 0 {
+		pattern = fmt.Sprintf("*_%s_%s", ns, name)
+	} else {
+		return "", nil
+	}
+	pattern = GetEscapedPath(s.dataDir, pattern)
+
+	podFiles, err := filepath.Glob(pattern)
+	if err != nil {
+		return "", err
+	}
+
+	if len(podFiles) == 1 {
+		_, fName := filepath.Split(podFiles[0])
+		if strings.Count(fName, "_") == 2 {
+			return fName, nil
+		}
+	}
+
+	return "", nil
 }
