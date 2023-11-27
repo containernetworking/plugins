@@ -271,6 +271,7 @@ var _ = Describe("macvlan Operations", func() {
 					Master:     masterInterface,
 					Mode:       "bridge",
 					MTU:        1500,
+					Queues:     20,
 					LinkContNs: isInContainer != nil && *isInContainer,
 				}
 

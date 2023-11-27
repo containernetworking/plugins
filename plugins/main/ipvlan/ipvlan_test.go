@@ -343,6 +343,7 @@ var _ = Describe("ipvlan Operations", func() {
 					Master:     masterInterface,
 					Mode:       "l2",
 					MTU:        1500,
+					Queues:     20,
 					LinkContNs: isInContainer,
 				}
 

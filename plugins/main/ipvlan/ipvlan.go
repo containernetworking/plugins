@@ -38,6 +38,7 @@ type NetConf struct {
 	Master     string `json:"master"`
 	Mode       string `json:"mode"`
 	MTU        int    `json:"mtu"`
+	Queues     int    `json:"queues,omitempty"`
 	LinkContNs bool   `json:"linkInContainer,omitempty"`
 }
 
@@ -87,6 +88,10 @@ func loadConf(args *skel.CmdArgs, cmdCheck bool) (*NetConf, string, error) {
 			}
 		}
 	}
+	if n.Queues < 0 {
+		return nil, "", fmt.Errorf("invalid Queues %d, must be greater than 0", n.Queues)
+	}
+
 	return n, n.CNIVersion, nil
 }
 
@@ -149,6 +154,8 @@ func createIpvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interf
 			MTU:         conf.MTU,
 			Name:        tmpName,
 			ParentIndex: m.Attrs().Index,
+			NumTxQueues: conf.Queues,
+			NumRxQueues: conf.Queues,
 			Namespace:   netlink.NsFd(int(netns.Fd())),
 		},
 		Mode: mode,

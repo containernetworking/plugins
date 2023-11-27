@@ -39,6 +39,7 @@ type NetConf struct {
 	Master     string `json:"master"`
 	Mode       string `json:"mode"`
 	MTU        int    `json:"mtu"`
+	Queues     int    `json:"queues,omitempty"`
 	Mac        string `json:"mac,omitempty"`
 	LinkContNs bool   `json:"linkInContainer,omitempty"`
 
@@ -122,6 +123,9 @@ func loadConf(args *skel.CmdArgs, envArgs string) (*NetConf, string, error) {
 	}
 	if n.MTU < 0 || n.MTU > masterMTU {
 		return nil, "", fmt.Errorf("invalid MTU %d, must be [0, master MTU(%d)]", n.MTU, masterMTU)
+	}
+	if n.Queues < 0 {
+		return nil, "", fmt.Errorf("invalid Queues %d, must be greater than 0", n.Queues)
 	}
 
 	if envArgs != "" {
@@ -229,6 +233,8 @@ func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Inter
 		MTU:         conf.MTU,
 		Name:        tmpName,
 		ParentIndex: m.Attrs().Index,
+		NumTxQueues: conf.Queues,
+		NumRxQueues: conf.Queues,
 		Namespace:   netlink.NsFd(int(netns.Fd())),
 	}
 
