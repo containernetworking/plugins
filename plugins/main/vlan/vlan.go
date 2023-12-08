@@ -52,9 +52,31 @@ func loadConf(args *skel.CmdArgs) (*NetConf, string, error) {
 	if err := json.Unmarshal(args.StdinData, n); err != nil {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
 	}
-	if n.Master == "" {
-		return nil, "", fmt.Errorf("\"master\" field is required. It specifies the host interface name to create the VLAN for")
+
+	// Parse previous result
+	var result *current.Result
+	var err error
+	if n.NetConf.RawPrevResult != nil {
+		if err = version.ParsePrevResult(&n.NetConf); err != nil {
+			return nil, "", fmt.Errorf("could not parse prevResult: %v", err)
+		}
+
+		result, err = current.NewResultFromResult(n.PrevResult)
+		if err != nil {
+			return nil, "", fmt.Errorf("could not convert result to current version: %v", err)
+		}
 	}
+
+	if n.Master == "" {
+		if result != nil && n.LinkContNs {
+			// Chaining scenario: CNI_IFNAME used as a master and new IfName is named <Master>.<VlanID>
+			n.Master = args.IfName
+			args.IfName = fmt.Sprintf("%s.%d", n.Master, n.VlanID)
+		} else {
+			return nil, "", fmt.Errorf("\"master\" field is required. It specifies the host interface name to create the VLAN for")
+		}
+	}
+
 	if n.VlanID < 0 || n.VlanID > 4094 {
 		return nil, "", fmt.Errorf("invalid VLAN ID %d (must be between 0 and 4095 inclusive)", n.VlanID)
 	}

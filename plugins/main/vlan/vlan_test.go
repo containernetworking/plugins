@@ -22,6 +22,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
@@ -452,6 +453,88 @@ var _ = Describe("vlan Operations", func() {
 					return nil
 				})
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Context("When master is not provided", func() {
+				masterInterface := ""
+
+				Context("When used as a chained plugin", func() {
+					Context("When linkInContainer is true", func() {
+						It(fmt.Sprintf("[%s] Use IFNAME as a master interface", ver), func() {
+							if !isInContainer {
+								ginkgo.Skip("Skipping because linkInContainer is false")
+							}
+
+							var err error
+							const IFNAME = MASTER_NAME_INCONTAINER
+							vlanID := 1234
+							NEWIFNAME := fmt.Sprintf("%s.%d", IFNAME, vlanID)
+
+							conf := fmt.Sprintf(`{
+								"cniVersion": "%s",
+								"name": "vlanTestv4",
+								"type": "vlan",
+								"master": "%s",
+								"vlanId": %d,
+								"linkInContainer": %t,
+								"ipam": {
+									"type": "host-local",
+									"subnet": "10.1.2.0/24",
+									"dataDir": "%s"
+								},
+								"prevResult": {
+									"cniVersion": "%s"
+								}
+							}`, ver, masterInterface, vlanID, isInContainer, dataDir, ver)
+
+							args := &skel.CmdArgs{
+								ContainerID: "dummy",
+								Netns:       targetNS.Path(),
+								IfName:      IFNAME,
+								StdinData:   []byte(conf),
+							}
+
+							t := newTesterByVersion(ver)
+
+							var result types.Result
+							var macAddress string
+							err = originalNS.Do(func(ns.NetNS) error {
+								defer GinkgoRecover()
+
+								var err error
+								result, _, err = testutils.CmdAddWithArgs(args, func() error {
+									return cmdAdd(args)
+								})
+								Expect(err).NotTo(HaveOccurred())
+
+								macAddress = t.verifyResult(result, NEWIFNAME)
+								return nil
+							})
+							Expect(err).NotTo(HaveOccurred())
+
+							// Make sure vlan link exists in the target namespace
+							err = targetNS.Do(func(ns.NetNS) error {
+								defer GinkgoRecover()
+
+								link, err := netlink.LinkByName(NEWIFNAME)
+								Expect(err).NotTo(HaveOccurred())
+								Expect(link.Attrs().Name).To(Equal(NEWIFNAME))
+
+								if macAddress != "" {
+									hwaddr, err := net.ParseMAC(macAddress)
+									Expect(err).NotTo(HaveOccurred())
+									Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
+								}
+
+								addrs, err := netlink.AddrList(link, syscall.AF_INET)
+								Expect(err).NotTo(HaveOccurred())
+								Expect(addrs).To(HaveLen(1))
+								return nil
+							})
+							Expect(err).NotTo(HaveOccurred())
+						})
+					})
+				})
 			})
 
 			Describe("fails to create vlan link with invalid MTU", func() {
