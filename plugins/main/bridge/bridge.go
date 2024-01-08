@@ -47,19 +47,20 @@ const defaultBrName = "cni0"
 
 type NetConf struct {
 	types.NetConf
-	BrName              string       `json:"bridge"`
-	IsGW                bool         `json:"isGateway"`
-	IsDefaultGW         bool         `json:"isDefaultGateway"`
-	ForceAddress        bool         `json:"forceAddress"`
-	IPMasq              bool         `json:"ipMasq"`
-	MTU                 int          `json:"mtu"`
-	HairpinMode         bool         `json:"hairpinMode"`
-	PromiscMode         bool         `json:"promiscMode"`
-	Vlan                int          `json:"vlan"`
-	VlanTrunk           []*VlanTrunk `json:"vlanTrunk,omitempty"`
-	PreserveDefaultVlan bool         `json:"preserveDefaultVlan"`
-	MacSpoofChk         bool         `json:"macspoofchk,omitempty"`
-	EnableDad           bool         `json:"enabledad,omitempty"`
+	BrName                    string       `json:"bridge"`
+	IsGW                      bool         `json:"isGateway"`
+	IsDefaultGW               bool         `json:"isDefaultGateway"`
+	ForceAddress              bool         `json:"forceAddress"`
+	IPMasq                    bool         `json:"ipMasq"`
+	MTU                       int          `json:"mtu"`
+	HairpinMode               bool         `json:"hairpinMode"`
+	PromiscMode               bool         `json:"promiscMode"`
+	Vlan                      int          `json:"vlan"`
+	VlanTrunk                 []*VlanTrunk `json:"vlanTrunk,omitempty"`
+	PreserveDefaultVlan       bool         `json:"preserveDefaultVlan"`
+	MacSpoofChk               bool         `json:"macspoofchk,omitempty"`
+	EnableDad                 bool         `json:"enabledad,omitempty"`
+	DisableContainerInterface bool         `json:"disableContainerInterface,omitempty"`
 
 	Args struct {
 		Cni BridgeArgs `json:"cni,omitempty"`
@@ -530,6 +531,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	isLayer3 := n.IPAM.Type != ""
 
+	if isLayer3 && n.DisableContainerInterface {
+		return fmt.Errorf("cannot use IPAM when DisableContainerInterface flag is set")
+	}
+
 	if n.IsDefaultGW {
 		n.IsGW = true
 	}
@@ -676,12 +681,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 				}
 			}
 		}
-	} else {
+	} else if !n.DisableContainerInterface {
 		if err := netns.Do(func(_ ns.NetNS) error {
 			link, err := netlink.LinkByName(args.IfName)
 			if err != nil {
 				return fmt.Errorf("failed to retrieve link: %v", err)
 			}
+
 			// If layer 2 we still need to set the container veth to up
 			if err = netlink.LinkSetUp(link); err != nil {
 				return fmt.Errorf("failed to set %q up: %v", args.IfName, err)
@@ -692,23 +698,28 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	}
 
-	var hostVeth netlink.Link
+	hostVeth, err := netlink.LinkByName(hostInterface.Name)
+	if err != nil {
+		return err
+	}
 
-	// check bridge port state
-	retries := []int{0, 50, 500, 1000, 1000}
-	for idx, sleep := range retries {
-		time.Sleep(time.Duration(sleep) * time.Millisecond)
+	if !n.DisableContainerInterface {
+		// check bridge port state
+		retries := []int{0, 50, 500, 1000, 1000}
+		for idx, sleep := range retries {
+			time.Sleep(time.Duration(sleep) * time.Millisecond)
 
-		hostVeth, err = netlink.LinkByName(hostInterface.Name)
-		if err != nil {
-			return err
-		}
-		if hostVeth.Attrs().OperState == netlink.OperUp {
-			break
-		}
+			hostVeth, err = netlink.LinkByName(hostInterface.Name)
+			if err != nil {
+				return err
+			}
+			if hostVeth.Attrs().OperState == netlink.OperUp {
+				break
+			}
 
-		if idx == len(retries)-1 {
-			return fmt.Errorf("bridge port in error state: %s", hostVeth.Attrs().OperState)
+			if idx == len(retries)-1 {
+				return fmt.Errorf("bridge port in error state: %s", hostVeth.Attrs().OperState)
+			}
 		}
 	}
 
