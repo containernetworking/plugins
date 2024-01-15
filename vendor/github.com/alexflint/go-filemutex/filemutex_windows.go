@@ -5,13 +5,8 @@
 package filemutex
 
 import (
-	"syscall"
-
 	"golang.org/x/sys/windows"
 )
-
-// see https://msdn.microsoft.com/en-us/library/windows/desktop/ms681382(v=vs.85).aspx
-var errLockUnlocked syscall.Errno = 0x9E
 
 // FileMutex is similar to sync.RWMutex, but also synchronizes across processes.
 // This implementation is based on flock syscall.
@@ -58,8 +53,11 @@ func (m *FileMutex) RUnlock() error {
 
 // Close unlocks the lock and closes the underlying file descriptor.
 func (m *FileMutex) Close() error {
-	if err := windows.UnlockFileEx(m.fd, 0, 1, 0, &windows.Overlapped{}); err != nil && err != errLockUnlocked {
-		return err
-	}
+	// See comment section of https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-lockfileex
+	// It's recommended to unlock a file explicitly before closing in order to
+	// avoid delays, but all locks are definitly unlocked when closing a file.
+	// So any unlocking error can be ignored.
+	_ = windows.UnlockFileEx(m.fd, 0, 1, 0, &windows.Overlapped{})
+
 	return windows.Close(m.fd)
 }
