@@ -23,7 +23,6 @@ import (
 	"runtime"
 	"sort"
 	"syscall"
-	"time"
 
 	"github.com/vishvananda/netlink"
 
@@ -677,39 +676,18 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 	} else {
+		// If layer 2 we still need to set the container veth to up
 		if err := netns.Do(func(_ ns.NetNS) error {
-			link, err := netlink.LinkByName(args.IfName)
-			if err != nil {
-				return fmt.Errorf("failed to retrieve link: %v", err)
-			}
-			// If layer 2 we still need to set the container veth to up
-			if err = netlink.LinkSetUp(link); err != nil {
-				return fmt.Errorf("failed to set %q up: %v", args.IfName, err)
-			}
-			return nil
+			return link.SetUp(args.IfName)
 		}); err != nil {
 			return err
 		}
 	}
 
-	var hostVeth netlink.Link
-
 	// check bridge port state
-	retries := []int{0, 50, 500, 1000, 1000}
-	for idx, sleep := range retries {
-		time.Sleep(time.Duration(sleep) * time.Millisecond)
-
-		hostVeth, err = netlink.LinkByName(hostInterface.Name)
-		if err != nil {
-			return err
-		}
-		if hostVeth.Attrs().OperState == netlink.OperUp {
-			break
-		}
-
-		if idx == len(retries)-1 {
-			return fmt.Errorf("bridge port in error state: %s", hostVeth.Attrs().OperState)
-		}
+	hostVeth, err := link.WaitForOperStateUp(hostInterface.Name)
+	if err != nil {
+		return fmt.Errorf("bridge port in error state %q: %v", hostVeth.Attrs().OperState, err)
 	}
 
 	// In certain circumstances, the host-side of the veth may change addrs
