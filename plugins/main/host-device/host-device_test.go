@@ -898,6 +898,71 @@ var _ = Describe("base functionality", func() {
 			})
 		})
 
+		It(fmt.Sprintf("Works with a valid %s config on auxiliary device", ver), func() {
+			var origLink netlink.Link
+			ifname := "eth0"
+
+			fs := &fakeFilesystem{
+				dirs: []string{
+					fmt.Sprintf("sys/bus/auxiliary/devices/mlx5_core.sf.4/net/%s", ifname),
+				},
+			}
+			defer fs.use()()
+
+			// prepare ifname in original namespace
+			_ = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				err := netlink.LinkAdd(&netlink.Dummy{
+					LinkAttrs: netlink.LinkAttrs{
+						Name: ifname,
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+				origLink, err = netlink.LinkByName(ifname)
+				Expect(err).NotTo(HaveOccurred())
+				err = netlink.LinkSetUp(origLink)
+				Expect(err).NotTo(HaveOccurred())
+				return nil
+			})
+
+			// call CmdAdd
+			cniName := "net1"
+			conf := fmt.Sprintf(`{
+							"cniVersion": "%s",
+							"name": "cni-plugin-host-device-test",
+							"type": "host-device",
+							"runtimeConfig": {"deviceID": %q}
+						}`, ver, "mlx5_core.sf.4")
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				IfName:      cniName,
+				Netns:       targetNS.Path(),
+				StdinData:   []byte(conf),
+			}
+			var resI types.Result
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				var err error
+				resI, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+				return err
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// check that the result was sane
+			t := newTesterByVersion(ver)
+			t.expectInterfaces(resI, cniName, origLink.Attrs().HardwareAddr.String(), targetNS.Path())
+
+			// call CmdDel
+			_ = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				err = testutils.CmdDelWithArgs(args, func() error {
+					return cmdDel(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+				return nil
+			})
+		})
+
 		It(fmt.Sprintf("Works with a valid %s config with IPAM", ver), func() {
 			var origLink netlink.Link
 
@@ -1181,6 +1246,7 @@ func (fs *fakeFilesystem) use() func() {
 	}
 
 	sysBusPCI = path.Join(fs.rootDir, "/sys/bus/pci/devices")
+	sysBusAuxiliary = path.Join(fs.rootDir, "/sys/bus/auxiliary/devices")
 
 	return func() {
 		// remove temporary fake fs
