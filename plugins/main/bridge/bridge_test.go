@@ -78,10 +78,12 @@ type testCase struct {
 	removeDefaultVlan bool
 	ipMasq            bool
 	macspoofchk       bool
-	AddErr020         string
-	DelErr020         string
-	AddErr010         string
-	DelErr010         string
+	disableContIface  bool
+
+	AddErr020 string
+	DelErr020 string
+	AddErr010 string
+	DelErr010 string
 
 	envArgs       string // CNI_ARGS
 	runtimeConfig struct {
@@ -153,6 +155,9 @@ const (
 
 	netDefault = `,
 	"isDefaultGateway": true`
+
+	disableContainerInterface = `,
+    "disableContainerInterface": true`
 
 	ipamStartStr = `,
     "ipam": {
@@ -246,6 +251,10 @@ func (tc testCase) netConfJSON(dataDir string) string {
 	}
 	if tc.macspoofchk {
 		conf += fmt.Sprintf(macspoofchkFormat, tc.macspoofchk)
+	}
+
+	if tc.disableContIface {
+		conf += disableContainerInterface
 	}
 
 	if !tc.isLayer2 {
@@ -677,14 +686,16 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		Expect(err).NotTo(HaveOccurred())
 		Expect(link.Attrs().Name).To(Equal(IFNAME))
 		Expect(link).To(BeAssignableToTypeOf(&netlink.Veth{}))
+		assertContainerInterfaceLinkState(&tc, link)
 
 		expCIDRsV4, expCIDRsV6 := tc.expectedCIDRs()
 		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(addrs).To(HaveLen(len(expCIDRsV4)))
 		addrs, err = netlink.AddrList(link, netlink.FAMILY_V6)
-		Expect(addrs).To(HaveLen(len(expCIDRsV6) + 1)) // add one for the link-local
 		Expect(err).NotTo(HaveOccurred())
+		assertIPv6Addresses(&tc, addrs, expCIDRsV6)
+
 		// Ignore link local address which may or may not be
 		// ready when we read addresses.
 		var foundAddrs int
@@ -726,6 +737,15 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 	Expect(err).NotTo(HaveOccurred())
 
 	return result, nil
+}
+
+func assertContainerInterfaceLinkState(tc *testCase, link netlink.Link) {
+	linkState := int(link.Attrs().OperState)
+	if tc.disableContIface {
+		Expect(linkState).ToNot(Equal(netlink.OperUp))
+	} else {
+		Expect(linkState).To(Equal(netlink.OperUp))
+	}
 }
 
 func (tester *testerV10x) cmdCheckTest(tc testCase, conf *Net, _ string) {
@@ -1008,8 +1028,9 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		Expect(err).NotTo(HaveOccurred())
 		Expect(addrs).To(HaveLen(len(expCIDRsV4)))
 		addrs, err = netlink.AddrList(link, netlink.FAMILY_V6)
-		Expect(addrs).To(HaveLen(len(expCIDRsV6) + 1)) // add one for the link-local
 		Expect(err).NotTo(HaveOccurred())
+		assertIPv6Addresses(&tc, addrs, expCIDRsV6)
+
 		// Ignore link local address which may or may not be
 		// ready when we read addresses.
 		var foundAddrs int
@@ -1051,6 +1072,14 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 	Expect(err).NotTo(HaveOccurred())
 
 	return result, nil
+}
+
+func assertIPv6Addresses(tc *testCase, addrs []netlink.Addr, expCIDRsV6 []*net.IPNet) {
+	if tc.disableContIface {
+		Expect(addrs).To(BeEmpty())
+	} else {
+		Expect(addrs).To(HaveLen(len(expCIDRsV6) + 1)) // add one for the link-local
+	}
 }
 
 func (tester *testerV04x) cmdCheckTest(tc testCase, conf *Net, _ string) {
@@ -2458,6 +2487,36 @@ var _ = Describe("bridge Operations", func() {
 					return nil
 				})).To(Succeed())
 
+				return nil
+			})).To(Succeed())
+		})
+
+		It(fmt.Sprintf("[%s] should fail when both IPAM and DisableContainerInterface are set", ver), func() {
+			Expect(originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				tc := testCase{
+					cniVersion:       ver,
+					subnet:           "10.1.2.0/24",
+					disableContIface: true,
+				}
+				args := tc.createCmdArgs(targetNS, dataDir)
+				Expect(cmdAdd(args)).To(HaveOccurred())
+
+				return nil
+			})).To(Succeed())
+		})
+
+		It(fmt.Sprintf("[%s] should set the container veth peer state down", ver), func() {
+			Expect(originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				tc := testCase{
+					cniVersion:       ver,
+					disableContIface: true,
+					isLayer2:         true,
+					AddErr020:        "cannot convert: no valid IP addresses",
+					AddErr010:        "cannot convert: no valid IP addresses",
+				}
+				cmdAddDelTest(originalNS, targetNS, tc, dataDir)
 				return nil
 			})).To(Succeed())
 		})
