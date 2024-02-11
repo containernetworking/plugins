@@ -371,7 +371,7 @@ var _ = Describe("dummy Operations", func() {
 				StdinData:   []byte(fmt.Sprintf(confFmt, ver)),
 			}
 
-			_ = originalNS.Do(func(netNS ns.NetNS) error {
+			_ = originalNS.Do(func(_ ns.NetNS) error {
 				defer GinkgoRecover()
 
 				_, _, err = testutils.CmdAddWithArgs(args, func() error {
