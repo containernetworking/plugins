@@ -66,7 +66,6 @@ func withLockAndNetNS(nspath string, toRun func(_ ns.NetNS) error) error {
 	}
 
 	err = ns.WithNetNSPath(nspath, toRun)
-
 	if err != nil {
 		return err
 	}

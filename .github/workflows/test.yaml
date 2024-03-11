@@ -4,7 +4,7 @@ name: test
 on: ["push", "pull_request"]
 
 env:
-  GO_VERSION: "1.21"
+  GO_VERSION: "1.22"
   LINUX_ARCHES: "amd64 386 arm arm64 s390x mips64le ppc64le riscv64"
 
 jobs:
@@ -14,14 +14,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: setup go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - uses: ibiqlik/action-yamllint@v3
         with:
           format: auto
-      - uses: golangci/golangci-lint-action@v3
+      - uses: golangci/golangci-lint-action@v4
         with:
+          version: v1.55.2
           args: -v
           skip-cache: true
   build:
@@ -31,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: setup go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: Build on all supported architectures
@@ -55,7 +56,7 @@ jobs:
         run: sudo apt-get install nftables
       - uses: actions/checkout@v4
       - name: setup go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: Set up Go for root
@@ -86,7 +87,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: setup go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: test
