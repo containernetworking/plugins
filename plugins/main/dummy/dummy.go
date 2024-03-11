@@ -136,7 +136,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	err = netns.Do(func(_ ns.NetNS) error {
 		return ipam.ConfigureIface(args.IfName, result)
 	})
-
 	if err != nil {
 		return err
 	}
@@ -165,7 +164,6 @@ func cmdDel(args *skel.CmdArgs) error {
 		}
 		return err
 	})
-
 	if err != nil {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.

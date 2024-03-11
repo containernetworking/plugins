@@ -165,7 +165,7 @@ var _ = Describe("bandwidth test", func() {
 					StdinData:   []byte(conf),
 				}
 
-				Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 					r, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
 					Expect(err).NotTo(HaveOccurred(), string(out))
@@ -202,7 +202,7 @@ var _ = Describe("bandwidth test", func() {
 					return nil
 				})).To(Succeed())
 
-				Expect(hostNs.Do(func(n ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
 					ifbLink, err := netlink.LinkByName(hostIfname)
@@ -260,7 +260,7 @@ var _ = Describe("bandwidth test", func() {
 					StdinData:   []byte(conf),
 				}
 
-				Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
 					_, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, ifbDeviceName, []byte(conf), func() error { return cmdAdd(args) })
@@ -271,7 +271,7 @@ var _ = Describe("bandwidth test", func() {
 					return nil
 				})).To(Succeed())
 
-				Expect(hostNs.Do(func(n ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
 					containerIfLink, err := netlink.LinkByName(hostIfname)
@@ -327,7 +327,7 @@ var _ = Describe("bandwidth test", func() {
 					StdinData:   []byte(conf),
 				}
 
-				Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
 					_, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, ifbDeviceName, []byte(conf), func() error { return cmdAdd(args) })
@@ -338,7 +338,7 @@ var _ = Describe("bandwidth test", func() {
 					return nil
 				})).To(Succeed())
 
-				Expect(hostNs.Do(func(n ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
 					containerIfLink, err := netlink.LinkByName(hostIfname)
@@ -396,7 +396,7 @@ var _ = Describe("bandwidth test", func() {
 					StdinData:   []byte(conf),
 				}
 
-				Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
 					_, _, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
@@ -448,7 +448,7 @@ var _ = Describe("bandwidth test", func() {
 					StdinData:   []byte(conf),
 				}
 
-				Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 					r, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
 					Expect(err).NotTo(HaveOccurred(), string(out))
@@ -485,7 +485,7 @@ var _ = Describe("bandwidth test", func() {
 					return nil
 				})).To(Succeed())
 
-				Expect(hostNs.Do(func(n ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
 					ifbLink, err := netlink.LinkByName(hostIfname)
@@ -551,7 +551,7 @@ var _ = Describe("bandwidth test", func() {
 					StdinData:   []byte(conf),
 				}
 
-				Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
 					_, _, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
@@ -601,7 +601,7 @@ var _ = Describe("bandwidth test", func() {
 					StdinData:   []byte(conf),
 				}
 
-				Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 					_, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
 					Expect(err).NotTo(HaveOccurred(), string(out))
@@ -669,7 +669,7 @@ var _ = Describe("bandwidth test", func() {
 					StdinData:   []byte(conf),
 				}
 
-				Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 					r, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
 					Expect(err).NotTo(HaveOccurred(), string(out))
@@ -706,7 +706,7 @@ var _ = Describe("bandwidth test", func() {
 					return nil
 				})).To(Succeed())
 
-				Expect(hostNs.Do(func(n ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
 					ifbLink, err := netlink.LinkByName(hostIfname)
@@ -768,7 +768,7 @@ var _ = Describe("bandwidth test", func() {
 					StdinData:   []byte(conf),
 				}
 
-				Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
 					_, _, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
@@ -801,7 +801,7 @@ var _ = Describe("bandwidth test", func() {
 					StdinData:   []byte(conf),
 				}
 
-				Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
 					_, _, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
@@ -853,7 +853,7 @@ var _ = Describe("bandwidth test", func() {
 					StdinData:   []byte(conf),
 				}
 
-				Expect(hostNs.Do(func(netNS ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
 					_, _, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, "", []byte(conf), func() error { return cmdAdd(args) })
