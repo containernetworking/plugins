@@ -14,7 +14,7 @@ jobs:
         goarch: [amd64, arm, arm64, mips64le, ppc64le, riscv64, s390x]
     steps:
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: 1.21
 
@@ -65,7 +65,7 @@ jobs:
         run: sudo apt-get install dos2unix
 
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: 1.21
 
