@@ -37,7 +37,10 @@ import (
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
-var sysBusPCI = "/sys/bus/pci/devices"
+var (
+	sysBusPCI       = "/sys/bus/pci/devices"
+	sysBusAuxiliary = "/sys/bus/auxiliary/devices"
+)
 
 // Array of different linux drivers bound to network device needed for DPDK
 var userspaceDrivers = []string{"vfio-pci", "uio_pci_generic", "igb_uio"}
@@ -53,6 +56,9 @@ type NetConf struct {
 	RuntimeConfig struct {
 		DeviceID string `json:"deviceID,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
+
+	// for internal use
+	auxDevice string `json:"-"` // Auxiliary device name as appears on Auxiliary bus (/sys/bus/auxiliary)
 }
 
 func init() {
@@ -62,6 +68,31 @@ func init() {
 	runtime.LockOSThread()
 }
 
+// handleDeviceID updates netconf fields with DeviceID runtime config
+func handleDeviceID(netconf *NetConf) error {
+	deviceID := netconf.RuntimeConfig.DeviceID
+	if deviceID == "" {
+		return nil
+	}
+
+	// Check if deviceID is a PCI device
+	pciPath := filepath.Join(sysBusPCI, deviceID)
+	if _, err := os.Stat(pciPath); err == nil {
+		netconf.PCIAddr = deviceID
+		return nil
+	}
+
+	// Check if deviceID is an Auxiliary device
+	auxPath := filepath.Join(sysBusAuxiliary, deviceID)
+	if _, err := os.Stat(auxPath); err == nil {
+		netconf.PCIAddr = ""
+		netconf.auxDevice = deviceID
+		return nil
+	}
+
+	return fmt.Errorf("runtime config DeviceID %s not found or unsupported", deviceID)
+}
+
 func loadConf(bytes []byte) (*NetConf, error) {
 	n := &NetConf{}
 	var err error
@@ -69,12 +100,12 @@ func loadConf(bytes []byte) (*NetConf, error) {
 		return nil, fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	if n.RuntimeConfig.DeviceID != "" {
-		// Override PCI device with the standardized DeviceID provided in Runtime Config.
-		n.PCIAddr = n.RuntimeConfig.DeviceID
+	// Override device with the standardized DeviceID if provided in Runtime Config.
+	if err := handleDeviceID(n); err != nil {
+		return nil, err
 	}
 
-	if n.Device == "" && n.HWAddr == "" && n.KernelPath == "" && n.PCIAddr == "" {
+	if n.Device == "" && n.HWAddr == "" && n.KernelPath == "" && n.PCIAddr == "" && n.auxDevice == "" {
 		return nil, fmt.Errorf(`specify either "device", "hwaddr", "kernelpath" or "pciBusID"`)
 	}
 
@@ -102,7 +133,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	result := &current.Result{}
 	var contDev netlink.Link
 	if !cfg.DPDKMode {
-		hostDev, err := getLink(cfg.Device, cfg.HWAddr, cfg.KernelPath, cfg.PCIAddr)
+		hostDev, err := getLink(cfg.Device, cfg.HWAddr, cfg.KernelPath, cfg.PCIAddr, cfg.auxDevice)
 		if err != nil {
 			return fmt.Errorf("failed to find host device: %v", err)
 		}
@@ -428,11 +459,19 @@ func printLink(dev netlink.Link, cniVersion string, containerNs ns.NetNS) error 
 	return types.PrintResult(&result, cniVersion)
 }
 
-func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) {
-	links, err := netlink.LinkList()
+func linkFromPath(path string) (netlink.Link, error) {
+	entries, err := os.ReadDir(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list node links: %v", err)
+		return nil, fmt.Errorf("failed to read directory %s: %q", path, err)
 	}
+	if len(entries) > 0 {
+		// grab the first net device
+		return netlink.LinkByName(entries[0].Name())
+	}
+	return nil, fmt.Errorf("failed to find network device in path %s", path)
+}
+
+func getLink(devname, hwaddr, kernelpath, pciaddr string, auxDev string) (netlink.Link, error) {
 	switch {
 
 	case len(devname) > 0:
@@ -441,6 +480,11 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) 
 		hwAddr, err := net.ParseMAC(hwaddr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse MAC address %q: %v", hwaddr, err)
+		}
+
+		links, err := netlink.LinkList()
+		if err != nil {
+			return nil, fmt.Errorf("failed to list node links: %v", err)
 		}
 
 		for _, link := range links {
@@ -453,20 +497,7 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) 
 			return nil, fmt.Errorf("kernel device path %q must be absolute and begin with /sys/devices/", kernelpath)
 		}
 		netDir := filepath.Join(kernelpath, "net")
-		entries, err := os.ReadDir(netDir)
-		if err != nil {
-			return nil, fmt.Errorf("failed to find network devices at %q", netDir)
-		}
-
-		// Grab the first device from eg /sys/devices/pci0000:00/0000:00:19.0/net
-		for _, entry := range entries {
-			// Make sure it's really an interface
-			for _, l := range links {
-				if entry.Name() == l.Attrs().Name {
-					return l, nil
-				}
-			}
-		}
+		return linkFromPath(netDir)
 	case len(pciaddr) > 0:
 		netDir := filepath.Join(sysBusPCI, pciaddr, "net")
 		if _, err := os.Lstat(netDir); err != nil {
@@ -477,14 +508,10 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string) (netlink.Link, error) 
 			}
 			netDir = matches[0]
 		}
-		entries, err := os.ReadDir(netDir)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read net directory %s: %q", netDir, err)
-		}
-		if len(entries) > 0 {
-			return netlink.LinkByName(entries[0].Name())
-		}
-		return nil, fmt.Errorf("failed to find device name for pci address %s", pciaddr)
+		return linkFromPath(netDir)
+	case len(auxDev) > 0:
+		netDir := filepath.Join(sysBusAuxiliary, auxDev, "net")
+		return linkFromPath(netDir)
 	}
 
 	return nil, fmt.Errorf("failed to find physical interface")
