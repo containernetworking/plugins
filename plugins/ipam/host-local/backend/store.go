@@ -24,4 +24,5 @@ type Store interface {
 	LastReservedIP(rangeID string) (net.IP, error)
 	ReleaseByID(id string, ifname string) error
 	GetByID(id string, ifname string) []net.IP
+	ReleaseExcept(keeps [][2]string) error
 }

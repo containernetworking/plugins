@@ -29,7 +29,12 @@ import (
 )
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("host-local"))
+	skel.PluginMainFuncs(skel.CNIFuncs{
+		Add:   cmdAdd,
+		Check: cmdCheck,
+		Del:   cmdDel,
+		GC:    cmdGC,
+	}, version.All, bv.BuildString("host-local"))
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
@@ -159,4 +164,24 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf(strings.Join(errors, ";"))
 	}
 	return nil
+}
+
+func cmdGC(args *skel.CmdArgs) error {
+	netConf, err := allocator.ParseConfig(args.StdinData)
+	if err != nil {
+		return err
+	}
+	store, err := disk.New(netConf.Name, netConf.IPAM.DataDir)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+
+	keepKeys := make([][2]string, 0, len(netConf.ValidAttachments))
+
+	for _, a := range netConf.ValidAttachments {
+		keepKeys = append(keepKeys, [2]string{a.ContainerID, a.IfName})
+	}
+
+	return store.ReleaseExcept(keepKeys)
 }

@@ -15,7 +15,10 @@
 package disk
 
 import (
+	"errors"
+	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -114,6 +117,47 @@ func (s *Store) FindByKey(match string) (bool, error) {
 	return found, err
 }
 
+// ReleaseExceptKeys keeps only the entries in the store that correspond to
+// The set of matches we wish to keep
+func (s *Store) ReleaseExceptKeys(keys []string) error {
+	errs := []error{}
+
+	keep := map[string]struct{}{}
+	for _, k := range keys {
+		keep[k] = struct{}{}
+	}
+
+	err := filepath.WalkDir(s.dataDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		// Only consider IP filenames
+		if !d.Type().IsRegular() || !ISIPFilename(d.Name()) {
+			return nil
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			errs = append(errs, err)
+			return nil
+		}
+		if _, ok := keep[strings.TrimSpace(string(data))]; !ok {
+			err := os.Remove(path)
+			if err != nil {
+				errs = append(errs, err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to GC store directory %s: %w", s.dataDir, err)
+	}
+	if len(errs) != 0 {
+		return errors.Join(errs...)
+	}
+	return nil
+}
+
 func (s *Store) FindByID(id string, ifname string) bool {
 	s.Lock()
 	defer s.Unlock()
@@ -128,6 +172,19 @@ func (s *Store) FindByID(id string, ifname string) bool {
 	}
 
 	return found
+}
+
+// ReleaseExcept cleans the store, preserving only the (id, ifname) pairs
+// provided in keeps
+func (s *Store) ReleaseExcept(keeps [][2]string) error {
+	s.Lock()
+	defer s.Unlock()
+
+	matches := make([]string, 0, len(keeps))
+	for _, keep := range keeps {
+		matches = append(matches, strings.TrimSpace(keep[0])+LineBreak+keep[1])
+	}
+	return s.ReleaseExceptKeys(matches)
 }
 
 func (s *Store) ReleaseByKey(match string) (bool, error) {
@@ -199,4 +256,15 @@ func GetEscapedPath(dataDir string, fname string) string {
 		fname = strings.ReplaceAll(fname, ":", "_")
 	}
 	return filepath.Join(dataDir, fname)
+}
+
+func ISIPFilename(fname string) bool {
+	if strings.HasPrefix(fname, lastIPFilePrefix) || fname == "lock" {
+		return false
+	}
+	if runtime.GOOS == "windows" {
+		fname = strings.ReplaceAll(fname, "_", ":")
+	}
+	_, err := netip.ParseAddr(fname)
+	return err == nil
 }
