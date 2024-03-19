@@ -43,6 +43,7 @@ const (
 	BRNAMEVLAN = "bridge0.100"
 	IFNAME     = "eth0"
 	NAMESERVER = "192.0.2.0"
+	MTU        = 5000
 )
 
 type Net struct {
@@ -118,7 +119,7 @@ func (tc testCase) netConf() *NetConf {
 		BrName: BRNAME,
 		IsGW:   tc.isGW,
 		IPMasq: false,
-		MTU:    5000,
+		MTU:    MTU,
 	}
 }
 
@@ -128,6 +129,7 @@ const (
 	"cniVersion": "%s",
 	"name": "testConfig",
 	"type": "bridge",
+	"mtu": %d,
 	"bridge": "%s"`
 
 	vlan = `,
@@ -215,7 +217,7 @@ const (
 // netConfJSON() generates a JSON network configuration string
 // for a test case.
 func (tc testCase) netConfJSON(dataDir string) string {
-	conf := fmt.Sprintf(netConfStr, tc.cniVersion, BRNAME)
+	conf := fmt.Sprintf(netConfStr, tc.cniVersion, tc.netConf().MTU, BRNAME)
 	if tc.vlan != 0 {
 		conf += fmt.Sprintf(vlan, tc.vlan)
 
@@ -494,6 +496,11 @@ type (
 
 func newTesterByVersion(version string, testNS, targetNS ns.NetNS) cmdAddDelTester {
 	switch {
+	case strings.HasPrefix(version, "1.1."):
+		return &testerV10x{
+			testNS:   testNS,
+			targetNS: targetNS,
+		}
 	case strings.HasPrefix(version, "1.0."):
 		return &testerV10x{
 			testNS:   testNS,
@@ -526,6 +533,14 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 	err := tester.testNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
+		// check that STATUS is
+		if testutils.SpecVersionHasSTATUS(tc.cniVersion) {
+			err := testutils.CmdStatus(func() error {
+				return cmdStatus(&skel.CmdArgs{StdinData: []byte(tc.netConfJSON(dataDir))})
+			})
+			Expect(err).NotTo(HaveOccurred())
+		}
+
 		r, raw, err := testutils.CmdAddWithArgs(tester.args, func() error {
 			return cmdAdd(tester.args)
 		})
@@ -554,6 +569,10 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			Expect(result.Interfaces[2].Mac).To(Equal(tc.expectedMac))
 		}
 		Expect(result.Interfaces[2].Sandbox).To(Equal(tester.targetNS.Path()))
+
+		Expect(result.Interfaces[0].Mtu).To(Equal(MTU))
+		Expect(result.Interfaces[1].Mtu).To(Equal(MTU))
+		Expect(result.Interfaces[2].Mtu).To(Equal(MTU))
 
 		// Make sure bridge link exists
 		link, err := netlink.LinkByName(result.Interfaces[0].Name)
@@ -687,6 +706,7 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		Expect(link.Attrs().Name).To(Equal(IFNAME))
 		Expect(link).To(BeAssignableToTypeOf(&netlink.Veth{}))
 		assertContainerInterfaceLinkState(&tc, link)
+		Expect(link.Attrs().MTU).To(Equal(MTU))
 
 		expCIDRsV4, expCIDRsV6 := tc.expectedCIDRs()
 		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
@@ -856,6 +876,17 @@ func (tester *testerV10x) cmdDelTest(tc testCase, dataDir string) {
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
+
+	// Make sure that GC does not reuturn an error
+	if testutils.SpecVersionHasGC(tc.cniVersion) {
+		err = tester.testNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			return testutils.CmdGC(func() error {
+				return cmdGC(tester.args)
+			})
+		})
+		Expect(err).NotTo(HaveOccurred())
+	}
 }
 
 func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result, error) {
@@ -1477,7 +1508,7 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (types.Re
 			return err
 		}
 		Expect(err).NotTo(HaveOccurred())
-		Expect(strings.Index(string(raw), "\"ip\":")).Should(BeNumerically(">", 0))
+		Expect(string(raw)).Should(ContainSubstring("\"ip\":"))
 
 		// We expect a version 0.1.0 or 0.2.0 result
 		_, err = r.GetAsVersion(tc.cniVersion)
@@ -1861,6 +1892,7 @@ var _ = Describe("bridge Operations", func() {
 				bridge, _, err := setupBridge(conf)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(bridge.Attrs().Name).To(Equal(BRNAME))
+				Expect(bridge.Attrs().MTU).To(Equal(MTU))
 
 				// Double check that the link was added
 				link, err := netlink.LinkByName(BRNAME)
@@ -1879,6 +1911,7 @@ var _ = Describe("bridge Operations", func() {
 				err := netlink.LinkAdd(&netlink.Bridge{
 					LinkAttrs: netlink.LinkAttrs{
 						Name: BRNAME,
+						MTU:  MTU,
 					},
 				})
 				Expect(err).NotTo(HaveOccurred())
