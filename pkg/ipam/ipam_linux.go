@@ -117,6 +117,15 @@ func ConfigureIface(ifName string, res *current.Result) error {
 			Dst:       &r.Dst,
 			LinkIndex: link.Attrs().Index,
 			Gw:        gw,
+			MTU:       r.MTU,
+			AdvMSS:    r.AdvMSS,
+			Priority:  r.Priority,
+		}
+		if r.Scope != nil {
+			route.Scope = netlink.Scope(*r.Scope)
+		}
+		if r.Table != nil {
+			route.Table = *r.Table
 		}
 
 		if err = netlink.RouteAddEcmp(&route); err != nil {
