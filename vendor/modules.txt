@@ -78,13 +78,6 @@ github.com/d2g/dhcp4
 # github.com/d2g/dhcp4client v1.0.0
 ## explicit
 github.com/d2g/dhcp4client
-# github.com/d2g/dhcp4server v0.0.0-20181031114812-7d4a0a7f59a5
-## explicit
-github.com/d2g/dhcp4server
-github.com/d2g/dhcp4server/leasepool
-github.com/d2g/dhcp4server/leasepool/memorypool
-# github.com/d2g/hardwareaddr v0.0.0-20190221164911-e7d9fbe030e4
-## explicit
 # github.com/go-logr/logr v1.4.1
 ## explicit; go 1.18
 github.com/go-logr/logr

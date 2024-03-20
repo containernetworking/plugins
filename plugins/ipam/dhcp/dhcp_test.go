@@ -26,9 +26,6 @@ import (
 	"time"
 
 	"github.com/d2g/dhcp4"
-	"github.com/d2g/dhcp4server"
-	"github.com/d2g/dhcp4server/leasepool"
-	"github.com/d2g/dhcp4server/leasepool/memorypool"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
@@ -37,6 +34,9 @@ import (
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
+	"github.com/containernetworking/plugins/pkg/testutils/dhcp4server"
+	"github.com/containernetworking/plugins/pkg/testutils/dhcp4server/leasepool"
+	"github.com/containernetworking/plugins/pkg/testutils/dhcp4server/leasepool/memorypool"
 )
 
 func getTmpDir() (string, error) {
