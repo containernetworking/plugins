@@ -332,8 +332,23 @@ func (s *Server) ServeDHCP(packet dhcp4.Packet) (dhcp4.Packet, error) {
 		log.Printf("Debug: Decline Message:%v\n", packet)
 
 	case dhcp4.Release:
-		// Decline from the client:
 		log.Printf("Debug: Release Message:%v\n", packet)
+		// Release Received from client
+		// Lets get the lease we're going to send them
+		found, lease, err := s.GetLease(packet)
+		if err != nil {
+			return dhcp4.Packet{}, err
+		}
+
+		ack := s.AcknowledgementPacket(packet)
+		ack.PadToMinSize()
+		if !found {
+			log.Println("Warning: Release of unknown lease")
+			return ack, nil
+		}
+		s.leasePool.RemoveLease(lease.IP)
+
+		return ack, nil
 
 	default:
 		log.Printf("Debug: Unexpected Packet Type:%v\n", dhcp4.MessageType(packetOptions[dhcp4.OptionDHCPMessageType][0]))
