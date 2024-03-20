@@ -39,7 +39,6 @@ type NetConf struct {
 	types.NetConf
 	IPAM *IPAMConfig `json:"ipam"`
 }
-
 type IPAMConfig struct {
 	types.IPAM
 	DaemonSocketPath string `json:"daemonSocketPath"`
@@ -96,7 +95,13 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
-		skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("dhcp"))
+		skel.PluginMainFuncs(skel.CNIFuncs{
+			Add:    cmdAdd,
+			Check:  cmdCheck,
+			Del:    cmdDel,
+			Status: cmdStatus,
+			GC:     cmdGC,
+		}, version.All, bv.BuildString("dhcp"))
 	}
 }
 
@@ -132,6 +137,16 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	result := &current.Result{CNIVersion: current.ImplementedSpecVersion}
 	return rpcCall("DHCP.Allocate", args, result)
+}
+
+func cmdStatus(args *skel.CmdArgs) error {
+	result := struct{}{}
+	return rpcCall("DHCP.Ping", args, &result)
+}
+
+func cmdGC(args *skel.CmdArgs) error {
+	result := struct{}{}
+	return rpcCall("DHCP.GC", args, &result)
 }
 
 func getSocketPath(stdinData []byte) (string, error) {

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/rpc"
@@ -125,6 +126,36 @@ func (d *DHCP) Release(args *skel.CmdArgs, _ *struct{}) error {
 	if l := d.getLease(clientID); l != nil {
 		l.Stop()
 		d.clearLease(clientID)
+	}
+
+	return nil
+}
+
+func (d *DHCP) Ping(_ *skel.CmdArgs, _ *struct{}) error {
+	return nil
+}
+
+func (d *DHCP) GC(args *skel.CmdArgs, _ *struct{}) error {
+	conf := NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("error parsing netconf: %v", err)
+	}
+
+	keepClientIDs := make(map[string]struct{}, len(conf.ValidAttachments))
+	for _, keep := range conf.ValidAttachments {
+		keepClientIDs[generateClientID(keep.ContainerID, conf.Name, keep.IfName)] = struct{}{}
+	}
+	log.Printf("GC, keeping containers %v", keepClientIDs)
+
+	d.mux.Lock()
+	defer d.mux.Unlock()
+
+	for clientID, l := range d.leases {
+		if _, ok := keepClientIDs[clientID]; ok {
+			continue
+		}
+		l.Stop()
+		delete(d.leases, clientID)
 	}
 
 	return nil

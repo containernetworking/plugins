@@ -29,6 +29,7 @@ import (
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
+	"github.com/containernetworking/plugins/pkg/testutils/dhcp4server/leasepool/memorypool"
 )
 
 var _ = Describe("DHCP Multiple Lease Operations", func() {
@@ -39,6 +40,7 @@ var _ = Describe("DHCP Multiple Lease Operations", func() {
 	var socketPath string
 	var tmpDir string
 	var err error
+	var leasepool *memorypool.MemoryPool
 
 	BeforeEach(func() {
 		dhcpServerStopCh, socketPath, originalNS, targetNS, err = dhcpSetupOriginalNS()
@@ -61,13 +63,15 @@ var _ = Describe("DHCP Multiple Lease Operations", func() {
 		})
 
 		// Start the DHCP server
-		dhcpServerDone, err = dhcpServerStart(originalNS, 2, dhcpServerStopCh)
+		dhcpServerDone, leasepool, err = dhcpServerStart(originalNS, 2, dhcpServerStopCh)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start the DHCP client daemon
 		dhcpPluginPath, err := exec.LookPath("dhcp")
 		Expect(err).NotTo(HaveOccurred())
 		clientCmd = exec.Command(dhcpPluginPath, "daemon", "-socketpath", socketPath)
+		clientCmd.Stderr = GinkgoWriter
+		clientCmd.Stdout = GinkgoWriter
 		err = clientCmd.Start()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(clientCmd.Process).NotTo(BeNil())
@@ -174,6 +178,69 @@ var _ = Describe("DHCP Multiple Lease Operations", func() {
 			return testutils.CmdDelWithArgs(args, func() error {
 				return cmdDel(args)
 			})
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("[1.1.0] clears stale leases with GC", func() {
+		conf := fmt.Sprintf(`{
+			    "cniVersion": "1.1.0",
+			    "name": "mynet",
+			    "type": "ipvlan",
+			    "ipam": {
+				"type": "dhcp",
+				"daemonSocketPath": "%s"
+			    }
+			}`, socketPath)
+
+		args1 := &skel.CmdArgs{
+			ContainerID: "dummy1",
+			Netns:       targetNS.Path(),
+			IfName:      contVethName,
+			StdinData:   []byte(conf),
+		}
+		args2 := &skel.CmdArgs{
+			ContainerID: "dummy2",
+			Netns:       targetNS.Path(),
+			IfName:      contVethName,
+			StdinData:   []byte(conf),
+		}
+
+		gcConf := fmt.Sprintf(`{
+			    "cniVersion": "1.1.0",
+			    "name": "mynet",
+			    "type": "ipvlan",
+			    "ipam": {
+				"type": "dhcp",
+				"daemonSocketPath": "%s"
+			    },
+				"cni.dev/valid-attachments": [{"containerID": "dummy1", "ifname": "eth0"}]
+			}`, socketPath)
+
+		gcArgs := &skel.CmdArgs{
+			StdinData: []byte(gcConf),
+		}
+
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			_, _, err := testutils.CmdAddWithArgs(args1, func() error {
+				return cmdAdd(args1)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, _, err = testutils.CmdAddWithArgs(args2, func() error {
+				return cmdAdd(args2)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(leasepool.GetLeases()).To(HaveLen(2))
+
+			err = testutils.CmdGC(func() error {
+				return cmdGC(gcArgs)
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(leasepool.GetLeases()).To(HaveLen(1))
+
+			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
