@@ -114,6 +114,13 @@ func ipvlanAddCheckDelTest(conf, masterName string, originalNS, targetNS ns.NetN
 	err = originalNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
+		if testutils.SpecVersionHasSTATUS(cniVersion) {
+			err = testutils.CmdStatus(func() error {
+				return cmdStatus(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+		}
+
 		result, _, err = testutils.CmdAddWithArgs(args, func() error {
 			return cmdAdd(args)
 		})
@@ -197,6 +204,17 @@ func ipvlanAddCheckDelTest(conf, masterName string, originalNS, targetNS ns.NetN
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
+
+	// See that GC succeeds
+	if testutils.SpecVersionHasGC(cniVersion) {
+		err = originalNS.Do(func(_ ns.NetNS) error {
+			defer GinkgoRecover()
+			return testutils.CmdGC(func() error {
+				return cmdGC(args)
+			})
+		})
+		Expect(err).NotTo(HaveOccurred())
+	}
 }
 
 type tester interface {

@@ -177,6 +177,7 @@ func createIpvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interf
 			return fmt.Errorf("failed to refetch ipvlan %q: %v", ipvlan.Name, err)
 		}
 		ipvlan.Mac = contIpvlan.Attrs().HardwareAddr.String()
+		ipvlan.Mtu = contIpvlan.Attrs().MTU
 		ipvlan.Sandbox = netns.Path()
 
 		return nil
@@ -349,7 +350,13 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("ipvlan"))
+	skel.PluginMainFuncs(skel.CNIFuncs{
+		Add:    cmdAdd,
+		Check:  cmdCheck,
+		Del:    cmdDel,
+		Status: cmdStatus,
+		GC:     cmdGC,
+	}, version.All, bv.BuildString("ipvlan"))
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
@@ -479,6 +486,35 @@ func validateCniContainerInterface(intf current.Interface, modeExpected string) 
 	if intf.Mac != "" {
 		if intf.Mac != link.Attrs().HardwareAddr.String() {
 			return fmt.Errorf("Interface %s Mac %s doesn't match container Mac: %s", intf.Name, intf.Mac, link.Attrs().HardwareAddr)
+		}
+	}
+
+	return nil
+}
+
+func cmdStatus(args *skel.CmdArgs) error {
+	conf := NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("failed to load netconf: %w", err)
+	}
+	if conf.IPAM.Type != "" {
+		if err := ipam.ExecStatus(conf.IPAM.Type, args.StdinData); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func cmdGC(args *skel.CmdArgs) error {
+	conf := NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("failed to load netconf: %w", err)
+	}
+
+	if conf.IPAM.Type != "" {
+		if err := ipam.ExecGC(conf.IPAM.Type, args.StdinData); err != nil {
+			return err
 		}
 	}
 
