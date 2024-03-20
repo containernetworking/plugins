@@ -24,6 +24,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/containernetworking/plugins/pkg/ipam"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
@@ -150,10 +151,65 @@ func cmdDel(args *skel.CmdArgs) error {
 
 func main() {
 	// replace TODO with your plugin name
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("TODO"))
+	skel.PluginMainFuncs(skel.CNIFuncs{
+		Add:    cmdAdd,
+		Del:    cmdDel,
+		Check:  cmdCheck,
+		Status: cmdStatus,
+		GC:     cmdGc,
+	}, version.All, bv.BuildString("a sample plugin"))
 }
 
 func cmdCheck(_ *skel.CmdArgs) error {
 	// TODO: implement
 	return fmt.Errorf("not implemented")
+}
+
+// cmdStatus implements the STATUS command, which indicates whether or not
+// this plugin is able to accept ADD requests.
+//
+// If the plugin has external dependencies, such as a daemon
+// or chained ipam plugin, it should determine their status. If all is well,
+// and an ADD can be successfully processed, return nil
+func cmdStatus(args *skel.CmdArgs) error {
+	conf, err := parseConfig(args.StdinData)
+	if err != nil {
+		return err
+	}
+	_ = conf
+
+	// If this plugins delegates IPAM, ensure that IPAM is also running
+	if err := ipam.ExecStatus(conf.IPAM.Type, args.StdinData); err != nil {
+		return err
+	}
+
+	// TODO: implement STATUS here
+	// e.g. querying an external deamon, or delegating STATUS to an IPAM plugin
+
+	return nil
+}
+
+// cmdGc implements the GC command, which the runtime uses to indicate
+// the currently valid set of attachments for a given configuration; any
+// resources not owned by these containers may be deleted.
+//
+// The set of valid attachments is provided in the variable 'cni.dev/valid-attachments'.
+// All other attachments should be considered invalid.
+func cmdGc(args *skel.CmdArgs) error {
+	conf, err := parseConfig(args.StdinData)
+	if err != nil {
+		return err
+	}
+	_ = conf
+
+	// If this plugin delegates IPAM, then GC must be passed
+	if err := ipam.ExecGC(conf.IPAM.Type, args.StdinData); err != nil {
+		return err
+	}
+
+	// TODO: implement GC here
+	// e.g clean up any stale resources, such as iptables rules.
+	// You can assume that anything attached to a network namespace is gone.
+
+	return nil
 }
