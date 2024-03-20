@@ -153,6 +153,7 @@ func createVlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interfac
 			return fmt.Errorf("failed to refetch vlan %q: %v", vlan.Name, err)
 		}
 		vlan.Mac = contVlan.Attrs().HardwareAddr.String()
+		vlan.Mtu = contVlan.Attrs().MTU
 		vlan.Sandbox = netns.Path()
 
 		return nil
@@ -259,7 +260,13 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("vlan"))
+	skel.PluginMainFuncs(skel.CNIFuncs{
+		Add:    cmdAdd,
+		Check:  cmdCheck,
+		Del:    cmdDel,
+		Status: cmdStatus,
+		GC:     cmdGC,
+	}, version.All, bv.BuildString("vlan"))
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
@@ -388,6 +395,32 @@ func validateCniContainerInterface(intf current.Interface, vlanID int, mtu int) 
 			return fmt.Errorf("Error: Tuning configured MTU of %s is %d, current value is %d",
 				intf.Name, mtu, link.Attrs().MTU)
 		}
+	}
+
+	return nil
+}
+
+func cmdStatus(args *skel.CmdArgs) error {
+	conf := NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("failed to load netconf: %w", err)
+	}
+
+	if err := ipam.ExecStatus(conf.IPAM.Type, args.StdinData); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func cmdGC(args *skel.CmdArgs) error {
+	conf := NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("failed to load netconf: %w", err)
+	}
+
+	if err := ipam.ExecGC(conf.IPAM.Type, args.StdinData); err != nil {
+		return err
 	}
 
 	return nil
