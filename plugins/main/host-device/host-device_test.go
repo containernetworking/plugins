@@ -231,7 +231,7 @@ type (
 
 func newTesterByVersion(version string) tester {
 	switch {
-	case strings.HasPrefix(version, "1.0."):
+	case strings.HasPrefix(version, "1."):
 		return &testerV10x{}
 	case strings.HasPrefix(version, "0.4."):
 		return &testerV04x{}
@@ -252,6 +252,7 @@ func (t *testerV10x) expectInterfaces(result types.Result, name, mac, sandbox st
 			Name:    name,
 			Mac:     mac,
 			Sandbox: sandbox,
+			Mtu:     1500,
 		},
 	}))
 }
@@ -330,7 +331,7 @@ var _ = Describe("base functionality", func() {
 		Expect(testutils.UnmountNS(targetNS)).To(Succeed())
 	})
 
-	for _, ver := range []string{"0.3.0", "0.3.1", "0.4.0", "1.0.0"} {
+	for _, ver := range testutils.AllSpecVersions[2:] { // from v0.3 onwards
 		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
 		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
 		ver := ver
@@ -354,7 +355,6 @@ var _ = Describe("base functionality", func() {
 				return nil
 			})
 
-			// call CmdAdd
 			cniName := "eth0"
 			conf := fmt.Sprintf(`{
 				"cniVersion": "%s",
@@ -362,6 +362,16 @@ var _ = Describe("base functionality", func() {
 				"type": "host-device",
 				"device": %q
 			}`, ver, ifname)
+
+			// if v1.1 or greater, call CmdStatus
+			if testutils.SpecVersionHasSTATUS(ver) {
+				err := testutils.CmdStatus(func() error {
+					return cmdStatus(&skel.CmdArgs{StdinData: []byte(conf)})
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// call CmdAdd
 			args := &skel.CmdArgs{
 				ContainerID: "dummy",
 				Netns:       targetNS.Path(),
@@ -411,6 +421,14 @@ var _ = Describe("base functionality", func() {
 				Expect(err).NotTo(HaveOccurred())
 				return nil
 			})
+
+			// call GC, ensure it does not fail (it should be a noop)
+			if testutils.SpecVersionHasGC(ver) {
+				err := testutils.CmdGC(func() error {
+					return cmdGC(&skel.CmdArgs{StdinData: []byte(conf)})
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
 		})
 
 		It(fmt.Sprintf("[%s] ensures CmdDel is idempotent", ver), func() {
@@ -621,7 +639,6 @@ var _ = Describe("base functionality", func() {
 				return nil
 			})
 
-			// call CmdAdd
 			targetIP := "10.10.0.1/24"
 			cniName := "eth0"
 			conf := fmt.Sprintf(`{
@@ -638,6 +655,16 @@ var _ = Describe("base functionality", func() {
 				},
 				"device": %q
 			}`, ver, ifname)
+
+			// if v1.1 or greater, call CmdStatus
+			if gt, _ := version.GreaterThanOrEqualTo(ver, "1.1.0"); gt {
+				err := testutils.CmdStatus(func() error {
+					return cmdStatus(&skel.CmdArgs{StdinData: []byte(conf)})
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// call CmdAdd
 			args := &skel.CmdArgs{
 				ContainerID: "dummy",
 				Netns:       targetNS.Path(),
@@ -695,6 +722,14 @@ var _ = Describe("base functionality", func() {
 				Expect(err).NotTo(HaveOccurred())
 				return nil
 			})
+
+			// call GC, ensure it does not fail
+			if gt, _ := version.GreaterThanOrEqualTo(ver, "1.1.0"); gt {
+				err := testutils.CmdGC(func() error {
+					return cmdGC(&skel.CmdArgs{StdinData: []byte(conf)})
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
 		})
 
 		It(fmt.Sprintf("[%s] fails an invalid config", ver), func() {
