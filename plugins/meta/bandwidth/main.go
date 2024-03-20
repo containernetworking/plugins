@@ -218,6 +218,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		result.Interfaces = append(result.Interfaces, &current.Interface{
 			Name: ifbDeviceName,
 			Mac:  ifbDevice.Attrs().HardwareAddr.String(),
+			Mtu:  mtu,
 		})
 		err = CreateEgressQdisc(bandwidth.EgressRate, bandwidth.EgressBurst, hostInterface.Name, ifbDeviceName)
 		if err != nil {
@@ -240,7 +241,16 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.VersionsStartingFrom("0.3.0"), bv.BuildString("bandwidth"))
+	// TODO: clean up stale IFB devices via GC
+	// Cannot do this until we can filter out only ifb devices that belong
+	// to this network.
+	skel.PluginMainFuncs(
+		skel.CNIFuncs{
+			Add:   cmdAdd,
+			Check: cmdCheck,
+			Del:   cmdDel,
+		},
+		version.VersionsStartingFrom("0.3.0"), bv.BuildString("bandwidth"))
 }
 
 func SafeQdiscList(link netlink.Link) ([]netlink.Qdisc, error) {

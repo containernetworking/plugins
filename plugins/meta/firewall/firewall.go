@@ -179,7 +179,13 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.VersionsStartingFrom("0.4.0"), bv.BuildString("firewall"))
+	skel.PluginMainFuncs(
+		skel.CNIFuncs{
+			Add:    cmdAdd,
+			Check:  cmdCheck,
+			Del:    cmdDel,
+			Status: cmdStatus,
+		}, version.VersionsStartingFrom("0.4.0"), bv.BuildString("firewall"))
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
@@ -199,4 +205,16 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 
 	return backend.Check(conf, result)
+}
+
+func cmdStatus(args *skel.CmdArgs) error {
+	conf := FirewallNetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("failed to load netconf: %v", err)
+	}
+
+	if conf.Backend == "firewalld" && !isFirewalldRunning() {
+		return types.NewError(50, "firewalld down", "unable to connect to the firewalld backend")
+	}
+	return nil
 }
