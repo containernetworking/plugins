@@ -106,7 +106,7 @@ type (
 
 func newTesterByVersion(version string) tester {
 	switch {
-	case strings.HasPrefix(version, "1.0."):
+	case strings.HasPrefix(version, "1."):
 		return &testerV10x{}
 	case strings.HasPrefix(version, "0.4."):
 		return &testerV04x{}
@@ -124,6 +124,7 @@ func (t *testerV10x) verifyResult(result types.Result, name string) string {
 
 	Expect(r.Interfaces).To(HaveLen(1))
 	Expect(r.Interfaces[0].Name).To(Equal(name))
+	Expect(r.Interfaces[0].Mtu).To(BeNumerically(">", 0))
 	Expect(r.IPs).To(HaveLen(1))
 
 	return r.Interfaces[0].Mac
@@ -261,6 +262,13 @@ var _ = Describe("dummy Operations", func() {
 				defer GinkgoRecover()
 
 				var err error
+				if testutils.SpecVersionHasSTATUS(ver) {
+					err = testutils.CmdStatus(func() error {
+						return cmdStatus(args)
+					})
+					Expect(err).NotTo(HaveOccurred())
+				}
+
 				result, _, err = testutils.CmdAddWithArgs(args, func() error {
 					return cmdAdd(args)
 				})
@@ -350,6 +358,14 @@ var _ = Describe("dummy Operations", func() {
 					return cmdDel(args)
 				})
 				Expect(err).NotTo(HaveOccurred())
+
+				if testutils.SpecVersionHasGC(ver) {
+					err = testutils.CmdGC(func() error {
+						return cmdGC(args)
+					})
+					Expect(err).NotTo(HaveOccurred())
+				}
+
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
