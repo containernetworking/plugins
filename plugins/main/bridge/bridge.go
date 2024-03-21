@@ -367,6 +367,15 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 	if err != nil {
 		return nil, err
 	}
+	if mtu > 0 && br.MTU != mtu {
+		if err := netlink.LinkSetMTU(br, mtu); err != nil {
+			return nil, fmt.Errorf("could not update MTU on %q: %w", brName, err)
+		}
+		br, err = bridgeByName(brName)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// we want to own the routes for this interface
 	_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv6/conf/%s/accept_ra", brName), "0")
@@ -424,6 +433,7 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 		contIface.Name = containerVeth.Name
 		contIface.Mac = containerVeth.HardwareAddr.String()
 		contIface.Sandbox = netns.Path()
+		contIface.Mtu = containerVeth.MTU
 		hostIface.Name = hostVeth.Name
 		return nil
 	})
@@ -437,6 +447,7 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 		return nil, nil, fmt.Errorf("failed to lookup %q: %v", hostIface.Name, err)
 	}
 	hostIface.Mac = hostVeth.Attrs().HardwareAddr.String()
+	hostIface.Mtu = hostVeth.Attrs().MTU
 
 	// connect host veth end to the bridge
 	if err := netlink.LinkSetMaster(hostVeth, br); err != nil {
@@ -511,6 +522,7 @@ func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
 	return br, &current.Interface{
 		Name: br.Attrs().Name,
 		Mac:  br.Attrs().HardwareAddr.String(),
+		Mtu:  br.Attrs().MTU,
 	}, nil
 }
 
@@ -827,7 +839,13 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("bridge"))
+	skel.PluginMainFuncs(skel.CNIFuncs{
+		Add:    cmdAdd,
+		Check:  cmdCheck,
+		Del:    cmdDel,
+		Status: cmdStatus,
+		GC:     cmdGC,
+	}, version.All, bv.BuildString("bridge"))
 }
 
 type cniBridgeIf struct {
@@ -1087,4 +1105,38 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 func uniqueID(containerID, cniIface string) string {
 	return containerID + "-" + cniIface
+}
+
+func cmdStatus(args *skel.CmdArgs) error {
+	conf := NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("failed to load netconf: %w", err)
+	}
+
+	if conf.IPAM.Type != "" {
+		if err := ipam.ExecStatus(conf.IPAM.Type, args.StdinData); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func cmdGC(args *skel.CmdArgs) error {
+	conf := NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("failed to load netconf: %w", err)
+	}
+
+	if conf.IPAM.Type != "" {
+		if err := ipam.ExecGC(conf.IPAM.Type, args.StdinData); err != nil {
+			return err
+		}
+	}
+
+	// We do not clean up any stale bridge ports here, as there are use-cases where
+	// additional bridge ports are created by external users.
+
+	// TODO: Clean up any stale masquerading rules
+	return nil
 }

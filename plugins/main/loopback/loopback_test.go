@@ -74,7 +74,7 @@ var _ = Describe("Loopback", func() {
 				session, err := gexec.Start(command, GinkgoWriter, GinkgoWriter)
 				Expect(err).NotTo(HaveOccurred())
 
-				Eventually(session).Should(gbytes.Say(`{.*}`))
+				Eventually(session).Should(gbytes.Say(`.+`))
 				Eventually(session).Should(gexec.Exit(0))
 
 				var lo *net.Interface

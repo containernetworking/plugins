@@ -114,6 +114,46 @@ func TeardownIPMasq(ipn *net.IPNet, chain string, comment string) error {
 	return nil
 }
 
+func CheckIPMasq(ipn *net.IPNet, chain, comment string) error {
+	isV6 := ipn.IP.To4() == nil
+
+	var ipt *iptables.IPTables
+	var err error
+	var multicastNet string
+	var ip string // the ip and its full-length prefix
+
+	if isV6 {
+		ipt, err = iptables.NewWithProtocol(iptables.ProtocolIPv6)
+		multicastNet = "ff00::/8"
+		ip = ipn.IP.String() + "/128"
+	} else {
+		ipt, err = iptables.NewWithProtocol(iptables.ProtocolIPv4)
+		multicastNet = "224.0.0.0/4"
+		ip = ipn.IP.String() + "/32"
+	}
+	if err != nil {
+		return fmt.Errorf("failed to locate iptables: %v", err)
+	}
+
+	ok, err := ipt.Exists("nat", chain, "!", "-d", multicastNet, "-j", "MASQUERADE", "-m", "comment", "--comment", comment)
+	if err != nil {
+		return fmt.Errorf("could not check for expected rule: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("expected rule did not exist in chain %s", chain)
+	}
+
+	ok, err = ipt.Exists("nat", "POSTROUTING", "-s", ip, "-j", chain, "-m", "comment", "--comment", comment)
+	if err != nil {
+		return fmt.Errorf("could not check for expected rule [-A POSTROUTING ]: %w", err)
+	}
+	if !ok {
+		want := []string{"-A", "POSTROUTING", "-s", ip, "-j", chain, "-m", "comment", "--comment", comment}
+		return fmt.Errorf("expected rule %v did not exist in chain POSTROUTING", want)
+	}
+	return nil
+}
+
 // isNotExist returnst true if the error is from iptables indicating
 // that the target does not exist.
 func isNotExist(err error) bool {

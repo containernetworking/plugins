@@ -8,13 +8,13 @@ import (
  * Lease.IP is the Key.
  */
 type LeasePool interface {
-	//Add A Lease To The Pool
+	// Add A Lease To The Pool
 	AddLease(Lease) error
 
-	//Remove
+	// Remove
 	RemoveLease(net.IP) error
 
-	//Remove All Leases from the Pool (Required for Persistant LeaseManagers)
+	// Remove All Leases from the Pool (Required for Persistent LeaseManagers)
 	PurgeLeases() error
 
 	/*
@@ -25,7 +25,7 @@ type LeasePool interface {
 	 */
 	GetLease(net.IP) (bool, Lease, error)
 
-	//Get the lease already in use by that hardware address and/or client identifier.
+	// Get the lease already in use by that hardware address and/or client identifier.
 	GetLeaseForClient(net.HardwareAddr, []byte) (bool, Lease, error)
 
 	/*

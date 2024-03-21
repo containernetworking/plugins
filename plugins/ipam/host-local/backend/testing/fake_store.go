@@ -89,3 +89,18 @@ func (s *FakeStore) GetByID(id string, _ string) []net.IP {
 func (s *FakeStore) SetIPMap(m map[string]string) {
 	s.ipMap = m
 }
+
+func (s *FakeStore) ReleaseExcept(keeps [][2]string) error {
+	keepKeys := map[string]struct{}{}
+	for _, keep := range keeps {
+		id := keep[0]
+		keepKeys[id] = struct{}{}
+	}
+
+	for k := range s.ipMap {
+		if _, ok := keepKeys[k]; !ok {
+			delete(s.ipMap, k)
+		}
+	}
+	return nil
+}

@@ -38,6 +38,16 @@ type Net struct {
 	Args *struct {
 		A *IPAMArgs `json:"cni"`
 	} `json:"args"`
+
+	ValidAttachments []GCAttachment `json:"cni.dev/valid-attachments,omitempty"`
+}
+
+// GCAttachment is the parameters to a GC call -- namely,
+// the container ID and ifname pair that represents a
+// still-valid attachment.
+type GCAttachment struct {
+	ContainerID string `json:"containerID"`
+	IfName      string `json:"ifname"`
 }
 
 // IPAMConfig represents the IP related network configuration.
@@ -72,15 +82,23 @@ type Range struct {
 	Gateway    net.IP      `json:"gateway,omitempty"`
 }
 
-// NewIPAMConfig creates a NetworkConfig from the given network name.
-func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
+func ParseConfig(bytes []byte) (*Net, error) {
 	n := Net{}
 	if err := json.Unmarshal(bytes, &n); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	if n.IPAM == nil {
-		return nil, "", fmt.Errorf("IPAM config missing 'ipam' key")
+		return nil, fmt.Errorf("IPAM config missing 'ipam' key")
+	}
+	return &n, nil
+}
+
+// NewIPAMConfig creates a NetworkConfig from the given network name.
+func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
+	n, err := ParseConfig(bytes)
+	if err != nil {
+		return nil, "", err
 	}
 
 	// parse custom IP from env args

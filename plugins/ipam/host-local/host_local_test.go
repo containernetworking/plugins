@@ -18,11 +18,13 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/tidwall/sjson"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -678,6 +680,128 @@ var _ = Describe("host-local Operations", func() {
 			}
 		})
 	}
+
+	It("Verfies that GC works as expected", func() {
+		conf := fmt.Sprintf(`{
+				"cniVersion": "1.1.0",
+				"name": "mynet0",
+				"type": "ipvlan",
+				"ipam": {
+					"type": "host-local",
+					"dataDir": "%s",
+					"ranges": [
+						[{ "subnet": "10.1.2.0/24" }]
+					]
+				}
+			}`, tmpDir)
+
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       nspath,
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+
+		args1 := &skel.CmdArgs{
+			ContainerID: "dummy1",
+			Netns:       nspath,
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+
+		// Allocate the IP
+		res, _, err := testutils.CmdAddWithArgs(args, func() error {
+			return cmdAdd(args)
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		result, err := types100.GetResult(res)
+		Expect(err).NotTo(HaveOccurred())
+		ip1 := result.IPs[0].Address.IP
+
+		// Allocate the IP with the another container ID
+		res, _, err = testutils.CmdAddWithArgs(args1, func() error {
+			return cmdAdd(args1)
+		})
+		Expect(err).NotTo(HaveOccurred())
+		result, err = types100.GetResult(res)
+		Expect(err).NotTo(HaveOccurred())
+		ip2 := result.IPs[0].Address.IP
+
+		ipReserved := func(ip net.IP, expected bool) {
+			GinkgoHelper()
+
+			fname := disk.GetEscapedPath(path.Join(tmpDir, "mynet0"), ip.String())
+			_, err := os.Stat(fname)
+			if os.IsNotExist(err) {
+				if expected {
+					Fail(fmt.Sprintf("IP %s should have existed, but it did not", ip.String()))
+				}
+				return
+			}
+			Expect(err).NotTo(HaveOccurred())
+			if !expected {
+				Fail(fmt.Sprintf("IP %s should not have existed, but it did not", ip.String()))
+			}
+		}
+
+		ipReserved(ip1, true)
+		ipReserved(ip2, true)
+
+		// alternating container, ifname pairs
+		doGC := func(valid ...string) {
+			GinkgoHelper()
+			if len(valid)%2 != 0 {
+				Fail("doGC needs id, ifname pairs")
+			}
+			a := []types.GCAttachment{}
+			for i := 0; i < len(valid); {
+				a = append(a, types.GCAttachment{
+					ContainerID: valid[i],
+					IfName:      valid[i+1],
+				})
+				i += 2
+			}
+
+			confGC := fmt.Sprintf(`{
+				"cniVersion": "1.1.0",
+				"name": "mynet0",
+				"type": "ipvlan",
+				"ipam": {
+					"type": "host-local",
+					"dataDir": "%s",
+					"ranges": [
+						[{ "subnet": "10.1.2.0/24" }]
+					]
+				}
+			}`, tmpDir)
+			confGC, err := sjson.Set(confGC, "cni\\.dev/valid-attachments", a)
+			Expect(err).NotTo(HaveOccurred())
+
+			args := &skel.CmdArgs{
+				StdinData: []byte(confGC),
+			}
+			err = testutils.CmdGC(func() error {
+				return cmdGC(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// keep all attachments
+		doGC("dummy", ifname, "dummy1", ifname)
+		ipReserved(ip1, true)
+		ipReserved(ip2, true)
+
+		// Keep one attachment, keep another with wrong ifname
+		doGC("dummy", ifname, "dummy1", "eth42")
+		ipReserved(ip1, true)
+		ipReserved(ip2, false)
+
+		// Keep no attachments
+		doGC("different", "eth11")
+		ipReserved(ip1, false)
+		ipReserved(ip2, false)
+	})
 })
 
 func mustCIDR(s string) net.IPNet {

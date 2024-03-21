@@ -17,11 +17,16 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
+	"path"
 	"strings"
 
+	"github.com/coreos/go-iptables/iptables"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -29,8 +34,11 @@ import (
 	types020 "github.com/containernetworking/cni/pkg/types/020"
 	types040 "github.com/containernetworking/cni/pkg/types/040"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/cni/pkg/version"
+	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
+	"github.com/containernetworking/plugins/pkg/utils"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
 )
 
@@ -104,7 +112,7 @@ type (
 
 func newTesterByVersion(version string) tester {
 	switch {
-	case strings.HasPrefix(version, "1.0."):
+	case strings.HasPrefix(version, "1."):
 		return &testerV10x{}
 	case strings.HasPrefix(version, "0.4."):
 		return &testerV04x{}
@@ -116,8 +124,9 @@ func newTesterByVersion(version string) tester {
 }
 
 type resultIP struct {
-	ip string
-	gw string
+	ip   string
+	cidr string // same as ip, but with prefix
+	gw   string
 }
 
 // verifyResult minimally verifies the Result and returns the interface's IP addresses and MAC address
@@ -129,6 +138,8 @@ func (t *testerV10x) verifyResult(result types.Result, expectedIfName, expectedS
 	Expect(r.Interfaces[0].Name).To(HavePrefix("veth"))
 	Expect(r.Interfaces[0].Mac).To(HaveLen(17))
 	Expect(r.Interfaces[0].Sandbox).To(BeEmpty())
+	Expect(r.Interfaces[0].Mtu).To(Equal(5000))
+	Expect(r.Interfaces[1].Mtu).To(Equal(5000))
 	Expect(r.Interfaces[1].Name).To(Equal(expectedIfName))
 	Expect(r.Interfaces[1].Sandbox).To(Equal(expectedSandbox))
 
@@ -139,8 +150,9 @@ func (t *testerV10x) verifyResult(result types.Result, expectedIfName, expectedS
 	for _, ipc := range r.IPs {
 		if *ipc.Interface == 1 {
 			ips = append(ips, resultIP{
-				ip: ipc.Address.IP.String(),
-				gw: ipc.Gateway.String(),
+				ip:   ipc.Address.IP.String(),
+				cidr: ipc.Address.String(),
+				gw:   ipc.Gateway.String(),
 			})
 		}
 	}
@@ -166,8 +178,9 @@ func verify0403(result types.Result, expectedIfName, expectedSandbox string, exp
 	for _, ipc := range r.IPs {
 		if *ipc.Interface == 1 {
 			ips = append(ips, resultIP{
-				ip: ipc.Address.IP.String(),
-				gw: ipc.Gateway.String(),
+				ip:   ipc.Address.IP.String(),
+				cidr: ipc.Address.String(),
+				gw:   ipc.Gateway.String(),
 			})
 		}
 	}
@@ -193,14 +206,16 @@ func (t *testerV01xOr02x) verifyResult(result types.Result, _, _ string, _ types
 	ips := []resultIP{}
 	if r.IP4 != nil && r.IP4.IP.IP != nil {
 		ips = append(ips, resultIP{
-			ip: r.IP4.IP.IP.String(),
-			gw: r.IP4.Gateway.String(),
+			ip:   r.IP4.IP.IP.String(),
+			cidr: r.IP4.IP.String(),
+			gw:   r.IP4.Gateway.String(),
 		})
 	}
 	if r.IP6 != nil && r.IP6.IP.IP != nil {
 		ips = append(ips, resultIP{
-			ip: r.IP6.IP.IP.String(),
-			gw: r.IP6.Gateway.String(),
+			ip:   r.IP6.IP.IP.String(),
+			cidr: r.IP6.IP.String(),
+			gw:   r.IP6.Gateway.String(),
 		})
 	}
 
@@ -235,6 +250,10 @@ var _ = Describe("ptp Operations", func() {
 	doTest := func(conf, cniVersion string, numIPs int, expectedDNSConf types.DNS, targetNS ns.NetNS) {
 		const IFNAME = "ptp0"
 
+		expectMasq := gjson.Get(conf, "ipMasq").Bool()
+		name := gjson.Get(conf, "name").String()
+		Expect(name).NotTo(BeEmpty())
+
 		args := &skel.CmdArgs{
 			ContainerID: "dummy",
 			Netns:       targetNS.Path(),
@@ -249,41 +268,113 @@ var _ = Describe("ptp Operations", func() {
 			defer GinkgoRecover()
 
 			var err error
+
+			if testutils.SpecVersionHasSTATUS(cniVersion) {
+				By("Doing a cni STATUS")
+				err = testutils.CmdStatus(func() error {
+					return cmdStatus(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			By(fmt.Sprintf("Doing a CNI ADD with configuration %s", args.StdinData))
 			result, _, err = testutils.CmdAddWithArgs(args, func() error {
 				return cmdAdd(args)
 			})
-			Expect(err).NotTo(HaveOccurred())
-			return nil
+			return err
 		})
 		Expect(err).NotTo(HaveOccurred())
 
 		t := newTesterByVersion(cniVersion)
 		ips, mac := t.verifyResult(result, IFNAME, targetNS.Path(), expectedDNSConf)
 		Expect(ips).To(HaveLen(numIPs))
+		GinkgoWriter.Printf("got result %+v\n", ips)
 
 		// Make sure ptp link exists in the target namespace
 		// Then, ping the gateway
-		err = targetNS.Do(func(ns.NetNS) error {
-			defer GinkgoRecover()
+		checkOK := func() error {
+			By("Checking that the container can ping the gateway")
+			return targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
 
-			link, err := netlink.LinkByName(IFNAME)
-			Expect(err).NotTo(HaveOccurred())
-			if mac != "" {
-				Expect(mac).To(Equal(link.Attrs().HardwareAddr.String()))
-			}
+				link, err := netlink.LinkByName(IFNAME)
+				Expect(err).NotTo(HaveOccurred())
+				if mac != "" {
+					Expect(mac).To(Equal(link.Attrs().HardwareAddr.String()))
+				}
 
-			for _, ipc := range ips {
-				fmt.Fprintln(GinkgoWriter, "ping", ipc.ip, "->", ipc.gw)
-				if err := testutils.Ping(ipc.ip, ipc.gw, 30); err != nil {
-					return fmt.Errorf("ping %s -> %s failed: %s", ipc.ip, ipc.gw, err)
+				for _, ipc := range ips {
+					fmt.Fprintln(GinkgoWriter, "ping", ipc.ip, "->", ipc.gw)
+					if err := testutils.Ping(ipc.ip, ipc.gw, 30); err != nil {
+						return fmt.Errorf("ping %s -> %s failed: %s", ipc.ip, ipc.gw, err)
+					}
+				}
+
+				return nil
+			})
+		}
+
+		// checkIPAM relies on the details of the host-local plugin.
+		// It checks to see if the IP has been reserved
+		checkIPAM := func(ips []resultIP, expectEmpty bool) error {
+			GinkgoHelper()
+			for _, ip := range ips {
+				expectedFilename := path.Join(dataDir, name, ip.ip)
+				if _, err := os.Stat(expectedFilename); err != nil {
+					if expectEmpty && os.IsNotExist(err) {
+						continue
+					}
+					return err
+				}
+				if expectEmpty {
+					return fmt.Errorf("file %s existed but should not", expectedFilename)
 				}
 			}
-
 			return nil
-		})
+		}
+
+		// Lists the expected iptables rules, returning whether or not masquerading
+		// is configured for the interface in question
+		checkMasq := func(ips []resultIP) bool {
+			GinkgoHelper()
+			if !expectMasq {
+				return true
+			}
+			found := false
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				chain := utils.FormatChainName(name, args.ContainerID)
+				comment := utils.FormatComment(name, args.ContainerID)
+				for _, res := range ips {
+					addr, c, err := net.ParseCIDR(res.cidr)
+					Expect(err).NotTo(HaveOccurred())
+					c.IP = addr
+
+					// uncomment to debug
+					// If check fails, print iptables rules just for debugging
+					ipt, err := iptables.NewWithProtocol(iptables.ProtocolIPv4)
+					if err == nil {
+						r, _ := ipt.List("nat", "POSTROUTING")
+						GinkgoWriter.Printf("rules: %+v\n", r)
+					}
+
+					if err := ip.CheckIPMasq(c, chain, comment); err == nil {
+						found = true
+					}
+				}
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+			return found
+		}
+
+		err = checkOK()
 		Expect(err).NotTo(HaveOccurred())
+		Expect(checkIPAM(ips, false)).NotTo(HaveOccurred())
+		Expect(checkMasq(ips)).To(BeTrue())
 
 		// call CmdCheck
+		By("Ensuring that CHECK reports no errors")
 		n := &Net{}
 		err = json.Unmarshal([]byte(conf), &n)
 		Expect(err).NotTo(HaveOccurred())
@@ -312,6 +403,8 @@ var _ = Describe("ptp Operations", func() {
 
 		args.StdinData = []byte(conf)
 
+		By("Issuing a CNI DEL and verifying the link has been deleted")
+
 		// Call the plugins with the DEL command, deleting the veth endpoints
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
@@ -334,6 +427,97 @@ var _ = Describe("ptp Operations", func() {
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
+
+		cniVers := gjson.GetBytes(args.StdinData, "cniVersion").String()
+		if gt, _ := version.GreaterThanOrEqualTo(cniVers, "1.1.0"); gt {
+
+			By("Issuing a new CNI ADD and verifying a new link has been created")
+
+			// Call ADD again, creating the attachment
+			err = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				var err error
+				result, _, err = testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				return err
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			ips, mac = t.verifyResult(result, IFNAME, targetNS.Path(), expectedDNSConf)
+
+			// Call GC, asking for the attachment to be preserved
+			// Ensure that connectivity remains
+
+			By("Issuing a CNI GC that should preserve the attachment")
+			err = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				var err error
+				gcArgs := &skel.CmdArgs{
+					Path:          args.Path,
+					NetnsOverride: args.NetnsOverride,
+				}
+
+				validAttachments := []types.GCAttachment{
+					{
+						ContainerID: args.ContainerID,
+						IfName:      args.IfName,
+					},
+				}
+
+				gcArgs.StdinData, err = sjson.SetBytes(args.StdinData, "cni\\.dev/valid-attachments", validAttachments)
+				if err != nil {
+					return err
+				}
+				By(fmt.Sprintf("calling GC with configuration %s", gcArgs.StdinData))
+
+				return testutils.CmdGC(func() error {
+					return cmdGC(gcArgs)
+				})
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying that connectivity, IPAM, and masquerading are configured")
+			err = checkOK()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(checkIPAM(ips, false)).NotTo(HaveOccurred())
+			// 	Expect(checkMasq(ips)).To(BeTrue()) // TODO: GC masquerading
+
+			// Call GC, asking for the attachment *not* to be preserved
+			// Ensure that ipam and iptables rules are cleaned up
+			By("Issuing a CNI GC that should not preserve the attachment")
+			err = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				gcArgs := &skel.CmdArgs{
+					Path:          args.Path,
+					NetnsOverride: args.NetnsOverride,
+					StdinData:     args.StdinData,
+				}
+
+				return testutils.CmdGC(func() error {
+					return cmdGC(gcArgs)
+				})
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Ensuring that IPAM and masquerading have been cleaned up")
+			Expect(checkIPAM(ips, true)).NotTo(HaveOccurred())
+			// Expect(checkMasq(ips)).To(BeFalse()) // TODO: GC masquerading
+
+			By("Issuing a CNI DEL for the link")
+			// Call the plugins with the DEL command, deleting the veth endpoints
+			err = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				err := testutils.CmdDelWithArgs(args, func() error {
+					return cmdDel(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		}
 	}
 
 	for _, ver := range testutils.AllSpecVersions {

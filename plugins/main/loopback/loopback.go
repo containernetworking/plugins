@@ -55,6 +55,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	var v4Addr, v6Addr *net.IPNet
+	var mtu int
 
 	args.IfName = "lo" // ignore config, this only works for loopback
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
@@ -62,6 +63,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if err != nil {
 			return err // not tested
 		}
+		mtu = link.Attrs().MTU
 
 		err = netlink.LinkSetUp(link)
 		if err != nil {
@@ -115,6 +117,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 					Name:    args.IfName,
 					Mac:     "00:00:00:00:00:00",
 					Sandbox: args.Netns,
+					Mtu:     mtu,
 				},
 			},
 		}
@@ -172,7 +175,12 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("loopback"))
+	skel.PluginMainFuncs(
+		skel.CNIFuncs{
+			Add:   cmdAdd,
+			Check: cmdCheck,
+			Del:   cmdDel,
+		}, version.All, bv.BuildString("loopback"))
 }
 
 func cmdCheck(args *skel.CmdArgs) error {

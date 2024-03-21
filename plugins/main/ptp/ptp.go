@@ -70,9 +70,11 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 		}
 		hostInterface.Name = hostVeth.Name
 		hostInterface.Mac = hostVeth.HardwareAddr.String()
+		hostInterface.Mtu = hostVeth.MTU
 		containerInterface.Name = contVeth0.Name
 		containerInterface.Mac = contVeth0.HardwareAddr.String()
 		containerInterface.Sandbox = netns.Path()
+		containerInterface.Mtu = contVeth0.MTU
 
 		for _, ipc := range pr.IPs {
 			// All addresses apply to the container veth interface
@@ -304,7 +306,13 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("ptp"))
+	skel.PluginMainFuncs(skel.CNIFuncs{
+		Add:    cmdAdd,
+		Check:  cmdCheck,
+		Del:    cmdDel,
+		Status: cmdStatus,
+		GC:     cmdGC,
+	}, version.All, bv.BuildString("ptp"))
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
@@ -376,6 +384,33 @@ func cmdCheck(args *skel.CmdArgs) error {
 		return err
 	}
 
+	return nil
+}
+
+func cmdStatus(args *skel.CmdArgs) error {
+	conf := NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("failed to load netconf: %w", err)
+	}
+
+	if err := ipam.ExecStatus(conf.IPAM.Type, args.StdinData); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func cmdGC(args *skel.CmdArgs) error {
+	conf := NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("failed to load netconf: %w", err)
+	}
+
+	if err := ipam.ExecGC(conf.IPAM.Type, args.StdinData); err != nil {
+		return err
+	}
+
+	// TODO: Clean up any stale masquerading rules
 	return nil
 }
 
