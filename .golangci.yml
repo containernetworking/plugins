@@ -6,6 +6,8 @@ issues:
     - linters:
         - revive
       text: " and that stutters;"
+    - path: '(.+)_test\.go'
+      text: "dot-imports: should not use dot imports"
 
 linters:
   disable:
@@ -40,3 +42,4 @@ linters-settings:
 run:
   skip-dirs:
     - vendor
+  timeout: 5m

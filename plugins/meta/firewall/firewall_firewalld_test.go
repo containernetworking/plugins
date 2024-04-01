@@ -86,7 +86,8 @@ func spawnSessionDbus(wg *sync.WaitGroup) (string, *exec.Cmd) {
 	bytes, err := bufio.NewReader(stdout).ReadString('\n')
 	Expect(err).NotTo(HaveOccurred())
 	busAddr := strings.TrimSpace(bytes)
-	Expect(strings.HasPrefix(busAddr, "unix:abstract")).To(BeTrue())
+	Expect(strings.HasPrefix(busAddr, "unix:abstract") ||
+		strings.HasPrefix(busAddr, "unix:path")).To(BeTrue())
 
 	var startWg sync.WaitGroup
 	wg.Add(1)

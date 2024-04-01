@@ -47,6 +47,7 @@ type NetConf struct {
 	Owner          *uint32   `json:"owner,omitempty"`
 	Group          *uint32   `json:"group,omitempty"`
 	SelinuxContext string    `json:"selinuxContext,omitempty"`
+	Bridge         string    `json:"bridge,omitempty"`
 	Args           *struct{} `json:"args,omitempty"`
 	RuntimeConfig  struct {
 		Mac string `json:"mac,omitempty"`
@@ -216,6 +217,18 @@ func createTap(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interface
 			return fmt.Errorf("failed to refetch tap %q: %v", ifName, err)
 		}
 
+		if conf.Bridge != "" {
+			bridge, err := netlink.LinkByName(conf.Bridge)
+			if err != nil {
+				return fmt.Errorf("failed to get bridge %s: %v", conf.Bridge, err)
+			}
+
+			tapDev := link
+			if err := netlink.LinkSetMaster(tapDev, bridge); err != nil {
+				return fmt.Errorf("failed to set tap %s as a port of bridge %s: %v", tap.Name, conf.Bridge, err)
+			}
+		}
+
 		err = netlink.LinkSetUp(link)
 		if err != nil {
 			return fmt.Errorf("failed to set tap interface up: %v", err)
@@ -358,7 +371,6 @@ func cmdDel(args *skel.CmdArgs) error {
 		}
 		return nil
 	})
-
 	if err != nil {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.

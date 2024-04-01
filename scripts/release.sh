@@ -1,8 +1,9 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 set -xe
 
 SRC_DIR="${SRC_DIR:-$PWD}"
 DOCKER="${DOCKER:-docker}"
+GOLANG="${GOLANG:-golang:1.22-alpine}"
 
 DOCKER_RUN_ARGS=${DOCKER_RUN_ARGS:-'-ti'}
 
@@ -21,6 +22,7 @@ OUTPUT_DIR=bin
 rm -Rf ${SRC_DIR}/${RELEASE_DIR}
 mkdir -p ${SRC_DIR}/${RELEASE_DIR}
 mkdir -p ${OUTPUT_DIR}
+
 
 $DOCKER run ${DOCKER_RUN_ARGS} -v ${SRC_DIR}:/go/src/github.com/containernetworking/plugins:z --rm ${GO_IMAGE}:${GO_VERSION} \
 /bin/sh -xe -c "\

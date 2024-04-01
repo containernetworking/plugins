@@ -351,6 +351,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		err = netns.Do(func(_ ns.NetNS) error {
 			_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv4/conf/%s/arp_notify", args.IfName), "1")
+			_, _ = sysctl.Sysctl(fmt.Sprintf("net/ipv6/conf/%s/ndisc_notify", args.IfName), "1")
 
 			return ipam.ConfigureIface(args.IfName, result)
 		})
@@ -382,13 +383,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
-	n, _, err := loadConf(args, args.Args)
+	var n NetConf
+	err := json.Unmarshal(args.StdinData, &n)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load netConf: %v", err)
 	}
 
 	isLayer3 := n.IPAM.Type != ""
-
 	if isLayer3 {
 		err = ipam.ExecDel(n.IPAM.Type, args.StdinData)
 		if err != nil {
@@ -410,7 +411,6 @@ func cmdDel(args *skel.CmdArgs) error {
 		}
 		return nil
 	})
-
 	if err != nil {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.

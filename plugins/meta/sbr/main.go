@@ -66,7 +66,6 @@ func withLockAndNetNS(nspath string, toRun func(_ ns.NetNS) error) error {
 	}
 
 	err = ns.WithNetNSPath(nspath, toRun)
-
 	if err != nil {
 		return err
 	}
@@ -360,6 +359,13 @@ func tidyRules(iface string) error {
 
 	link, err := netlink.LinkByName(iface)
 	if err != nil {
+		// If interface is not found by any reason it's safe to ignore an error. Also, we don't need to raise an error
+		// during cmdDel call according to CNI spec:
+		// https://github.com/containernetworking/cni/blob/main/SPEC.md#del-remove-container-from-network-or-un-apply-modifications
+		_, notFound := err.(netlink.LinkNotFoundError)
+		if notFound {
+			return nil
+		}
 		log.Printf("Failed to get link %s: %v", iface, err)
 		return fmt.Errorf("Failed to get link %s: %v", iface, err)
 	}

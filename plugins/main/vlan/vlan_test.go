@@ -499,7 +499,7 @@ var _ = Describe("vlan Operations", func() {
 						StdinData:   []byte(fmt.Sprintf(confFmt, ver, masterInterface, 1600, isInContainer, dataDir)),
 					}
 
-					_ = originalNS.Do(func(netNS ns.NetNS) error {
+					_ = originalNS.Do(func(_ ns.NetNS) error {
 						defer GinkgoRecover()
 
 						_, _, err = testutils.CmdAddWithArgs(args, func() error {
@@ -520,7 +520,7 @@ var _ = Describe("vlan Operations", func() {
 						StdinData:   []byte(fmt.Sprintf(confFmt, ver, masterInterface, -100, isInContainer, dataDir)),
 					}
 
-					_ = originalNS.Do(func(netNS ns.NetNS) error {
+					_ = originalNS.Do(func(_ ns.NetNS) error {
 						defer GinkgoRecover()
 
 						_, _, err = testutils.CmdAddWithArgs(args, func() error {
