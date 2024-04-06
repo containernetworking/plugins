@@ -295,8 +295,10 @@ var _ = Describe("bandwidth test", func() {
 					"type": "bandwidth",
 					"egressRate": 0,
 					"egressBurst": 0,
+					"egressLatency": 0,
 					"ingressRate": 8000,
 					"ingressBurst": 80,
+					"ingressLatency": 25000,
 					"prevResult": {
 						"interfaces": [
 							{

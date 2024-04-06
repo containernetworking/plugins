@@ -39,15 +39,17 @@ const (
 // BandwidthEntry corresponds to a single entry in the bandwidth argument,
 // see CONVENTIONS.md
 type BandwidthEntry struct {
-	IngressRate  uint64 `json:"ingressRate"`  // Bandwidth rate in bps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
-	IngressBurst uint64 `json:"ingressBurst"` // Bandwidth burst in bits for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
+	IngressRate    uint64 `json:"ingressRate"`    // Bandwidth rate in bps for traffic through container. 0 for no limit. If ingressRate is set, ingressBurst must also be set
+	IngressBurst   uint64 `json:"ingressBurst"`   // Bandwidth burst in bits for traffic through container. 0 for no limit. If ingressBurst is set, ingressRate must also be set
+	IngressLatency uint64 `json:"ingressLatency"` // Bandwidth latency in microseconds for traffic through container. 0 for no limit. If ingressLatency is set, ingressRate must also be set
 
-	EgressRate  uint64 `json:"egressRate"`  // Bandwidth rate in bps for traffic through container. 0 for no limit. If egressRate is set, egressBurst must also be set
-	EgressBurst uint64 `json:"egressBurst"` // Bandwidth burst in bits for traffic through container. 0 for no limit. If egressBurst is set, egressRate must also be set
+	EgressRate    uint64 `json:"egressRate"`    // Bandwidth rate in bps for traffic through container. 0 for no limit. If egressRate is set, egressBurst must also be set
+	EgressBurst   uint64 `json:"egressBurst"`   // Bandwidth burst in bits for traffic through container. 0 for no limit. If egressBurst is set, egressRate must also be set
+	EgressLatency uint64 `json:"egressLatency"` // Bandwidth latency in microseconds for traffic through container, 0 by default.
 }
 
 func (bw *BandwidthEntry) isZero() bool {
-	return bw.IngressBurst == 0 && bw.IngressRate == 0 && bw.EgressBurst == 0 && bw.EgressRate == 0
+	return bw.IngressBurst == 0 && bw.IngressRate == 0 && bw.IngressLatency == 0 && bw.EgressBurst == 0 && bw.EgressRate == 0 && bw.EgressLatency == 0
 }
 
 type PluginConf struct {
@@ -191,7 +193,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	if bandwidth.IngressRate > 0 && bandwidth.IngressBurst > 0 {
-		err = CreateIngressQdisc(bandwidth.IngressRate, bandwidth.IngressBurst, hostInterface.Name)
+		err = CreateIngressQdisc(bandwidth.IngressRate, bandwidth.IngressBurst, float64(bandwidth.IngressLatency), hostInterface.Name)
 		if err != nil {
 			return err
 		}
@@ -219,7 +221,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			Name: ifbDeviceName,
 			Mac:  ifbDevice.Attrs().HardwareAddr.String(),
 		})
-		err = CreateEgressQdisc(bandwidth.EgressRate, bandwidth.EgressBurst, hostInterface.Name, ifbDeviceName)
+		err = CreateEgressQdisc(bandwidth.EgressRate, bandwidth.EgressBurst, float64(bandwidth.EgressLatency), hostInterface.Name, ifbDeviceName)
 		if err != nil {
 			return err
 		}
@@ -296,7 +298,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 		rateInBytes := bandwidth.IngressRate / 8
 		burstInBytes := bandwidth.IngressBurst / 8
 		bufferInBytes := buffer(rateInBytes, uint32(burstInBytes))
-		latency := latencyInUsec(latencyInMillis)
+		latency := float64(bandwidth.IngressLatency)
 		limitInBytes := limit(rateInBytes, latency, uint32(burstInBytes))
 
 		qdiscs, err := SafeQdiscList(link)
@@ -328,7 +330,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 		rateInBytes := bandwidth.EgressRate / 8
 		burstInBytes := bandwidth.EgressBurst / 8
 		bufferInBytes := buffer(rateInBytes, uint32(burstInBytes))
-		latency := latencyInUsec(latencyInMillis)
+		latency := float64(bandwidth.EgressLatency)
 		limitInBytes := limit(rateInBytes, latency, uint32(burstInBytes))
 
 		ifbDeviceName := getIfbDeviceName(bwConf.Name, args.ContainerID)

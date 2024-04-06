@@ -24,8 +24,6 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 )
 
-const latencyInMillis = 25
-
 func CreateIfb(ifbDeviceName string, mtu int) error {
 	err := netlink.LinkAdd(&netlink.Ifb{
 		LinkAttrs: netlink.LinkAttrs{
@@ -49,15 +47,15 @@ func TeardownIfb(deviceName string) error {
 	return err
 }
 
-func CreateIngressQdisc(rateInBits, burstInBits uint64, hostDeviceName string) error {
+func CreateIngressQdisc(rateInBits, burstInBits uint64, latencyInUsec float64, hostDeviceName string) error {
 	hostDevice, err := netlink.LinkByName(hostDeviceName)
 	if err != nil {
 		return fmt.Errorf("get host device: %s", err)
 	}
-	return createTBF(rateInBits, burstInBits, hostDevice.Attrs().Index)
+	return createTBF(rateInBits, burstInBits, latencyInUsec, hostDevice.Attrs().Index)
 }
 
-func CreateEgressQdisc(rateInBits, burstInBits uint64, hostDeviceName string, ifbDeviceName string) error {
+func CreateEgressQdisc(rateInBits, burstInBits uint64, latencyInUsec float64, hostDeviceName string, ifbDeviceName string) error {
 	ifbDevice, err := netlink.LinkByName(ifbDeviceName)
 	if err != nil {
 		return fmt.Errorf("get ifb device: %s", err)
@@ -105,14 +103,14 @@ func CreateEgressQdisc(rateInBits, burstInBits uint64, hostDeviceName string, if
 	}
 
 	// throttle traffic on ifb device
-	err = createTBF(rateInBits, burstInBits, ifbDevice.Attrs().Index)
+	err = createTBF(rateInBits, burstInBits, latencyInUsec, ifbDevice.Attrs().Index)
 	if err != nil {
 		return fmt.Errorf("create ifb qdisc: %s", err)
 	}
 	return nil
 }
 
-func createTBF(rateInBits, burstInBits uint64, linkIndex int) error {
+func createTBF(rateInBits, burstInBits uint64, latencyInUsec float64, linkIndex int) error {
 	// Equivalent to
 	// tc qdisc add dev link root tbf
 	//		rate netConf.BandwidthLimits.Rate
@@ -126,8 +124,7 @@ func createTBF(rateInBits, burstInBits uint64, linkIndex int) error {
 	rateInBytes := rateInBits / 8
 	burstInBytes := burstInBits / 8
 	bufferInBytes := buffer(rateInBytes, uint32(burstInBytes))
-	latency := latencyInUsec(latencyInMillis)
-	limitInBytes := limit(rateInBytes, latency, uint32(burstInBytes))
+	limitInBytes := limit(rateInBytes, latencyInUsec, uint32(burstInBytes))
 
 	qdisc := &netlink.Tbf{
 		QdiscAttrs: netlink.QdiscAttrs{
@@ -154,10 +151,7 @@ func buffer(rate uint64, burst uint32) uint32 {
 	return time2Tick(uint32(float64(burst) * float64(netlink.TIME_UNITS_PER_SEC) / float64(rate)))
 }
 
-func limit(rate uint64, latency float64, buffer uint32) uint32 {
-	return uint32(float64(rate)*latency/float64(netlink.TIME_UNITS_PER_SEC)) + buffer
-}
-
-func latencyInUsec(latencyInMillis float64) float64 {
-	return float64(netlink.TIME_UNITS_PER_SEC) * (latencyInMillis / 1000.0)
+func limit(rate uint64, latency float64, burst uint32) uint32 {
+	// Only when rate * latency > 1000000, the result will be greater than burst
+	return uint32(float64(rate)*latency/float64(netlink.TIME_UNITS_PER_SEC)) + burst
 }
