@@ -8,7 +8,7 @@ GOLANG="${GOLANG:-golang:1.22-alpine}"
 DOCKER_RUN_ARGS=${DOCKER_RUN_ARGS:-'-ti'}
 
 GO_IMAGE="${GO_IMAGE:-golang}"
-GO_VERSION="${GO_VERSION:-1.20-alpine}"
+GO_VERSION="${GO_VERSION:-1.22-alpine}"
 
 _defaultTag=$(git describe --tags --dirty)
 TAG=${TAG:-$_defaultTag}
