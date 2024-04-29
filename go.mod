@@ -3,7 +3,7 @@ module github.com/containernetworking/plugins
 go 1.20
 
 require (
-	github.com/Microsoft/hcsshim v0.12.1
+	github.com/Microsoft/hcsshim v0.12.2
 	github.com/alexflint/go-filemutex v1.3.0
 	github.com/buger/jsonparser v1.1.1
 	github.com/containernetworking/cni v1.1.2
@@ -40,7 +40,7 @@ require (
 	github.com/vishvananda/netns v0.0.4 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/mod v0.14.0 // indirect
-	golang.org/x/net v0.20.0 // indirect
+	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.17.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240123012728-ef4313101c80 // indirect
