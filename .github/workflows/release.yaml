@@ -25,7 +25,7 @@ jobs:
         env:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
-        run: ./build_linux.sh
+        run: ./build_linux.sh -ldflags '-extldflags -static -X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=${{ github.ref_name }}'
 
       - name: COPY files
         run: cp README.md LICENSE bin/
@@ -76,7 +76,7 @@ jobs:
         env:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
-        run: ./build_windows.sh
+        run: ./build_windows.sh -ldflags '-extldflags -static -X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=${{ github.ref_name }}'
 
       - name: COPY files
         run: cp README.md LICENSE bin/
