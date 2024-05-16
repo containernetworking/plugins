@@ -21,3 +21,5 @@ updates:
       golang:
         patterns:
           - "*"
+        exclude-patterns:
+          - "github.com/containernetworking/*"
