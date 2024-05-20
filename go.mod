@@ -16,11 +16,11 @@ require (
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/networkplumbing/go-nft v0.4.0
 	github.com/onsi/ginkgo/v2 v2.17.3
-	github.com/onsi/gomega v1.33.0
+	github.com/onsi/gomega v1.33.1
 	github.com/opencontainers/selinux v1.11.0
 	github.com/safchain/ethtool v0.3.0
 	github.com/vishvananda/netlink v1.2.1-beta.2
-	golang.org/x/sys v0.19.0
+	golang.org/x/sys v0.20.0
 )
 
 require (
