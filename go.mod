@@ -1,13 +1,15 @@
 module github.com/containernetworking/plugins
 
-go 1.20
+go 1.21
+
+toolchain go1.22.0
 
 require (
 	github.com/Microsoft/hcsshim v0.12.3
 	github.com/alexflint/go-filemutex v1.3.0
 	github.com/buger/jsonparser v1.1.1
 	github.com/containernetworking/cni v1.1.2
-	github.com/coreos/go-iptables v0.7.0
+	github.com/coreos/go-iptables v0.7.1-0.20240112124308-65c67c9f46e6
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/d2g/dhcp4 v0.0.0-20170904100407-a1d1b6c41b1c
 	github.com/d2g/dhcp4client v1.0.0
@@ -21,6 +23,7 @@ require (
 	github.com/safchain/ethtool v0.3.0
 	github.com/vishvananda/netlink v1.2.1-beta.2
 	golang.org/x/sys v0.20.0
+	sigs.k8s.io/knftables v0.0.16
 )
 
 require (

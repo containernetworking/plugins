@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -27,6 +28,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
+	"sigs.k8s.io/knftables"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -77,6 +79,7 @@ type testCase struct {
 	vlanTrunk         []*VlanTrunk
 	removeDefaultVlan bool
 	ipMasq            bool
+	ipMasqBackend     string
 	macspoofchk       bool
 	disableContIface  bool
 
@@ -172,6 +175,9 @@ const (
 	ipMasqConfStr = `,
 	"ipMasq": %t`
 
+	ipMasqBackendConfStr = `,
+	"ipMasqBackend": "%s"`
+
 	// Single subnet configuration (legacy)
 	subnetConfStr = `,
         "subnet":  "%s"`
@@ -243,6 +249,9 @@ func (tc testCase) netConfJSON(dataDir string) string {
 	if tc.ipMasq {
 		conf += tc.ipMasqConfig()
 	}
+	if tc.ipMasqBackend != "" {
+		conf += tc.ipMasqBackendConfig()
+	}
 	if tc.args.cni.mac != "" {
 		conf += fmt.Sprintf(argsFormat, tc.args.cni.mac)
 	}
@@ -292,6 +301,11 @@ func (tc testCase) subnetConfig() string {
 
 func (tc testCase) ipMasqConfig() string {
 	conf := fmt.Sprintf(ipMasqConfStr, tc.ipMasq)
+	return conf
+}
+
+func (tc testCase) ipMasqBackendConfig() string {
+	conf := fmt.Sprintf(ipMasqBackendConfStr, tc.ipMasqBackend)
 	return conf
 }
 
@@ -2390,41 +2404,82 @@ var _ = Describe("bridge Operations", func() {
 		})
 
 		if testutils.SpecVersionHasChaining(ver) {
-			It(fmt.Sprintf("[%s] configures a bridge and ipMasq rules", ver), func() {
-				err := originalNS.Do(func(ns.NetNS) error {
-					defer GinkgoRecover()
-					tc := testCase{
-						ranges: []rangeInfo{{
-							subnet: "10.1.2.0/24",
-						}},
-						ipMasq:     true,
-						cniVersion: ver,
-					}
+			for _, tc := range []testCase{
+				{
+					ranges: []rangeInfo{{
+						subnet: "10.1.2.0/24",
+					}},
+					ipMasq:     true,
+					cniVersion: ver,
+				},
+				{
+					ranges: []rangeInfo{{
+						subnet: "10.1.2.0/24",
+					}},
+					ipMasq:        true,
+					ipMasqBackend: "iptables",
+					cniVersion:    ver,
+				},
+				{
+					ranges: []rangeInfo{{
+						subnet: "10.1.2.0/24",
+					}},
+					ipMasq:        true,
+					ipMasqBackend: "nftables",
+					cniVersion:    ver,
+				},
+			} {
+				tc := tc
+				It(fmt.Sprintf("[%s] configures a bridge and ipMasq rules with ipMasqBackend %q", ver, tc.ipMasqBackend), func() {
+					err := originalNS.Do(func(ns.NetNS) error {
+						defer GinkgoRecover()
 
-					args := tc.createCmdArgs(originalNS, dataDir)
-					r, _, err := testutils.CmdAddWithArgs(args, func() error {
-						return cmdAdd(args)
+						args := tc.createCmdArgs(originalNS, dataDir)
+						r, _, err := testutils.CmdAddWithArgs(args, func() error {
+							return cmdAdd(args)
+						})
+						Expect(err).NotTo(HaveOccurred())
+						result, err := types100.GetResult(r)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(result.IPs).Should(HaveLen(1))
+
+						ip := result.IPs[0].Address.IP.String()
+
+						// Update this if the default ipmasq backend changes
+						switch tc.ipMasqBackend {
+						case "iptables", "":
+							ipt, err := iptables.NewWithProtocol(iptables.ProtocolIPv4)
+							Expect(err).NotTo(HaveOccurred())
+
+							rules, err := ipt.List("nat", "POSTROUTING")
+							Expect(err).NotTo(HaveOccurred())
+							Expect(rules).Should(ContainElement(ContainSubstring(ip)))
+						case "nftables":
+							nft, err := knftables.New(knftables.InetFamily, "cni_plugins_masquerade")
+							Expect(err).NotTo(HaveOccurred())
+							rules, err := nft.ListRules(context.TODO(), "masq_checks")
+							Expect(err).NotTo(HaveOccurred())
+							// FIXME: ListRules() doesn't return the actual rule strings,
+							// and we can't easily compute the ipmasq plugin's comment.
+							comments := 0
+							for _, r := range rules {
+								if r.Comment != nil {
+									comments++
+									break
+								}
+							}
+							Expect(comments).To(Equal(1), "expected to find exactly one Rule with a comment")
+						}
+
+						err = testutils.CmdDelWithArgs(args, func() error {
+							return cmdDel(args)
+						})
+						Expect(err).NotTo(HaveOccurred())
+						return nil
 					})
 					Expect(err).NotTo(HaveOccurred())
-					result, err := types100.GetResult(r)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(result.IPs).Should(HaveLen(1))
-
-					ipt, err := iptables.NewWithProtocol(iptables.ProtocolIPv4)
-					Expect(err).NotTo(HaveOccurred())
-
-					rules, err := ipt.List("nat", "POSTROUTING")
-					Expect(err).NotTo(HaveOccurred())
-					Expect(rules).Should(ContainElement(ContainSubstring(result.IPs[0].Address.IP.String())))
-
-					err = testutils.CmdDelWithArgs(args, func() error {
-						return cmdDel(args)
-					})
-					Expect(err).NotTo(HaveOccurred())
-					return nil
 				})
-				Expect(err).NotTo(HaveOccurred())
-			})
+			}
 
 			for i, tc := range []testCase{
 				{

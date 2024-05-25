@@ -35,7 +35,6 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/link"
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/utils"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 )
@@ -52,6 +51,7 @@ type NetConf struct {
 	IsDefaultGW               bool         `json:"isDefaultGateway"`
 	ForceAddress              bool         `json:"forceAddress"`
 	IPMasq                    bool         `json:"ipMasq"`
+	IPMasqBackend             *string      `json:"ipMasqBackend,omitempty"`
 	MTU                       int          `json:"mtu"`
 	HairpinMode               bool         `json:"hairpinMode"`
 	PromiscMode               bool         `json:"promiscMode"`
@@ -673,10 +673,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		if n.IPMasq {
-			chain := utils.FormatChainName(n.Name, args.ContainerID)
-			comment := utils.FormatComment(n.Name, args.ContainerID)
 			for _, ipc := range result.IPs {
-				if err = ip.SetupIPMasq(&ipc.Address, chain, comment); err != nil {
+				if err = ip.SetupIPMasqForPlugin(n.IPMasqBackend, &ipc.Address, n.Name, args.ContainerID); err != nil {
 					return err
 				}
 			}
@@ -814,10 +812,8 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	if isLayer3 && n.IPMasq {
-		chain := utils.FormatChainName(n.Name, args.ContainerID)
-		comment := utils.FormatComment(n.Name, args.ContainerID)
 		for _, ipn := range ipnets {
-			if err := ip.TeardownIPMasq(ipn, chain, comment); err != nil {
+			if err := ip.TeardownIPMasqForPlugin(ipn, n.Name, args.ContainerID); err != nil {
 				return err
 			}
 		}

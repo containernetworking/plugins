@@ -31,7 +31,6 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/utils"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
@@ -44,8 +43,9 @@ func init() {
 
 type NetConf struct {
 	types.NetConf
-	IPMasq bool `json:"ipMasq"`
-	MTU    int  `json:"mtu"`
+	IPMasq        bool    `json:"ipMasq"`
+	IPMasqBackend *string `json:"ipMasqBackend,omitempty"`
+	MTU           int     `json:"mtu"`
 }
 
 func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Result) (*current.Interface, *current.Interface, error) {
@@ -229,10 +229,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	if conf.IPMasq {
-		chain := utils.FormatChainName(conf.Name, args.ContainerID)
-		comment := utils.FormatComment(conf.Name, args.ContainerID)
 		for _, ipc := range result.IPs {
-			if err = ip.SetupIPMasq(&ipc.Address, chain, comment); err != nil {
+			if err = ip.SetupIPMasqForPlugin(conf.IPMasqBackend, &ipc.Address, conf.Name, args.ContainerID); err != nil {
 				return err
 			}
 		}
@@ -293,10 +291,8 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	if len(ipnets) != 0 && conf.IPMasq {
-		chain := utils.FormatChainName(conf.Name, args.ContainerID)
-		comment := utils.FormatComment(conf.Name, args.ContainerID)
 		for _, ipn := range ipnets {
-			err = ip.TeardownIPMasq(ipn, chain, comment)
+			err = ip.TeardownIPMasqForPlugin(ipn, conf.Name, args.ContainerID)
 		}
 	}
 
