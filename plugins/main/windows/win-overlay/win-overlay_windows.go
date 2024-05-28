@@ -131,7 +131,6 @@ func cmdHcnAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 			n.ApplyOutboundNatPolicy(hnsNetwork.Subnets[0].AddressPrefix)
 		}
 		hcnEndpoint, err := hns.GenerateHcnEndpoint(epInfo, &n.NetConf)
-
 		if err != nil {
 			return nil, errors.Annotate(err, "error while generating HostComputeEndpoint")
 		}
@@ -142,15 +141,14 @@ func cmdHcnAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 	}
 
 	result, err := hns.ConstructHcnResult(hcnNetwork, hcnEndpoint)
-
 	if err != nil {
 		ipam.ExecDel(n.IPAM.Type, args.StdinData)
 		return nil, errors.Annotate(err, "error while constructing HostComputeEndpoint addition result")
 	}
 
 	return result, nil
-
 }
+
 func cmdHnsAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 	success := false
 
@@ -243,6 +241,7 @@ func cmdHnsAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 	success = true
 	return result, nil
 }
+
 func cmdAdd(args *skel.CmdArgs) error {
 	n, cniVersion, err := loadNetConf(args.StdinData)
 	if err != nil {
