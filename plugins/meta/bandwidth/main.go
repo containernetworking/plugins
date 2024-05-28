@@ -337,6 +337,9 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 
 	bandwidth := getBandwidth(bwConf)
+	if bandwidth == nil {
+		return nil
+	}
 
 	if err = validateSubnets(bandwidth.UnshapedSubnets, bandwidth.ShapedSubnets); err != nil {
 		return fmt.Errorf("failed to check subnets, details %s", err)
