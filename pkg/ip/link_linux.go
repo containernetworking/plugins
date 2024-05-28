@@ -90,7 +90,7 @@ func makeVeth(name, vethPeerName string, mtu int, mac string, hostNS ns.NetNS) (
 			if peerExists(peerName) && vethPeerName == "" {
 				continue
 			}
-			return peerName, veth, fmt.Errorf("container veth name provided (%v) already exists", name)
+			return peerName, veth, fmt.Errorf("container veth name (%q) peer provided (%q) already exists", name, peerName)
 		default:
 			return peerName, veth, fmt.Errorf("failed to make veth pair: %v", err)
 		}

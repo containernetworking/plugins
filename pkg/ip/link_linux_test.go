@@ -149,9 +149,9 @@ var _ = Describe("Link", func() {
 		It("returns useful error", func() {
 			_ = containerNetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-
-				_, _, err := ip.SetupVeth(containerVethName, mtu, "", hostNetNS)
-				Expect(err.Error()).To(Equal(fmt.Sprintf("container veth name provided (%s) already exists", containerVethName)))
+				testHostVethName := "test" + hostVethName
+				_, _, err := ip.SetupVethWithName(containerVethName, testHostVethName, mtu, "", hostNetNS)
+				Expect(err.Error()).To(Equal(fmt.Sprintf("container veth name (%q) peer provided (%q) already exists", containerVethName, testHostVethName)))
 
 				return nil
 			})
@@ -180,9 +180,8 @@ var _ = Describe("Link", func() {
 		It("returns useful error", func() {
 			_ = containerNetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				_, _, err := ip.SetupVeth(containerVethName, mtu, "", hostNetNS)
-				Expect(err.Error()).To(HavePrefix("container veth name provided"))
-				Expect(err.Error()).To(HaveSuffix("already exists"))
+				_, _, err := ip.SetupVethWithName(containerVethName, hostVethName, mtu, "", hostNetNS)
+				Expect(err.Error()).To(Equal(fmt.Sprintf("container veth name (%q) peer provided (%q) already exists", containerVethName, hostVethName)))
 				return nil
 			})
 		})
