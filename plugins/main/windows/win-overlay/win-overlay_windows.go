@@ -106,13 +106,13 @@ func cmdHcnAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 		return nil, errors.Annotatef(err, "error while hcn.GetNetworkByName(%s)", networkName)
 	}
 	if hcnNetwork == nil {
-		return  nil, fmt.Errorf("network %v is not found", networkName)
+		return nil, fmt.Errorf("network %v is not found", networkName)
 	}
 	if hnsNetwork == nil {
 		return nil, fmt.Errorf("network %v not found", networkName)
 	}
 
-	if !strings.EqualFold(string (hcnNetwork.Type), "Overlay") {
+	if !strings.EqualFold(string(hcnNetwork.Type), "Overlay") {
 		return nil, fmt.Errorf("network %v is of an unexpected type: %v", networkName, hcnNetwork.Type)
 	}
 
@@ -288,5 +288,9 @@ func cmdCheck(_ *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("win-overlay"))
+	skel.PluginMainFuncs(skel.CNIFuncs{
+		Add:   cmdAdd,
+		Check: cmdCheck,
+		Del:   cmdDel,
+	}, version.All, bv.BuildString("win-overlay"))
 }

@@ -96,7 +96,11 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
-		skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("dhcp"))
+		skel.PluginMainFuncs(skel.CNIFuncs{
+			Add:   cmdAdd,
+			Check: cmdCheck,
+			Del:   cmdDel,
+		}, version.All, bv.BuildString("dhcp"))
 	}
 }
 

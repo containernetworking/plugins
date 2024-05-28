@@ -149,8 +149,11 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	// replace TODO with your plugin name
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("TODO"))
+	skel.PluginMainFuncs(skel.CNIFuncs{
+		Add:   cmdAdd,
+		Del:   cmdDel,
+		Check: cmdCheck,
+	}, version.All, bv.BuildString("TODO"))
 }
 
 func cmdCheck(_ *skel.CmdArgs) error {
