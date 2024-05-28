@@ -179,7 +179,7 @@ var _ = Describe("bandwidth test", func() {
 				})).To(Succeed())
 
 				// Container ingress (host egress)
-				Expect(hostNs.Do(func(n ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
 					vethLink, err := netlink.LinkByName(hostIfname)
@@ -381,7 +381,7 @@ var _ = Describe("bandwidth test", func() {
 				})).To(Succeed())
 
 				// Container ingress (host egress)
-				Expect(hostNs.Do(func(n ns.NetNS) error {
+				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
 					vethLink, err := netlink.LinkByName(hostIfname)
@@ -638,7 +638,7 @@ var _ = Describe("bandwidth test", func() {
 			})).To(Succeed())
 
 			// Container ingress (host egress)
-			Expect(hostNs.Do(func(n ns.NetNS) error {
+			Expect(hostNs.Do(func(_ ns.NetNS) error {
 				defer GinkgoRecover()
 
 				vethLink, err := netlink.LinkByName(hostIfname)
@@ -888,7 +888,7 @@ var _ = Describe("bandwidth test", func() {
 
 			// check container ingress side / host egress side, we should not have any htb qdisc/classes/filters defined for the host veth
 			// only the qdisc ingress + a noqueue qdisc
-			Expect(hostNs.Do(func(n ns.NetNS) error {
+			Expect(hostNs.Do(func(_ ns.NetNS) error {
 				defer GinkgoRecover()
 
 				containerIfLink, err := netlink.LinkByName(hostIfname)
@@ -957,7 +957,7 @@ var _ = Describe("bandwidth test", func() {
 				return nil
 			})).To(Succeed())
 
-			Expect(hostNs.Do(func(n ns.NetNS) error {
+			Expect(hostNs.Do(func(_ ns.NetNS) error {
 				defer GinkgoRecover()
 
 				containerIfLink, err := netlink.LinkByName(hostIfname)
@@ -1133,7 +1133,7 @@ var _ = Describe("bandwidth test", func() {
 			})).To(Succeed())
 
 			// Container ingress (host egress)
-			Expect(hostNs.Do(func(n ns.NetNS) error {
+			Expect(hostNs.Do(func(_ ns.NetNS) error {
 				defer GinkgoRecover()
 
 				vethLink, err := netlink.LinkByName(hostIfname)
