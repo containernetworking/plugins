@@ -30,12 +30,16 @@ jobs:
       - name: COPY files
         run: cp README.md LICENSE bin/
 
+      - name: Change plugin file ownership
+        working-directory: ./bin
+        run: sudo chown root:root ./*
+
       - name: Create dist directory
         run: mkdir dist
 
       - name: Create archive file
         working-directory: ./bin
-        run: tar cfzv ../dist/cni-plugins-linux-${{ matrix.goarch }}-${{ github.ref_name }}.tgz .
+        run: tar cfzpv ../dist/cni-plugins-linux-${{ matrix.goarch }}-${{ github.ref_name }}.tgz .
 
       - name: Create sha256 checksum
         working-directory: ./dist
@@ -81,12 +85,16 @@ jobs:
       - name: COPY files
         run: cp README.md LICENSE bin/
 
+      - name: Change plugin file ownership
+        working-directory: ./bin
+        run: sudo chown root:root ./*
+
       - name: Create dist directory
         run: mkdir dist
 
       - name: Create archive file
         working-directory: ./bin
-        run: tar cfzv ../dist/cni-plugins-windows-${{ matrix.goarch }}-${{ github.ref_name }}.tgz .
+        run: tar cpfzv ../dist/cni-plugins-windows-${{ matrix.goarch }}-${{ github.ref_name }}.tgz .
 
       - name: Create sha256 checksum
         working-directory: ./dist
