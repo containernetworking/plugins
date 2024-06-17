@@ -393,7 +393,6 @@ func moveLinkOut(containerNs ns.NetNS, ifName string) error {
 		}
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}
@@ -518,7 +517,11 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string, auxDev string) (netlin
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("host-device"))
+	skel.PluginMainFuncs(skel.CNIFuncs{
+		Add:   cmdAdd,
+		Check: cmdCheck,
+		Del:   cmdDel,
+	}, version.All, bv.BuildString("host-device"))
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
