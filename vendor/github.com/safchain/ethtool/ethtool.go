@@ -47,33 +47,41 @@ const (
 
 // ethtool stats related constants.
 const (
-	ETH_GSTRING_LEN = 32
-	ETH_SS_STATS    = 1
-	ETH_SS_FEATURES = 4
+	ETH_GSTRING_LEN   = 32
+	ETH_SS_STATS      = 1
+	ETH_SS_PRIV_FLAGS = 2
+	ETH_SS_FEATURES   = 4
 
 	// CMD supported
+	ETHTOOL_GSET     = 0x00000001 /* Get settings. */
+	ETHTOOL_SSET     = 0x00000002 /* Set settings. */
 	ETHTOOL_GDRVINFO = 0x00000003 /* Get driver info. */
-	ETHTOOL_GSTRINGS = 0x0000001b /* get specified string set */
-	ETHTOOL_GSTATS   = 0x0000001d /* get NIC-specific statistics */
-	// other CMDs from ethtool-copy.h of ethtool-3.5 package
-	ETHTOOL_GSET      = 0x00000001 /* Get settings. */
-	ETHTOOL_SSET      = 0x00000002 /* Set settings. */
-	ETHTOOL_GMSGLVL   = 0x00000007 /* Get driver message level */
-	ETHTOOL_SMSGLVL   = 0x00000008 /* Set driver msg level. */
-	ETHTOOL_GCHANNELS = 0x0000003c /* Get no of channels */
-	ETHTOOL_SCHANNELS = 0x0000003d /* Set no of channels */
-	ETHTOOL_GCOALESCE = 0x0000000e /* Get coalesce config */
+	ETHTOOL_GMSGLVL  = 0x00000007 /* Get driver message level */
+	ETHTOOL_SMSGLVL  = 0x00000008 /* Set driver msg level. */
+
 	/* Get link status for host, i.e. whether the interface *and* the
-	 * physical port (if there is one) are up (ethtool_value). */
+	* physical port (if there is one) are up (ethtool_value). */
 	ETHTOOL_GLINK         = 0x0000000a
-	ETHTOOL_GMODULEINFO   = 0x00000042 /* Get plug-in module information */
-	ETHTOOL_GMODULEEEPROM = 0x00000043 /* Get plug-in module eeprom */
+	ETHTOOL_GCOALESCE     = 0x0000000e /* Get coalesce config */
+	ETHTOOL_SCOALESCE     = 0x0000000f /* Set coalesce config */
+	ETHTOOL_GRINGPARAM    = 0x00000010 /* Get ring parameters */
+	ETHTOOL_SRINGPARAM    = 0x00000011 /* Set ring parameters. */
+	ETHTOOL_GPAUSEPARAM   = 0x00000012 /* Get pause parameters */
+	ETHTOOL_SPAUSEPARAM   = 0x00000013 /* Set pause parameters. */
+	ETHTOOL_GSTRINGS      = 0x0000001b /* Get specified string set */
+	ETHTOOL_GSTATS        = 0x0000001d /* Get NIC-specific statistics */
 	ETHTOOL_GPERMADDR     = 0x00000020 /* Get permanent hardware address */
+	ETHTOOL_GFLAGS        = 0x00000025 /* Get flags bitmap(ethtool_value) */
+	ETHTOOL_GPFLAGS       = 0x00000027 /* Get driver-private flags bitmap */
+	ETHTOOL_SPFLAGS       = 0x00000028 /* Set driver-private flags bitmap */
+	ETHTOOL_GSSET_INFO    = 0x00000037 /* Get string set info */
 	ETHTOOL_GFEATURES     = 0x0000003a /* Get device offload settings */
 	ETHTOOL_SFEATURES     = 0x0000003b /* Change device offload settings */
-	ETHTOOL_GFLAGS        = 0x00000025 /* Get flags bitmap(ethtool_value) */
-	ETHTOOL_GSSET_INFO    = 0x00000037 /* Get string set info */
+	ETHTOOL_GCHANNELS     = 0x0000003c /* Get no of channels */
+	ETHTOOL_SCHANNELS     = 0x0000003d /* Set no of channels */
 	ETHTOOL_GET_TS_INFO   = 0x00000041 /* Get time stamping and PHC info */
+	ETHTOOL_GMODULEINFO   = 0x00000042 /* Get plug-in module information */
+	ETHTOOL_GMODULEEEPROM = 0x00000043 /* Get plug-in module eeprom */
 )
 
 // MAX_GSTRINGS maximum number of stats entries that ethtool can
@@ -85,6 +93,41 @@ const (
 	PERMADDR_LEN       = 32
 )
 
+// ethtool sset_info related constants
+const (
+	MAX_SSET_INFO = 64
+)
+
+var supportedCapabilities = []struct {
+	name  string
+	mask  uint64
+	speed uint64
+}{
+	{"10baseT_Half", unix.ETHTOOL_LINK_MODE_10baseT_Half_BIT, 10_000_000},
+	{"10baseT_Full", unix.ETHTOOL_LINK_MODE_10baseT_Full_BIT, 10_000_000},
+	{"100baseT_Half", unix.ETHTOOL_LINK_MODE_100baseT_Half_BIT, 100_000_000},
+	{"100baseT_Full", unix.ETHTOOL_LINK_MODE_100baseT_Full_BIT, 100_000_000},
+	{"1000baseT_Half", unix.ETHTOOL_LINK_MODE_1000baseT_Half_BIT, 1_000_000_000},
+	{"1000baseT_Full", unix.ETHTOOL_LINK_MODE_1000baseT_Full_BIT, 1_000_000_000},
+	{"10000baseT_Full", unix.ETHTOOL_LINK_MODE_10000baseT_Full_BIT, 10_000_000_000},
+	{"2500baseT_Full", unix.ETHTOOL_LINK_MODE_2500baseT_Full_BIT, 2_500_000_000},
+	{"1000baseKX_Full", unix.ETHTOOL_LINK_MODE_1000baseKX_Full_BIT, 1_000_000_000},
+	{"10000baseKX_Full", unix.ETHTOOL_LINK_MODE_10000baseKX4_Full_BIT, 10_000_000_000},
+	{"10000baseKR_Full", unix.ETHTOOL_LINK_MODE_10000baseKR_Full_BIT, 10_000_000_000},
+	{"10000baseR_FEC", unix.ETHTOOL_LINK_MODE_10000baseR_FEC_BIT, 10_000_000_000},
+	{"20000baseMLD2_Full", unix.ETHTOOL_LINK_MODE_20000baseMLD2_Full_BIT, 20_000_000_000},
+	{"20000baseKR2_Full", unix.ETHTOOL_LINK_MODE_20000baseKR2_Full_BIT, 20_000_000_000},
+	{"40000baseKR4_Full", unix.ETHTOOL_LINK_MODE_40000baseKR4_Full_BIT, 40_000_000_000},
+	{"40000baseCR4_Full", unix.ETHTOOL_LINK_MODE_40000baseCR4_Full_BIT, 40_000_000_000},
+	{"40000baseSR4_Full", unix.ETHTOOL_LINK_MODE_40000baseSR4_Full_BIT, 40_000_000_000},
+	{"40000baseLR4_Full", unix.ETHTOOL_LINK_MODE_40000baseLR4_Full_BIT, 40_000_000_000},
+	{"56000baseKR4_Full", unix.ETHTOOL_LINK_MODE_56000baseKR4_Full_BIT, 56_000_000_000},
+	{"56000baseCR4_Full", unix.ETHTOOL_LINK_MODE_56000baseCR4_Full_BIT, 56_000_000_000},
+	{"56000baseSR4_Full", unix.ETHTOOL_LINK_MODE_56000baseSR4_Full_BIT, 56_000_000_000},
+	{"56000baseLR4_Full", unix.ETHTOOL_LINK_MODE_56000baseLR4_Full_BIT, 56_000_000_000},
+	{"25000baseCR_Full", unix.ETHTOOL_LINK_MODE_25000baseCR_Full_BIT, 25_000_000_000},
+}
+
 type ifreq struct {
 	ifr_name [IFNAMSIZ]byte
 	ifr_data uintptr
@@ -94,8 +137,8 @@ type ifreq struct {
 type ethtoolSsetInfo struct {
 	cmd       uint32
 	reserved  uint32
-	sset_mask uint32
-	data      uintptr
+	sset_mask uint64
+	data      [MAX_SSET_INFO]uint32
 }
 
 type ethtoolGetFeaturesBlock struct {
@@ -315,6 +358,27 @@ type ethtoolPermAddr struct {
 	data [PERMADDR_LEN]byte
 }
 
+// Ring is a ring config for an interface
+type Ring struct {
+	Cmd               uint32
+	RxMaxPending      uint32
+	RxMiniMaxPending  uint32
+	RxJumboMaxPending uint32
+	TxMaxPending      uint32
+	RxPending         uint32
+	RxMiniPending     uint32
+	RxJumboPending    uint32
+	TxPending         uint32
+}
+
+// Pause is a pause config for an interface
+type Pause struct {
+	Cmd     uint32
+	Autoneg uint32
+	RxPause uint32
+	TxPause uint32
+}
+
 type Ethtool struct {
 	fd int
 }
@@ -421,6 +485,15 @@ func (e *Ethtool) GetCoalesce(intf string) (Coalesce, error) {
 	return coalesce, nil
 }
 
+// SetCoalesce sets the coalesce config for the given interface name.
+func (e *Ethtool) SetCoalesce(intf string, coalesce Coalesce) (Coalesce, error) {
+	coalesce, err := e.setCoalesce(intf, coalesce)
+	if err != nil {
+		return Coalesce{}, err
+	}
+	return coalesce, nil
+}
+
 // GetTimestampingInformation returns the PTP timestamping information for the given interface name.
 func (e *Ethtool) GetTimestampingInformation(intf string) (TimestampingInformation, error) {
 	ts, err := e.getTimestampingInformation(intf)
@@ -516,6 +589,16 @@ func (e *Ethtool) getCoalesce(intf string) (Coalesce, error) {
 	return coalesce, nil
 }
 
+func (e *Ethtool) setCoalesce(intf string, coalesce Coalesce) (Coalesce, error) {
+	coalesce.Cmd = ETHTOOL_SCOALESCE
+
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&coalesce))); err != nil {
+		return Coalesce{}, err
+	}
+
+	return coalesce, nil
+}
+
 func (e *Ethtool) getTimestampingInformation(intf string) (TimestampingInformation, error) {
 	ts := TimestampingInformation{
 		Cmd: ETHTOOL_GET_TS_INFO,
@@ -567,8 +650,72 @@ func (e *Ethtool) getModuleEeprom(intf string) (ethtoolEeprom, ethtoolModInfo, e
 	return eeprom, modInfo, nil
 }
 
+// GetRing retrieves ring parameters of the given interface name.
+func (e *Ethtool) GetRing(intf string) (Ring, error) {
+	ring := Ring{
+		Cmd: ETHTOOL_GRINGPARAM,
+	}
+
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&ring))); err != nil {
+		return Ring{}, err
+	}
+
+	return ring, nil
+}
+
+// SetRing sets ring parameters of the given interface name.
+func (e *Ethtool) SetRing(intf string, ring Ring) (Ring, error) {
+	ring.Cmd = ETHTOOL_SRINGPARAM
+
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&ring))); err != nil {
+		return Ring{}, err
+	}
+
+	return ring, nil
+}
+
+// GetPause retrieves pause parameters of the given interface name.
+func (e *Ethtool) GetPause(intf string) (Pause, error) {
+	pause := Pause{
+		Cmd: ETHTOOL_GPAUSEPARAM,
+	}
+
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&pause))); err != nil {
+		return Pause{}, err
+	}
+
+	return pause, nil
+}
+
+// SetPause sets pause parameters of the given interface name.
+func (e *Ethtool) SetPause(intf string, pause Pause) (Pause, error) {
+	pause.Cmd = ETHTOOL_SPAUSEPARAM
+
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&pause))); err != nil {
+		return Pause{}, err
+	}
+
+	return pause, nil
+}
+
 func isFeatureBitSet(blocks [MAX_FEATURE_BLOCKS]ethtoolGetFeaturesBlock, index uint) bool {
 	return (blocks)[index/32].active&(1<<(index%32)) != 0
+}
+
+type FeatureState struct {
+	Available    bool
+	Requested    bool
+	Active       bool
+	NeverChanged bool
+}
+
+func getFeatureStateBits(blocks [MAX_FEATURE_BLOCKS]ethtoolGetFeaturesBlock, index uint) FeatureState {
+	return FeatureState{
+		Available:    (blocks)[index/32].available&(1<<(index%32)) != 0,
+		Requested:    (blocks)[index/32].requested&(1<<(index%32)) != 0,
+		Active:       (blocks)[index/32].active&(1<<(index%32)) != 0,
+		NeverChanged: (blocks)[index/32].never_changed&(1<<(index%32)) != 0,
+	}
 }
 
 func setFeatureBit(blocks *[MAX_FEATURE_BLOCKS]ethtoolSetFeaturesBlock, index uint, value bool) {
@@ -583,18 +730,19 @@ func setFeatureBit(blocks *[MAX_FEATURE_BLOCKS]ethtoolSetFeaturesBlock, index ui
 	}
 }
 
-// FeatureNames shows supported features by their name.
-func (e *Ethtool) FeatureNames(intf string) (map[string]uint, error) {
+func (e *Ethtool) getNames(intf string, mask int) (map[string]uint, error) {
 	ssetInfo := ethtoolSsetInfo{
 		cmd:       ETHTOOL_GSSET_INFO,
-		sset_mask: 1 << ETH_SS_FEATURES,
+		sset_mask: 1 << mask,
+		data:      [MAX_SSET_INFO]uint32{},
 	}
 
 	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&ssetInfo))); err != nil {
 		return nil, err
 	}
 
-	length := uint32(ssetInfo.data)
+	/* we only read data on first index because single bit was set in sset_mask(0x10) */
+	length := ssetInfo.data[0]
 	if length == 0 {
 		return map[string]uint{}, nil
 	} else if length > MAX_GSTRINGS {
@@ -603,7 +751,7 @@ func (e *Ethtool) FeatureNames(intf string) (map[string]uint, error) {
 
 	gstrings := ethtoolGStrings{
 		cmd:        ETHTOOL_GSTRINGS,
-		string_set: ETH_SS_FEATURES,
+		string_set: uint32(mask),
 		len:        length,
 		data:       [MAX_GSTRINGS * ETH_GSTRING_LEN]byte{},
 	}
@@ -612,7 +760,7 @@ func (e *Ethtool) FeatureNames(intf string) (map[string]uint, error) {
 		return nil, err
 	}
 
-	var result = make(map[string]uint)
+	result := make(map[string]uint)
 	for i := 0; i != int(length); i++ {
 		b := gstrings.data[i*ETH_GSTRING_LEN : i*ETH_GSTRING_LEN+ETH_GSTRING_LEN]
 		key := goString(b)
@@ -622,6 +770,11 @@ func (e *Ethtool) FeatureNames(intf string) (map[string]uint, error) {
 	}
 
 	return result, nil
+}
+
+// FeatureNames shows supported features by their name.
+func (e *Ethtool) FeatureNames(intf string) (map[string]uint, error) {
+	return e.getNames(intf, ETH_SS_FEATURES)
 }
 
 // Features retrieves features of the given interface name.
@@ -645,9 +798,39 @@ func (e *Ethtool) Features(intf string) (map[string]bool, error) {
 		return nil, err
 	}
 
-	var result = make(map[string]bool, length)
+	result := make(map[string]bool, length)
 	for key, index := range names {
 		result[key] = isFeatureBitSet(features.blocks, index)
+	}
+
+	return result, nil
+}
+
+// FeaturesWithState retrieves features of the given interface name,
+// with extra flags to explain if they can be enabled
+func (e *Ethtool) FeaturesWithState(intf string) (map[string]FeatureState, error) {
+	names, err := e.FeatureNames(intf)
+	if err != nil {
+		return nil, err
+	}
+
+	length := uint32(len(names))
+	if length == 0 {
+		return map[string]FeatureState{}, nil
+	}
+
+	features := ethtoolGfeatures{
+		cmd:  ETHTOOL_GFEATURES,
+		size: (length + 32 - 1) / 32,
+	}
+
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&features))); err != nil {
+		return nil, err
+	}
+
+	var result = make(map[string]FeatureState, length)
+	for key, index := range names {
+		result[key] = getFeatureStateBits(features.blocks, index)
 	}
 
 	return result, nil
@@ -676,6 +859,68 @@ func (e *Ethtool) Change(intf string, config map[string]bool) error {
 	}
 
 	return e.ioctl(intf, uintptr(unsafe.Pointer(&features)))
+}
+
+// PrivFlagsNames shows supported private flags by their name.
+func (e *Ethtool) PrivFlagsNames(intf string) (map[string]uint, error) {
+	return e.getNames(intf, ETH_SS_PRIV_FLAGS)
+}
+
+// PrivFlags retrieves private flags of the given interface name.
+func (e *Ethtool) PrivFlags(intf string) (map[string]bool, error) {
+	names, err := e.PrivFlagsNames(intf)
+	if err != nil {
+		return nil, err
+	}
+
+	length := uint32(len(names))
+	if length == 0 {
+		return map[string]bool{}, nil
+	}
+
+	var val ethtoolLink
+	val.cmd = ETHTOOL_GPFLAGS
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&val))); err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]bool, length)
+	for name, mask := range names {
+		result[name] = val.data&(1<<mask) != 0
+	}
+
+	return result, nil
+}
+
+// UpdatePrivFlags requests a change in the given device's private flags.
+func (e *Ethtool) UpdatePrivFlags(intf string, config map[string]bool) error {
+	names, err := e.PrivFlagsNames(intf)
+	if err != nil {
+		return err
+	}
+
+	var curr ethtoolLink
+	curr.cmd = ETHTOOL_GPFLAGS
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&curr))); err != nil {
+		return err
+	}
+
+	var update ethtoolLink
+	update.cmd = ETHTOOL_SPFLAGS
+	update.data = curr.data
+	for name, value := range config {
+		if index, ok := names[name]; ok {
+			if value {
+				update.data |= 1 << index
+			} else {
+				update.data &= ^(1 << index)
+			}
+		} else {
+			return fmt.Errorf("unsupported priv flag %q", name)
+		}
+	}
+
+	return e.ioctl(intf, uintptr(unsafe.Pointer(&update)))
 }
 
 // Get state of a link.
@@ -726,7 +971,7 @@ func (e *Ethtool) Stats(intf string) (map[string]uint64, error) {
 		return nil, err
 	}
 
-	var result = make(map[string]uint64)
+	result := make(map[string]uint64)
 	for i := 0; i != int(drvinfo.n_stats); i++ {
 		b := gstrings.data[i*ETH_GSTRING_LEN : i*ETH_GSTRING_LEN+ETH_GSTRING_LEN]
 		strEnd := strings.Index(string(b), "\x00")
@@ -797,4 +1042,37 @@ func PermAddr(intf string) (string, error) {
 	}
 	defer e.Close()
 	return e.PermAddr(intf)
+}
+
+func supportedSpeeds(mask uint64) (ret []struct {
+	name  string
+	mask  uint64
+	speed uint64
+}) {
+	for _, mode := range supportedCapabilities {
+		if ((1 << mode.mask) & mask) != 0 {
+			ret = append(ret, mode)
+		}
+	}
+	return ret
+}
+
+// SupportedLinkModes returns the names of the link modes supported by the interface.
+func SupportedLinkModes(mask uint64) []string {
+	var ret []string
+	for _, mode := range supportedSpeeds(mask) {
+		ret = append(ret, mode.name)
+	}
+	return ret
+}
+
+// SupportedSpeed returns the maximum capacity of this interface.
+func SupportedSpeed(mask uint64) uint64 {
+	var ret uint64
+	for _, mode := range supportedSpeeds(mask) {
+		if mode.speed > ret {
+			ret = mode.speed
+		}
+	}
+	return ret
 }
