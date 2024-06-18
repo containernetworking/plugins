@@ -32,7 +32,7 @@ jobs:
 
       - name: Change plugin file ownership
         working-directory: ./bin
-        run: sudo chown root:root ./*
+        run: sudo chown -R root:root .
 
       - name: Create dist directory
         run: mkdir dist
@@ -87,7 +87,7 @@ jobs:
 
       - name: Change plugin file ownership
         working-directory: ./bin
-        run: sudo chown root:root ./*
+        run: sudo chown -R root:root .
 
       - name: Create dist directory
         run: mkdir dist
