@@ -3,7 +3,7 @@ module github.com/containernetworking/plugins
 go 1.20
 
 require (
-	github.com/Microsoft/hcsshim v0.12.3
+	github.com/Microsoft/hcsshim v0.12.4
 	github.com/alexflint/go-filemutex v1.3.0
 	github.com/buger/jsonparser v1.1.1
 	github.com/containernetworking/cni v1.1.2
@@ -18,7 +18,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
 	github.com/opencontainers/selinux v1.11.0
-	github.com/safchain/ethtool v0.4.0
+	github.com/safchain/ethtool v0.4.1
 	github.com/vishvananda/netlink v1.2.1-beta.2
 	golang.org/x/sys v0.21.0
 )
