@@ -230,118 +230,121 @@ func cmdDel(args *skel.CmdArgs) error {
 	return nil
 }
 
-// setTempName sets a temporary name for netdevice, returns updated Link object or error
-// if occurred.
-func setTempName(dev netlink.Link) (netlink.Link, error) {
-	tempName := fmt.Sprintf("%s%d", "temp_", dev.Attrs().Index)
-
-	// rename to tempName
-	if err := netlink.LinkSetName(dev, tempName); err != nil {
-		return nil, fmt.Errorf("failed to rename device %q to %q: %v", dev.Attrs().Name, tempName, err)
-	}
-
-	// Get updated Link obj
-	tempDev, err := netlink.LinkByName(tempName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find %q after rename to %q: %v", dev.Attrs().Name, tempName, err)
-	}
-
-	return tempDev, nil
-}
-
-func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, ifName string) (netlink.Link, error) {
-	origLinkFlags := hostDev.Attrs().Flags
+func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, containerIfName string) (netlink.Link, error) {
 	hostDevName := hostDev.Attrs().Name
-	defaultNs, err := ns.GetCurrentNS()
+
+	// With recent kernels we could do all changes in a single netlink call,
+	// but on failure the device is left in a partially modified state.
+	// Doing changes one by one allow us to (try to) rollback to the initial state.
+
+	// Create a temporary namespace to rename (and modify) the device in.
+	// We were previously using a temporary name, but rapid rename leads to
+	// race condition with udev and NetworkManager.
+	tempNS, err := ns.TempNetNS()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get host namespace: %v", err)
+		return nil, fmt.Errorf("failed to create tempNS: %v", err)
 	}
+	defer tempNS.Close()
 
-	// Devices can be renamed only when down
-	if err = netlink.LinkSetDown(hostDev); err != nil {
-		return nil, fmt.Errorf("failed to set %q down: %v", hostDev.Attrs().Name, err)
-	}
-
-	// restore original link state in case of error
-	defer func() {
-		if err != nil {
-			if origLinkFlags&net.FlagUp == net.FlagUp && hostDev != nil {
-				_ = netlink.LinkSetUp(hostDev)
+	// Restore original up state in case of error
+	// This must be done in the hostNS as moving
+	// device between namespaces sets the link down
+	if hostDev.Attrs().Flags&net.FlagUp == net.FlagUp {
+		defer func() {
+			if err != nil {
+				// lookup the device again (index might have changed)
+				if hostDev, err := netlink.LinkByName(hostDevName); err == nil {
+					_ = netlink.LinkSetUp(hostDev)
+				}
 			}
-		}
-	}()
-
-	hostDev, err = setTempName(hostDev)
-	if err != nil {
-		return nil, fmt.Errorf("failed to rename device %q to temporary name: %v", hostDevName, err)
+		}()
 	}
 
-	// restore original netdev name in case of error
-	defer func() {
-		if err != nil && hostDev != nil {
-			_ = netlink.LinkSetName(hostDev, hostDevName)
-		}
-	}()
-
-	if err = netlink.LinkSetNsFd(hostDev, int(containerNs.Fd())); err != nil {
-		return nil, fmt.Errorf("failed to move %q to container ns: %v", hostDev.Attrs().Name, err)
+	// Move the host device into tempNS
+	if err = netlink.LinkSetNsFd(hostDev, int(tempNS.Fd())); err != nil {
+		return nil, fmt.Errorf("failed to move %q to tempNS: %v", hostDevName, err)
 	}
 
 	var contDev netlink.Link
-	tempDevName := hostDev.Attrs().Name
-	if err = containerNs.Do(func(_ ns.NetNS) error {
-		var err error
-		contDev, err = netlink.LinkByName(tempDevName)
+
+	// In a container in container scenario, hostNS is not the initial net namespace,
+	// but host / container naming is easier to follow.
+	if err = tempNS.Do(func(hostNS ns.NetNS) error {
+		// lookup the device in tempNS (index might have changed)
+		tempNSDev, err := netlink.LinkByName(hostDevName)
 		if err != nil {
-			return fmt.Errorf("failed to find %q: %v", tempDevName, err)
+			return fmt.Errorf("failed to find %q in tempNS: %v", hostDevName, err)
 		}
 
-		// move netdev back to host namespace in case of error
+		// detroying a non empty tempNS would move physical devices back to the initial net namespace,
+		// not the namespace of the "parent" process, and virtual devices would be destroyed,
+		// so we need to actively move the device back to hostNS on error
 		defer func() {
-			if err != nil {
-				_ = netlink.LinkSetNsFd(contDev, int(defaultNs.Fd()))
-				// we need to get updated link object as link was moved back to host namepsace
-				_ = defaultNs.Do(func(_ ns.NetNS) error {
-					hostDev, _ = netlink.LinkByName(tempDevName)
-					return nil
-				})
+			if err != nil && tempNSDev != nil {
+				_ = netlink.LinkSetNsFd(tempNSDev, int(hostNS.Fd()))
+			}
+		}()
+
+		// Rename the device to the wanted name
+		if err = netlink.LinkSetName(tempNSDev, containerIfName); err != nil {
+			return fmt.Errorf("failed to rename host device %q to %q: %v", hostDevName, containerIfName, err)
+		}
+
+		// Restore the original device name in case of error
+		defer func() {
+			if err != nil && tempNSDev != nil {
+				_ = netlink.LinkSetName(tempNSDev, hostDevName)
 			}
 		}()
 
 		// Save host device name into the container device's alias property
-		if err = netlink.LinkSetAlias(contDev, hostDevName); err != nil {
-			return fmt.Errorf("failed to set alias to %q: %v", tempDevName, err)
-		}
-		// Rename container device to respect args.IfName
-		if err = netlink.LinkSetName(contDev, ifName); err != nil {
-			return fmt.Errorf("failed to rename device %q to %q: %v", tempDevName, ifName, err)
+		if err = netlink.LinkSetAlias(tempNSDev, hostDevName); err != nil {
+			return fmt.Errorf("failed to set alias to %q: %v", hostDevName, err)
 		}
 
-		// restore tempDevName in case of error
+		// Remove the alias on error
 		defer func() {
-			if err != nil {
-				_ = netlink.LinkSetName(contDev, tempDevName)
+			if err != nil && tempNSDev != nil {
+				_ = netlink.LinkSetAlias(tempNSDev, "")
 			}
 		}()
 
-		// Bring container device up
-		if err = netlink.LinkSetUp(contDev); err != nil {
-			return fmt.Errorf("failed to set %q up: %v", ifName, err)
+		// Move the device to the containerNS
+		if err = netlink.LinkSetNsFd(tempNSDev, int(containerNs.Fd())); err != nil {
+			return fmt.Errorf("failed to move %q (host: %q) to container NS: %v", containerIfName, hostDevName, err)
 		}
 
-		// bring device down in case of error
+		// Lookup the device again on error, the index might have changed
 		defer func() {
 			if err != nil {
-				_ = netlink.LinkSetDown(contDev)
+				tempNSDev, _ = netlink.LinkByName(containerIfName)
 			}
 		}()
 
-		// Retrieve link again to get up-to-date name and attributes
-		contDev, err = netlink.LinkByName(ifName)
-		if err != nil {
-			return fmt.Errorf("failed to find %q: %v", ifName, err)
-		}
-		return nil
+		err = containerNs.Do(func(_ ns.NetNS) error {
+			var err error
+			contDev, err = netlink.LinkByName(containerIfName)
+			if err != nil {
+				return fmt.Errorf("failed to find %q in container NS: %v", containerIfName, err)
+			}
+
+			// Move the interface back to tempNS on error
+			defer func() {
+				if err != nil {
+					_ = netlink.LinkSetNsFd(contDev, int(tempNS.Fd()))
+				}
+			}()
+
+			// Bring the device up
+			// This must be done in the containerNS
+			if err = netlink.LinkSetUp(contDev); err != nil {
+				return fmt.Errorf("failed to set %q up: %v", containerIfName, err)
+			}
+
+			return nil
+		})
+
+		return err
 	}); err != nil {
 		return nil, err
 	}
@@ -349,47 +352,49 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, ifName string) (netl
 	return contDev, nil
 }
 
-func moveLinkOut(containerNs ns.NetNS, ifName string) error {
-	defaultNs, err := ns.GetCurrentNS()
+func moveLinkOut(containerNs ns.NetNS, containerIfName string) error {
+	// Create a temporary namespace to rename (and modify) the device in.
+	// We were previously using a temporary name, but multiple rapid renames
+	// leads to race condition with udev and NetworkManager.
+	tempNS, err := ns.TempNetNS()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create tempNS: %v", err)
 	}
-	defer defaultNs.Close()
+	defer tempNS.Close()
 
-	var tempName string
-	var origDev netlink.Link
-	err = containerNs.Do(func(_ ns.NetNS) error {
-		dev, err := netlink.LinkByName(ifName)
-		if err != nil {
-			return fmt.Errorf("failed to find %q: %v", ifName, err)
-		}
-		origDev = dev
+	var contDev netlink.Link
 
-		// Devices can be renamed only when down
-		if err = netlink.LinkSetDown(dev); err != nil {
-			return fmt.Errorf("failed to set %q down: %v", ifName, err)
-		}
-
-		defer func() {
-			// If moving the device to the host namespace fails, set its name back to ifName so that this
-			// function can be retried. Also bring the device back up, unless it was already down before.
-			if err != nil {
-				_ = netlink.LinkSetName(dev, ifName)
-				if dev.Attrs().Flags&net.FlagUp == net.FlagUp {
-					_ = netlink.LinkSetUp(dev)
+	// Restore original up state in case of error
+	// This must be done in the containerNS as moving
+	// device between namespaces sets the link down
+	defer func() {
+		if err != nil && contDev != nil && contDev.Attrs().Flags&net.FlagUp == net.FlagUp {
+			containerNs.Do(func(_ ns.NetNS) error {
+				// lookup the device again (index might have changed)
+				if contDev, err := netlink.LinkByName(containerIfName); err == nil {
+					_ = netlink.LinkSetUp(contDev)
 				}
-			}
-		}()
-
-		newLink, err := setTempName(dev)
-		if err != nil {
-			return fmt.Errorf("failed to rename device %q to temporary name: %v", ifName, err)
+				return nil
+			})
 		}
-		dev = newLink
-		tempName = dev.Attrs().Name
+	}()
 
-		if err = netlink.LinkSetNsFd(dev, int(defaultNs.Fd())); err != nil {
-			return fmt.Errorf("failed to move %q to host netns: %v", tempName, err)
+	err = containerNs.Do(func(_ ns.NetNS) error {
+		var err error
+		// Lookup the device in the containerNS
+		contDev, err = netlink.LinkByName(containerIfName)
+		if err != nil {
+			return fmt.Errorf("failed to find %q in containerNS: %v", containerIfName, err)
+		}
+
+		// Verify we have the original name
+		if contDev.Attrs().Alias == "" {
+			return fmt.Errorf("failed to find original ifname for %q (alias is not set)", containerIfName)
+		}
+
+		// Move the device to the tempNS
+		if err = netlink.LinkSetNsFd(contDev, int(tempNS.Fd())); err != nil {
+			return fmt.Errorf("failed to move %q to tempNS: %v", containerIfName, err)
 		}
 		return nil
 	})
@@ -397,29 +402,57 @@ func moveLinkOut(containerNs ns.NetNS, ifName string) error {
 		return err
 	}
 
-	// Rename the device to its original name from the host namespace
-	tempDev, err := netlink.LinkByName(tempName)
-	if err != nil {
-		return fmt.Errorf("failed to find %q in host namespace: %v", tempName, err)
-	}
+	err = tempNS.Do(func(hostNS ns.NetNS) error {
+		// Lookup the device in tempNS (index might have changed)
+		tempNSDev, err := netlink.LinkByName(containerIfName)
+		if err != nil {
+			return fmt.Errorf("failed to find %q in tempNS: %v", containerIfName, err)
+		}
 
-	if err = netlink.LinkSetName(tempDev, tempDev.Attrs().Alias); err != nil {
-		// move device back to container ns so it may be retired
+		// Move the device back to containerNS on error
 		defer func() {
-			_ = netlink.LinkSetNsFd(tempDev, int(containerNs.Fd()))
-			_ = containerNs.Do(func(_ ns.NetNS) error {
-				lnk, err := netlink.LinkByName(tempName)
-				if err != nil {
-					return err
-				}
-				_ = netlink.LinkSetName(lnk, ifName)
-				if origDev.Attrs().Flags&net.FlagUp == net.FlagUp {
-					_ = netlink.LinkSetUp(lnk)
-				}
-				return nil
-			})
+			if err != nil {
+				_ = netlink.LinkSetNsFd(tempNSDev, int(containerNs.Fd()))
+			}
 		}()
-		return fmt.Errorf("failed to restore %q to original name %q: %v", tempName, tempDev.Attrs().Alias, err)
+
+		hostDevName := tempNSDev.Attrs().Alias
+
+		// Rename container device to hostDevName
+		if err = netlink.LinkSetName(tempNSDev, hostDevName); err != nil {
+			return fmt.Errorf("failed to rename device %q to %q: %v", containerIfName, hostDevName, err)
+		}
+
+		// Rename the device back to containerIfName on error
+		defer func() {
+			if err != nil {
+				_ = netlink.LinkSetName(tempNSDev, containerIfName)
+			}
+		}()
+
+		// Unset device's alias property
+		if err = netlink.LinkSetAlias(tempNSDev, ""); err != nil {
+			return fmt.Errorf("failed to unset alias of %q: %v", hostDevName, err)
+		}
+
+		// Set back the device alias to hostDevName on error
+		defer func() {
+			if err != nil {
+				_ = netlink.LinkSetAlias(tempNSDev, hostDevName)
+			}
+		}()
+
+		// Finally move the device to the hostNS
+		if err = netlink.LinkSetNsFd(tempNSDev, int(hostNS.Fd())); err != nil {
+			return fmt.Errorf("failed to move %q to hostNS: %v", hostDevName, err)
+		}
+
+		// As we don't know the previous state, leave the link down
+
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil
