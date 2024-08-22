@@ -1,9 +1,11 @@
 ---
 name: test
 
-on: ["push", "pull_request"]
+on:
+  pull_request: {}
 
 env:
+  # be sure to update the version in release.yaml too
   GO_VERSION: "1.22"
   LINUX_ARCHES: "amd64 386 arm arm64 s390x mips64le ppc64le riscv64"
 
@@ -16,7 +18,7 @@ jobs:
       - name: setup go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
       - uses: ibiqlik/action-yamllint@v3
         with:
           format: auto
@@ -34,7 +36,7 @@ jobs:
       - name: setup go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
       - name: Build on all supported architectures
         run: |
           set -e
@@ -58,7 +60,7 @@ jobs:
       - name: setup go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
       - name: Set up Go for root
         run: |
           sudo ln -sf `which go` `sudo which go` || true
@@ -89,6 +91,6 @@ jobs:
       - name: setup go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
       - name: test
         run: bash ./test_windows.sh
