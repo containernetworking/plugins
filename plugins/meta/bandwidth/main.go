@@ -282,7 +282,11 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.VersionsStartingFrom("0.3.0"), bv.BuildString("bandwidth"))
+	skel.PluginMainFuncs(skel.CNIFuncs{
+		Add:   cmdAdd,
+		Check: cmdCheck,
+		Del:   cmdDel,
+	}, version.VersionsStartingFrom("0.3.0"), bv.BuildString("bandwidth"))
 }
 
 func SafeQdiscList(link netlink.Link) ([]netlink.Qdisc, error) {
@@ -333,6 +337,9 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 
 	bandwidth := getBandwidth(bwConf)
+	if bandwidth == nil {
+		return nil
+	}
 
 	if err = validateSubnets(bandwidth.UnshapedSubnets, bandwidth.ShapedSubnets); err != nil {
 		return fmt.Errorf("failed to check subnets, details %s", err)
