@@ -17,18 +17,18 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
+	"strings"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-
-	"github.com/vishvananda/netlink"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
-	. "github.com/onsi/gomega"
 )
 
 func buildOneConfig(name, cniVersion string, orig *VRFNetConf, prevResult types.Result) (*VRFNetConf, []byte, error) {
@@ -71,7 +71,6 @@ func buildOneConfig(name, cniVersion string, orig *VRFNetConf, prevResult types.
 	}
 
 	return conf, newBytes, nil
-
 }
 
 var _ = Describe("vrf plugin", func() {
@@ -110,7 +109,7 @@ var _ = Describe("vrf plugin", func() {
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			_, err = netlink.LinkByName(IF0Name)
+			_, err = netlink.LinkByName(IF1Name)
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
@@ -143,9 +142,9 @@ var _ = Describe("vrf plugin", func() {
 			result, err := current.GetResult(r)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(len(result.Interfaces)).To(Equal(1))
+			Expect(result.Interfaces).To(HaveLen(1))
 			Expect(result.Interfaces[0].Name).To(Equal(IF0Name))
-			Expect(len(result.IPs)).To(Equal(1))
+			Expect(result.IPs).To(HaveLen(1))
 			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 			return nil
 		})
@@ -170,6 +169,7 @@ var _ = Describe("vrf plugin", func() {
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
+		Expect(err).NotTo(HaveOccurred())
 
 		err = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
@@ -177,6 +177,256 @@ var _ = Describe("vrf plugin", func() {
 			return nil
 		})
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("adds the interface and custom routing to new VRF", func() {
+		conf := configWithRouteFor("test", IF0Name, VRF0Name, "10.0.0.2/24", "10.10.10.0/24")
+
+		By("Setting custom routing first", func() {
+			err := targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				ipv4, err := types.ParseCIDR("10.0.0.2/24")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ipv4).NotTo(BeNil())
+
+				_, routev4, err := net.ParseCIDR("10.10.10.0/24")
+				Expect(err).NotTo(HaveOccurred())
+
+				ipv6, err := types.ParseCIDR("abcd:1234:ffff::cdde/64")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ipv6).NotTo(BeNil())
+
+				_, routev6, err := net.ParseCIDR("1111:dddd::/80")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(routev6).NotTo(BeNil())
+
+				link, err := netlink.LinkByName(IF0Name)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Add IP addresses for network reachability
+				netlink.AddrAdd(link, &netlink.Addr{IPNet: ipv4})
+				netlink.AddrAdd(link, &netlink.Addr{IPNet: ipv6})
+
+				ipAddrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+				Expect(err).NotTo(HaveOccurred())
+				// Check if address was assigned properly
+				Expect(ipAddrs[0].IP.String()).To(Equal("10.0.0.2"))
+
+				// Set interface UP, otherwise local route to 10.0.0.0/24 is not present
+				err = netlink.LinkSetUp(link)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Add additional route to 10.10.10.0/24 via 10.0.0.1 gateway
+				r := netlink.Route{
+					LinkIndex: link.Attrs().Index,
+					Src:       ipv4.IP,
+					Dst:       routev4,
+					Gw:        net.ParseIP("10.0.0.1"),
+				}
+				err = netlink.RouteAdd(&r)
+				Expect(err).NotTo(HaveOccurred())
+
+				r6 := netlink.Route{
+					LinkIndex: link.Attrs().Index,
+					Src:       ipv6.IP,
+					Dst:       routev6,
+					Gw:        net.ParseIP("abcd:1234:ffff::1"),
+				}
+				err = netlink.RouteAdd(&r6)
+				Expect(err).NotTo(HaveOccurred())
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNS.Path(),
+			IfName:      IF0Name,
+			StdinData:   conf,
+		}
+
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			r, _, err := testutils.CmdAddWithArgs(args, func() error {
+				return cmdAdd(args)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := current.GetResult(r)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(result.Interfaces).To(HaveLen(1))
+			Expect(result.Interfaces[0].Name).To(Equal(IF0Name))
+			Expect(result.Routes).To(HaveLen(1))
+			Expect(result.Routes[0].Dst.IP.String()).To(Equal("10.10.10.0"))
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		err = targetNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			checkInterfaceOnVRF(VRF0Name, IF0Name)
+			checkRoutesOnVRF(VRF0Name, IF0Name, "10.0.0.2", "10.10.10.0/24", "1111:dddd::/80")
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("filters the correct routes to import to new VRF", func() {
+		_ = configWithRouteFor("test0", IF0Name, VRF0Name, "10.0.0.2/24", "10.10.10.0/24")
+		conf1 := configWithRouteFor("test1", IF1Name, VRF1Name, "10.0.0.3/24", "10.11.10.0/24")
+
+		By("Setting custom routing for IF0Name", func() {
+			err := targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				ipv4, err := types.ParseCIDR("10.0.0.2/24")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ipv4).NotTo(BeNil())
+
+				_, routev4, err := net.ParseCIDR("10.10.10.0/24")
+				Expect(err).NotTo(HaveOccurred())
+
+				ipv6, err := types.ParseCIDR("abcd:1234:ffff::cdde/64")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ipv6).NotTo(BeNil())
+
+				_, routev6, err := net.ParseCIDR("1111:dddd::/80")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(routev6).NotTo(BeNil())
+
+				link, err := netlink.LinkByName(IF0Name)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Add IP addresses for network reachability
+				netlink.AddrAdd(link, &netlink.Addr{IPNet: ipv4})
+				netlink.AddrAdd(link, &netlink.Addr{IPNet: ipv6})
+
+				ipAddrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+				Expect(err).NotTo(HaveOccurred())
+				// Check if address was assigned properly
+				Expect(ipAddrs[0].IP.String()).To(Equal("10.0.0.2"))
+
+				// Set interface UP, otherwise local route to 10.0.0.0/24 is not present
+				err = netlink.LinkSetUp(link)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Add additional route to 10.10.10.0/24 via 10.0.0.1 gateway
+				r := netlink.Route{
+					LinkIndex: link.Attrs().Index,
+					Dst:       routev4,
+					Gw:        net.ParseIP("10.0.0.1"),
+				}
+				err = netlink.RouteAdd(&r)
+				Expect(err).NotTo(HaveOccurred())
+
+				r6 := netlink.Route{
+					LinkIndex: link.Attrs().Index,
+					Src:       ipv6.IP,
+					Dst:       routev6,
+					Gw:        net.ParseIP("abcd:1234:ffff::1"),
+				}
+				err = netlink.RouteAdd(&r6)
+				Expect(err).NotTo(HaveOccurred())
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Setting custom routing for IF1Name", func() {
+			err := targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				ipv4, err := types.ParseCIDR("10.0.0.3/24")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ipv4).NotTo(BeNil())
+
+				_, routev4, err := net.ParseCIDR("10.11.10.0/24")
+				Expect(err).NotTo(HaveOccurred())
+
+				ipv6, err := types.ParseCIDR("abcd:1234:ffff::cddf/64")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ipv6).NotTo(BeNil())
+
+				_, routev6, err := net.ParseCIDR("1111:ddde::/80")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(routev6).NotTo(BeNil())
+
+				link, err := netlink.LinkByName(IF1Name)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Add IP addresses for network reachability
+				netlink.AddrAdd(link, &netlink.Addr{IPNet: ipv4})
+				netlink.AddrAdd(link, &netlink.Addr{IPNet: ipv6})
+
+				ipAddrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+				Expect(err).NotTo(HaveOccurred())
+				// Check if address was assigned properly
+				Expect(ipAddrs[0].IP.String()).To(Equal("10.0.0.3"))
+
+				// Set interface UP, otherwise local route to 10.0.0.0/24 is not present
+				err = netlink.LinkSetUp(link)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Add additional route to 10.11.10.0/24 via 10.0.0.1 gateway
+				r := netlink.Route{
+					LinkIndex: link.Attrs().Index,
+					Dst:       routev4,
+					Gw:        net.ParseIP("10.0.0.1"),
+					Priority:  100,
+				}
+				err = netlink.RouteAdd(&r)
+				Expect(err).NotTo(HaveOccurred())
+
+				r6 := netlink.Route{
+					LinkIndex: link.Attrs().Index,
+					Src:       ipv6.IP,
+					Dst:       routev6,
+					Gw:        net.ParseIP("abcd:1234:ffff::1"),
+				}
+				err = netlink.RouteAdd(&r6)
+				Expect(err).NotTo(HaveOccurred())
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Adding if1 to the VRF", func() {
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				args := &skel.CmdArgs{
+					ContainerID: "dummy",
+					Netns:       targetNS.Path(),
+					IfName:      IF1Name,
+					StdinData:   conf1,
+				}
+				_, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking routes are moved correctly to VRF", func() {
+			err := targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				checkInterfaceOnVRF(VRF1Name, IF1Name)
+				checkRoutesOnVRF(VRF1Name, IF1Name, "10.0.0.3", "10.11.10.0/24", "1111:ddde::/80")
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
 	It("fails if the interface already has a master set", func() {
@@ -299,7 +549,8 @@ var _ = Describe("vrf plugin", func() {
 					link, err := netlink.LinkByName(IF0Name)
 					Expect(err).NotTo(HaveOccurred())
 					addresses, err := netlink.AddrList(link, netlink.FAMILY_ALL)
-					Expect(len(addresses)).To(Equal(1))
+					Expect(err).NotTo(HaveOccurred())
+					Expect(addresses).To(HaveLen(1))
 					Expect(addresses[0].IP.Equal(addr0.IP)).To(BeTrue())
 					Expect(addresses[0].Mask).To(Equal(addr0.Mask))
 					return nil
@@ -316,7 +567,8 @@ var _ = Describe("vrf plugin", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					addresses, err := netlink.AddrList(link, netlink.FAMILY_ALL)
-					Expect(len(addresses)).To(Equal(1))
+					Expect(err).NotTo(HaveOccurred())
+					Expect(addresses).To(HaveLen(1))
 					Expect(addresses[0].IP.Equal(addr1.IP)).To(BeTrue())
 					Expect(addresses[0].Mask).To(Equal(addr1.Mask))
 					return nil
@@ -344,7 +596,6 @@ var _ = Describe("vrf plugin", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 			})
-
 		},
 		Entry("added to the same vrf", VRF0Name, VRF0Name, "10.0.0.2/24", "10.0.0.3/24"),
 		Entry("added to different vrfs", VRF0Name, VRF1Name, "10.0.0.2/24", "10.0.0.3/24"),
@@ -525,7 +776,7 @@ var _ = Describe("vrf plugin", func() {
 			targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 				_, err := netlink.LinkByName(VRF0Name)
-				Expect(err).NotTo(BeNil())
+				Expect(err).To(HaveOccurred())
 				return nil
 			})
 		})
@@ -570,9 +821,9 @@ var _ = Describe("vrf plugin", func() {
 			result, err := current.GetResult(prevRes)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(len(result.Interfaces)).To(Equal(1))
+			Expect(result.Interfaces).To(HaveLen(1))
 			Expect(result.Interfaces[0].Name).To(Equal(IF0Name))
-			Expect(len(result.IPs)).To(Equal(1))
+			Expect(result.IPs).To(HaveLen(1))
 			Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 			return nil
 		})
@@ -588,7 +839,7 @@ var _ = Describe("vrf plugin", func() {
 			defer GinkgoRecover()
 			cniVersion := "0.4.0"
 			n := &VRFNetConf{}
-			err = json.Unmarshal([]byte(conf), &n)
+			err = json.Unmarshal(conf, &n)
 			_, confString, err := buildOneConfig("testConfig", cniVersion, n, prevRes)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -607,7 +858,6 @@ var _ = Describe("vrf plugin", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 	})
-
 })
 
 var _ = Describe("unit tests", func() {
@@ -692,6 +942,35 @@ func configWithTableFor(name, intf, vrf, ip string, tableID int) []byte {
 	return []byte(conf)
 }
 
+func configWithRouteFor(name, intf, vrf, ip, route string) []byte {
+	conf := fmt.Sprintf(`{
+		"name": "%s",
+		"type": "vrf",
+		"cniVersion": "0.3.1",
+		"vrfName": "%s",
+		"prevResult": {
+			"interfaces": [
+				{"name": "%s", "sandbox":"netns"}
+			],
+			"ips": [
+				{
+					"version": "4",
+					"address": "%s",
+					"gateway": "10.0.0.1",
+					"interface": 0
+				}
+			],
+			"routes": [
+				{
+					"dst": "%s",
+					"gw": "10.0.0.1"
+				}
+			]
+		}
+	}`, name, vrf, intf, ip, route)
+	return []byte(conf)
+}
+
 func checkInterfaceOnVRF(vrfName, intfName string) {
 	vrf, err := netlink.LinkByName(vrfName)
 	Expect(err).NotTo(HaveOccurred())
@@ -705,9 +984,45 @@ func checkInterfaceOnVRF(vrfName, intfName string) {
 	Expect(master.Attrs().Name).To(Equal(vrfName))
 }
 
-func checkLinkHasNoMaster(intfName string) {
+func checkRoutesOnVRF(vrfName, intfName string, addrStr string, routesToCheck ...string) {
+	l, err := netlink.LinkByName(vrfName)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(l).To(BeAssignableToTypeOf(&netlink.Vrf{}))
+
+	vrf, ok := l.(*netlink.Vrf)
+	Expect(ok).To(BeTrue())
+
 	link, err := netlink.LinkByName(intfName)
 	Expect(err).NotTo(HaveOccurred())
-	masterIndx := link.Attrs().MasterIndex
-	Expect(masterIndx).To(Equal(0))
+
+	err = netlink.LinkSetUp(link)
+	Expect(err).NotTo(HaveOccurred())
+
+	ipAddrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(ipAddrs).To(HaveLen(1))
+	Expect(ipAddrs[0].IP.String()).To(Equal(addrStr))
+
+	routeFilter := &netlink.Route{
+		Table: int(vrf.Table),
+	}
+
+	routes, err := netlink.RouteListFiltered(netlink.FAMILY_ALL,
+		routeFilter,
+		netlink.RT_FILTER_TABLE)
+	Expect(err).NotTo(HaveOccurred())
+
+	routesRead := []string{}
+	for _, route := range routes {
+		routesRead = append(routesRead, route.String())
+		Expect(uint32(route.Table)).To(Equal(vrf.Table))
+	}
+	routesStr := strings.Join(routesRead, "\n")
+	for _, route := range routesToCheck {
+		Expect(routesStr).To(ContainSubstring(route))
+	}
+
+	for _, route := range routes {
+		Expect(route.LinkIndex).To(Equal(link.Attrs().Index))
+	}
 }

@@ -29,9 +29,9 @@ func EnsureChain(ipt *iptables.IPTables, table, chain string) error {
 	if ipt == nil {
 		return errors.New("failed to ensure iptable chain: IPTables was nil")
 	}
-	exists, err := ChainExists(ipt, table, chain)
+	exists, err := ipt.ChainExists(table, chain)
 	if err != nil {
-		return fmt.Errorf("failed to list iptables chains: %v", err)
+		return fmt.Errorf("failed to check iptables chain existence: %v", err)
 	}
 	if !exists {
 		err = ipt.NewChain(table, chain)
@@ -43,24 +43,6 @@ func EnsureChain(ipt *iptables.IPTables, table, chain string) error {
 		}
 	}
 	return nil
-}
-
-// ChainExists checks whether an iptables chain exists.
-func ChainExists(ipt *iptables.IPTables, table, chain string) (bool, error) {
-	if ipt == nil {
-		return false, errors.New("failed to check iptable chain: IPTables was nil")
-	}
-	chains, err := ipt.ListChains(table)
-	if err != nil {
-		return false, err
-	}
-
-	for _, ch := range chains {
-		if ch == chain {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 // DeleteRule idempotently delete the iptables rule in the specified table/chain.
@@ -133,7 +115,6 @@ func InsertUnique(ipt *iptables.IPTables, table, chain string, prepend bool, rul
 
 	if prepend {
 		return ipt.Insert(table, chain, 1, rule...)
-	} else {
-		return ipt.Append(table, chain, rule...)
 	}
+	return ipt.Append(table, chain, rule...)
 }

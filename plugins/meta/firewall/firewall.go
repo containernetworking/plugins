@@ -26,7 +26,6 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
@@ -117,12 +116,12 @@ func getBackend(conf *FirewallNetConf) (FirewallBackend, error) {
 	case "iptables":
 		return newIptablesBackend(conf)
 	case "firewalld":
-		return newFirewalldBackend(conf)
+		return newFirewalldBackend()
 	}
 
 	// Default to firewalld if it's running
 	if isFirewalldRunning() {
-		return newFirewalldBackend(conf)
+		return newFirewalldBackend()
 	}
 
 	// Otherwise iptables
@@ -176,11 +175,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if err := teardownIngressPolicy(conf, result); err != nil {
-		return err
-	}
-
-	return nil
+	return teardownIngressPolicy(conf)
 }
 
 func main() {
@@ -203,9 +198,5 @@ func cmdCheck(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if err := backend.Check(conf, result); err != nil {
-		return err
-	}
-
-	return nil
+	return backend.Check(conf, result)
 }

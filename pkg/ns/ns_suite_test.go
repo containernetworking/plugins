@@ -15,18 +15,14 @@
 package ns_test
 
 import (
-	"math/rand"
 	"runtime"
-
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
-	. "github.com/onsi/gomega"
-
 	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 func TestNs(t *testing.T) {
-	rand.Seed(config.GinkgoConfig.RandomSeed)
 	runtime.LockOSThread()
 
 	RegisterFailHandler(Fail)

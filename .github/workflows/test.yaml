@@ -1,23 +1,42 @@
 ---
 name: test
 
-on: ["push", "pull_request"]
+on:
+  pull_request: {}
 
 env:
-  GO_VERSION: "1.18"
+  # be sure to update the version in release.yaml too
+  GO_VERSION: "1.22"
   LINUX_ARCHES: "amd64 386 arm arm64 s390x mips64le ppc64le riscv64"
 
 jobs:
-  build:
-    name: Build all linux architectures
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: setup go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-      - uses: actions/checkout@v2
-
+      - uses: ibiqlik/action-yamllint@v3
+        with:
+          format: auto
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.55.2
+          args: -v
+          skip-cache: true
+  build:
+    name: Build all linux architectures
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
       - name: Build on all supported architectures
         run: |
           set -e
@@ -26,9 +45,9 @@ jobs:
             GOARCH=$arch ./build_linux.sh
             rm bin/*
           done
-
   test-linux:
     name: Run tests on Linux amd64
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Install kernel module
@@ -37,24 +56,21 @@ jobs:
           sudo apt-get install linux-modules-extra-$(uname -r)
       - name: Install nftables
         run: sudo apt-get install nftables
-
+      - uses: actions/checkout@v4
       - name: setup go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Set up Go for root
         run: |
           sudo ln -sf `which go` `sudo which go` || true
           sudo go version
-      - uses: actions/checkout@v2
 
       - name: Install test binaries
-        env:
-          GO111MODULE: off
         run: |
-          go get github.com/containernetworking/cni/cnitool
-          go get github.com/mattn/goveralls
-          go get github.com/modocache/gover
+          go install github.com/containernetworking/cni/cnitool@latest
+          go install github.com/mattn/goveralls@latest
+          go install github.com/modocache/gover@latest
 
       - name: test
         run: PATH=$PATH:$(go env GOPATH)/bin COVERALLS=1 ./test_linux.sh
@@ -66,15 +82,15 @@ jobs:
           PATH=$PATH:$(go env GOPATH)/bin
           gover
           goveralls -coverprofile=gover.coverprofile -service=github
-
   test-win:
     name: Build and run tests on Windows
+    needs: build
     runs-on: windows-latest
     steps:
+      - uses: actions/checkout@v4
       - name: setup go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-      - uses: actions/checkout@v2
       - name: test
         run: bash ./test_windows.sh

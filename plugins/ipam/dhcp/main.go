@@ -118,27 +118,20 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 func cmdDel(args *skel.CmdArgs) error {
 	result := struct{}{}
-	if err := rpcCall("DHCP.Release", args, &result); err != nil {
-		return err
-	}
-	return nil
+	return rpcCall("DHCP.Release", args, &result)
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
 	// Plugin must return result in same version as specified in netconf
 	versionDecoder := &version.ConfigDecoder{}
-	//confVersion, err := versionDecoder.Decode(args.StdinData)
+	// confVersion, err := versionDecoder.Decode(args.StdinData)
 	_, err := versionDecoder.Decode(args.StdinData)
 	if err != nil {
 		return err
 	}
 
 	result := &current.Result{CNIVersion: current.ImplementedSpecVersion}
-	if err := rpcCall("DHCP.Allocate", args, result); err != nil {
-		return err
-	}
-
-	return nil
+	return rpcCall("DHCP.Allocate", args, result)
 }
 
 func getSocketPath(stdinData []byte) (string, error) {

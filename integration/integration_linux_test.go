@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,21 +14,21 @@
 package integration_test
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"log"
 	"math/rand"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-
-	"bytes"
-	"io"
-	"net"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
@@ -61,6 +61,13 @@ var _ = Describe("Basic PTP using cnitool", func() {
 			netConfPath, err := filepath.Abs("./testdata")
 			Expect(err).NotTo(HaveOccurred())
 
+			// Flush ipam stores to avoid conflicts
+			err = os.RemoveAll("/tmp/chained-ptp-bandwidth-test")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = os.RemoveAll("/tmp/basic-ptp-test")
+			Expect(err).NotTo(HaveOccurred())
+
 			env = TestEnv([]string{
 				"CNI_PATH=" + cniPath,
 				"NETCONFPATH=" + netConfPath,
@@ -83,6 +90,7 @@ var _ = Describe("Basic PTP using cnitool", func() {
 			env.runInNS(hostNS, cnitoolBin, "add", netName, contNS.LongName())
 
 			addrOutput := env.runInNS(contNS, "ip", "addr")
+
 			Expect(addrOutput).To(ContainSubstring(expectedIPPrefix))
 
 			env.runInNS(hostNS, cnitoolBin, "del", netName, contNS.LongName())
@@ -146,10 +154,14 @@ var _ = Describe("Basic PTP using cnitool", func() {
 
 			chainedBridgeBandwidthEnv.runInNS(hostNS, cnitoolBin, "del", "network-chain-test", contNS1.LongName())
 			basicBridgeEnv.runInNS(hostNS, cnitoolBin, "del", "network-chain-test", contNS2.LongName())
+
+			contNS1.Del()
+			contNS2.Del()
+			hostNS.Del()
 		})
 
-		Measure("limits traffic only on the restricted bandwith veth device", func(b Benchmarker) {
-			ipRegexp := regexp.MustCompile("10\\.1[12]\\.2\\.\\d{1,3}")
+		It("limits traffic only on the restricted bandwidth veth device", func() {
+			ipRegexp := regexp.MustCompile(`10\.1[12]\.2\.\d{1,3}`)
 
 			By(fmt.Sprintf("adding %s to %s\n\n", "chained-bridge-bandwidth", contNS1.ShortName()))
 			chainedBridgeBandwidthEnv.runInNS(hostNS, cnitoolBin, "add", "network-chain-test", contNS1.LongName())
@@ -162,31 +174,30 @@ var _ = Describe("Basic PTP using cnitool", func() {
 			Expect(basicBridgeIP).To(ContainSubstring("10.11.2."))
 
 			var chainedBridgeBandwidthPort, basicBridgePort int
-			var err error
 
 			By(fmt.Sprintf("starting echo server in %s\n\n", contNS1.ShortName()))
-			chainedBridgeBandwidthPort, chainedBridgeBandwidthSession, err = startEchoServerInNamespace(contNS1)
-			Expect(err).ToNot(HaveOccurred())
+			chainedBridgeBandwidthPort, chainedBridgeBandwidthSession = startEchoServerInNamespace(contNS1)
 
 			By(fmt.Sprintf("starting echo server in %s\n\n", contNS2.ShortName()))
-			basicBridgePort, basicBridgeSession, err = startEchoServerInNamespace(contNS2)
-			Expect(err).ToNot(HaveOccurred())
+			basicBridgePort, basicBridgeSession = startEchoServerInNamespace(contNS2)
 
-			packetInBytes := 20000 // The shaper needs to 'warm'. Send enough to cause it to throttle,
-			// balanced by run time.
+			packetInBytes := 3000
 
 			By(fmt.Sprintf("sending tcp traffic to the chained, bridged, traffic shaped container on ip address '%s:%d'\n\n", chainedBridgeIP, chainedBridgeBandwidthPort))
-			runtimeWithLimit := b.Time("with chained bridge and bandwidth plugins", func() {
-				makeTcpClientInNS(hostNS.ShortName(), chainedBridgeIP, chainedBridgeBandwidthPort, packetInBytes)
-			})
+			start := time.Now()
+			makeTCPClientInNS(hostNS.ShortName(), chainedBridgeIP, chainedBridgeBandwidthPort, packetInBytes)
+			runtimeWithLimit := time.Since(start)
+
+			log.Printf("Runtime with qos limit %.2f seconds", runtimeWithLimit.Seconds())
 
 			By(fmt.Sprintf("sending tcp traffic to the basic bridged container on ip address '%s:%d'\n\n", basicBridgeIP, basicBridgePort))
-			runtimeWithoutLimit := b.Time("with basic bridged plugin", func() {
-				makeTcpClientInNS(hostNS.ShortName(), basicBridgeIP, basicBridgePort, packetInBytes)
-			})
+			start = time.Now()
+			makeTCPClientInNS(hostNS.ShortName(), basicBridgeIP, basicBridgePort, packetInBytes)
+			runtimeWithoutLimit := time.Since(start)
+			log.Printf("Runtime without qos limit %.2f seconds", runtimeWithLimit.Seconds())
 
 			Expect(runtimeWithLimit).To(BeNumerically(">", runtimeWithoutLimit+1000*time.Millisecond))
-		}, 1)
+		})
 	})
 })
 
@@ -224,7 +235,7 @@ func (n Namespace) Del() {
 	(TestEnv{}).run("ip", "netns", "del", string(n))
 }
 
-func makeTcpClientInNS(netns string, address string, port int, numBytes int) {
+func makeTCPClientInNS(netns string, address string, port int, numBytes int) {
 	payload := bytes.Repeat([]byte{'a'}, numBytes)
 	message := string(payload)
 
@@ -243,7 +254,7 @@ func makeTcpClientInNS(netns string, address string, port int, numBytes int) {
 	Expect(string(out)).To(Equal(message))
 }
 
-func startEchoServerInNamespace(netNS Namespace) (int, *gexec.Session, error) {
+func startEchoServerInNamespace(netNS Namespace) (int, *gexec.Session) {
 	session, err := startInNetNS(echoServerBinaryPath, netNS)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -260,7 +271,7 @@ func startEchoServerInNamespace(netNS Namespace) (int, *gexec.Session, error) {
 		io.Copy(GinkgoWriter, io.MultiReader(session.Out, session.Err))
 	}()
 
-	return port, session, nil
+	return port, session
 }
 
 func startInNetNS(binPath string, namespace Namespace) (*gexec.Session, error) {

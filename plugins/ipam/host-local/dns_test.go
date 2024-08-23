@@ -15,12 +15,12 @@
 package main
 
 import (
-	"io/ioutil"
 	"os"
 
-	"github.com/containernetworking/cni/pkg/types"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/containernetworking/cni/pkg/types"
 )
 
 var _ = Describe("parsing resolv.conf", func() {
@@ -64,7 +64,7 @@ options four
 })
 
 func parse(contents string) (*types.DNS, error) {
-	f, err := ioutil.TempFile("", "host_local_resolv")
+	f, err := os.CreateTemp("", "host_local_resolv")
 	if err != nil {
 		return nil, err
 	}

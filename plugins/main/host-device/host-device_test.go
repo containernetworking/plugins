@@ -17,12 +17,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
 	"path"
 	"strings"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -31,10 +34,6 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"github.com/vishvananda/netlink"
 )
 
 type Net struct {
@@ -87,14 +86,14 @@ func canonicalizeIP(ip *net.IP) error {
 // LoadIPAMConfig creates IPAMConfig using json encoded configuration provided
 // as `bytes`. At the moment values provided in envArgs are ignored so there
 // is no possibility to overload the json configuration using envArgs
-func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
+func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, error) {
 	n := Net{}
 	if err := json.Unmarshal(bytes, &n); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	if n.IPAM == nil {
-		return nil, "", fmt.Errorf("IPAM config missing 'ipam' key")
+		return nil, fmt.Errorf("IPAM config missing 'ipam' key")
 	}
 
 	// Validate all ranges
@@ -104,13 +103,13 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	for i := range n.IPAM.Addresses {
 		ip, addr, err := net.ParseCIDR(n.IPAM.Addresses[i].AddressStr)
 		if err != nil {
-			return nil, "", fmt.Errorf("invalid CIDR %s: %s", n.IPAM.Addresses[i].AddressStr, err)
+			return nil, fmt.Errorf("invalid CIDR %s: %s", n.IPAM.Addresses[i].AddressStr, err)
 		}
 		n.IPAM.Addresses[i].Address = *addr
 		n.IPAM.Addresses[i].Address.IP = ip
 
 		if err := canonicalizeIP(&n.IPAM.Addresses[i].Address.IP); err != nil {
-			return nil, "", fmt.Errorf("invalid address %d: %s", i, err)
+			return nil, fmt.Errorf("invalid address %d: %s", i, err)
 		}
 
 		if n.IPAM.Addresses[i].Address.IP.To4() != nil {
@@ -124,7 +123,7 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 		e := IPAMEnvArgs{}
 		err := types.LoadArgs(envArgs, &e)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 
 		if e.IP != "" {
@@ -133,7 +132,7 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 
 				ip, subnet, err := net.ParseCIDR(ipstr)
 				if err != nil {
-					return nil, "", fmt.Errorf("invalid CIDR %s: %s", ipstr, err)
+					return nil, fmt.Errorf("invalid CIDR %s: %s", ipstr, err)
 				}
 
 				addr := Address{Address: net.IPNet{IP: ip, Mask: subnet.Mask}}
@@ -150,7 +149,7 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 			for _, item := range strings.Split(string(e.GATEWAY), ",") {
 				gwip := net.ParseIP(strings.TrimSpace(item))
 				if gwip == nil {
-					return nil, "", fmt.Errorf("invalid gateway address: %s", item)
+					return nil, fmt.Errorf("invalid gateway address: %s", item)
 				}
 
 				for i := range n.IPAM.Addresses {
@@ -165,14 +164,14 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	// CNI spec 0.2.0 and below supported only one v4 and v6 address
 	if numV4 > 1 || numV6 > 1 {
 		if ok, _ := version.GreaterThanOrEqualTo(n.CNIVersion, "0.3.0"); !ok {
-			return nil, "", fmt.Errorf("CNI version %v does not support more than 1 address per family", n.CNIVersion)
+			return nil, fmt.Errorf("CNI version %v does not support more than 1 address per family", n.CNIVersion)
 		}
 	}
 
 	// Copy net name into IPAM so not to drag Net struct around
 	n.IPAM.Name = n.Name
 
-	return n.IPAM, n.CNIVersion, nil
+	return n.IPAM, nil
 }
 
 func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result) (*Net, error) {
@@ -215,7 +214,6 @@ func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result)
 	}
 
 	return conf, nil
-
 }
 
 type tester interface {
@@ -225,9 +223,11 @@ type tester interface {
 
 type testerBase struct{}
 
-type testerV10x testerBase
-type testerV04x testerBase
-type testerV03x testerBase
+type (
+	testerV10x testerBase
+	testerV04x testerBase
+	testerV03x testerBase
+)
 
 func newTesterByVersion(version string) tester {
 	switch {
@@ -260,8 +260,8 @@ func (t *testerV10x) expectDpdkInterfaceIP(result types.Result, ipAddress string
 	// check that the result was sane
 	res, err := types100.NewResultFromResult(result)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(len(res.Interfaces)).To(Equal(0))
-	Expect(len(res.IPs)).To(Equal(1))
+	Expect(res.Interfaces).To(BeEmpty())
+	Expect(res.IPs).To(HaveLen(1))
 	Expect(res.IPs[0].Address.String()).To(Equal(ipAddress))
 }
 
@@ -282,8 +282,8 @@ func (t *testerV04x) expectDpdkInterfaceIP(result types.Result, ipAddress string
 	// check that the result was sane
 	res, err := types040.NewResultFromResult(result)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(len(res.Interfaces)).To(Equal(0))
-	Expect(len(res.IPs)).To(Equal(1))
+	Expect(res.Interfaces).To(BeEmpty())
+	Expect(res.IPs).To(HaveLen(1))
 	Expect(res.IPs[0].Address.String()).To(Equal(ipAddress))
 }
 
@@ -304,8 +304,8 @@ func (t *testerV03x) expectDpdkInterfaceIP(result types.Result, ipAddress string
 	// check that the result was sane
 	res, err := types040.NewResultFromResult(result)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(len(res.Interfaces)).To(Equal(0))
-	Expect(len(res.IPs)).To(Equal(1))
+	Expect(res.Interfaces).To(BeEmpty())
+	Expect(res.IPs).To(HaveLen(1))
 	Expect(res.IPs[0].Address.String()).To(Equal(ipAddress))
 }
 
@@ -665,11 +665,11 @@ var _ = Describe("base functionality", func() {
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 
-				//get the IP address of the interface in the target namespace
+				// get the IP address of the interface in the target namespace
 				addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 				Expect(err).NotTo(HaveOccurred())
 				addr := addrs[0].IPNet.String()
-				//assert that IP address is what we set
+				// assert that IP address is what we set
 				Expect(addr).To(Equal(targetIP))
 
 				return nil
@@ -712,7 +712,6 @@ var _ = Describe("base functionality", func() {
 			}
 			_, _, err := testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
 			Expect(err).To(MatchError(`specify either "device", "hwaddr", "kernelpath" or "pciBusID"`))
-
 		})
 
 		It(fmt.Sprintf("[%s] works with a valid config without IPAM", ver), func() {
@@ -869,7 +868,7 @@ var _ = Describe("base functionality", func() {
 			err = json.Unmarshal([]byte(conf), &n)
 			Expect(err).NotTo(HaveOccurred())
 
-			n.IPAM, _, err = LoadIPAMConfig([]byte(conf), "")
+			n.IPAM, err = LoadIPAMConfig([]byte(conf), "")
 			Expect(err).NotTo(HaveOccurred())
 
 			if testutils.SpecVersionHasCHECK(ver) {
@@ -887,6 +886,71 @@ var _ = Describe("base functionality", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 			}
+
+			// call CmdDel
+			_ = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				err = testutils.CmdDelWithArgs(args, func() error {
+					return cmdDel(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+				return nil
+			})
+		})
+
+		It(fmt.Sprintf("Works with a valid %s config on auxiliary device", ver), func() {
+			var origLink netlink.Link
+			ifname := "eth0"
+
+			fs := &fakeFilesystem{
+				dirs: []string{
+					fmt.Sprintf("sys/bus/auxiliary/devices/mlx5_core.sf.4/net/%s", ifname),
+				},
+			}
+			defer fs.use()()
+
+			// prepare ifname in original namespace
+			_ = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				err := netlink.LinkAdd(&netlink.Dummy{
+					LinkAttrs: netlink.LinkAttrs{
+						Name: ifname,
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+				origLink, err = netlink.LinkByName(ifname)
+				Expect(err).NotTo(HaveOccurred())
+				err = netlink.LinkSetUp(origLink)
+				Expect(err).NotTo(HaveOccurred())
+				return nil
+			})
+
+			// call CmdAdd
+			cniName := "net1"
+			conf := fmt.Sprintf(`{
+							"cniVersion": "%s",
+							"name": "cni-plugin-host-device-test",
+							"type": "host-device",
+							"runtimeConfig": {"deviceID": %q}
+						}`, ver, "mlx5_core.sf.4")
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				IfName:      cniName,
+				Netns:       targetNS.Path(),
+				StdinData:   []byte(conf),
+			}
+			var resI types.Result
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				var err error
+				resI, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+				return err
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// check that the result was sane
+			t := newTesterByVersion(ver)
+			t.expectInterfaces(resI, cniName, origLink.Attrs().HardwareAddr.String(), targetNS.Path())
 
 			// call CmdDel
 			_ = originalNS.Do(func(ns.NetNS) error {
@@ -962,11 +1026,11 @@ var _ = Describe("base functionality", func() {
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 
-				//get the IP address of the interface in the target namespace
+				// get the IP address of the interface in the target namespace
 				addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 				Expect(err).NotTo(HaveOccurred())
 				addr := addrs[0].IPNet.String()
-				//assert that IP address is what we set
+				// assert that IP address is what we set
 				Expect(addr).To(Equal(targetIP))
 
 				return nil
@@ -985,7 +1049,7 @@ var _ = Describe("base functionality", func() {
 			err = json.Unmarshal([]byte(conf), &n)
 			Expect(err).NotTo(HaveOccurred())
 
-			n.IPAM, _, err = LoadIPAMConfig([]byte(conf), "")
+			n.IPAM, err = LoadIPAMConfig([]byte(conf), "")
 			Expect(err).NotTo(HaveOccurred())
 
 			if testutils.SpecVersionHasCHECK(ver) {
@@ -1150,6 +1214,114 @@ var _ = Describe("base functionality", func() {
 				return nil
 			})
 		})
+
+		It(fmt.Sprintf("Test CmdAdd/Del when additioinal interface alreay exists in container ns with same name. %s config", ver), func() {
+			var (
+				origLink      netlink.Link
+				containerLink netlink.Link
+			)
+
+			hostIfname := "eth0"
+			containerAdditionalIfname := "eth0"
+
+			// prepare host device in original namespace
+			_ = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				err := netlink.LinkAdd(&netlink.Dummy{
+					LinkAttrs: netlink.LinkAttrs{
+						Name: hostIfname,
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+				origLink, err = netlink.LinkByName(hostIfname)
+				Expect(err).NotTo(HaveOccurred())
+				err = netlink.LinkSetUp(origLink)
+				Expect(err).NotTo(HaveOccurred())
+				return nil
+			})
+
+			// prepare device in container namespace with same name as host device
+			_ = targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				err := netlink.LinkAdd(&netlink.Dummy{
+					LinkAttrs: netlink.LinkAttrs{
+						Name: containerAdditionalIfname,
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+				containerLink, err = netlink.LinkByName(containerAdditionalIfname)
+				Expect(err).NotTo(HaveOccurred())
+				err = netlink.LinkSetUp(containerLink)
+				Expect(err).NotTo(HaveOccurred())
+				return nil
+			})
+
+			// call CmdAdd
+			cniName := "net1"
+			conf := fmt.Sprintf(`{
+				"cniVersion": "%s",
+				"name": "cni-plugin-host-device-test",
+				"type": "host-device",
+				"device": %q
+			}`, ver, hostIfname)
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNS.Path(),
+				IfName:      cniName,
+				StdinData:   []byte(conf),
+			}
+			var resI types.Result
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				var err error
+				resI, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+				return err
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// check that the result was sane
+			t := newTesterByVersion(ver)
+			t.expectInterfaces(resI, cniName, origLink.Attrs().HardwareAddr.String(), targetNS.Path())
+
+			// assert that host device is now in the target namespace and is up
+			_ = targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				link, err := netlink.LinkByName(cniName)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
+				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
+				return nil
+			})
+
+			// call CmdDel, expect it to succeed
+			_ = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				err = testutils.CmdDelWithArgs(args, func() error {
+					return cmdDel(args)
+				})
+				Expect(err).ToNot(HaveOccurred())
+				return nil
+			})
+
+			// assert container interface "eth0" still exists in target namespace and is up
+			err = targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				link, err := netlink.LinkByName(containerAdditionalIfname)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().HardwareAddr).To(Equal(containerLink.Attrs().HardwareAddr))
+				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// assert that host device is now back in the original namespace
+			_ = originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				_, err := netlink.LinkByName(hostIfname)
+				Expect(err).NotTo(HaveOccurred())
+				return nil
+			})
+		})
 	}
 })
 
@@ -1161,14 +1333,14 @@ type fakeFilesystem struct {
 
 func (fs *fakeFilesystem) use() func() {
 	// create the new fake fs root dir in /tmp/sriov...
-	tmpDir, err := ioutil.TempDir("", "sriov")
+	tmpDir, err := os.MkdirTemp("", "sriov")
 	if err != nil {
 		panic(fmt.Errorf("error creating fake root dir: %s", err.Error()))
 	}
 	fs.rootDir = tmpDir
 
 	for _, dir := range fs.dirs {
-		err := os.MkdirAll(path.Join(fs.rootDir, dir), 0755)
+		err := os.MkdirAll(path.Join(fs.rootDir, dir), 0o755)
 		if err != nil {
 			panic(fmt.Errorf("error creating fake directory: %s", err.Error()))
 		}
@@ -1182,6 +1354,7 @@ func (fs *fakeFilesystem) use() func() {
 	}
 
 	sysBusPCI = path.Join(fs.rootDir, "/sys/bus/pci/devices")
+	sysBusAuxiliary = path.Join(fs.rootDir, "/sys/bus/auxiliary/devices")
 
 	return func() {
 		// remove temporary fake fs

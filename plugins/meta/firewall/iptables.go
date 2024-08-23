@@ -21,9 +21,10 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/coreos/go-iptables/iptables"
+
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/utils"
-	"github.com/coreos/go-iptables/iptables"
 )
 
 func getPrivChainRules(ip string) [][]string {
@@ -73,11 +74,7 @@ func (ib *iptablesBackend) setupChains(ipt *iptables.IPTables) error {
 	}
 
 	// Ensure our admin override chain rule exists in our private chain
-	if err := ensureFirstChainRule(ipt, ib.privChainName, adminRule); err != nil {
-		return err
-	}
-
-	return nil
+	return ensureFirstChainRule(ipt, ib.privChainName, adminRule)
 }
 
 func protoForIP(ip net.IPNet) iptables.Protocol {
@@ -87,7 +84,7 @@ func protoForIP(ip net.IPNet) iptables.Protocol {
 	return iptables.ProtocolIPv6
 }
 
-func (ib *iptablesBackend) addRules(conf *FirewallNetConf, result *current.Result, ipt *iptables.IPTables, proto iptables.Protocol) error {
+func (ib *iptablesBackend) addRules(_ *FirewallNetConf, result *current.Result, ipt *iptables.IPTables, proto iptables.Protocol) error {
 	rules := make([][]string, 0)
 	for _, ip := range result.IPs {
 		if protoForIP(ip.Address) == proto {
@@ -119,22 +116,19 @@ func (ib *iptablesBackend) addRules(conf *FirewallNetConf, result *current.Resul
 	return nil
 }
 
-func (ib *iptablesBackend) delRules(conf *FirewallNetConf, result *current.Result, ipt *iptables.IPTables, proto iptables.Protocol) error {
+func (ib *iptablesBackend) delRules(_ *FirewallNetConf, result *current.Result, ipt *iptables.IPTables, proto iptables.Protocol) {
 	rules := make([][]string, 0)
 	for _, ip := range result.IPs {
 		if protoForIP(ip.Address) == proto {
 			rules = append(rules, getPrivChainRules(ipString(ip.Address))...)
 		}
 	}
-
 	if len(rules) > 0 {
 		cleanupRules(ipt, ib.privChainName, rules)
 	}
-
-	return nil
 }
 
-func (ib *iptablesBackend) checkRules(conf *FirewallNetConf, result *current.Result, ipt *iptables.IPTables, proto iptables.Protocol) error {
+func (ib *iptablesBackend) checkRules(_ *FirewallNetConf, result *current.Result, ipt *iptables.IPTables, proto iptables.Protocol) error {
 	rules := make([][]string, 0)
 	for _, ip := range result.IPs {
 		if protoForIP(ip.Address) == proto {
@@ -142,7 +136,7 @@ func (ib *iptablesBackend) checkRules(conf *FirewallNetConf, result *current.Res
 		}
 	}
 
-	if len(rules) <= 0 {
+	if len(rules) == 0 {
 		return nil
 	}
 
@@ -211,7 +205,6 @@ type iptablesBackend struct {
 	protos         map[iptables.Protocol]*iptables.IPTables
 	privChainName  string
 	adminChainName string
-	ifName         string
 }
 
 // iptablesBackend implements the FirewallBackend interface

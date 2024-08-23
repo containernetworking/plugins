@@ -16,7 +16,7 @@ package sysctl
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -36,7 +36,7 @@ func Sysctl(name string, params ...string) (string, error) {
 
 func getSysctl(name string) (string, error) {
 	fullName := filepath.Join("/proc/sys", toNormalName(name))
-	data, err := ioutil.ReadFile(fullName)
+	data, err := os.ReadFile(fullName)
 	if err != nil {
 		return "", err
 	}
@@ -46,7 +46,7 @@ func getSysctl(name string) (string, error) {
 
 func setSysctl(name, value string) (string, error) {
 	fullName := filepath.Join("/proc/sys", toNormalName(name))
-	if err := ioutil.WriteFile(fullName, []byte(value), 0644); err != nil {
+	if err := os.WriteFile(fullName, []byte(value), 0o644); err != nil {
 		return "", err
 	}
 

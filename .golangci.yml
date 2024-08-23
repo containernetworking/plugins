@@ -1,0 +1,45 @@
+issues:
+  exclude-rules:
+    - linters:
+        - revive
+      text: "don't use ALL_CAPS in Go names; use CamelCase"
+    - linters:
+        - revive
+      text: " and that stutters;"
+    - path: '(.+)_test\.go'
+      text: "dot-imports: should not use dot imports"
+
+linters:
+  disable:
+    - errcheck
+  enable:
+    - contextcheck
+    - durationcheck
+    - gci
+    - ginkgolinter
+    - gocritic
+    - gofumpt
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - nonamedreturns
+    - predeclared
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - wastedassign
+
+linters-settings:
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/containernetworking)
+
+run:
+  skip-dirs:
+    - vendor
+  timeout: 5m

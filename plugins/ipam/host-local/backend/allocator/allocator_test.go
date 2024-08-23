@@ -18,12 +18,12 @@ import (
 	"fmt"
 	"net"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	fakestore "github.com/containernetworking/plugins/plugins/ipam/host-local/backend/testing"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
 type AllocatorTestCase struct {
@@ -77,7 +77,7 @@ func (t AllocatorTestCase) run(idx int) (*current.IPConfig, error) {
 		p = append(p, Range{Subnet: types.IPNet(*subnet)})
 	}
 
-	Expect(p.Canonicalize()).To(BeNil())
+	Expect(p.Canonicalize()).To(Succeed())
 
 	store := fakestore.NewFakeStore(t.ipmap, map[string]net.IP{"rangeid": net.ParseIP(t.lastIP)})
 
@@ -262,7 +262,6 @@ var _ = Describe("host-local ip allocator", func() {
 			res, err = alloc.Get("ID", "eth0", nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Address.String()).To(Equal("192.168.1.3/29"))
-
 		})
 
 		Context("when requesting a specific IP", func() {
@@ -301,7 +300,6 @@ var _ = Describe("host-local ip allocator", func() {
 				Expect(err).To(HaveOccurred())
 			})
 		})
-
 	})
 	Context("when out of ips", func() {
 		It("returns a meaningful error", func() {
@@ -332,7 +330,7 @@ var _ = Describe("host-local ip allocator", func() {
 			}
 			for idx, tc := range testCases {
 				_, err := tc.run(idx)
-				Expect(err).NotTo(BeNil())
+				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(HavePrefix("no IP addresses available in range set"))
 			}
 		})

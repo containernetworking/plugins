@@ -20,11 +20,18 @@
 package nft
 
 import (
+	"context"
+	"time"
+
 	nftconfig "github.com/networkplumbing/go-nft/nft/config"
 	nftexec "github.com/networkplumbing/go-nft/nft/exec"
 )
 
 type Config = nftconfig.Config
+
+const (
+	defaultTimeout = 30 * time.Second
+)
 
 // NewConfig returns a new nftables config structure.
 func NewConfig() *nftconfig.Config {
@@ -34,12 +41,36 @@ func NewConfig() *nftconfig.Config {
 // ReadConfig loads the nftables configuration from the system and
 // returns it as a nftables config structure.
 // The system is expected to have the `nft` executable deployed and nftables enabled in the kernel.
-func ReadConfig() (*Config, error) {
-	return nftexec.ReadConfig()
+func ReadConfig(filterCommands ...string) (*Config, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+	return ReadConfigContext(ctx, filterCommands...)
+}
+
+// ReadConfigContext loads the nftables configuration from the system and
+// returns it as a nftables config structure.
+// The system is expected to have the `nft` executable deployed and nftables enabled in the kernel.
+func ReadConfigContext(ctx context.Context, filterCommands ...string) (*Config, error) {
+	return nftexec.ReadConfig(ctx, filterCommands...)
 }
 
 // ApplyConfig applies the given nftables config on the system.
 // The system is expected to have the `nft` executable deployed and nftables enabled in the kernel.
 func ApplyConfig(c *Config) error {
-	return nftexec.ApplyConfig(c)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+	return ApplyConfigContext(ctx, c)
+}
+
+// ApplyConfigContext applies the given nftables config on the system.
+// The system is expected to have the `nft` executable deployed and nftables enabled in the kernel.
+func ApplyConfigContext(ctx context.Context, c *Config) error {
+	return nftexec.ApplyConfig(ctx, c)
+}
+
+// ApplyConfigEcho applies the given nftables config on the system, echoing
+// back the added elements with their assigned handles
+// The system is expected to have the `nft` executable deployed and nftables enabled in the kernel.
+func ApplyConfigEcho(ctx context.Context, c *Config) (*Config, error) {
+	return nftexec.ApplyConfigEcho(ctx, c)
 }

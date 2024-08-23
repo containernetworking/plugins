@@ -16,9 +16,9 @@ package link_test
 
 import (
 	"fmt"
-	"github.com/networkplumbing/go-nft/nft"
 
-	. "github.com/onsi/ginkgo"
+	"github.com/networkplumbing/go-nft/nft"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/containernetworking/plugins/pkg/link"
@@ -113,13 +113,32 @@ var _ = Describe("spoofcheck", func() {
 			)))
 		})
 	})
+
+	Context("echo", func() {
+		It("succeeds, no read called", func() {
+			c := configurerStub{}
+			sc := link.NewSpoofCheckerWithConfigurer(iface, mac, id, &c)
+			Expect(sc.Setup()).To(Succeed())
+			Expect(sc.Teardown()).To(Succeed())
+			Expect(c.readCalled).To(BeFalse())
+		})
+
+		It("succeeds, fall back to config read", func() {
+			c := configurerStub{applyReturnNil: true}
+			sc := link.NewSpoofCheckerWithConfigurer(iface, mac, id, &c)
+			Expect(sc.Setup()).To(Succeed())
+			c.readConfig = c.applyConfig[0]
+			Expect(sc.Teardown()).To(Succeed())
+			Expect(c.readCalled).To(BeTrue())
+		})
+	})
 })
 
 func assertExpectedRegularChainsDeletionInTeardownConfig(action configurerStub) {
-	deleteRegularChainRulesJsonConfig, err := action.applyConfig[1].ToJSON()
+	deleteRegularChainRulesJSONConfig, err := action.applyConfig[1].ToJSON()
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-	expectedDeleteRegularChainRulesJsonConfig := `
+	expectedDeleteRegularChainRulesJSONConfig := `
 			{"nftables": [
 				{"delete": {"chain": {
 					"family": "bridge",
@@ -133,14 +152,14 @@ func assertExpectedRegularChainsDeletionInTeardownConfig(action configurerStub) 
 				}}}
 			]}`
 
-	ExpectWithOffset(1, string(deleteRegularChainRulesJsonConfig)).To(MatchJSON(expectedDeleteRegularChainRulesJsonConfig))
+	ExpectWithOffset(1, string(deleteRegularChainRulesJSONConfig)).To(MatchJSON(expectedDeleteRegularChainRulesJSONConfig))
 }
 
 func assertExpectedBaseChainRuleDeletionInTeardownConfig(action configurerStub) {
-	deleteBaseChainRuleJsonConfig, err := action.applyConfig[0].ToJSON()
+	deleteBaseChainRuleJSONConfig, err := action.applyConfig[0].ToJSON()
 	Expect(err).NotTo(HaveOccurred())
 
-	expectedDeleteIfaceMatchRuleJsonConfig := `
+	expectedDeleteIfaceMatchRuleJSONConfig := `
             {"nftables": [
 				{"delete": {"rule": {
 					"family": "bridge",
@@ -157,7 +176,7 @@ func assertExpectedBaseChainRuleDeletionInTeardownConfig(action configurerStub) 
 					"comment": "macspoofchk-container99-net1"
 				}}}
 			]}`
-	Expect(string(deleteBaseChainRuleJsonConfig)).To(MatchJSON(expectedDeleteIfaceMatchRuleJsonConfig))
+	Expect(string(deleteBaseChainRuleJSONConfig)).To(MatchJSON(expectedDeleteIfaceMatchRuleJSONConfig))
 }
 
 func rowConfigWithRulesOnly() string {
@@ -254,7 +273,6 @@ func assertExpectedRulesInSetupConfig(c configurerStub) {
                     "comment":"macspoofchk-container99-net1"}},
                 {"rule":{"family":"bridge","table":"nat","chain":"cni-br-iface-container99-net1-mac",
                     "expr":[{"drop":null}],
-                    "index":0,
                     "comment":"macspoofchk-container99-net1"}}
             ]}`
 	ExpectWithOffset(1, string(jsonConfig)).To(MatchJSON(expectedConfig))
@@ -275,21 +293,28 @@ type configurerStub struct {
 	failFirstApplyConfig  bool
 	failSecondApplyConfig bool
 	failReadConfig        bool
+
+	applyReturnNil bool
+	readCalled     bool
 }
 
-func (a *configurerStub) Apply(c *nft.Config) error {
+func (a *configurerStub) Apply(c *nft.Config) (*nft.Config, error) {
 	a.applyCounter++
 	if a.failFirstApplyConfig && a.applyCounter == 1 {
-		return fmt.Errorf(errorFirstApplyText)
+		return nil, fmt.Errorf(errorFirstApplyText)
 	}
 	if a.failSecondApplyConfig && a.applyCounter == 2 {
-		return fmt.Errorf(errorSecondApplyText)
+		return nil, fmt.Errorf(errorSecondApplyText)
 	}
 	a.applyConfig = append(a.applyConfig, c)
-	return nil
+	if a.applyReturnNil {
+		return nil, nil
+	}
+	return c, nil
 }
 
-func (a *configurerStub) Read() (*nft.Config, error) {
+func (a *configurerStub) Read(_ ...string) (*nft.Config, error) {
+	a.readCalled = true
 	if a.failReadConfig {
 		return nil, fmt.Errorf(errorReadText)
 	}

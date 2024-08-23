@@ -21,9 +21,8 @@ package exec
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"os/exec"
 	"strings"
 
@@ -32,17 +31,24 @@ import (
 
 const (
 	cmdBin     = "nft"
+	cmdHandle  = "-a"
+	cmdEcho    = "-e"
 	cmdFile    = "-f"
 	cmdJSON    = "-j"
 	cmdList    = "list"
 	cmdRuleset = "ruleset"
+	cmdStdin   = "-"
 )
 
 // ReadConfig loads the nftables configuration from the system and
 // returns it as a nftables config structure.
 // The system is expected to have the `nft` executable deployed and nftables enabled in the kernel.
-func ReadConfig() (*nftconfig.Config, error) {
-	stdout, err := execCommand(cmdJSON, cmdList, cmdRuleset)
+func ReadConfig(ctx context.Context, filterCommands ...string) (*nftconfig.Config, error) {
+	whatToList := cmdRuleset
+	if len(filterCommands) > 0 {
+		whatToList = strings.Join(filterCommands, " ")
+	}
+	stdout, err := execCommand(ctx, nil, cmdJSON, cmdList, whatToList)
 	if err != nil {
 		return nil, err
 	}
@@ -57,44 +63,58 @@ func ReadConfig() (*nftconfig.Config, error) {
 
 // ApplyConfig applies the given nftables config on the system.
 // The system is expected to have the `nft` executable deployed and nftables enabled in the kernel.
-func ApplyConfig(c *nftconfig.Config) error {
+func ApplyConfig(ctx context.Context, c *nftconfig.Config) error {
 	data, err := c.ToJSON()
 	if err != nil {
 		return err
 	}
 
-	tmpFile, err := ioutil.TempFile(os.TempDir(), "spoofcheck-")
-	if err != nil {
-		return fmt.Errorf("failed to create temporary file: %v", err)
-	}
-	defer os.Remove(tmpFile.Name())
-
-	if _, err = tmpFile.Write(data); err != nil {
-		return fmt.Errorf("failed to write to temporary file: %v", err)
-	}
-
-	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temporary file: %v", err)
-	}
-
-	if _, err := execCommand(cmdJSON, cmdFile, tmpFile.Name()); err != nil {
+	if _, err := execCommand(ctx, data, cmdJSON, cmdFile, cmdStdin); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func execCommand(args ...string) (*bytes.Buffer, error) {
-	cmd := exec.Command(cmdBin, args...)
+// ApplyConfigEcho applies the given nftables config on the system, echoing
+// back the added elements with their assigned handles
+// The system is expected to have the `nft` executable deployed and nftables enabled in the kernel.
+func ApplyConfigEcho(ctx context.Context, c *nftconfig.Config) (*nftconfig.Config, error) {
+	data, err := c.ToJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	stdout, err := execCommand(ctx, data, cmdHandle, cmdEcho, cmdJSON, cmdFile, cmdStdin)
+	if err != nil {
+		return nil, err
+	}
+
+	config := nftconfig.New()
+	if err := config.FromJSON(stdout.Bytes()); err != nil {
+		return nil, fmt.Errorf("failed to parse echo: %v", err)
+	}
+
+	return config, nil
+}
+
+func execCommand(ctx context.Context, input []byte, args ...string) (*bytes.Buffer, error) {
+	cmd := exec.CommandContext(ctx, cmdBin, args...)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
 
+	if input != nil {
+		var stdin bytes.Buffer
+		stdin.Write(input)
+		cmd.Stdin = &stdin
+	}
+
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf(
-			"failed to execute %s %s: %v stdout:'%s' stderr:'%s'",
-			cmd.Path, strings.Join(cmd.Args, " "), err, stdout.String(), stderr.String(),
+			"failed to execute %s %s: %v stdin:'%s' stdout:'%s' stderr:'%s'",
+			cmd.Path, strings.Join(cmd.Args, " "), err, string(input), stdout.String(), stderr.String(),
 		)
 	}
 

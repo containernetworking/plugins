@@ -19,13 +19,13 @@ import (
 	"net"
 	"strings"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/testutils"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("static Operations", func() {
@@ -97,7 +97,7 @@ var _ = Describe("static Operations", func() {
 					Gateway: net.ParseIP("3ffe:ffff:0::1"),
 				},
 			))
-			Expect(len(result.IPs)).To(Equal(2))
+			Expect(result.IPs).To(HaveLen(2))
 
 			Expect(result.Routes).To(Equal([]*types.Route{
 				{Dst: mustCIDR("0.0.0.0/0")},
@@ -206,7 +206,7 @@ var _ = Describe("static Operations", func() {
 					Gateway: net.ParseIP("10.10.0.254"),
 				}))
 
-			Expect(len(result.IPs)).To(Equal(1))
+			Expect(result.IPs).To(HaveLen(1))
 
 			Expect(result.Routes).To(Equal([]*types.Route{
 				{Dst: mustCIDR("0.0.0.0/0")},
@@ -272,7 +272,7 @@ var _ = Describe("static Operations", func() {
 					Gateway: nil,
 				}))
 
-			Expect(len(result.IPs)).To(Equal(2))
+			Expect(result.IPs).To(HaveLen(2))
 
 			// Release the IP
 			err = testutils.CmdDelWithArgs(args, func() error {
@@ -337,7 +337,7 @@ var _ = Describe("static Operations", func() {
 					Address: mustCIDR("3ffe:ffff:0:01ff::1/64"),
 				},
 			))
-			Expect(len(result.IPs)).To(Equal(2))
+			Expect(result.IPs).To(HaveLen(2))
 			Expect(result.Routes).To(Equal([]*types.Route{
 				{Dst: mustCIDR("0.0.0.0/0"), GW: net.ParseIP("10.10.0.254")},
 				{Dst: mustCIDR("3ffe:ffff:0:01ff::1/64"), GW: net.ParseIP("3ffe:ffff:0::1")},
@@ -407,7 +407,7 @@ var _ = Describe("static Operations", func() {
 					Address: mustCIDR("3ffe:ffff:0:01ff::1/64"),
 				},
 			))
-			Expect(len(result.IPs)).To(Equal(2))
+			Expect(result.IPs).To(HaveLen(2))
 			Expect(result.Routes).To(Equal([]*types.Route{
 				{Dst: mustCIDR("0.0.0.0/0"), GW: net.ParseIP("10.10.0.254")},
 				{Dst: mustCIDR("3ffe:ffff:0:01ff::1/64"), GW: net.ParseIP("3ffe:ffff:0::1")},
@@ -482,7 +482,7 @@ var _ = Describe("static Operations", func() {
 					Address: mustCIDR("3ffe:ffff:0:01ff::1/64"),
 				},
 			))
-			Expect(len(result.IPs)).To(Equal(2))
+			Expect(result.IPs).To(HaveLen(2))
 			Expect(result.Routes).To(Equal([]*types.Route{
 				{Dst: mustCIDR("0.0.0.0/0"), GW: net.ParseIP("10.10.0.254")},
 				{Dst: mustCIDR("3ffe:ffff:0:01ff::1/64"), GW: net.ParseIP("3ffe:ffff:0::1")},

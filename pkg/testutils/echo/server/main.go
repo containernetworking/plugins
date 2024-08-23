@@ -1,9 +1,10 @@
 // Echosvr is a simple TCP echo server
 //
 // It prints its listen address on stdout
-//    127.0.0.1:xxxxx
-//  A test should wait for this line, parse it
-//  and may then attempt to connect.
+//
+//	  127.0.0.1:xxxxx
+//	A test should wait for this line, parse it
+//	and may then attempt to connect.
 package main
 
 import (
@@ -43,11 +44,13 @@ func main() {
 	// Start UDP server
 	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%s", port))
 	if err != nil {
-		log.Fatalf("Error from net.ResolveUDPAddr(): %s", err)
+		log.Printf("Error from net.ResolveUDPAddr(): %s", err)
+		return
 	}
 	sock, err := net.ListenUDP("udp", addr)
 	if err != nil {
-		log.Fatalf("Error from ListenUDP(): %s", err)
+		log.Printf("Error from ListenUDP(): %s", err)
+		return
 	}
 	defer sock.Close()
 
@@ -55,10 +58,11 @@ func main() {
 	for {
 		n, addr, err := sock.ReadFrom(buffer)
 		if err != nil {
-			log.Fatalf("Error from ReadFrom(): %s", err)
+			log.Printf("Error from ReadFrom(): %s", err)
+			return
 		}
 		sock.SetWriteDeadline(time.Now().Add(1 * time.Minute))
-		n, err = sock.WriteTo(buffer[0:n], addr)
+		_, err = sock.WriteTo(buffer[0:n], addr)
 		if err != nil {
 			return
 		}

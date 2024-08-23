@@ -31,12 +31,12 @@ import (
 	"log"
 	"net"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-	"golang.org/x/sys/unix"
-
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
@@ -54,6 +54,7 @@ type PortMapConf struct {
 	SNAT                 *bool     `json:"snat,omitempty"`
 	ConditionsV4         *[]string `json:"conditionsV4"`
 	ConditionsV6         *[]string `json:"conditionsV6"`
+	MasqAll              bool      `json:"masqAll,omitempty"`
 	MarkMasqBit          *int      `json:"markMasqBit"`
 	ExternalSetMarkChain *string   `json:"externalSetMarkChain"`
 	RuntimeConfig        struct {
@@ -129,10 +130,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	// We don't need to parse out whether or not we're using v6 or snat,
 	// deletion is idempotent
-	if err := unforwardPorts(netConf); err != nil {
-		return err
-	}
-	return nil
+	return unforwardPorts(netConf)
 }
 
 func main() {

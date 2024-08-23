@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -26,24 +25,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types/100"
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/testutils"
-
-	"github.com/vishvananda/netlink"
-
 	"github.com/d2g/dhcp4"
 	"github.com/d2g/dhcp4server"
 	"github.com/d2g/dhcp4server/leasepool"
 	"github.com/d2g/dhcp4server/leasepool/memorypool"
-
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/cni/pkg/skel"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 )
 
 func getTmpDir() (string, error) {
-	tmpDir, err := ioutil.TempDir(cniDirPrefix, "dhcp")
+	tmpDir, err := os.MkdirTemp(cniDirPrefix, "dhcp")
 	if err == nil {
 		tmpDir = filepath.ToSlash(tmpDir)
 	}
@@ -51,7 +48,7 @@ func getTmpDir() (string, error) {
 	return tmpDir, err
 }
 
-func dhcpServerStart(netns ns.NetNS, leaseIP, serverIP net.IP, numLeases int, stopCh <-chan bool) (*sync.WaitGroup, error) {
+func dhcpServerStart(netns ns.NetNS, numLeases int, stopCh <-chan bool) (*sync.WaitGroup, error) {
 	// Add the expected IP to the pool
 	lp := memorypool.MemoryPool{}
 
@@ -121,7 +118,7 @@ const (
 )
 
 var _ = BeforeSuite(func() {
-	err := os.MkdirAll(cniDirPrefix, 0700)
+	err := os.MkdirAll(cniDirPrefix, 0o700)
 	Expect(err).NotTo(HaveOccurred())
 })
 
@@ -203,7 +200,7 @@ var _ = Describe("DHCP Operations", func() {
 		})
 
 		// Start the DHCP server
-		dhcpServerDone, err = dhcpServerStart(originalNS, net.IPv4(192, 168, 1, 5), serverIP.IP, 1, dhcpServerStopCh)
+		dhcpServerDone, err = dhcpServerStart(originalNS, 1, dhcpServerStopCh)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start the DHCP client daemon
@@ -274,7 +271,7 @@ var _ = Describe("DHCP Operations", func() {
 
 				addResult, err = types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(len(addResult.IPs)).To(Equal(1))
+				Expect(addResult.IPs).To(HaveLen(1))
 				Expect(addResult.IPs[0].Address.String()).To(Equal("192.168.1.5/24"))
 				return nil
 			})
@@ -317,7 +314,7 @@ var _ = Describe("DHCP Operations", func() {
 
 				addResult, err = types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(len(addResult.IPs)).To(Equal(1))
+				Expect(addResult.IPs).To(HaveLen(1))
 				Expect(addResult.IPs[0].Address.String()).To(Equal("192.168.1.5/24"))
 				return nil
 			})
@@ -335,9 +332,17 @@ var _ = Describe("DHCP Operations", func() {
 					started.Done()
 					started.Wait()
 
-					err = originalNS.Do(func(ns.NetNS) error {
+					err := originalNS.Do(func(ns.NetNS) error {
 						return testutils.CmdDelWithArgs(args, func() error {
-							return cmdDel(args)
+							copiedArgs := &skel.CmdArgs{
+								ContainerID: args.ContainerID,
+								Netns:       args.Netns,
+								IfName:      args.IfName,
+								StdinData:   args.StdinData,
+								Path:        args.Path,
+								Args:        args.Args,
+							}
+							return cmdDel(copiedArgs)
 						})
 					})
 					Expect(err).NotTo(HaveOccurred())
@@ -364,7 +369,7 @@ const (
 	contVethName1  string = "eth1"
 )
 
-func dhcpSetupOriginalNS() (chan bool, net.IPNet, string, ns.NetNS, ns.NetNS, error) {
+func dhcpSetupOriginalNS() (chan bool, string, ns.NetNS, ns.NetNS, error) {
 	var originalNS, targetNS ns.NetNS
 	var dhcpServerStopCh chan bool
 	var socketPath string
@@ -384,11 +389,6 @@ func dhcpSetupOriginalNS() (chan bool, net.IPNet, string, ns.NetNS, ns.NetNS, er
 
 	targetNS, err = testutils.NewNS()
 	Expect(err).NotTo(HaveOccurred())
-
-	serverIP := net.IPNet{
-		IP:   net.IPv4(192, 168, 1, 1),
-		Mask: net.IPv4Mask(255, 255, 255, 0),
-	}
 
 	// Use (original) NS
 	err = originalNS.Do(func(ns.NetNS) error {
@@ -484,7 +484,7 @@ func dhcpSetupOriginalNS() (chan bool, net.IPNet, string, ns.NetNS, ns.NetNS, er
 		return nil
 	})
 
-	return dhcpServerStopCh, serverIP, socketPath, originalNS, targetNS, err
+	return dhcpServerStopCh, socketPath, originalNS, targetNS, err
 }
 
 var _ = Describe("DHCP Lease Unavailable Operations", func() {
@@ -494,11 +494,10 @@ var _ = Describe("DHCP Lease Unavailable Operations", func() {
 	var clientCmd *exec.Cmd
 	var socketPath string
 	var tmpDir string
-	var serverIP net.IPNet
 	var err error
 
 	BeforeEach(func() {
-		dhcpServerStopCh, serverIP, socketPath, originalNS, targetNS, err = dhcpSetupOriginalNS()
+		dhcpServerStopCh, socketPath, originalNS, targetNS, err = dhcpSetupOriginalNS()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Move the container side to the container's NS
@@ -518,7 +517,7 @@ var _ = Describe("DHCP Lease Unavailable Operations", func() {
 		})
 
 		// Start the DHCP server
-		dhcpServerDone, err = dhcpServerStart(originalNS, net.IPv4(192, 168, 1, 5), serverIP.IP, 1, dhcpServerStopCh)
+		dhcpServerDone, err = dhcpServerStart(originalNS, 1, dhcpServerStopCh)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start the DHCP client daemon
@@ -597,7 +596,7 @@ var _ = Describe("DHCP Lease Unavailable Operations", func() {
 
 				addResult, err = types100.GetResult(r)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(len(addResult.IPs)).To(Equal(1))
+				Expect(addResult.IPs).To(HaveLen(1))
 				Expect(addResult.IPs[0].Address.String()).To(Equal("192.168.1.5/24"))
 				return nil
 			})

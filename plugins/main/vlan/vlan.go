@@ -26,7 +26,6 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -35,9 +34,10 @@ import (
 
 type NetConf struct {
 	types.NetConf
-	Master string `json:"master"`
-	VlanId int    `json:"vlanId"`
-	MTU    int    `json:"mtu,omitempty"`
+	Master     string `json:"master"`
+	VlanID     int    `json:"vlanId"`
+	MTU        int    `json:"mtu,omitempty"`
+	LinkContNs bool   `json:"linkInContainer,omitempty"`
 }
 
 func init() {
@@ -47,32 +47,47 @@ func init() {
 	runtime.LockOSThread()
 }
 
-func loadConf(bytes []byte) (*NetConf, string, error) {
+func loadConf(args *skel.CmdArgs) (*NetConf, string, error) {
 	n := &NetConf{}
-	if err := json.Unmarshal(bytes, n); err != nil {
+	if err := json.Unmarshal(args.StdinData, n); err != nil {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
 	}
 	if n.Master == "" {
-		return nil, "", fmt.Errorf("\"master\" field is required. It specifies the host interface name to create the VLAN for.")
+		return nil, "", fmt.Errorf("\"master\" field is required. It specifies the host interface name to create the VLAN for")
 	}
-	if n.VlanId < 0 || n.VlanId > 4094 {
-		return nil, "", fmt.Errorf("invalid VLAN ID %d (must be between 0 and 4095 inclusive)", n.VlanId)
+	if n.VlanID < 0 || n.VlanID > 4094 {
+		return nil, "", fmt.Errorf("invalid VLAN ID %d (must be between 0 and 4095 inclusive)", n.VlanID)
 	}
 
 	// check existing and MTU of master interface
-	masterMTU, err := getMTUByName(n.Master)
+	masterMTU, err := getMTUByName(n.Master, args.Netns, n.LinkContNs)
 	if err != nil {
 		return nil, "", err
 	}
 	if n.MTU < 0 || n.MTU > masterMTU {
 		return nil, "", fmt.Errorf("invalid MTU %d, must be [0, master MTU(%d)]", n.MTU, masterMTU)
 	}
-
 	return n, n.CNIVersion, nil
 }
 
-func getMTUByName(ifName string) (int, error) {
-	link, err := netlink.LinkByName(ifName)
+func getMTUByName(ifName string, namespace string, inContainer bool) (int, error) {
+	var link netlink.Link
+	var err error
+	if inContainer {
+		var netns ns.NetNS
+		netns, err = ns.GetNS(namespace)
+		if err != nil {
+			return 0, fmt.Errorf("failed to open netns %q: %v", netns, err)
+		}
+		defer netns.Close()
+
+		err = netns.Do(func(_ ns.NetNS) error {
+			link, err = netlink.LinkByName(ifName)
+			return err
+		})
+	} else {
+		link, err = netlink.LinkByName(ifName)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -82,7 +97,17 @@ func getMTUByName(ifName string) (int, error) {
 func createVlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interface, error) {
 	vlan := &current.Interface{}
 
-	m, err := netlink.LinkByName(conf.Master)
+	var m netlink.Link
+	var err error
+	if conf.LinkContNs {
+		err = netns.Do(func(_ ns.NetNS) error {
+			m, err = netlink.LinkByName(conf.Master)
+			return err
+		})
+	} else {
+		m, err = netlink.LinkByName(conf.Master)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
 	}
@@ -101,10 +126,17 @@ func createVlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interfac
 			ParentIndex: m.Attrs().Index,
 			Namespace:   netlink.NsFd(int(netns.Fd())),
 		},
-		VlanId: conf.VlanId,
+		VlanId: conf.VlanID,
 	}
 
-	if err := netlink.LinkAdd(v); err != nil {
+	if conf.LinkContNs {
+		err = netns.Do(func(_ ns.NetNS) error {
+			return netlink.LinkAdd(v)
+		})
+	} else {
+		err = netlink.LinkAdd(v)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("failed to create vlan: %v", err)
 	}
 
@@ -133,7 +165,7 @@ func createVlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interfac
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
-	n, cniVersion, err := loadConf(args.StdinData)
+	n, cniVersion, err := loadConf(args)
 	if err != nil {
 		return err
 	}
@@ -191,7 +223,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
-	n, _, err := loadConf(args.StdinData)
+	n, _, err := loadConf(args)
 	if err != nil {
 		return err
 	}
@@ -212,7 +244,6 @@ func cmdDel(args *skel.CmdArgs) error {
 		}
 		return err
 	})
-
 	if err != nil {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.
@@ -277,7 +308,15 @@ func cmdCheck(args *skel.CmdArgs) error {
 			contMap.Sandbox, args.Netns)
 	}
 
-	m, err := netlink.LinkByName(conf.Master)
+	if conf.LinkContNs {
+		err = netns.Do(func(_ ns.NetNS) error {
+			_, err = netlink.LinkByName(conf.Master)
+			return err
+		})
+	} else {
+		_, err = netlink.LinkByName(conf.Master)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
 	}
@@ -285,9 +324,8 @@ func cmdCheck(args *skel.CmdArgs) error {
 	//
 	// Check prevResults for ips, routes and dns against values found in the container
 	if err := netns.Do(func(_ ns.NetNS) error {
-
 		// Check interface against values found in the container
-		err := validateCniContainerInterface(contMap, m.Attrs().Index, conf.VlanId, conf.MTU)
+		err := validateCniContainerInterface(contMap, conf.VlanID, conf.MTU)
 		if err != nil {
 			return err
 		}
@@ -309,8 +347,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	return nil
 }
 
-func validateCniContainerInterface(intf current.Interface, masterIndex int, vlanId int, mtu int) error {
-
+func validateCniContainerInterface(intf current.Interface, vlanID int, mtu int) error {
 	var link netlink.Link
 	var err error
 
@@ -331,7 +368,7 @@ func validateCniContainerInterface(intf current.Interface, masterIndex int, vlan
 	}
 
 	// TODO This works when unit testing via cnitool; fails with ./test.sh
-	//if masterIndex != vlan.Attrs().ParentIndex {
+	// if masterIndex != vlan.Attrs().ParentIndex {
 	//   return fmt.Errorf("Container vlan Master %d does not match expected value: %d", vlan.Attrs().ParentIndex, masterIndex)
 	//}
 
@@ -341,9 +378,9 @@ func validateCniContainerInterface(intf current.Interface, masterIndex int, vlan
 		}
 	}
 
-	if vlanId != vlan.VlanId {
+	if vlanID != vlan.VlanId {
 		return fmt.Errorf("Error: Tuning link %s configured promisc is %v, current value is %d",
-			intf.Name, vlanId, vlan.VlanId)
+			intf.Name, vlanID, vlan.VlanId)
 	}
 
 	if mtu != 0 {

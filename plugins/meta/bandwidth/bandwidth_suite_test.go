@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,6 +15,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -24,17 +25,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/containernetworking/plugins/pkg/ns"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
-
 	"github.com/vishvananda/netlink"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/plugins/pkg/ns"
 )
 
-func TestTBF(t *testing.T) {
+func TestHTB(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "plugins/meta/bandwidth")
 }
@@ -67,7 +68,7 @@ func startInNetNS(binPath string, netNS ns.NetNS) (*gexec.Session, error) {
 	return session, err
 }
 
-func startEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session, error) {
+func startEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session) {
 	session, err := startInNetNS(echoServerBinaryPath, netNS)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -84,10 +85,10 @@ func startEchoServerInNamespace(netNS ns.NetNS) (int, *gexec.Session, error) {
 		io.Copy(GinkgoWriter, io.MultiReader(session.Out, session.Err))
 	}()
 
-	return port, session, nil
+	return port, session
 }
 
-func makeTcpClientInNS(netns string, address string, port int, numBytes int) {
+func makeTCPClientInNS(netns string, address string, port int, numBytes int) {
 	payload := bytes.Repeat([]byte{'a'}, numBytes)
 	message := string(payload)
 
@@ -243,4 +244,48 @@ func createMacvlan(netNS ns.NetNS, master, macvlanName string) {
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
+}
+
+func buildOneConfig(cniVersion string, orig *PluginConf, prevResult types.Result) ([]byte, error) {
+	var err error
+
+	inject := map[string]interface{}{
+		"name":       "myBWnet",
+		"cniVersion": cniVersion,
+	}
+	// Add previous plugin result
+	if prevResult != nil {
+		r, err := prevResult.GetAsVersion(cniVersion)
+		Expect(err).NotTo(HaveOccurred())
+		inject["prevResult"] = r
+	}
+
+	// Ensure every config uses the same name and version
+	config := make(map[string]interface{})
+
+	confBytes, err := json.Marshal(orig)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(confBytes, &config)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
+	}
+
+	for key, value := range inject {
+		config[key] = value
+	}
+
+	newBytes, err := json.Marshal(config)
+	if err != nil {
+		return nil, err
+	}
+
+	conf := &PluginConf{}
+	if err := json.Unmarshal(newBytes, &conf); err != nil {
+		return nil, fmt.Errorf("error parsing configuration: %s", err)
+	}
+
+	return newBytes, nil
 }

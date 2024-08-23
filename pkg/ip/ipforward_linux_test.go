@@ -1,17 +1,16 @@
 package ip
 
 import (
-	"io/ioutil"
 	"os"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("IpforwardLinux", func() {
 	It("echo1 must not write the file if content is 1", func() {
-		file, err := ioutil.TempFile(os.TempDir(), "containernetworking")
+		file, err := os.CreateTemp("", "containernetworking")
 		Expect(err).NotTo(HaveOccurred())
 		defer os.Remove(file.Name())
 		err = echo1(file.Name())

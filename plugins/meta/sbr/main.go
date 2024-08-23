@@ -28,7 +28,6 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
@@ -67,7 +66,6 @@ func withLockAndNetNS(nspath string, toRun func(_ ns.NetNS) error) error {
 	}
 
 	err = ns.WithNetNSPath(nspath, toRun)
-
 	if err != nil {
 		return err
 	}
@@ -109,7 +107,6 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 
 // getIPCfgs finds the IPs on the supplied interface, returning as IPConfig structures
 func getIPCfgs(iface string, prevResult *current.Result) ([]*current.IPConfig, error) {
-
 	if len(prevResult.IPs) == 0 {
 		// No IP addresses; that makes no sense. Pack it in.
 		return nil, fmt.Errorf("No IP addresses supplied on interface: %s", iface)
@@ -166,7 +163,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// Do the actual work.
 	err = withLockAndNetNS(args.Netns, func(_ ns.NetNS) error {
-		return doRoutes(ipCfgs, conf.PrevResult.Routes, args.IfName)
+		return doRoutes(ipCfgs, args.IfName)
 	})
 	if err != nil {
 		return err
@@ -205,7 +202,7 @@ func getNextTableID(rules []netlink.Rule, routes []netlink.Route, candidateID in
 }
 
 // doRoutes does all the work to set up routes and rules during an add.
-func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface string) error {
+func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 	// Get a list of rules and routes ready.
 	rules, err := netlink.RuleList(netlink.FAMILY_ALL)
 	if err != nil {
@@ -276,7 +273,8 @@ func doRoutes(ipCfgs []*current.IPConfig, origRoutes []*types.Route, iface strin
 				Dst:       &dest,
 				Gw:        ipCfg.Gateway,
 				Table:     table,
-				LinkIndex: linkIndex}
+				LinkIndex: linkIndex,
+			}
 
 			err = netlink.RouteAdd(&route)
 			if err != nil {
@@ -350,7 +348,6 @@ func cmdDel(args *skel.CmdArgs) error {
 
 // Tidy up the rules for the deleted interface
 func tidyRules(iface string) error {
-
 	// We keep on going on rule deletion error, but return the last failure.
 	var errReturn error
 
@@ -362,6 +359,13 @@ func tidyRules(iface string) error {
 
 	link, err := netlink.LinkByName(iface)
 	if err != nil {
+		// If interface is not found by any reason it's safe to ignore an error. Also, we don't need to raise an error
+		// during cmdDel call according to CNI spec:
+		// https://github.com/containernetworking/cni/blob/main/SPEC.md#del-remove-container-from-network-or-un-apply-modifications
+		_, notFound := err.(netlink.LinkNotFoundError)
+		if notFound {
+			return nil
+		}
 		log.Printf("Failed to get link %s: %v", iface, err)
 		return fmt.Errorf("Failed to get link %s: %v", iface, err)
 	}
@@ -400,6 +404,6 @@ func main() {
 	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("sbr"))
 }
 
-func cmdCheck(args *skel.CmdArgs) error {
+func cmdCheck(_ *skel.CmdArgs) error {
 	return nil
 }

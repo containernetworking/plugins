@@ -17,16 +17,16 @@ package ns_test
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
 
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containernetworking/plugins/pkg/testutils"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"golang.org/x/sys/unix"
+
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 )
 
 func getInodeCurNetNS() (uint64, error) {
@@ -182,7 +182,7 @@ var _ = Describe("Linux namespace operations", func() {
 				testNsInode, err := getInodeNS(targetNetNS)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(testNsInode).NotTo(Equal(0))
+				Expect(testNsInode).NotTo(Equal(uint64(0)))
 				Expect(testNsInode).NotTo(Equal(origNSInode))
 			})
 
@@ -208,7 +208,7 @@ var _ = Describe("Linux namespace operations", func() {
 			})
 
 			It("fails when the path is not a namespace", func() {
-				tempFile, err := ioutil.TempFile("", "nstest")
+				tempFile, err := os.CreateTemp("", "nstest")
 				Expect(err).NotTo(HaveOccurred())
 				defer tempFile.Close()
 
@@ -262,7 +262,7 @@ var _ = Describe("Linux namespace operations", func() {
 		})
 
 		It("should refuse other paths", func() {
-			tempFile, err := ioutil.TempFile("", "nstest")
+			tempFile, err := os.CreateTemp("", "nstest")
 			Expect(err).NotTo(HaveOccurred())
 			defer tempFile.Close()
 

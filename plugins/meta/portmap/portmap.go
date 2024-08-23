@@ -21,10 +21,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/containernetworking/plugins/pkg/utils"
-	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/plugins/pkg/utils"
+	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 )
 
 // This creates the chains to be added to iptables. The basic structure is
@@ -117,11 +118,22 @@ func forwardPorts(config *PortMapConf, containerNet net.IPNet) error {
 }
 
 func checkPorts(config *PortMapConf, containerNet net.IPNet) error {
+	isV6 := (containerNet.IP.To4() == nil)
 	dnatChain := genDnatChain(config.Name, config.ContainerID)
 	fillDnatRules(&dnatChain, config, containerNet)
 
-	ip4t, err4 := maybeGetIptables(false)
-	ip6t, err6 := maybeGetIptables(true)
+	// check is called for each address, not once for all addresses
+	var ip4t *iptables.IPTables
+	var err4 error
+	var ip6t *iptables.IPTables
+	var err6 error
+
+	if isV6 {
+		ip6t, err6 = maybeGetIptables(true)
+	} else {
+		ip4t, err4 = maybeGetIptables(false)
+	}
+
 	if ip4t == nil && ip6t == nil {
 		err := fmt.Errorf("neither iptables nor ip6tables is usable")
 		err = fmt.Errorf("%v, (iptables) %v", err, err4)
@@ -248,13 +260,22 @@ func fillDnatRules(c *chain, config *PortMapConf, containerNet net.IPNet) {
 			hpRule := make([]string, len(ruleBase), len(ruleBase)+4)
 			copy(hpRule, ruleBase)
 
+			masqCIDR := containerNet.String()
+			if config.MasqAll {
+				if isV6 {
+					masqCIDR = "::/0"
+				} else {
+					masqCIDR = "0.0.0.0/0"
+				}
+			}
+
 			hpRule = append(hpRule,
-				"-s", containerNet.String(),
+				"-s", masqCIDR,
 				"-j", setMarkChainName,
 			)
 			c.rules = append(c.rules, hpRule)
 
-			if !isV6 {
+			if !isV6 && !config.MasqAll {
 				// localhost
 				localRule := make([]string, len(ruleBase), len(ruleBase)+4)
 				copy(localRule, ruleBase)
@@ -272,7 +293,7 @@ func fillDnatRules(c *chain, config *PortMapConf, containerNet net.IPNet) {
 		copy(dnatRule, ruleBase)
 		dnatRule = append(dnatRule,
 			"-j", "DNAT",
-			"--to-destination", fmtIpPort(containerNet.IP, entry.ContainerPort),
+			"--to-destination", fmtIPPort(containerNet.IP, entry.ContainerPort),
 		)
 		c.rules = append(c.rules, dnatRule)
 	}

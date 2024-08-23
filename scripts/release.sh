@@ -1,8 +1,9 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 set -xe
 
 SRC_DIR="${SRC_DIR:-$PWD}"
 DOCKER="${DOCKER:-docker}"
+GOLANG="${GOLANG:-golang:1.22-alpine}"
 
 TAG=$(git describe --tags --dirty)
 RELEASE_DIR=release-${TAG}
@@ -16,7 +17,7 @@ rm -Rf ${SRC_DIR}/${RELEASE_DIR}
 mkdir -p ${SRC_DIR}/${RELEASE_DIR}
 mkdir -p ${OUTPUT_DIR}
 
-$DOCKER run -ti -v ${SRC_DIR}:/go/src/github.com/containernetworking/plugins:z --rm golang:1.18-alpine \
+$DOCKER run -ti -v ${SRC_DIR}:/go/src/github.com/containernetworking/plugins:z --rm "${GOLANG}" \
 /bin/sh -xe -c "\
     apk --no-cache add bash tar;
     cd /go/src/github.com/containernetworking/plugins; umask 0022;
