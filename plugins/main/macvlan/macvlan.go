@@ -41,6 +41,7 @@ type NetConf struct {
 	MTU        int    `json:"mtu"`
 	Mac        string `json:"mac,omitempty"`
 	LinkContNs bool   `json:"linkInContainer,omitempty"`
+	BcQueueLen uint32 `json:"bcqueuelen,omitempty"`
 
 	RuntimeConfig struct {
 		Mac string `json:"mac,omitempty"`
@@ -244,6 +245,8 @@ func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Inter
 		LinkAttrs: linkAttrs,
 		Mode:      mode,
 	}
+
+	mv.BCQueueLen = conf.BcQueueLen
 
 	if conf.LinkContNs {
 		err = netns.Do(func(_ ns.NetNS) error {
