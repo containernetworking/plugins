@@ -234,18 +234,18 @@ func (l *DHCPLease) getAllOptions() dhcp4.Options {
 }
 
 func (l *DHCPLease) acquire() error {
+	if (l.link.Attrs().Flags & net.FlagUp) != net.FlagUp {
+		log.Printf("Link %q down. Attempting to set up", l.link.Attrs().Name)
+		if err := netlink.LinkSetUp(l.link); err != nil {
+			return err
+		}
+	}
+
 	c, err := newDHCPClient(l.link, l.timeout, l.broadcast)
 	if err != nil {
 		return err
 	}
 	defer c.Close()
-
-	if (l.link.Attrs().Flags & net.FlagUp) != net.FlagUp {
-		log.Printf("Link %q down. Attempting to set up", l.link.Attrs().Name)
-		if err = netlink.LinkSetUp(l.link); err != nil {
-			return err
-		}
-	}
 
 	opts := l.getAllOptions()
 
