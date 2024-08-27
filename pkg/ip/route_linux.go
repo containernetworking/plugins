@@ -50,3 +50,16 @@ func AddDefaultRoute(gw net.IP, dev netlink.Link) error {
 	}
 	return AddRoute(defNet, gw, dev)
 }
+
+// IsIPNetZero check if the IPNet is "0.0.0.0/0" or "::/0"
+// This is needed as go-netlink replaces nil Dst with a '0' IPNet since
+// https://github.com/vishvananda/netlink/commit/acdc658b8613655ddb69f978e9fb4cf413e2b830
+func IsIPNetZero(ipnet *net.IPNet) bool {
+	if ipnet == nil {
+		return true
+	}
+	if ones, _ := ipnet.Mask.Size(); ones != 0 {
+		return false
+	}
+	return ipnet.IP.Equal(net.IPv4zero) || ipnet.IP.Equal(net.IPv6zero)
+}

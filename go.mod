@@ -1,6 +1,6 @@
 module github.com/containernetworking/plugins
 
-go 1.20
+go 1.21
 
 require (
 	github.com/Microsoft/hcsshim v0.12.4
@@ -19,7 +19,7 @@ require (
 	github.com/onsi/gomega v1.33.1
 	github.com/opencontainers/selinux v1.11.0
 	github.com/safchain/ethtool v0.4.1
-	github.com/vishvananda/netlink v1.2.1-beta.2
+	github.com/vishvananda/netlink v1.3.0
 	golang.org/x/sys v0.21.0
 )
 
