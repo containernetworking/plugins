@@ -291,6 +291,7 @@ var _ = Describe("sbr test", func() {
 		expNet1.Routes = append(expNet1.Routes,
 			netlink.Route{
 				Gw:        net.IPv4(192, 168, 1, 1),
+				Dst:       &net.IPNet{IP: net.IPv4zero, Mask: net.IPMask(net.IPv4zero)},
 				Table:     100,
 				LinkIndex: expNet1.Routes[0].LinkIndex,
 			})
@@ -491,6 +492,7 @@ var _ = Describe("sbr test", func() {
 		}
 		expNet1.Routes = append(expNet1.Routes,
 			netlink.Route{
+				Dst:       &net.IPNet{IP: net.IPv4zero, Mask: net.IPMask(net.IPv4zero)},
 				Gw:        net.IPv4(192, 168, 1, 1),
 				Table:     100,
 				LinkIndex: expNet1.Routes[0].LinkIndex,
@@ -498,6 +500,7 @@ var _ = Describe("sbr test", func() {
 
 		expNet1.Routes = append(expNet1.Routes,
 			netlink.Route{
+				Dst:       &net.IPNet{IP: net.IPv4zero, Mask: net.IPMask(net.IPv4zero)},
 				Gw:        net.IPv4(192, 168, 101, 1),
 				Table:     101,
 				LinkIndex: expNet1.Routes[0].LinkIndex,
