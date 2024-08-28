@@ -433,7 +433,13 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("tuning"))
+	skel.PluginMainFuncs(skel.CNIFuncs{
+		Add:   cmdAdd,
+		Check: cmdCheck,
+		Del:   cmdDel,
+		/* FIXME GC */
+		/* FIXME Status */
+	}, version.All, bv.BuildString("tuning"))
 }
 
 func cmdCheck(args *skel.CmdArgs) error {

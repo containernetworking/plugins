@@ -288,5 +288,11 @@ func cmdCheck(_ *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("win-overlay"))
+	skel.PluginMainFuncs(skel.CNIFuncs{
+		Add:    cmdAdd,
+		Check:  cmdCheck,
+		Del:    cmdDel,
+		/* FIXME GC */
+		/* FIXME Status */
+	}, version.All, bv.BuildString("win-overlay"))
 }

@@ -401,7 +401,13 @@ RULE_LOOP:
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("sbr"))
+	skel.PluginMainFuncs(skel.CNIFuncs{
+		Add:   cmdAdd,
+		Check: cmdCheck,
+		Del:   cmdDel,
+		/* FIXME GC */
+		/* FIXME Status */
+	}, version.All, bv.BuildString("sbr"))
 }
 
 func cmdCheck(_ *skel.CmdArgs) error {

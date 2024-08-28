@@ -6,7 +6,7 @@ require (
 	github.com/Microsoft/hcsshim v0.12.6
 	github.com/alexflint/go-filemutex v1.3.0
 	github.com/buger/jsonparser v1.1.1
-	github.com/containernetworking/cni v1.1.2
+	github.com/containernetworking/cni v1.2.3
 	github.com/coreos/go-iptables v0.8.0
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/d2g/dhcp4 v0.0.0-20170904100407-a1d1b6c41b1c
