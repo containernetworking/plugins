@@ -179,7 +179,13 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.VersionsStartingFrom("0.4.0"), bv.BuildString("firewall"))
+	skel.PluginMainFuncs(skel.CNIFuncs{
+		Add:   cmdAdd,
+		Check: cmdCheck,
+		Del:   cmdDel,
+		/* FIXME GC */
+		/* FIXME Status */
+	}, version.VersionsStartingFrom("0.4.0"), bv.BuildString("firewall"))
 }
 
 func cmdCheck(args *skel.CmdArgs) error {

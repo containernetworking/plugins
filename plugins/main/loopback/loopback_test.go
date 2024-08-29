@@ -74,7 +74,8 @@ var _ = Describe("Loopback", func() {
 				session, err := gexec.Start(command, GinkgoWriter, GinkgoWriter)
 				Expect(err).NotTo(HaveOccurred())
 
-				Eventually(session).Should(gbytes.Say(`{.*}`))
+				// "(?s)" turns on the "s" flag, making "." match newlines too.
+				Eventually(session).Should(gbytes.Say(`(?s){.*}`))
 				Eventually(session).Should(gexec.Exit(0))
 
 				var lo *net.Interface
