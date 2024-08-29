@@ -14,10 +14,10 @@ jobs:
         goarch: [amd64, arm, arm64, mips64le, ppc64le, riscv64, s390x]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # v4.1.7
 
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32  # v5.0.2
         with:
           go-version-file: .github/go-version
 
@@ -50,7 +50,7 @@ jobs:
         run: sha512sum cni-plugins-linux-${{ matrix.goarch }}-${{ github.ref_name }}.tgz | tee cni-plugins-linux-${{ matrix.goarch }}-${{ github.ref_name }}.tgz.sha512
 
       - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2
+        uses: svenstaro/upload-release-action@04733e069f2d7f7f0b4aebc4fbdbce8613b03ccd  # v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ./dist/*
@@ -69,10 +69,10 @@ jobs:
         run: sudo apt-get install dos2unix
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # v4.1.7
 
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32  # v5.0.2
         with:
           go-version-file: .github/go-version
 
@@ -105,7 +105,7 @@ jobs:
         run: sha512sum cni-plugins-windows-${{ matrix.goarch }}-${{ github.ref_name }}.tgz | tee cni-plugins-windows-${{ matrix.goarch }}-${{ github.ref_name }}.tgz.sha512
 
       - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2
+        uses: svenstaro/upload-release-action@04733e069f2d7f7f0b4aebc4fbdbce8613b03ccd  # v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ./dist/*

@@ -1,4 +1,5 @@
 [![test](https://github.com/containernetworking/plugins/actions/workflows/test.yaml/badge.svg)](https://github.com/containernetworking/plugins/actions/workflows/test.yaml?query=branch%3Amaster)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/containernetworking/plugins/badge)](https://securityscorecards.dev/viewer/?uri=github.com/containernetworking/plugins)
 
 # Plugins
 Some CNI network plugins, maintained by the containernetworking team. For more information, see the [CNI website](https://www.cni.dev).
