@@ -119,8 +119,12 @@ func ConfigureIface(ifName string, res *current.Result) error {
 			Gw:        gw,
 		}
 
+		if r.Table != nil {
+			route.Table = *r.Table
+		}
+
 		if err = netlink.RouteAddEcmp(&route); err != nil {
-			return fmt.Errorf("failed to add route '%v via %v dev %v': %v", r.Dst, gw, ifName, err)
+			return fmt.Errorf("failed to add route '%v via %v dev %v (Table: %d)': %v", r.Dst, gw, ifName, route.Table, err)
 		}
 	}
 
