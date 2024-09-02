@@ -91,7 +91,7 @@ type MacEnvArgs struct {
 func parseConf(data []byte, envArgs string) (*TuningConf, error) {
 	conf := TuningConf{Promisc: false}
 	if err := json.Unmarshal(data, &conf); err != nil {
-		return nil, fmt.Errorf("failed to load netconf: %v", err)
+		return nil, fmt.Errorf("failed to load netconf: %w", err)
 	}
 
 	if conf.DataDir == "" {
@@ -151,12 +151,12 @@ func parseConf(data []byte, envArgs string) (*TuningConf, error) {
 func changeMacAddr(ifName string, newMacAddr string) error {
 	addr, err := net.ParseMAC(newMacAddr)
 	if err != nil {
-		return fmt.Errorf("invalid args %v for MAC addr: %v", newMacAddr, err)
+		return fmt.Errorf("invalid args %v for MAC addr: %w", newMacAddr, err)
 	}
 
 	link, err := netlink.LinkByName(ifName)
 	if err != nil {
-		return fmt.Errorf("failed to get %q: %v", ifName, err)
+		return fmt.Errorf("failed to get %q: %w", ifName, err)
 	}
 
 	return netlink.LinkSetHardwareAddr(link, addr)
@@ -182,7 +182,7 @@ func updateResultsMacAddr(config *TuningConf, ifName string, newMacAddr string) 
 func changePromisc(ifName string, val bool) error {
 	link, err := netlink.LinkByName(ifName)
 	if err != nil {
-		return fmt.Errorf("failed to get %q: %v", ifName, err)
+		return fmt.Errorf("failed to get %q: %w", ifName, err)
 	}
 
 	if val {
@@ -194,7 +194,7 @@ func changePromisc(ifName string, val bool) error {
 func changeMtu(ifName string, mtu int) error {
 	link, err := netlink.LinkByName(ifName)
 	if err != nil {
-		return fmt.Errorf("failed to get %q: %v", ifName, err)
+		return fmt.Errorf("failed to get %q: %w", ifName, err)
 	}
 	return netlink.LinkSetMTU(link, mtu)
 }
@@ -202,7 +202,7 @@ func changeMtu(ifName string, mtu int) error {
 func changeAllmulti(ifName string, val bool) error {
 	link, err := netlink.LinkByName(ifName)
 	if err != nil {
-		return fmt.Errorf("failed to get %q: %v", ifName, err)
+		return fmt.Errorf("failed to get %q: %w", ifName, err)
 	}
 
 	if val {
@@ -214,7 +214,7 @@ func changeAllmulti(ifName string, val bool) error {
 func changeTxQLen(ifName string, txQLen int) error {
 	link, err := netlink.LinkByName(ifName)
 	if err != nil {
-		return fmt.Errorf("failed to get %q: %v", ifName, err)
+		return fmt.Errorf("failed to get %q: %w", ifName, err)
 	}
 	return netlink.LinkSetTxQLen(link, txQLen)
 }
@@ -223,7 +223,7 @@ func createBackup(ifName, containerID, backupPath string, tuningConf *TuningConf
 	config := configToRestore{}
 	link, err := netlink.LinkByName(ifName)
 	if err != nil {
-		return fmt.Errorf("failed to get %q: %v", ifName, err)
+		return fmt.Errorf("failed to get %q: %w", ifName, err)
 	}
 	if tuningConf.Mac != "" {
 		config.Mac = link.Attrs().HardwareAddr.String()
@@ -246,16 +246,16 @@ func createBackup(ifName, containerID, backupPath string, tuningConf *TuningConf
 
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
 		if err = os.MkdirAll(backupPath, 0o600); err != nil {
-			return fmt.Errorf("failed to create backup directory: %v", err)
+			return fmt.Errorf("failed to create backup directory: %w", err)
 		}
 	}
 
 	data, err := json.MarshalIndent(config, "", " ")
 	if err != nil {
-		return fmt.Errorf("failed to marshall data for %q: %v", ifName, err)
+		return fmt.Errorf("failed to marshall data for %q: %w", ifName, err)
 	}
 	if err = os.WriteFile(path.Join(backupPath, containerID+"_"+ifName+".json"), data, 0o600); err != nil {
-		return fmt.Errorf("failed to save file %s.json: %v", ifName, err)
+		return fmt.Errorf("failed to save file %s.json: %w", ifName, err)
 	}
 
 	return nil
@@ -271,7 +271,7 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 
 	file, err := os.ReadFile(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to open file %q: %v", filePath, err)
+		return fmt.Errorf("failed to open file %q: %w", filePath, err)
 	}
 
 	config := configToRestore{}
@@ -288,32 +288,32 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 
 	if config.Mtu != 0 {
 		if err = changeMtu(ifName, config.Mtu); err != nil {
-			err = fmt.Errorf("failed to restore MTU: %v", err)
+			err = fmt.Errorf("failed to restore MTU: %w", err)
 			errStr = append(errStr, err.Error())
 		}
 	}
 	if config.Mac != "" {
 		if err = changeMacAddr(ifName, config.Mac); err != nil {
-			err = fmt.Errorf("failed to restore MAC address: %v", err)
+			err = fmt.Errorf("failed to restore MAC address: %w", err)
 			errStr = append(errStr, err.Error())
 		}
 	}
 	if config.Promisc != nil {
 		if err = changePromisc(ifName, *config.Promisc); err != nil {
-			err = fmt.Errorf("failed to restore promiscuous mode: %v", err)
+			err = fmt.Errorf("failed to restore promiscuous mode: %w", err)
 			errStr = append(errStr, err.Error())
 		}
 	}
 	if config.Allmulti != nil {
 		if err = changeAllmulti(ifName, *config.Allmulti); err != nil {
-			err = fmt.Errorf("failed to restore all-multicast mode: %v", err)
+			err = fmt.Errorf("failed to restore all-multicast mode: %w", err)
 			errStr = append(errStr, err.Error())
 		}
 	}
 
 	if config.TxQLen != nil {
 		if err = changeTxQLen(ifName, *config.TxQLen); err != nil {
-			err = fmt.Errorf("failed to restore transmit queue length: %v", err)
+			err = fmt.Errorf("failed to restore transmit queue length: %w", err)
 			errStr = append(errStr, err.Error())
 		}
 	}
@@ -323,7 +323,7 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 	}
 
 	if err = os.Remove(filePath); err != nil {
-		return fmt.Errorf("failed to remove file %v: %v", filePath, err)
+		return fmt.Errorf("failed to remove file %v: %w", filePath, err)
 	}
 
 	return nil

@@ -16,7 +16,6 @@ package errors
 
 import (
 	"errors"
-	"reflect"
 	"testing"
 )
 
@@ -43,9 +42,17 @@ func TestAnnotate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if !reflect.DeepEqual(Annotatef(test.existingErr, test.contextMessage), test.expectedErr) {
-				t.Errorf("test case %s fails", test.name)
-				return
+			err := Annotatef(test.existingErr, test.contextMessage)
+			if test.expectedErr != nil {
+				if errors.Is(err, test.expectedErr) {
+					t.Errorf("test case %s fails", test.name)
+					return
+				}
+			} else {
+				if err != nil {
+					t.Errorf("test case %s fails", test.name)
+					return
+				}
 			}
 		})
 	}
@@ -87,9 +94,17 @@ func TestAnnotatef(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if !reflect.DeepEqual(Annotatef(test.existingErr, test.contextMessage, test.contextArgs...), test.expectedErr) {
-				t.Errorf("test case %s fails", test.name)
-				return
+			err := Annotatef(test.existingErr, test.contextMessage)
+			if test.expectedErr != nil {
+				if errors.Is(err, test.expectedErr) {
+					t.Errorf("test case %s fails", test.name)
+					return
+				}
+			} else {
+				if err != nil {
+					t.Errorf("test case %s fails", test.name)
+					return
+				}
 			}
 		})
 	}

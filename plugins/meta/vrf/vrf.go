@@ -38,7 +38,7 @@ func findVRF(name string) (*netlink.Vrf, error) {
 func createVRF(name string, tableID uint32) (*netlink.Vrf, error) {
 	links, err := netlink.LinkList()
 	if err != nil {
-		return nil, fmt.Errorf("createVRF: Failed to find links %v", err)
+		return nil, fmt.Errorf("createVRF: Failed to find links %w", err)
 	}
 
 	if tableID == 0 {
@@ -57,11 +57,11 @@ func createVRF(name string, tableID uint32) (*netlink.Vrf, error) {
 
 	err = netlink.LinkAdd(vrf)
 	if err != nil {
-		return nil, fmt.Errorf("could not add VRF %s: %v", name, err)
+		return nil, fmt.Errorf("could not add VRF %s: %w", name, err)
 	}
 	err = netlink.LinkSetUp(vrf)
 	if err != nil {
-		return nil, fmt.Errorf("could not set link up for VRF %s: %v", name, err)
+		return nil, fmt.Errorf("could not set link up for VRF %s: %w", name, err)
 	}
 
 	return vrf, nil
@@ -71,7 +71,7 @@ func createVRF(name string, tableID uint32) (*netlink.Vrf, error) {
 func assignedInterfaces(vrf *netlink.Vrf) ([]netlink.Link, error) {
 	links, err := netlink.LinkList()
 	if err != nil {
-		return nil, fmt.Errorf("getAssignedInterfaces: Failed to find links %v", err)
+		return nil, fmt.Errorf("getAssignedInterfaces: Failed to find links %w", err)
 	}
 	res := make([]netlink.Link, 0)
 	for _, l := range links {
@@ -92,7 +92,7 @@ func addInterface(vrf *netlink.Vrf, intf string) error {
 	if i.Attrs().MasterIndex != 0 {
 		master, err := netlink.LinkByIndex(i.Attrs().MasterIndex)
 		if err != nil {
-			return fmt.Errorf("interface %s has already a master set, could not retrieve the name: %v", intf, err)
+			return fmt.Errorf("interface %s has already a master set, could not retrieve the name: %w", intf, err)
 		}
 		return fmt.Errorf("interface %s has already a master set: %s", intf, master.Attrs().Name)
 	}
@@ -119,7 +119,7 @@ func addInterface(vrf *netlink.Vrf, intf string) error {
 
 	err = netlink.LinkSetMaster(i, vrf)
 	if err != nil {
-		return fmt.Errorf("could not set vrf %s as master of %s: %v", vrf.Name, intf, err)
+		return fmt.Errorf("could not set vrf %s as master of %s: %w", vrf.Name, intf, err)
 	}
 
 	afterAddresses, err := netlink.AddrList(i, netlink.FAMILY_V6)
@@ -139,7 +139,7 @@ CONTINUE:
 		// Not found, re-adding it
 		err = netlink.AddrAdd(i, &toFind)
 		if err != nil {
-			return fmt.Errorf("could not restore address %s to %s @ %s: %v", toFind, intf, vrf.Name, err)
+			return fmt.Errorf("could not restore address %s to %s @ %s: %w", toFind, intf, vrf.Name, err)
 		}
 	}
 
@@ -151,7 +151,7 @@ CONTINUE:
 		// equivalent of 'ip route replace <address> table <int>'.
 		err = netlink.RouteReplace(&r)
 		if err != nil {
-			return fmt.Errorf("could not add route '%s': %v", r, err)
+			return fmt.Errorf("could not add route '%s': %w", r, err)
 		}
 	}
 

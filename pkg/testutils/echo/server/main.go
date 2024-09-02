@@ -9,6 +9,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -72,7 +73,7 @@ func main() {
 func handleConnection(conn net.Conn) {
 	conn.SetReadDeadline(time.Now().Add(1 * time.Minute))
 	content, err := bufio.NewReader(conn).ReadString('\n')
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		fmt.Fprint(os.Stderr, err.Error())
 		return
 	}

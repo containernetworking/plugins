@@ -83,7 +83,7 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 
 		contVeth, err := net.InterfaceByName(ifName)
 		if err != nil {
-			return fmt.Errorf("failed to look up %q: %v", ifName, err)
+			return fmt.Errorf("failed to look up %q: %w", ifName, err)
 		}
 
 		if err = ipam.ConfigureIface(ifName, pr); err != nil {
@@ -102,7 +102,7 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 			}
 
 			if err := netlink.RouteDel(&route); err != nil {
-				return fmt.Errorf("failed to delete route %v: %v", route, err)
+				return fmt.Errorf("failed to delete route %v: %w", route, err)
 			}
 
 			addrBits := 32
@@ -132,7 +132,7 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 				},
 			} {
 				if err := netlink.RouteAdd(&r); err != nil {
-					return fmt.Errorf("failed to add route %v: %v", r, err)
+					return fmt.Errorf("failed to add route %v: %w", r, err)
 				}
 			}
 		}
@@ -149,7 +149,7 @@ func setupHostVeth(vethName string, result *current.Result) error {
 	// hostVeth moved namespaces and may have a new ifindex
 	veth, err := netlink.LinkByName(vethName)
 	if err != nil {
-		return fmt.Errorf("failed to lookup %q: %v", vethName, err)
+		return fmt.Errorf("failed to lookup %q: %w", vethName, err)
 	}
 
 	for _, ipc := range result.IPs {
@@ -164,7 +164,7 @@ func setupHostVeth(vethName string, result *current.Result) error {
 		}
 		addr := &netlink.Addr{IPNet: ipn, Label: ""}
 		if err = netlink.AddrAdd(veth, addr); err != nil {
-			return fmt.Errorf("failed to add IP addr (%#v) to veth: %v", ipn, err)
+			return fmt.Errorf("failed to add IP addr (%#v) to veth: %w", ipn, err)
 		}
 
 		ipn = &net.IPNet{
@@ -173,7 +173,7 @@ func setupHostVeth(vethName string, result *current.Result) error {
 		}
 		// dst happens to be the same as IP/net of host veth
 		if err = ip.AddHostRoute(ipn, nil, veth); err != nil && !os.IsExist(err) {
-			return fmt.Errorf("failed to add route on host: %v", err)
+			return fmt.Errorf("failed to add route on host: %w", err)
 		}
 	}
 
@@ -183,7 +183,7 @@ func setupHostVeth(vethName string, result *current.Result) error {
 func cmdAdd(args *skel.CmdArgs) error {
 	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
-		return fmt.Errorf("failed to load netconf: %v", err)
+		return fmt.Errorf("failed to load netconf: %w", err)
 	}
 
 	// run the IPAM plugin and get back the config to apply
@@ -210,12 +210,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	if err := ip.EnableForward(result.IPs); err != nil {
-		return fmt.Errorf("Could not enable IP forwarding: %v", err)
+		return fmt.Errorf("Could not enable IP forwarding: %w", err)
 	}
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer netns.Close()
 
@@ -258,7 +258,7 @@ func dnsConfSet(dnsConf types.DNS) bool {
 func cmdDel(args *skel.CmdArgs) error {
 	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
-		return fmt.Errorf("failed to load netconf: %v", err)
+		return fmt.Errorf("failed to load netconf: %w", err)
 	}
 
 	if err := ipam.ExecDel(conf.IPAM.Type, args.StdinData); err != nil {
@@ -276,7 +276,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	err := ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		var err error
 		ipnets, err = ip.DelLinkByNameAddr(args.IfName)
-		if err != nil && err == ip.ErrLinkNotFound {
+		if err != nil && errors.Is(err, ip.ErrLinkNotFound) {
 			return nil
 		}
 		return err
@@ -285,8 +285,8 @@ func cmdDel(args *skel.CmdArgs) error {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.
 		// https://github.com/kubernetes/kubernetes/issues/43014#issuecomment-287164444
-		_, ok := err.(ns.NSPathNotExistErr)
-		if ok {
+		var pneErr ns.NSPathNotExistErr
+		if errors.As(err, &pneErr) {
 			return nil
 		}
 		return err
@@ -316,12 +316,12 @@ func main() {
 func cmdCheck(args *skel.CmdArgs) error {
 	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
-		return fmt.Errorf("failed to load netconf: %v", err)
+		return fmt.Errorf("failed to load netconf: %w", err)
 	}
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer netns.Close()
 

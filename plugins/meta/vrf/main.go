@@ -16,6 +16,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/vishvananda/netlink"
@@ -67,7 +68,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return fmt.Errorf("VRF %s already exist with different routing table %d", conf.VRFName, vrf.Table)
 		}
 
-		if _, ok := err.(netlink.LinkNotFoundError); ok {
+		var lnfErr netlink.LinkNotFoundError
+		if errors.As(err, &lnfErr) {
 			vrf, err = createVRF(conf.VRFName, conf.Table)
 		}
 
@@ -82,7 +84,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("cmdAdd failed: %v", err)
+		return fmt.Errorf("cmdAdd failed: %w", err)
 	}
 
 	if result == nil {
@@ -99,7 +101,8 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		vrf, err := findVRF(conf.VRFName)
-		if _, ok := err.(netlink.LinkNotFoundError); ok {
+		var lnfErr netlink.LinkNotFoundError
+		if errors.As(err, &lnfErr) {
 			return nil
 		}
 
@@ -130,15 +133,15 @@ func cmdDel(args *skel.CmdArgs) error {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.
 		// https://github.com/kubernetes/kubernetes/issues/43014#issuecomment-287164444
-		_, ok := err.(ns.NSPathNotExistErr)
-		if ok {
+		var pneErr ns.NSPathNotExistErr
+		if errors.As(err, &pneErr) {
 			return nil
 		}
 		return err
 	}
 
 	if err != nil {
-		return fmt.Errorf("cmdDel failed: %v", err)
+		return fmt.Errorf("cmdDel failed: %w", err)
 	}
 	return nil
 }
@@ -186,7 +189,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 func parseConf(data []byte) (*VRFNetConf, *current.Result, error) {
 	conf := VRFNetConf{}
 	if err := json.Unmarshal(data, &conf); err != nil {
-		return nil, nil, fmt.Errorf("failed to load netconf: %v", err)
+		return nil, nil, fmt.Errorf("failed to load netconf: %w", err)
 	}
 
 	if conf.VRFName == "" {
@@ -202,12 +205,12 @@ func parseConf(data []byte) (*VRFNetConf, *current.Result, error) {
 	var result *current.Result
 	var err error
 	if err = version.ParsePrevResult(&conf.NetConf); err != nil {
-		return nil, nil, fmt.Errorf("could not parse prevResult: %v", err)
+		return nil, nil, fmt.Errorf("could not parse prevResult: %w", err)
 	}
 
 	result, err = current.NewResultFromResult(conf.PrevResult)
 	if err != nil {
-		return nil, nil, fmt.Errorf("could not convert result to current version: %v", err)
+		return nil, nil, fmt.Errorf("could not convert result to current version: %w", err)
 	}
 
 	return &conf, result, nil

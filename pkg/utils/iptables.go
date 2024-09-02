@@ -31,13 +31,13 @@ func EnsureChain(ipt *iptables.IPTables, table, chain string) error {
 	}
 	exists, err := ipt.ChainExists(table, chain)
 	if err != nil {
-		return fmt.Errorf("failed to check iptables chain existence: %v", err)
+		return fmt.Errorf("failed to check iptables chain existence: %w", err)
 	}
 	if !exists {
 		err = ipt.NewChain(table, chain)
 		if err != nil {
-			eerr, eok := err.(*iptables.Error)
-			if eok && eerr.ExitStatus() != statusChainExists {
+			var eerr *iptables.Error
+			if errors.As(err, &eerr) && eerr.ExitStatus() != statusChainExists {
 				return err
 			}
 		}
@@ -52,7 +52,8 @@ func DeleteRule(ipt *iptables.IPTables, table, chain string, rulespec ...string)
 		return errors.New("failed to ensure iptable chain: IPTables was nil")
 	}
 	if err := ipt.Delete(table, chain, rulespec...); err != nil {
-		eerr, eok := err.(*iptables.Error)
+		var eerr *iptables.Error
+		eok := errors.As(err, &eerr)
 		switch {
 		case eok && eerr.IsNotExist():
 			// swallow here, the chain was already deleted
@@ -61,7 +62,7 @@ func DeleteRule(ipt *iptables.IPTables, table, chain string, rulespec ...string)
 			// swallow here, invalid command line parameter because the referring rule is missing
 			return nil
 		default:
-			return fmt.Errorf("Failed to delete referring rule %s %s: %v", table, chain, err)
+			return fmt.Errorf("Failed to delete referring rule %s %s: %w", table, chain, err)
 		}
 	}
 	return nil
@@ -75,9 +76,9 @@ func DeleteChain(ipt *iptables.IPTables, table, chain string) error {
 	}
 
 	err := ipt.DeleteChain(table, chain)
-	eerr, eok := err.(*iptables.Error)
+	var eerr *iptables.Error
 	switch {
-	case eok && eerr.IsNotExist():
+	case errors.As(err, &eerr) && eerr.IsNotExist():
 		// swallow here, the chain was already deleted
 		return nil
 	default:
@@ -92,9 +93,9 @@ func ClearChain(ipt *iptables.IPTables, table, chain string) error {
 		return errors.New("failed to ensure iptable chain: IPTables was nil")
 	}
 	err := ipt.ClearChain(table, chain)
-	eerr, eok := err.(*iptables.Error)
+	var eerr *iptables.Error
 	switch {
-	case eok && eerr.IsNotExist():
+	case errors.As(err, &eerr) && eerr.IsNotExist():
 		// swallow here, the chain was already deleted
 		return EnsureChain(ipt, table, chain)
 	default:

@@ -63,7 +63,7 @@ func buildOneConfig(cniVersion string, master string, orig *Net, prevResult type
 	config := make(map[string]interface{})
 	err = json.Unmarshal(confBytes, &config)
 	if err != nil {
-		return nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
+		return nil, fmt.Errorf("unmarshal existing network bytes: %w", err)
 	}
 
 	inject := map[string]interface{}{
@@ -89,7 +89,7 @@ func buildOneConfig(cniVersion string, master string, orig *Net, prevResult type
 
 	conf := &Net{}
 	if err := json.Unmarshal(newBytes, &conf); err != nil {
-		return nil, fmt.Errorf("error parsing configuration: %s", err)
+		return nil, fmt.Errorf("error parsing configuration: %w", err)
 	}
 
 	return conf, nil

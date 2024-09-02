@@ -47,7 +47,7 @@ func (ns *netNS) Close() error {
 	}
 
 	if err := ns.file.Close(); err != nil {
-		return fmt.Errorf("Failed to close %q: %v", ns.file.Name(), err)
+		return fmt.Errorf("Failed to close %q: %w", ns.file.Name(), err)
 	}
 	ns.closed = true
 
@@ -60,7 +60,7 @@ func (ns *netNS) Set() error {
 	}
 
 	if err := unix.Setns(int(ns.Fd()), unix.CLONE_NEWNET); err != nil {
-		return fmt.Errorf("Error switching to ns %v: %v", ns.file.Name(), err)
+		return fmt.Errorf("Error switching to ns %v: %w", ns.file.Name(), err)
 	}
 
 	return nil
@@ -124,7 +124,7 @@ func IsNSorErr(nspath string) error {
 		if os.IsNotExist(err) {
 			err = NSPathNotExistErr{msg: fmt.Sprintf("failed to Statfs %q: %v", nspath, err)}
 		} else {
-			err = fmt.Errorf("failed to Statfs %q: %v", nspath, err)
+			err = fmt.Errorf("failed to Statfs %q: %w", nspath, err)
 		}
 		return err
 	}
@@ -175,13 +175,13 @@ func (ns *netNS) Do(toRun func(NetNS) error) error {
 	containedCall := func(hostNS NetNS) error {
 		threadNS, err := GetCurrentNS()
 		if err != nil {
-			return fmt.Errorf("failed to open current netns: %v", err)
+			return fmt.Errorf("failed to open current netns: %w", err)
 		}
 		defer threadNS.Close()
 
 		// switch to target namespace
 		if err = ns.Set(); err != nil {
-			return fmt.Errorf("error switching to ns %v: %v", ns.file.Name(), err)
+			return fmt.Errorf("error switching to ns %v: %w", ns.file.Name(), err)
 		}
 		defer func() {
 			err := threadNS.Set() // switch back
@@ -200,7 +200,7 @@ func (ns *netNS) Do(toRun func(NetNS) error) error {
 	// save a handle to current network namespace
 	hostNS, err := GetCurrentNS()
 	if err != nil {
-		return fmt.Errorf("Failed to open current namespace: %v", err)
+		return fmt.Errorf("Failed to open current namespace: %w", err)
 	}
 	defer hostNS.Close()
 

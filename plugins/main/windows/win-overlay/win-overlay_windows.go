@@ -52,7 +52,7 @@ func init() {
 func loadNetConf(bytes []byte) (*NetConf, string, error) {
 	n := &NetConf{}
 	if err := json.Unmarshal(bytes, n); err != nil {
-		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
+		return nil, "", fmt.Errorf("failed to load netconf: %w", err)
 	}
 	return n, n.CNIVersion, nil
 }

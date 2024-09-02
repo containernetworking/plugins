@@ -55,7 +55,7 @@ func buildOneConfig(cniVersion string, orig *TuningConf, prevResult types.Result
 
 	err = json.Unmarshal(confBytes, &config)
 	if err != nil {
-		return nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
+		return nil, fmt.Errorf("unmarshal existing network bytes: %w", err)
 	}
 
 	for key, value := range inject {
@@ -69,7 +69,7 @@ func buildOneConfig(cniVersion string, orig *TuningConf, prevResult types.Result
 
 	conf := &TuningConf{}
 	if err := json.Unmarshal(newBytes, &conf); err != nil {
-		return nil, fmt.Errorf("error parsing configuration: %s", err)
+		return nil, fmt.Errorf("error parsing configuration: %w", err)
 	}
 
 	return newBytes, nil

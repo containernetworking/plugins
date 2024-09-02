@@ -225,7 +225,7 @@ func newIptablesBackend(conf *FirewallNetConf) (FirewallBackend, error) {
 	for _, proto := range []iptables.Protocol{iptables.ProtocolIPv4, iptables.ProtocolIPv6} {
 		ipt, err := iptables.NewWithProtocol(proto)
 		if err != nil {
-			return nil, fmt.Errorf("could not initialize iptables protocol %v: %v", proto, err)
+			return nil, fmt.Errorf("could not initialize iptables protocol %v: %w", proto, err)
 		}
 		backend.protos[proto] = ipt
 	}

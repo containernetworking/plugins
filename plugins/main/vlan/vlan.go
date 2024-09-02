@@ -50,7 +50,7 @@ func init() {
 func loadConf(args *skel.CmdArgs) (*NetConf, string, error) {
 	n := &NetConf{}
 	if err := json.Unmarshal(args.StdinData, n); err != nil {
-		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
+		return nil, "", fmt.Errorf("failed to load netconf: %w", err)
 	}
 	if n.Master == "" {
 		return nil, "", fmt.Errorf("\"master\" field is required. It specifies the host interface name to create the VLAN for")
@@ -77,7 +77,7 @@ func getMTUByName(ifName string, namespace string, inContainer bool) (int, error
 		var netns ns.NetNS
 		netns, err = ns.GetNS(namespace)
 		if err != nil {
-			return 0, fmt.Errorf("failed to open netns %q: %v", netns, err)
+			return 0, fmt.Errorf("failed to open netns %q: %w", netns, err)
 		}
 		defer netns.Close()
 
@@ -109,7 +109,7 @@ func createVlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interfac
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
+		return nil, fmt.Errorf("failed to lookup master %q: %w", conf.Master, err)
 	}
 
 	// due to kernel bug we have to create with tmpname or it might
@@ -137,20 +137,20 @@ func createVlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interfac
 		err = netlink.LinkAdd(v)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to create vlan: %v", err)
+		return nil, fmt.Errorf("failed to create vlan: %w", err)
 	}
 
 	err = netns.Do(func(_ ns.NetNS) error {
 		err := ip.RenameLink(tmpName, ifName)
 		if err != nil {
-			return fmt.Errorf("failed to rename vlan to %q: %v", ifName, err)
+			return fmt.Errorf("failed to rename vlan to %q: %w", ifName, err)
 		}
 		vlan.Name = ifName
 
 		// Re-fetch interface to get all properties/attributes
 		contVlan, err := netlink.LinkByName(vlan.Name)
 		if err != nil {
-			return fmt.Errorf("failed to refetch vlan %q: %v", vlan.Name, err)
+			return fmt.Errorf("failed to refetch vlan %q: %w", vlan.Name, err)
 		}
 		vlan.Mac = contVlan.Attrs().HardwareAddr.String()
 		vlan.Sandbox = netns.Path()
@@ -172,7 +172,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer netns.Close()
 
@@ -184,7 +184,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// run the IPAM plugin and get back the config to apply
 	r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
 	if err != nil {
-		return fmt.Errorf("failed to execute IPAM delegate: %v", err)
+		return fmt.Errorf("failed to execute IPAM delegate: %w", err)
 	}
 
 	// Invoke ipam del if err to avoid ip leak
@@ -239,7 +239,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		err = ip.DelLinkByName(args.IfName)
-		if err != nil && err == ip.ErrLinkNotFound {
+		if err != nil && errors.Is(err, ip.ErrLinkNotFound) {
 			return nil
 		}
 		return err
@@ -248,8 +248,8 @@ func cmdDel(args *skel.CmdArgs) error {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.
 		// https://github.com/kubernetes/kubernetes/issues/43014#issuecomment-287164444
-		_, ok := err.(ns.NSPathNotExistErr)
-		if ok {
+		var pneErr ns.NSPathNotExistErr
+		if errors.As(err, &pneErr) {
 			return nil
 		}
 		return err
@@ -271,12 +271,12 @@ func main() {
 func cmdCheck(args *skel.CmdArgs) error {
 	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
-		return fmt.Errorf("failed to load netconf: %v", err)
+		return fmt.Errorf("failed to load netconf: %w", err)
 	}
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer netns.Close()
 
@@ -324,7 +324,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
+		return fmt.Errorf("failed to lookup master %q: %w", conf.Master, err)
 	}
 
 	//

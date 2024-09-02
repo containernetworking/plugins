@@ -171,7 +171,7 @@ func AcquireLease(
 
 			link, err := netlink.LinkByName(ifName)
 			if err != nil {
-				return fmt.Errorf("error looking up %q: %v", ifName, err)
+				return fmt.Errorf("error looking up %q: %w", ifName, err)
 			}
 
 			l.link = link

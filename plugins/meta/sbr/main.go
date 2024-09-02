@@ -17,6 +17,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -81,23 +82,23 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 	conf := PluginConf{}
 
 	if err := json.Unmarshal(stdin, &conf); err != nil {
-		return nil, fmt.Errorf("failed to parse network configuration: %v", err)
+		return nil, fmt.Errorf("failed to parse network configuration: %w", err)
 	}
 
 	// Parse previous result.
 	if conf.RawPrevResult != nil {
 		resultBytes, err := json.Marshal(conf.RawPrevResult)
 		if err != nil {
-			return nil, fmt.Errorf("could not serialize prevResult: %v", err)
+			return nil, fmt.Errorf("could not serialize prevResult: %w", err)
 		}
 		res, err := version.NewResult(conf.CNIVersion, resultBytes)
 		if err != nil {
-			return nil, fmt.Errorf("could not parse prevResult: %v", err)
+			return nil, fmt.Errorf("could not parse prevResult: %w", err)
 		}
 		conf.RawPrevResult = nil
 		conf.PrevResult, err = current.NewResultFromResult(res)
 		if err != nil {
-			return nil, fmt.Errorf("could not convert result to current version: %v", err)
+			return nil, fmt.Errorf("could not convert result to current version: %w", err)
 		}
 	}
 	// End previous result parsing
@@ -206,12 +207,12 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 	// Get a list of rules and routes ready.
 	rules, err := netlink.RuleList(netlink.FAMILY_ALL)
 	if err != nil {
-		return fmt.Errorf("Failed to list all rules: %v", err)
+		return fmt.Errorf("Failed to list all rules: %w", err)
 	}
 
 	routes, err := netlink.RouteList(nil, netlink.FAMILY_ALL)
 	if err != nil {
-		return fmt.Errorf("Failed to list all routes: %v", err)
+		return fmt.Errorf("Failed to list all routes: %w", err)
 	}
 
 	// Pick a table ID to use. We pick the first table ID from firstTableID
@@ -222,7 +223,7 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 
 	link, err := netlink.LinkByName(iface)
 	if err != nil {
-		return fmt.Errorf("Cannot find network interface %s: %v", iface, err)
+		return fmt.Errorf("Cannot find network interface %s: %w", iface, err)
 	}
 
 	linkIndex := link.Attrs().Index
@@ -230,7 +231,7 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 	// Get all routes for the interface in the default routing table
 	routes, err = netlink.RouteList(link, netlink.FAMILY_ALL)
 	if err != nil {
-		return fmt.Errorf("Unable to list routes: %v", err)
+		return fmt.Errorf("Unable to list routes: %w", err)
 	}
 
 	// Loop through setting up source based rules and default routes.
@@ -252,7 +253,7 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 		rule.Src = &src
 
 		if err = netlink.RuleAdd(rule); err != nil {
-			return fmt.Errorf("Failed to add rule: %v", err)
+			return fmt.Errorf("Failed to add rule: %w", err)
 		}
 
 		// Add a default route, since this may have been removed by previous
@@ -278,7 +279,7 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 
 			err = netlink.RouteAdd(&route)
 			if err != nil {
-				return fmt.Errorf("Failed to add default route to %s: %v",
+				return fmt.Errorf("Failed to add default route to %s: %w",
 					ipCfg.Gateway.String(),
 					err)
 			}
@@ -305,7 +306,7 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 				// is possible for the default gateway we added above.
 				err = netlink.RouteReplace(&r)
 				if err != nil {
-					return fmt.Errorf("Failed to readd route: %v", err)
+					return fmt.Errorf("Failed to readd route: %w", err)
 				}
 			}
 		}
@@ -323,7 +324,7 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 		log.Printf("Deleting route %s from table %d", route.String(), route.Table)
 		err := netlink.RouteDel(&route)
 		if err != nil {
-			return fmt.Errorf("Failed to delete route: %v", err)
+			return fmt.Errorf("Failed to delete route: %w", err)
 		}
 	}
 
@@ -354,7 +355,7 @@ func tidyRules(iface string) error {
 	rules, err := netlink.RuleList(netlink.FAMILY_ALL)
 	if err != nil {
 		log.Printf("Failed to list all rules to tidy: %v", err)
-		return fmt.Errorf("Failed to list all rules to tidy: %v", err)
+		return fmt.Errorf("Failed to list all rules to tidy: %w", err)
 	}
 
 	link, err := netlink.LinkByName(iface)
@@ -362,18 +363,18 @@ func tidyRules(iface string) error {
 		// If interface is not found by any reason it's safe to ignore an error. Also, we don't need to raise an error
 		// during cmdDel call according to CNI spec:
 		// https://github.com/containernetworking/cni/blob/main/SPEC.md#del-remove-container-from-network-or-un-apply-modifications
-		_, notFound := err.(netlink.LinkNotFoundError)
-		if notFound {
+		var lnfErr netlink.LinkNotFoundError
+		if errors.As(err, &lnfErr) {
 			return nil
 		}
 		log.Printf("Failed to get link %s: %v", iface, err)
-		return fmt.Errorf("Failed to get link %s: %v", iface, err)
+		return fmt.Errorf("Failed to get link %s: %w", iface, err)
 	}
 
 	addrs, err := netlink.AddrList(link, netlink.FAMILY_ALL)
 	if err != nil {
 		log.Printf("Failed to list all addrs: %v", err)
-		return fmt.Errorf("Failed to list all addrs: %v", err)
+		return fmt.Errorf("Failed to list all addrs: %w", err)
 	}
 
 RULE_LOOP:
@@ -388,7 +389,7 @@ RULE_LOOP:
 				log.Printf("Delete rule %v", rule)
 				err := netlink.RuleDel(&rule)
 				if err != nil {
-					errReturn = fmt.Errorf("Failed to delete rule %v", err)
+					errReturn = fmt.Errorf("Failed to delete rule %w", err)
 					log.Printf("... Failed! %v", err)
 				}
 				continue RULE_LOOP

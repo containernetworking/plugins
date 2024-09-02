@@ -40,7 +40,7 @@ func ConfigureIface(ifName string, res *current.Result) error {
 
 	link, err := netlink.LinkByName(ifName)
 	if err != nil {
-		return fmt.Errorf("failed to lookup %q: %v", ifName, err)
+		return fmt.Errorf("failed to lookup %q: %w", ifName, err)
 	}
 
 	var v4gw, v6gw net.IP
@@ -76,7 +76,7 @@ func ConfigureIface(ifName string, res *current.Result) error {
 				// Write sysctl to enable IPv6
 				_, err = sysctl.Sysctl(ipv6SysctlValueName, "0")
 				if err != nil {
-					return fmt.Errorf("failed to enable IPv6 for interface %q (%s=%s): %v", iface, ipv6SysctlValueName, value, err)
+					return fmt.Errorf("failed to enable IPv6 for interface %q (%s=%s): %w", iface, ipv6SysctlValueName, value, err)
 				}
 			}
 			hasEnabledIpv6 = true
@@ -84,7 +84,7 @@ func ConfigureIface(ifName string, res *current.Result) error {
 
 		addr := &netlink.Addr{IPNet: &ipc.Address, Label: ""}
 		if err = netlink.AddrAdd(link, addr); err != nil {
-			return fmt.Errorf("failed to add IP addr %v to %q: %v", ipc, ifName, err)
+			return fmt.Errorf("failed to add IP addr %v to %q: %w", ipc, ifName, err)
 		}
 
 		gwIsV4 := ipc.Gateway.To4() != nil
@@ -96,7 +96,7 @@ func ConfigureIface(ifName string, res *current.Result) error {
 	}
 
 	if err := netlink.LinkSetUp(link); err != nil {
-		return fmt.Errorf("failed to set %q UP: %v", ifName, err)
+		return fmt.Errorf("failed to set %q UP: %w", ifName, err)
 	}
 
 	if v6gw != nil {
@@ -120,7 +120,7 @@ func ConfigureIface(ifName string, res *current.Result) error {
 		}
 
 		if err = netlink.RouteAddEcmp(&route); err != nil {
-			return fmt.Errorf("failed to add route '%v via %v dev %v': %v", r.Dst, gw, ifName, err)
+			return fmt.Errorf("failed to add route '%v via %v dev %v': %w", r.Dst, gw, ifName, err)
 		}
 	}
 

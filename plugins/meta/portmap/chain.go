@@ -100,7 +100,7 @@ func (c *chain) teardown(ipt *iptables.IPTables) error {
 			if strings.HasSuffix(entryChainRule, "-j "+c.name) {
 				chainParts, err := shellwords.Parse(entryChainRule)
 				if err != nil {
-					return fmt.Errorf("error parsing iptables rule: %s: %v", entryChainRule, err)
+					return fmt.Errorf("error parsing iptables rule: %s: %w", entryChainRule, err)
 				}
 				chainParts = chainParts[2:] // List results always include an -A CHAINNAME
 

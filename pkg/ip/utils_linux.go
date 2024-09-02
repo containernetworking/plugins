@@ -69,7 +69,7 @@ func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) 
 
 		gwy, err := netlink.RouteListFiltered(family, findGwy, routeFilter)
 		if err != nil {
-			return fmt.Errorf("Error %v trying to find Gateway %v for interface %v", err, ips.Gateway, ifName)
+			return fmt.Errorf("Error %w trying to find Gateway %v for interface %v", err, ips.Gateway, ifName)
 		}
 		if gwy == nil {
 			return fmt.Errorf("Failed to find Gateway %v for interface %v", ips.Gateway, ifName)
@@ -110,7 +110,7 @@ func ValidateExpectedRoute(resultRoutes []*types.Route) error {
 
 		wasFound, err := netlink.RouteListFiltered(family, find, routeFilter)
 		if err != nil {
-			return fmt.Errorf("Expected Route %v not route table lookup error %v", route, err)
+			return fmt.Errorf("Expected Route %v not route table lookup error %w", route, err)
 		}
 		if wasFound == nil {
 			return fmt.Errorf("Expected Route %v not found in routing table", route)

@@ -70,7 +70,7 @@ func buildOneConfig(netName string, cniVersion string, orig *Net, prevResult typ
 
 	err = json.Unmarshal(confBytes, &config)
 	if err != nil {
-		return nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
+		return nil, fmt.Errorf("unmarshal existing network bytes: %w", err)
 	}
 
 	for key, value := range inject {
@@ -84,7 +84,7 @@ func buildOneConfig(netName string, cniVersion string, orig *Net, prevResult typ
 
 	conf := &Net{}
 	if err := json.Unmarshal(newBytes, &conf); err != nil {
-		return nil, fmt.Errorf("error parsing configuration: %s", err)
+		return nil, fmt.Errorf("error parsing configuration: %w", err)
 	}
 
 	return conf, nil

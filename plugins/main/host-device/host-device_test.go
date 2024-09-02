@@ -103,13 +103,13 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, error) {
 	for i := range n.IPAM.Addresses {
 		ip, addr, err := net.ParseCIDR(n.IPAM.Addresses[i].AddressStr)
 		if err != nil {
-			return nil, fmt.Errorf("invalid CIDR %s: %s", n.IPAM.Addresses[i].AddressStr, err)
+			return nil, fmt.Errorf("invalid CIDR %s: %w", n.IPAM.Addresses[i].AddressStr, err)
 		}
 		n.IPAM.Addresses[i].Address = *addr
 		n.IPAM.Addresses[i].Address.IP = ip
 
 		if err := canonicalizeIP(&n.IPAM.Addresses[i].Address.IP); err != nil {
-			return nil, fmt.Errorf("invalid address %d: %s", i, err)
+			return nil, fmt.Errorf("invalid address %d: %w", i, err)
 		}
 
 		if n.IPAM.Addresses[i].Address.IP.To4() != nil {
@@ -132,7 +132,7 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, error) {
 
 				ip, subnet, err := net.ParseCIDR(ipstr)
 				if err != nil {
-					return nil, fmt.Errorf("invalid CIDR %s: %s", ipstr, err)
+					return nil, fmt.Errorf("invalid CIDR %s: %w", ipstr, err)
 				}
 
 				addr := Address{Address: net.IPNet{IP: ip, Mask: subnet.Mask}}
@@ -196,7 +196,7 @@ func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result)
 
 	err = json.Unmarshal(confBytes, &config)
 	if err != nil {
-		return nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
+		return nil, fmt.Errorf("unmarshal existing network bytes: %w", err)
 	}
 
 	for key, value := range inject {
@@ -210,7 +210,7 @@ func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result)
 
 	conf := &Net{}
 	if err := json.Unmarshal(newBytes, &conf); err != nil {
-		return nil, fmt.Errorf("error parsing configuration: %s", err)
+		return nil, fmt.Errorf("error parsing configuration: %w", err)
 	}
 
 	return conf, nil

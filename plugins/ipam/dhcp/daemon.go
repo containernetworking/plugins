@@ -71,7 +71,7 @@ func generateClientID(containerID string, netName string, ifName string) string 
 func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
-		return fmt.Errorf("error parsing netconf: %v", err)
+		return fmt.Errorf("error parsing netconf: %w", err)
 	}
 
 	optsRequesting, optsProviding, err := prepareOptions(args.Args, conf.IPAM.ProvideOptions, conf.IPAM.RequestOptions)
@@ -118,7 +118,7 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 func (d *DHCP) Release(args *skel.CmdArgs, _ *struct{}) error {
 	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
-		return fmt.Errorf("error parsing netconf: %v", err)
+		return fmt.Errorf("error parsing netconf: %w", err)
 	}
 
 	clientID := generateClientID(args.ContainerID, conf.Name, args.IfName)
@@ -197,13 +197,13 @@ func runDaemon(
 			return fmt.Errorf("Error writing pidfile %q: path not absolute", pidfilePath)
 		}
 		if err := os.WriteFile(pidfilePath, []byte(fmt.Sprintf("%d", os.Getpid())), 0o644); err != nil {
-			return fmt.Errorf("Error writing pidfile %q: %v", pidfilePath, err)
+			return fmt.Errorf("Error writing pidfile %q: %w", pidfilePath, err)
 		}
 	}
 
 	l, err := getListener(hostPrefix + socketPath)
 	if err != nil {
-		return fmt.Errorf("Error getting listener: %v", err)
+		return fmt.Errorf("Error getting listener: %w", err)
 	}
 
 	srv := http.Server{}

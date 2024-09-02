@@ -68,7 +68,7 @@ func buildOneConfig(netName string, cniVersion string, orig *Net, prevResult typ
 
 	err = json.Unmarshal(confBytes, &config)
 	if err != nil {
-		return nil, fmt.Errorf("unmarshal existing network bytes: %s", err)
+		return nil, fmt.Errorf("unmarshal existing network bytes: %w", err)
 	}
 
 	for key, value := range inject {
@@ -82,7 +82,7 @@ func buildOneConfig(netName string, cniVersion string, orig *Net, prevResult typ
 
 	conf := &Net{}
 	if err := json.Unmarshal(newBytes, &conf); err != nil {
-		return nil, fmt.Errorf("error parsing configuration: %s", err)
+		return nil, fmt.Errorf("error parsing configuration: %w", err)
 	}
 
 	return conf, nil
@@ -275,7 +275,7 @@ var _ = Describe("ptp Operations", func() {
 			for _, ipc := range ips {
 				fmt.Fprintln(GinkgoWriter, "ping", ipc.ip, "->", ipc.gw)
 				if err := testutils.Ping(ipc.ip, ipc.gw, 30); err != nil {
-					return fmt.Errorf("ping %s -> %s failed: %s", ipc.ip, ipc.gw, err)
+					return fmt.Errorf("ping %s -> %s failed: %w", ipc.ip, ipc.gw, err)
 				}
 			}
 

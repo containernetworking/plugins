@@ -70,7 +70,7 @@ func init() {
 func loadConf(args *skel.CmdArgs) (*NetConf, string, error) {
 	n := &NetConf{}
 	if err := json.Unmarshal(args.StdinData, n); err != nil {
-		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
+		return nil, "", fmt.Errorf("failed to load netconf: %w", err)
 	}
 	if args.Args != "" {
 		e := MacEnvArgs{}
@@ -119,7 +119,7 @@ func createTapWithIptool(tmpName string, mtu int, multiqueue bool, mac string, o
 	}
 	output, err := exec.Command("ip", tapDeviceArgs...).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to run command %s: %v", output, err)
+		return fmt.Errorf("failed to run command %s: %w", output, err)
 	}
 
 	tapDeviceArgs = []string{"link", "set", tmpName}
@@ -131,7 +131,7 @@ func createTapWithIptool(tmpName string, mtu int, multiqueue bool, mac string, o
 	}
 	output, err = exec.Command("ip", tapDeviceArgs...).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to run command %s: %v", output, err)
+		return fmt.Errorf("failed to run command %s: %w", output, err)
 	}
 	return nil
 }
@@ -159,7 +159,7 @@ func createLinkWithNetlink(tmpName string, mtu int, nsFd int, multiqueue bool, m
 	if mac != "" {
 		addr, err := net.ParseMAC(mac)
 		if err != nil {
-			return fmt.Errorf("invalid args %v for MAC addr: %v", mac, err)
+			return fmt.Errorf("invalid args %v for MAC addr: %w", mac, err)
 		}
 		linkAttrs.HardwareAddr = addr
 	}
@@ -168,7 +168,7 @@ func createLinkWithNetlink(tmpName string, mtu int, nsFd int, multiqueue bool, m
 		mv.Flags = netlink.TUNTAP_MULTI_QUEUE_DEFAULTS | mv.Flags
 	}
 	if err := netlink.LinkAdd(mv); err != nil {
-		return fmt.Errorf("failed to create tap: %v", err)
+		return fmt.Errorf("failed to create tap: %w", err)
 	}
 	return nil
 }
@@ -177,7 +177,7 @@ func createLink(tmpName string, conf *NetConf, netns ns.NetNS) error {
 	switch {
 	case conf.SelinuxContext != "":
 		if err := selinux.SetExecLabel(conf.SelinuxContext); err != nil {
-			return fmt.Errorf("failed set socket label: %v", err)
+			return fmt.Errorf("failed set socket label: %w", err)
 		}
 		return createTapWithIptool(tmpName, conf.MTU, conf.MultiQueue, conf.Mac, conf.Owner, conf.Group)
 	case conf.Owner == nil || conf.Group == nil:
@@ -206,7 +206,7 @@ func createTap(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interface
 			link, err := netlink.LinkByName(tmpName)
 			if err != nil {
 				netlink.LinkDel(link)
-				return fmt.Errorf("failed to rename tap to %q: %v", ifName, err)
+				return fmt.Errorf("failed to rename tap to %q: %w", ifName, err)
 			}
 		}
 		tap.Name = ifName
@@ -214,24 +214,24 @@ func createTap(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interface
 		// Re-fetch link to get all properties/attributes
 		link, err := netlink.LinkByName(ifName)
 		if err != nil {
-			return fmt.Errorf("failed to refetch tap %q: %v", ifName, err)
+			return fmt.Errorf("failed to refetch tap %q: %w", ifName, err)
 		}
 
 		if conf.Bridge != "" {
 			bridge, err := netlink.LinkByName(conf.Bridge)
 			if err != nil {
-				return fmt.Errorf("failed to get bridge %s: %v", conf.Bridge, err)
+				return fmt.Errorf("failed to get bridge %s: %w", conf.Bridge, err)
 			}
 
 			tapDev := link
 			if err := netlink.LinkSetMaster(tapDev, bridge); err != nil {
-				return fmt.Errorf("failed to set tap %s as a port of bridge %s: %v", tap.Name, conf.Bridge, err)
+				return fmt.Errorf("failed to set tap %s as a port of bridge %s: %w", tap.Name, conf.Bridge, err)
 			}
 		}
 
 		err = netlink.LinkSetUp(link)
 		if err != nil {
-			return fmt.Errorf("failed to set tap interface up: %v", err)
+			return fmt.Errorf("failed to set tap interface up: %w", err)
 		}
 
 		tap.Mac = link.Attrs().HardwareAddr.String()
@@ -256,7 +256,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", netns, err)
 	}
 	defer netns.Close()
 
@@ -325,10 +325,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		err = netns.Do(func(_ ns.NetNS) error {
 			tapInterfaceLink, err := netlink.LinkByName(args.IfName)
 			if err != nil {
-				return fmt.Errorf("failed to find interface name %q: %v", tapInterface.Name, err)
+				return fmt.Errorf("failed to find interface name %q: %w", tapInterface.Name, err)
 			}
 			if err := netlink.LinkSetUp(tapInterfaceLink); err != nil {
-				return fmt.Errorf("failed to set %q UP: %v", args.IfName, err)
+				return fmt.Errorf("failed to set %q up: %w", args.IfName, err)
 			}
 
 			return nil
@@ -365,7 +365,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	// so don't return an error if the device is already removed.
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		if err := ip.DelLinkByName(args.IfName); err != nil {
-			if err != ip.ErrLinkNotFound {
+			if !errors.Is(err, ip.ErrLinkNotFound) {
 				return err
 			}
 		}
@@ -375,8 +375,8 @@ func cmdDel(args *skel.CmdArgs) error {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.
 		// https://github.com/kubernetes/kubernetes/issues/43014#issuecomment-287164444
-		_, ok := err.(ns.NSPathNotExistErr)
-		if ok {
+		var pneErr ns.NSPathNotExistErr
+		if errors.As(err, &pneErr) {
 			return nil
 		}
 		return err
@@ -404,7 +404,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer netns.Close()
 

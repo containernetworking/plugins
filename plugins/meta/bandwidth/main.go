@@ -67,7 +67,7 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 	conf := PluginConf{}
 
 	if err := json.Unmarshal(stdin, &conf); err != nil {
-		return nil, fmt.Errorf("failed to parse network configuration: %v", err)
+		return nil, fmt.Errorf("failed to parse network configuration: %w", err)
 	}
 
 	bandwidth := getBandwidth(&conf)
@@ -85,12 +85,12 @@ func parseConfig(stdin []byte) (*PluginConf, error) {
 	if conf.RawPrevResult != nil {
 		var err error
 		if err = version.ParsePrevResult(&conf.NetConf); err != nil {
-			return nil, fmt.Errorf("could not parse prevResult: %v", err)
+			return nil, fmt.Errorf("could not parse prevResult: %w", err)
 		}
 
 		_, err = current.NewResultFromResult(conf.PrevResult)
 		if err != nil {
-			return nil, fmt.Errorf("could not convert result to current version: %v", err)
+			return nil, fmt.Errorf("could not convert result to current version: %w", err)
 		}
 	}
 
@@ -155,7 +155,7 @@ func getHostInterface(interfaces []*current.Interface, containerIfName string, n
 		return nil
 	})
 	if peerIndex <= 0 {
-		return nil, fmt.Errorf("container interface %s has no veth peer: %v", containerIfName, err)
+		return nil, fmt.Errorf("container interface %s has no veth peer: %w", containerIfName, err)
 	}
 
 	// find host interface by index
@@ -180,14 +180,14 @@ func validateSubnets(unshapedSubnets []string, shapedSubnets []string) error {
 	for _, subnet := range unshapedSubnets {
 		_, _, err := net.ParseCIDR(subnet)
 		if err != nil {
-			return fmt.Errorf("bad subnet %q provided, details %s", subnet, err)
+			return fmt.Errorf("bad subnet %q provided, details %w", subnet, err)
 		}
 	}
 
 	for _, subnet := range shapedSubnets {
 		_, _, err := net.ParseCIDR(subnet)
 		if err != nil {
-			return fmt.Errorf("bad subnet %q provided, details %s", subnet, err)
+			return fmt.Errorf("bad subnet %q provided, details %w", subnet, err)
 		}
 	}
 
@@ -215,12 +215,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	result, err := current.NewResultFromResult(conf.PrevResult)
 	if err != nil {
-		return fmt.Errorf("could not convert result to current version: %v", err)
+		return fmt.Errorf("could not convert result to current version: %w", err)
 	}
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", netns, err)
 	}
 	defer netns.Close()
 
@@ -320,12 +320,12 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	result, err := current.NewResultFromResult(bwConf.PrevResult)
 	if err != nil {
-		return fmt.Errorf("could not convert result to current version: %v", err)
+		return fmt.Errorf("could not convert result to current version: %w", err)
 	}
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", netns, err)
 	}
 	defer netns.Close()
 
@@ -341,7 +341,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	bandwidth := getBandwidth(bwConf)
 
 	if err = validateSubnets(bandwidth.UnshapedSubnets, bandwidth.ShapedSubnets); err != nil {
-		return fmt.Errorf("failed to check subnets, details %s", err)
+		return fmt.Errorf("failed to check subnets, details %w", err)
 	}
 
 	if bandwidth.IngressRate > 0 && bandwidth.IngressBurst > 0 {
@@ -360,7 +360,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 		ifbDeviceName := getIfbDeviceName(bwConf.Name, args.ContainerID)
 		ifbDevice, err := netlink.LinkByName(ifbDeviceName)
 		if err != nil {
-			return fmt.Errorf("get ifb device: %s", err)
+			return fmt.Errorf("get ifb device: %w", err)
 		}
 		err = checkHTB(ifbDevice, rateInBytes, bufferInBytes, bandwidth.ShapedSubnets)
 		if err != nil {
@@ -401,7 +401,7 @@ func checkHTB(link netlink.Link, rateInBytes uint64, bufferInBytes uint32, shape
 
 		classes, err := netlink.ClassList(link, htb.Handle)
 		if err != nil {
-			return fmt.Errorf("Unable to list classes bound to htb qdisc for device %s. Details %s",
+			return fmt.Errorf("Unable to list classes bound to htb qdisc for device %s. Details %w",
 				link.Attrs().Name, err)
 		}
 		if len(classes) != 2 {

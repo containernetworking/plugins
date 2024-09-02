@@ -16,6 +16,7 @@ package testutils
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -55,7 +56,7 @@ func NewNS() (ns.NetNS, error) {
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate random netns name: %v", err)
+		return nil, fmt.Errorf("failed to generate random netns name: %w", err)
 	}
 
 	// Create the directory for mounting network namespaces
@@ -71,21 +72,21 @@ func NewNS() (ns.NetNS, error) {
 	// to a mountpoint.
 	err = unix.Mount("", nsRunDir, "none", unix.MS_SHARED|unix.MS_REC, "")
 	if err != nil {
-		if err != unix.EINVAL {
-			return nil, fmt.Errorf("mount --make-rshared %s failed: %q", nsRunDir, err)
+		if !errors.Is(err, unix.EINVAL) {
+			return nil, fmt.Errorf("mount --make-rshared %s failed: %w", nsRunDir, err)
 		}
 
 		// Recursively remount /var/run/netns on itself. The recursive flag is
 		// so that any existing netns bindmounts are carried over.
 		err = unix.Mount(nsRunDir, nsRunDir, "none", unix.MS_BIND|unix.MS_REC, "")
 		if err != nil {
-			return nil, fmt.Errorf("mount --rbind %s %s failed: %q", nsRunDir, nsRunDir, err)
+			return nil, fmt.Errorf("mount --rbind %s %s failed: %w", nsRunDir, nsRunDir, err)
 		}
 
 		// Now we can make it shared
 		err = unix.Mount("", nsRunDir, "none", unix.MS_SHARED|unix.MS_REC, "")
 		if err != nil {
-			return nil, fmt.Errorf("mount --make-rshared %s failed: %q", nsRunDir, err)
+			return nil, fmt.Errorf("mount --make-rshared %s failed: %w", nsRunDir, err)
 		}
 
 	}
@@ -138,13 +139,13 @@ func NewNS() (ns.NetNS, error) {
 		// are no threads in the ns.
 		err = unix.Mount(getCurrentThreadNetNSPath(), nsPath, "none", unix.MS_BIND, "")
 		if err != nil {
-			err = fmt.Errorf("failed to bind mount ns at %s: %v", nsPath, err)
+			err = fmt.Errorf("failed to bind mount ns at %s: %w", nsPath, err)
 		}
 	})()
 	wg.Wait()
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to create namespace: %v", err)
+		return nil, fmt.Errorf("failed to create namespace: %w", err)
 	}
 
 	return ns.GetNS(nsPath)
@@ -156,11 +157,11 @@ func UnmountNS(ns ns.NetNS) error {
 	// Only unmount if it's been bind-mounted (don't touch namespaces in /proc...)
 	if strings.HasPrefix(nsPath, getNsRunDir()) {
 		if err := unix.Unmount(nsPath, 0); err != nil {
-			return fmt.Errorf("failed to unmount NS: at %s: %v", nsPath, err)
+			return fmt.Errorf("failed to unmount NS: at %s: %w", nsPath, err)
 		}
 
 		if err := os.Remove(nsPath); err != nil {
-			return fmt.Errorf("failed to remove ns path %s: %v", nsPath, err)
+			return fmt.Errorf("failed to remove ns path %s: %w", nsPath, err)
 		}
 	}
 

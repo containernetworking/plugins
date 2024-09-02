@@ -97,7 +97,7 @@ func loadConf(bytes []byte) (*NetConf, error) {
 	n := &NetConf{}
 	var err error
 	if err = json.Unmarshal(bytes, n); err != nil {
-		return nil, fmt.Errorf("failed to load netconf: %v", err)
+		return nil, fmt.Errorf("failed to load netconf: %w", err)
 	}
 
 	// Override device with the standardized DeviceID if provided in Runtime Config.
@@ -112,7 +112,7 @@ func loadConf(bytes []byte) (*NetConf, error) {
 	if len(n.PCIAddr) > 0 {
 		n.DPDKMode, err = hasDpdkDriver(n.PCIAddr)
 		if err != nil {
-			return nil, fmt.Errorf("error with host device: %v", err)
+			return nil, fmt.Errorf("error with host device: %w", err)
 		}
 	}
 
@@ -126,7 +126,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	containerNs, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer containerNs.Close()
 
@@ -135,12 +135,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if !cfg.DPDKMode {
 		hostDev, err := getLink(cfg.Device, cfg.HWAddr, cfg.KernelPath, cfg.PCIAddr, cfg.auxDevice)
 		if err != nil {
-			return fmt.Errorf("failed to find host device: %v", err)
+			return fmt.Errorf("failed to find host device: %w", err)
 		}
 
 		contDev, err = moveLinkIn(hostDev, containerNs, args.IfName)
 		if err != nil {
-			return fmt.Errorf("failed to move link %v", err)
+			return fmt.Errorf("failed to move link %w", err)
 		}
 
 		result.Interfaces = []*current.Interface{{
@@ -211,7 +211,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 	containerNs, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer containerNs.Close()
 
@@ -237,13 +237,13 @@ func setTempName(dev netlink.Link) (netlink.Link, error) {
 
 	// rename to tempName
 	if err := netlink.LinkSetName(dev, tempName); err != nil {
-		return nil, fmt.Errorf("failed to rename device %q to %q: %v", dev.Attrs().Name, tempName, err)
+		return nil, fmt.Errorf("failed to rename device %q to %q: %w", dev.Attrs().Name, tempName, err)
 	}
 
 	// Get updated Link obj
 	tempDev, err := netlink.LinkByName(tempName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find %q after rename to %q: %v", dev.Attrs().Name, tempName, err)
+		return nil, fmt.Errorf("failed to find %q after rename to %q: %w", dev.Attrs().Name, tempName, err)
 	}
 
 	return tempDev, nil
@@ -254,12 +254,12 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, ifName string) (netl
 	hostDevName := hostDev.Attrs().Name
 	defaultNs, err := ns.GetCurrentNS()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get host namespace: %v", err)
+		return nil, fmt.Errorf("failed to get host namespace: %w", err)
 	}
 
 	// Devices can be renamed only when down
 	if err = netlink.LinkSetDown(hostDev); err != nil {
-		return nil, fmt.Errorf("failed to set %q down: %v", hostDev.Attrs().Name, err)
+		return nil, fmt.Errorf("failed to set %q down: %w", hostDev.Attrs().Name, err)
 	}
 
 	// restore original link state in case of error
@@ -273,7 +273,7 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, ifName string) (netl
 
 	hostDev, err = setTempName(hostDev)
 	if err != nil {
-		return nil, fmt.Errorf("failed to rename device %q to temporary name: %v", hostDevName, err)
+		return nil, fmt.Errorf("failed to rename device %q to temporary name: %w", hostDevName, err)
 	}
 
 	// restore original netdev name in case of error
@@ -284,7 +284,7 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, ifName string) (netl
 	}()
 
 	if err = netlink.LinkSetNsFd(hostDev, int(containerNs.Fd())); err != nil {
-		return nil, fmt.Errorf("failed to move %q to container ns: %v", hostDev.Attrs().Name, err)
+		return nil, fmt.Errorf("failed to move %q to container ns: %w", hostDev.Attrs().Name, err)
 	}
 
 	var contDev netlink.Link
@@ -293,7 +293,7 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, ifName string) (netl
 		var err error
 		contDev, err = netlink.LinkByName(tempDevName)
 		if err != nil {
-			return fmt.Errorf("failed to find %q: %v", tempDevName, err)
+			return fmt.Errorf("failed to find %q: %w", tempDevName, err)
 		}
 
 		// move netdev back to host namespace in case of error
@@ -310,11 +310,11 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, ifName string) (netl
 
 		// Save host device name into the container device's alias property
 		if err = netlink.LinkSetAlias(contDev, hostDevName); err != nil {
-			return fmt.Errorf("failed to set alias to %q: %v", tempDevName, err)
+			return fmt.Errorf("failed to set alias to %q: %w", tempDevName, err)
 		}
 		// Rename container device to respect args.IfName
 		if err = netlink.LinkSetName(contDev, ifName); err != nil {
-			return fmt.Errorf("failed to rename device %q to %q: %v", tempDevName, ifName, err)
+			return fmt.Errorf("failed to rename device %q to %q: %w", tempDevName, ifName, err)
 		}
 
 		// restore tempDevName in case of error
@@ -326,7 +326,7 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, ifName string) (netl
 
 		// Bring container device up
 		if err = netlink.LinkSetUp(contDev); err != nil {
-			return fmt.Errorf("failed to set %q up: %v", ifName, err)
+			return fmt.Errorf("failed to set %q up: %w", ifName, err)
 		}
 
 		// bring device down in case of error
@@ -339,7 +339,7 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, ifName string) (netl
 		// Retrieve link again to get up-to-date name and attributes
 		contDev, err = netlink.LinkByName(ifName)
 		if err != nil {
-			return fmt.Errorf("failed to find %q: %v", ifName, err)
+			return fmt.Errorf("failed to find %q: %w", ifName, err)
 		}
 		return nil
 	}); err != nil {
@@ -361,13 +361,13 @@ func moveLinkOut(containerNs ns.NetNS, ifName string) error {
 	err = containerNs.Do(func(_ ns.NetNS) error {
 		dev, err := netlink.LinkByName(ifName)
 		if err != nil {
-			return fmt.Errorf("failed to find %q: %v", ifName, err)
+			return fmt.Errorf("failed to find %q: %w", ifName, err)
 		}
 		origDev = dev
 
 		// Devices can be renamed only when down
 		if err = netlink.LinkSetDown(dev); err != nil {
-			return fmt.Errorf("failed to set %q down: %v", ifName, err)
+			return fmt.Errorf("failed to set %q down: %w", ifName, err)
 		}
 
 		defer func() {
@@ -383,13 +383,13 @@ func moveLinkOut(containerNs ns.NetNS, ifName string) error {
 
 		newLink, err := setTempName(dev)
 		if err != nil {
-			return fmt.Errorf("failed to rename device %q to temporary name: %v", ifName, err)
+			return fmt.Errorf("failed to rename device %q to temporary name: %w", ifName, err)
 		}
 		dev = newLink
 		tempName = dev.Attrs().Name
 
 		if err = netlink.LinkSetNsFd(dev, int(defaultNs.Fd())); err != nil {
-			return fmt.Errorf("failed to move %q to host netns: %v", tempName, err)
+			return fmt.Errorf("failed to move %q to host netns: %w", tempName, err)
 		}
 		return nil
 	})
@@ -401,7 +401,7 @@ func moveLinkOut(containerNs ns.NetNS, ifName string) error {
 	// Rename the device to its original name from the host namespace
 	tempDev, err := netlink.LinkByName(tempName)
 	if err != nil {
-		return fmt.Errorf("failed to find %q in host namespace: %v", tempName, err)
+		return fmt.Errorf("failed to find %q in host namespace: %w", tempName, err)
 	}
 
 	if err = netlink.LinkSetName(tempDev, tempDev.Attrs().Alias); err != nil {
@@ -420,7 +420,7 @@ func moveLinkOut(containerNs ns.NetNS, ifName string) error {
 				return nil
 			})
 		}()
-		return fmt.Errorf("failed to restore %q to original name %q: %v", tempName, tempDev.Attrs().Alias, err)
+		return fmt.Errorf("failed to restore %q to original name %q: %w", tempName, tempDev.Attrs().Alias, err)
 	}
 
 	return nil
@@ -462,7 +462,7 @@ func printLink(dev netlink.Link, cniVersion string, containerNs ns.NetNS) error 
 func linkFromPath(path string) (netlink.Link, error) {
 	entries, err := os.ReadDir(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read directory %s: %q", path, err)
+		return nil, fmt.Errorf("failed to read directory %s: %w", path, err)
 	}
 	if len(entries) > 0 {
 		// grab the first net device
@@ -479,12 +479,12 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string, auxDev string) (netlin
 	case len(hwaddr) > 0:
 		hwAddr, err := net.ParseMAC(hwaddr)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse MAC address %q: %v", hwaddr, err)
+			return nil, fmt.Errorf("failed to parse MAC address %q: %w", hwaddr, err)
 		}
 
 		links, err := netlink.LinkList()
 		if err != nil {
-			return nil, fmt.Errorf("failed to list node links: %v", err)
+			return nil, fmt.Errorf("failed to list node links: %w", err)
 		}
 
 		for _, link := range links {
@@ -534,7 +534,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer netns.Close()
 

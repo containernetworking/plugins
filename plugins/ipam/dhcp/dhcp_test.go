@@ -60,7 +60,7 @@ func dhcpServerStart(netns ns.NetNS, numLeases int, stopCh <-chan bool) (*sync.W
 	for i := 5; i < numLeases+5; i++ {
 		err := lp.AddLease(leasepool.Lease{IP: dhcp4.IPAdd(net.IPv4(192, 168, 1, byte(i)), 0)})
 		if err != nil {
-			return nil, fmt.Errorf("error adding IP to DHCP pool: %v", err)
+			return nil, fmt.Errorf("error adding IP to DHCP pool: %w", err)
 		}
 	}
 
@@ -72,7 +72,7 @@ func dhcpServerStart(netns ns.NetNS, numLeases int, stopCh <-chan bool) (*sync.W
 		dhcp4server.LeaseDuration(time.Minute*15),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create DHCP server: %v", err)
+		return nil, fmt.Errorf("failed to create DHCP server: %w", err)
 	}
 
 	stopWg := sync.WaitGroup{}

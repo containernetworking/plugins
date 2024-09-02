@@ -17,6 +17,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"syscall"
@@ -47,7 +48,7 @@ func CreateIfb(ifbDeviceName string, mtu int, qlen int) error {
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("adding link: %s", err)
+		return fmt.Errorf("adding link: %w", err)
 	}
 
 	return nil
@@ -55,7 +56,7 @@ func CreateIfb(ifbDeviceName string, mtu int, qlen int) error {
 
 func TeardownIfb(deviceName string) error {
 	_, err := ip.DelLinkByNameAddr(deviceName)
-	if err != nil && err == ip.ErrLinkNotFound {
+	if err != nil && errors.Is(err, ip.ErrLinkNotFound) {
 		return nil
 	}
 	return err
@@ -64,7 +65,7 @@ func TeardownIfb(deviceName string) error {
 func CreateIngressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string, includeSubnets []string, hostDeviceName string) error {
 	hostDevice, err := netlink.LinkByName(hostDeviceName)
 	if err != nil {
-		return fmt.Errorf("get host device: %s", err)
+		return fmt.Errorf("get host device: %w", err)
 	}
 
 	subnets := includeSubnets
@@ -81,11 +82,11 @@ func CreateIngressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string,
 func CreateEgressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string, includeSubnets []string, hostDeviceName string, ifbDeviceName string) error {
 	ifbDevice, err := netlink.LinkByName(ifbDeviceName)
 	if err != nil {
-		return fmt.Errorf("get ifb device: %s", err)
+		return fmt.Errorf("get ifb device: %w", err)
 	}
 	hostDevice, err := netlink.LinkByName(hostDeviceName)
 	if err != nil {
-		return fmt.Errorf("get host device: %s", err)
+		return fmt.Errorf("get host device: %w", err)
 	}
 
 	// add qdisc ingress on host device
@@ -99,7 +100,7 @@ func CreateEgressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string, 
 
 	err = netlink.QdiscAdd(ingress)
 	if err != nil {
-		return fmt.Errorf("create ingress qdisc: %s", err)
+		return fmt.Errorf("create ingress qdisc: %w", err)
 	}
 
 	// add filter on host device to mirror traffic to ifb device
@@ -122,7 +123,7 @@ func CreateEgressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string, 
 	}
 	err = netlink.FilterAdd(filter)
 	if err != nil {
-		return fmt.Errorf("add filter: %s", err)
+		return fmt.Errorf("add filter: %w", err)
 	}
 
 	subnets := excludeSubnets
@@ -137,7 +138,7 @@ func CreateEgressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string, 
 	err = createHTB(rateInBits, burstInBits, ifbDevice.Attrs().Index, subnets, exclude)
 	if err != nil {
 		// egress from the container/netns pov = ingress from the main netns/host pov
-		return fmt.Errorf("create htb container egress qos rules: %s", err)
+		return fmt.Errorf("create htb container egress qos rules: %w", err)
 	}
 	return nil
 }
@@ -166,7 +167,7 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, subnets []string, 
 	}
 	err := netlink.QdiscAdd(qdisc)
 	if err != nil {
-		return fmt.Errorf("error while creating qdisc: %s", err)
+		return fmt.Errorf("error while creating qdisc: %w", err)
 	}
 
 	// Step 2 classes
@@ -193,7 +194,7 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, subnets []string, 
 
 	err = netlink.ClassAdd(shapedClass)
 	if err != nil {
-		return fmt.Errorf("error while creating htb default class: %s", err)
+		return fmt.Errorf("error while creating htb default class: %w", err)
 	}
 
 	// The uncapped class for non shaped traffic (either all but included subnets or excluded subnets only)
@@ -213,7 +214,7 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, subnets []string, 
 	}
 	err = netlink.ClassAdd(unshapedClass)
 	if err != nil {
-		return fmt.Errorf("error while creating htb uncapped class: %s", err)
+		return fmt.Errorf("error while creating htb uncapped class: %w", err)
 	}
 
 	// Now add filters to redirect subnets to the class 1 if excluded instead of the default one (30)
@@ -223,7 +224,7 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, subnets []string, 
 		// "prio", "16", "u32", "match", "ip", "dst", subnet, "flowid", "1:1")
 		_, nw, err := net.ParseCIDR(subnet)
 		if err != nil {
-			return fmt.Errorf("bad subnet %s: %s", subnet, err)
+			return fmt.Errorf("bad subnet %s: %w", subnet, err)
 		}
 		var maskBytes []byte = nw.Mask
 		var subnetBytes []byte = nw.IP
@@ -333,7 +334,7 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, subnets []string, 
 
 		err = netlink.FilterAdd(&tcFilter)
 		if err != nil {
-			return fmt.Errorf("error, unable to create htb filter, details %s", err)
+			return fmt.Errorf("error, unable to create htb filter, details %w", err)
 		}
 	}
 	return nil

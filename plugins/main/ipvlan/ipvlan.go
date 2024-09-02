@@ -51,7 +51,7 @@ func init() {
 func loadConf(args *skel.CmdArgs, cmdCheck bool) (*NetConf, string, error) {
 	n := &NetConf{}
 	if err := json.Unmarshal(args.StdinData, n); err != nil {
-		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
+		return nil, "", fmt.Errorf("failed to load netconf: %w", err)
 	}
 
 	if cmdCheck {
@@ -63,12 +63,12 @@ func loadConf(args *skel.CmdArgs, cmdCheck bool) (*NetConf, string, error) {
 	// Parse previous result
 	if n.NetConf.RawPrevResult != nil {
 		if err = version.ParsePrevResult(&n.NetConf); err != nil {
-			return nil, "", fmt.Errorf("could not parse prevResult: %v", err)
+			return nil, "", fmt.Errorf("could not parse prevResult: %w", err)
 		}
 
 		result, err = current.NewResultFromResult(n.PrevResult)
 		if err != nil {
-			return nil, "", fmt.Errorf("could not convert result to current version: %v", err)
+			return nil, "", fmt.Errorf("could not convert result to current version: %w", err)
 		}
 	}
 	if n.Master == "" {
@@ -134,7 +134,7 @@ func createIpvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interf
 		m, err = netlink.LinkByName(conf.Master)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
+		return nil, fmt.Errorf("failed to lookup master %q: %w", conf.Master, err)
 	}
 
 	// due to kernel bug we have to create with tmpname or it might
@@ -160,21 +160,21 @@ func createIpvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interf
 		})
 	} else {
 		if err := netlink.LinkAdd(mv); err != nil {
-			return nil, fmt.Errorf("failed to create ipvlan: %v", err)
+			return nil, fmt.Errorf("failed to create ipvlan: %w", err)
 		}
 	}
 
 	err = netns.Do(func(_ ns.NetNS) error {
 		err := ip.RenameLink(tmpName, ifName)
 		if err != nil {
-			return fmt.Errorf("failed to rename ipvlan to %q: %v", ifName, err)
+			return fmt.Errorf("failed to rename ipvlan to %q: %w", ifName, err)
 		}
 		ipvlan.Name = ifName
 
 		// Re-fetch ipvlan to get all properties/attributes
 		contIpvlan, err := netlink.LinkByName(ipvlan.Name)
 		if err != nil {
-			return fmt.Errorf("failed to refetch ipvlan %q: %v", ipvlan.Name, err)
+			return fmt.Errorf("failed to refetch ipvlan %q: %w", ipvlan.Name, err)
 		}
 		ipvlan.Mac = contIpvlan.Attrs().HardwareAddr.String()
 		ipvlan.Sandbox = netns.Path()
@@ -213,7 +213,7 @@ func getNamespacedDefaultRouteInterfaceName(namespace string, inContainer bool) 
 	}
 	netns, err := ns.GetNS(namespace)
 	if err != nil {
-		return "", fmt.Errorf("failed to open netns %q: %v", netns, err)
+		return "", fmt.Errorf("failed to open netns %q: %w", netns, err)
 	}
 	defer netns.Close()
 	var defaultRouteInterface string
@@ -238,7 +238,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer netns.Close()
 
@@ -328,7 +328,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	// so don't return an error if the device is already removed.
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		if err := ip.DelLinkByName(args.IfName); err != nil {
-			if err != ip.ErrLinkNotFound {
+			if !errors.Is(err, ip.ErrLinkNotFound) {
 				return err
 			}
 		}
@@ -338,8 +338,8 @@ func cmdDel(args *skel.CmdArgs) error {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.
 		// https://github.com/kubernetes/kubernetes/issues/43014#issuecomment-287164444
-		_, ok := err.(ns.NSPathNotExistErr)
-		if ok {
+		var pneErr ns.NSPathNotExistErr
+		if errors.As(err, &pneErr) {
 			return nil
 		}
 		return err
@@ -365,7 +365,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer netns.Close()
 
@@ -418,7 +418,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to lookup master %q: %v", n.Master, err)
+		return fmt.Errorf("failed to lookup master %q: %w", n.Master, err)
 	}
 
 	// Check prevResults for ips, routes and dns against values found in the container

@@ -70,8 +70,8 @@ var _ = Describe("spoofcheck", func() {
 			config.FromJSON([]byte(rowConfigWithRulesOnly()))
 			c := &configurerStub{applyConfig: []*nft.Config{config}, readConfig: config, failFirstApplyConfig: true}
 			sc := link.NewSpoofCheckerWithConfigurer("", "", id, c)
-			Expect(sc.Teardown()).To(MatchError(fmt.Sprintf(
-				"failed to teardown spoof-check: failed to delete iface match rule: %s, <nil>", errorFirstApplyText,
+			Expect(sc.Teardown()).To(MatchError(fmt.Errorf(
+				"failed to teardown spoof-check: failed to delete iface match rule: %s, %w", errorFirstApplyText, nil,
 			)))
 		})
 
@@ -80,8 +80,8 @@ var _ = Describe("spoofcheck", func() {
 			config.FromJSON([]byte(rowConfigWithRulesOnly()))
 			c := &configurerStub{applyConfig: []*nft.Config{config}, readConfig: config, failReadConfig: true}
 			sc := link.NewSpoofCheckerWithConfigurer("", "", id, c)
-			Expect(sc.Teardown()).To(MatchError(fmt.Sprintf(
-				"failed to teardown spoof-check: %s, <nil>", errorReadText,
+			Expect(sc.Teardown()).To(MatchError(fmt.Errorf(
+				"failed to teardown spoof-check: %s, %w", errorReadText, nil,
 			)))
 		})
 
@@ -90,8 +90,8 @@ var _ = Describe("spoofcheck", func() {
 			config.FromJSON([]byte(rowConfigWithRulesOnly()))
 			c := &configurerStub{applyConfig: []*nft.Config{config}, readConfig: config, failSecondApplyConfig: true}
 			sc := link.NewSpoofCheckerWithConfigurer("", "", id, c)
-			Expect(sc.Teardown()).To(MatchError(fmt.Sprintf(
-				"failed to teardown spoof-check: <nil>, failed to delete regular chains: %s", errorSecondApplyText,
+			Expect(sc.Teardown()).To(MatchError(fmt.Errorf(
+				"failed to teardown spoof-check: %w, failed to delete regular chains: %s", nil, errorSecondApplyText,
 			)))
 		})
 

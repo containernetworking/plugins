@@ -35,7 +35,7 @@ import (
 func parseNetConf(bytes []byte) (*types.NetConf, error) {
 	conf := &types.NetConf{}
 	if err := json.Unmarshal(bytes, conf); err != nil {
-		return nil, fmt.Errorf("failed to parse network config: %v", err)
+		return nil, fmt.Errorf("failed to parse network config: %w", err)
 	}
 	return conf, nil
 }
@@ -51,7 +51,7 @@ func createDummy(ifName string, netns ns.NetNS) (*current.Interface, error) {
 	}
 
 	if err := netlink.LinkAdd(dm); err != nil {
-		return nil, fmt.Errorf("failed to create dummy: %v", err)
+		return nil, fmt.Errorf("failed to create dummy: %w", err)
 	}
 	dummy.Name = ifName
 
@@ -59,7 +59,7 @@ func createDummy(ifName string, netns ns.NetNS) (*current.Interface, error) {
 		// Re-fetch interface to get all properties/attributes
 		contDummy, err := netlink.LinkByName(ifName)
 		if err != nil {
-			return fmt.Errorf("failed to fetch dummy%q: %v", ifName, err)
+			return fmt.Errorf("failed to fetch dummy%q: %w", ifName, err)
 		}
 
 		dummy.Mac = contDummy.Attrs().HardwareAddr.String()
@@ -86,7 +86,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", netns, err)
 	}
 	defer netns.Close()
 
@@ -159,7 +159,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	err = ns.WithNetNSPath(args.Netns, func(ns.NetNS) error {
 		err = ip.DelLinkByName(args.IfName)
-		if err != nil && err == ip.ErrLinkNotFound {
+		if err != nil && errors.Is(err, ip.ErrLinkNotFound) {
 			return nil
 		}
 		return err
@@ -168,8 +168,8 @@ func cmdDel(args *skel.CmdArgs) error {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.
 		// https://github.com/kubernetes/kubernetes/issues/43014#issuecomment-287164444
-		_, ok := err.(ns.NSPathNotExistErr)
-		if ok {
+		var pneErr ns.NSPathNotExistErr
+		if errors.As(err, &pneErr) {
 			return nil
 		}
 		return err
@@ -200,7 +200,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
+		return fmt.Errorf("failed to open netns %q: %w", args.Netns, err)
 	}
 	defer netns.Close()
 

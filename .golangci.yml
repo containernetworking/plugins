@@ -8,6 +8,8 @@ issues:
       text: " and that stutters;"
     - path: '(.+)_test\.go'
       text: "dot-imports: should not use dot imports"
+  max-issues-per-linter: 0
+  max-same-issues: 0
 
 linters:
   disable:
@@ -15,6 +17,7 @@ linters:
   enable:
     - contextcheck
     - durationcheck
+    - errorlint
     - gci
     - ginkgolinter
     - gocritic

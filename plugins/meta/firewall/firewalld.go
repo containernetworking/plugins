@@ -91,7 +91,7 @@ func (fb *fwdBackend) Add(conf *FirewallNetConf, result *current.Result) error {
 		var res string
 		if err := firewalldObj.Call(firewalldZoneInterface+"."+firewalldAddSourceMethod, 0, conf.FirewalldZone, ipStr).Store(&res); err != nil {
 			if !strings.Contains(err.Error(), errZoneAlreadySet) {
-				return fmt.Errorf("failed to add the address %v to %v zone: %v", ipStr, conf.FirewalldZone, err)
+				return fmt.Errorf("failed to add the address %v to %v zone: %w", ipStr, conf.FirewalldZone, err)
 			}
 		}
 	}

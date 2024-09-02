@@ -33,15 +33,15 @@ import (
 func parseNetConf(bytes []byte) (*types.NetConf, error) {
 	conf := &types.NetConf{}
 	if err := json.Unmarshal(bytes, conf); err != nil {
-		return nil, fmt.Errorf("failed to parse network config: %v", err)
+		return nil, fmt.Errorf("failed to parse network config: %w", err)
 	}
 
 	if conf.RawPrevResult != nil {
 		if err := version.ParsePrevResult(conf); err != nil {
-			return nil, fmt.Errorf("failed to parse prevResult: %v", err)
+			return nil, fmt.Errorf("failed to parse prevResult: %w", err)
 		}
 		if _, err := current.NewResultFromResult(conf.PrevResult); err != nil {
-			return nil, fmt.Errorf("failed to convert result to current version: %v", err)
+			return nil, fmt.Errorf("failed to convert result to current version: %w", err)
 		}
 	}
 
@@ -161,8 +161,8 @@ func cmdDel(args *skel.CmdArgs) error {
 		//  if NetNs is passed down by the Cloud Orchestration Engine, or if it called multiple times
 		// so don't return an error if the device is already removed.
 		// https://github.com/kubernetes/kubernetes/issues/43014#issuecomment-287164444
-		_, ok := err.(ns.NSPathNotExistErr)
-		if ok {
+		var pneErr ns.NSPathNotExistErr
+		if errors.As(err, &pneErr) {
 			return nil
 		}
 		return err

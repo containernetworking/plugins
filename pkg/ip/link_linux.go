@@ -92,7 +92,7 @@ func makeVeth(name, vethPeerName string, mtu int, mac string, hostNS ns.NetNS) (
 			}
 			return peerName, veth, fmt.Errorf("container veth name (%q) peer provided (%q) already exists", name, peerName)
 		default:
-			return peerName, veth, fmt.Errorf("failed to make veth pair: %v", err)
+			return peerName, veth, fmt.Errorf("failed to make veth pair: %w", err)
 		}
 	}
 
@@ -105,7 +105,7 @@ func RandomVethName() (string, error) {
 	entropy := make([]byte, 4)
 	_, err := rand.Read(entropy)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate random veth name: %v", err)
+		return "", fmt.Errorf("failed to generate random veth name: %w", err)
 	}
 
 	// NetworkManager (recent versions) will ignore veth devices that start with "veth"
@@ -146,11 +146,11 @@ func SetupVethWithName(contVethName, hostVethName string, mtu int, contVethMac s
 	err = hostNS.Do(func(_ ns.NetNS) error {
 		hostVeth, err = netlink.LinkByName(hostVethName)
 		if err != nil {
-			return fmt.Errorf("failed to lookup %q in %q: %v", hostVethName, hostNS.Path(), err)
+			return fmt.Errorf("failed to lookup %q in %q: %w", hostVethName, hostNS.Path(), err)
 		}
 
 		if err = netlink.LinkSetUp(hostVeth); err != nil {
-			return fmt.Errorf("failed to set %q up: %v", hostVethName, err)
+			return fmt.Errorf("failed to set %q up: %w", hostVethName, err)
 		}
 
 		// we want to own the routes for this interface
@@ -175,14 +175,15 @@ func SetupVeth(contVethName string, mtu int, contVethMac string, hostNS ns.NetNS
 func DelLinkByName(ifName string) error {
 	iface, err := netlink.LinkByName(ifName)
 	if err != nil {
-		if _, ok := err.(netlink.LinkNotFoundError); ok {
+		var lnfErr netlink.LinkNotFoundError
+		if errors.As(err, &lnfErr) {
 			return ErrLinkNotFound
 		}
-		return fmt.Errorf("failed to lookup %q: %v", ifName, err)
+		return fmt.Errorf("failed to lookup %q: %w", ifName, err)
 	}
 
 	if err = netlink.LinkDel(iface); err != nil {
-		return fmt.Errorf("failed to delete %q: %v", ifName, err)
+		return fmt.Errorf("failed to delete %q: %w", ifName, err)
 	}
 
 	return nil
@@ -192,19 +193,20 @@ func DelLinkByName(ifName string) error {
 func DelLinkByNameAddr(ifName string) ([]*net.IPNet, error) {
 	iface, err := netlink.LinkByName(ifName)
 	if err != nil {
-		if _, ok := err.(netlink.LinkNotFoundError); ok {
+		var lnfErr netlink.LinkNotFoundError
+		if errors.As(err, &lnfErr) {
 			return nil, ErrLinkNotFound
 		}
-		return nil, fmt.Errorf("failed to lookup %q: %v", ifName, err)
+		return nil, fmt.Errorf("failed to lookup %q: %w", ifName, err)
 	}
 
 	addrs, err := netlink.AddrList(iface, netlink.FAMILY_ALL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get IP addresses for %q: %v", ifName, err)
+		return nil, fmt.Errorf("failed to get IP addresses for %q: %w", ifName, err)
 	}
 
 	if err = netlink.LinkDel(iface); err != nil {
-		return nil, fmt.Errorf("failed to delete %q: %v", ifName, err)
+		return nil, fmt.Errorf("failed to delete %q: %w", ifName, err)
 	}
 
 	out := []*net.IPNet{}
@@ -223,7 +225,7 @@ func DelLinkByNameAddr(ifName string) ([]*net.IPNet, error) {
 func GetVethPeerIfindex(ifName string) (netlink.Link, int, error) {
 	link, err := netlink.LinkByName(ifName)
 	if err != nil {
-		return nil, -1, fmt.Errorf("could not look up %q: %v", ifName, err)
+		return nil, -1, fmt.Errorf("could not look up %q: %w", ifName, err)
 	}
 	if _, ok := link.(*netlink.Veth); !ok {
 		return nil, -1, fmt.Errorf("interface %q was not a veth interface", ifName)
@@ -236,13 +238,13 @@ func GetVethPeerIfindex(ifName string) (netlink.Link, int, error) {
 		// Fall back to ethtool for 4.0 and earlier kernels
 		e, err := ethtool.NewEthtool()
 		if err != nil {
-			return nil, -1, fmt.Errorf("failed to initialize ethtool: %v", err)
+			return nil, -1, fmt.Errorf("failed to initialize ethtool: %w", err)
 		}
 		defer e.Close()
 
 		stats, err := e.Stats(link.Attrs().Name)
 		if err != nil {
-			return nil, -1, fmt.Errorf("failed to request ethtool stats: %v", err)
+			return nil, -1, fmt.Errorf("failed to request ethtool stats: %w", err)
 		}
 		n, ok := stats["peer_ifindex"]
 		if !ok {

@@ -113,7 +113,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			for _, alloc := range allocs {
 				_ = alloc.Release(args.ContainerID, args.IfName)
 			}
-			return fmt.Errorf("failed to allocate for range %d: %v", idx, err)
+			return fmt.Errorf("failed to allocate for range %d: %w", idx, err)
 		}
 
 		allocs = append(allocs, allocator)
