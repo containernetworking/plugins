@@ -42,8 +42,8 @@ var _ = Describe("portmapping configuration", func() {
 						]
 					},
 					"snat": false,
-					"conditionsV4": ["a", "b"],
-					"conditionsV6": ["c", "d"],
+					"conditionsV4": ["-s", "1.2.3.4"],
+					"conditionsV6": ["-s", "12::34"],
 					"prevResult": {
 						"interfaces": [
 							{"name": "host"},
@@ -74,8 +74,8 @@ var _ = Describe("portmapping configuration", func() {
 				c, _, err := parseConfig(configBytes, "container")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(c.CNIVersion).To(Equal(ver))
-				Expect(c.ConditionsV4).To(Equal(&[]string{"a", "b"}))
-				Expect(c.ConditionsV6).To(Equal(&[]string{"c", "d"}))
+				Expect(c.ConditionsV4).To(Equal(&[]string{"-s", "1.2.3.4"}))
+				Expect(c.ConditionsV6).To(Equal(&[]string{"-s", "12::34"}))
 				fvar := false
 				Expect(c.SNAT).To(Equal(&fvar))
 				Expect(c.Name).To(Equal("test"))
@@ -95,14 +95,14 @@ var _ = Describe("portmapping configuration", func() {
 					"type": "portmap",
 					"cniVersion": "%s",
 					"snat": false,
-					"conditionsV4": ["a", "b"],
-					"conditionsV6": ["c", "d"]
+					"conditionsV4": ["-s", "1.2.3.4"],
+					"conditionsV6": ["-s", "12::34"]
 				}`, ver))
 				c, _, err := parseConfig(configBytes, "container")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(c.CNIVersion).To(Equal(ver))
-				Expect(c.ConditionsV4).To(Equal(&[]string{"a", "b"}))
-				Expect(c.ConditionsV6).To(Equal(&[]string{"c", "d"}))
+				Expect(c.ConditionsV4).To(Equal(&[]string{"-s", "1.2.3.4"}))
+				Expect(c.ConditionsV6).To(Equal(&[]string{"-s", "12::34"}))
 				fvar := false
 				Expect(c.SNAT).To(Equal(&fvar))
 				Expect(c.Name).To(Equal("test"))
@@ -114,8 +114,8 @@ var _ = Describe("portmapping configuration", func() {
 					"type": "portmap",
 					"cniVersion": "%s",
 					"snat": false,
-					"conditionsV4": ["a", "b"],
-					"conditionsV6": ["c", "d"],
+					"conditionsV4": ["-s", "1.2.3.4"],
+					"conditionsV6": ["-s", "12::34"],
 					"runtimeConfig": {
 						"portMappings": [
 							{ "hostPort": 0, "containerPort": 80, "protocol": "tcp"}
@@ -136,7 +136,7 @@ var _ = Describe("portmapping configuration", func() {
 							{ "hostPort": 8080, "containerPort": 80, "protocol": "tcp"}
 						]
 					},
-					"conditionsV4": ["a", "b"],
+					"conditionsV4": ["-s", "1.2.3.4"],
 					"prevResult": {
 						"interfaces": [
 							{"name": "host"}
