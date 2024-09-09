@@ -543,4 +543,81 @@ var _ = Describe("sbr test", func() {
 		_, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
 		Expect(err).To(MatchError("This plugin must be called as chained plugin"))
 	})
+
+	It("Works with Table ID", func() {
+		ifname := "net1"
+		tableID := 5000
+		conf := `{
+	"cniVersion": "0.3.0",
+	"name": "cni-plugin-sbr-test",
+	"type": "sbr",
+	"table": %d,
+	"prevResult": {
+		"cniVersion": "0.3.0",
+		"interfaces": [
+			{
+				"name": "%s",
+				"sandbox": "%s"
+			}
+		],
+		"ips": [
+			{
+				"address": "192.168.1.209/24",
+				"interface": 0
+			},
+			{
+				"address": "192.168.101.209/24",
+				"interface": 0
+			}
+		],
+		"routes": []
+	}
+}`
+		conf = fmt.Sprintf(conf, tableID, ifname, targetNs.Path())
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNs.Path(),
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+
+		preStatus := createDefaultStatus()
+
+		err := setup(targetNs, preStatus)
+		Expect(err).NotTo(HaveOccurred())
+
+		oldStatus, err := readback(targetNs, []string{"net1", "eth0"})
+		Expect(err).NotTo(HaveOccurred())
+
+		_, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+		Expect(err).NotTo(HaveOccurred())
+
+		newStatus, err := readback(targetNs, []string{"net1", "eth0"})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Routes have not been moved.
+		Expect(newStatus).To(Equal(oldStatus))
+
+		// Fetch all rules for the requested table ID.
+		var rules []netlink.Rule
+		err = targetNs.Do(func(_ ns.NetNS) error {
+			var err error
+			rules, err = netlink.RuleListFiltered(
+				netlink.FAMILY_ALL, &netlink.Rule{
+					Table: tableID,
+				},
+				netlink.RT_FILTER_TABLE,
+			)
+			return err
+		})
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rules).To(HaveLen(2))
+
+		// Both IPs have been added as source based routes with requested table ID.
+		Expect(rules[0].Table).To(Equal(tableID))
+		Expect(rules[0].Src.String()).To(Equal("192.168.101.209/32"))
+		Expect(rules[1].Table).To(Equal(tableID))
+		Expect(rules[1].Src.String()).To(Equal("192.168.1.209/32"))
+	})
 })
