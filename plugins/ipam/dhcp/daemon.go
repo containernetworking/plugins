@@ -109,6 +109,11 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 		Gateway: l.Gateway(),
 	}}
 	result.Routes = l.Routes()
+	if conf.IPAM.Priority != 0 {
+		for _, r := range result.Routes {
+			r.Priority = conf.IPAM.Priority
+		}
+	}
 
 	return nil
 }
