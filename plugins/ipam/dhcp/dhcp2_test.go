@@ -61,8 +61,7 @@ var _ = Describe("DHCP Multiple Lease Operations", func() {
 		})
 
 		// Start the DHCP server
-		dhcpServerDone, err = dhcpServerStart(originalNS, 2, dhcpServerStopCh)
-		Expect(err).NotTo(HaveOccurred())
+		dhcpServerDone = dhcpServerStart(originalNS, 2, dhcpServerStopCh)
 
 		// Start the DHCP client daemon
 		dhcpPluginPath, err := exec.LookPath("dhcp")

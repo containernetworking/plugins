@@ -74,7 +74,7 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 		return fmt.Errorf("error parsing netconf: %v", err)
 	}
 
-	optsRequesting, optsProviding, err := prepareOptions(args.Args, conf.IPAM.ProvideOptions, conf.IPAM.RequestOptions)
+	opts, err := prepareOptions(args.Args, conf.IPAM.ProvideOptions, conf.IPAM.RequestOptions)
 	if err != nil {
 		return err
 	}
@@ -89,7 +89,7 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 	} else {
 		hostNetns := d.hostNetnsPrefix + args.Netns
 		l, err = AcquireLease(clientID, hostNetns, args.IfName,
-			optsRequesting, optsProviding,
+			opts,
 			d.clientTimeout, d.clientResendMax, d.broadcast)
 		if err != nil {
 			return err
