@@ -117,6 +117,7 @@ func ConfigureIface(ifName string, res *current.Result) error {
 			Dst:       &r.Dst,
 			LinkIndex: link.Attrs().Index,
 			Gw:        gw,
+			Priority:  r.Priority,
 		}
 
 		if r.Table != nil {
@@ -128,7 +129,7 @@ func ConfigureIface(ifName string, res *current.Result) error {
 		}
 
 		if err = netlink.RouteAddEcmp(&route); err != nil {
-			return fmt.Errorf("failed to add route '%v via %v dev %v (Scope: %v, Table: %d)': %v", r.Dst, gw, ifName, route.Scope, route.Table, err)
+			return fmt.Errorf("failed to add route '%v via %v dev %v metric %d (Scope: %v, Table: %d)': %v", r.Dst, gw, ifName, r.Priority, route.Scope, route.Table, err)
 		}
 	}
 
