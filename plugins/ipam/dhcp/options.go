@@ -15,13 +15,11 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"net"
 	"strconv"
-	"time"
 
-	"github.com/d2g/dhcp4"
+	dhcp4 "github.com/insomniacslk/dhcp/dhcpv4"
 
 	"github.com/containernetworking/cni/pkg/types"
 )
@@ -31,8 +29,8 @@ var optionNameToID = map[string]dhcp4.OptionCode{
 	"subnet-mask":             dhcp4.OptionSubnetMask,
 	"routers":                 dhcp4.OptionRouter,
 	"host-name":               dhcp4.OptionHostName,
-	"user-class":              dhcp4.OptionUserClass,
-	"vendor-class-identifier": dhcp4.OptionVendorClassIdentifier,
+	"user-class":              dhcp4.OptionUserClassInformation,
+	"vendor-class-identifier": dhcp4.OptionClassIdentifier,
 }
 
 func parseOptionName(option string) (dhcp4.OptionCode, error) {
@@ -41,18 +39,9 @@ func parseOptionName(option string) (dhcp4.OptionCode, error) {
 	}
 	i, err := strconv.ParseUint(option, 10, 8)
 	if err != nil {
-		return 0, fmt.Errorf("Can not parse option: %w", err)
+		return dhcp4.OptionPad, fmt.Errorf("Can not parse option: %w", err)
 	}
-	return dhcp4.OptionCode(i), nil
-}
-
-func parseRouter(opts dhcp4.Options) net.IP {
-	if opts, ok := opts[dhcp4.OptionRouter]; ok {
-		if len(opts) == 4 {
-			return net.IP(opts)
-		}
-	}
-	return nil
+	return dhcp4.GenericOptionCode(i), nil
 }
 
 func classfulSubnet(sn net.IP) net.IPNet {
@@ -62,100 +51,22 @@ func classfulSubnet(sn net.IP) net.IPNet {
 	}
 }
 
-func parseRoutes(opts dhcp4.Options) []*types.Route {
+func parseRoutes(opt []byte) []*types.Route {
 	// StaticRoutes format: pairs of:
 	// Dest = 4 bytes; Classful IP subnet
 	// Router = 4 bytes; IP address of router
 
 	routes := []*types.Route{}
-	if opt, ok := opts[dhcp4.OptionStaticRoute]; ok {
-		for len(opt) >= 8 {
-			sn := opt[0:4]
-			r := opt[4:8]
-			rt := &types.Route{
-				Dst: classfulSubnet(sn),
-				GW:  r,
-			}
-			routes = append(routes, rt)
-			opt = opt[8:]
+	for len(opt) >= 8 {
+		sn := opt[0:4]
+		r := opt[4:8]
+		rt := &types.Route{
+			Dst: classfulSubnet(sn),
+			GW:  r,
 		}
+		routes = append(routes, rt)
+		opt = opt[8:]
 	}
 
 	return routes
-}
-
-func parseCIDRRoutes(opts dhcp4.Options) []*types.Route {
-	// See RFC4332 for format (http://tools.ietf.org/html/rfc3442)
-
-	routes := []*types.Route{}
-	if opt, ok := opts[dhcp4.OptionClasslessRouteFormat]; ok {
-		for len(opt) >= 5 {
-			width := int(opt[0])
-			if width > 32 {
-				// error: can't have more than /32
-				return nil
-			}
-			// network bits are compacted to avoid zeros
-			octets := 0
-			if width > 0 {
-				octets = (width-1)/8 + 1
-			}
-
-			if len(opt) < 1+octets+4 {
-				// error: too short
-				return nil
-			}
-
-			sn := make([]byte, 4)
-			copy(sn, opt[1:octets+1])
-
-			gw := net.IP(opt[octets+1 : octets+5])
-
-			rt := &types.Route{
-				Dst: net.IPNet{
-					IP:   net.IP(sn),
-					Mask: net.CIDRMask(width, 32),
-				},
-				GW: gw,
-			}
-			routes = append(routes, rt)
-
-			opt = opt[octets+5:]
-		}
-	}
-	return routes
-}
-
-func parseSubnetMask(opts dhcp4.Options) net.IPMask {
-	mask, ok := opts[dhcp4.OptionSubnetMask]
-	if !ok {
-		return nil
-	}
-
-	return net.IPMask(mask)
-}
-
-func parseDuration(opts dhcp4.Options, code dhcp4.OptionCode, optName string) (time.Duration, error) {
-	val, ok := opts[code]
-	if !ok {
-		return 0, fmt.Errorf("option %v not found", optName)
-	}
-	if len(val) != 4 {
-		return 0, fmt.Errorf("option %v is not 4 bytes", optName)
-	}
-
-	secs := binary.BigEndian.Uint32(val)
-	return time.Duration(secs) * time.Second, nil
-}
-
-func parseLeaseTime(opts dhcp4.Options) (time.Duration, error) {
-	return parseDuration(opts, dhcp4.OptionIPAddressLeaseTime, "LeaseTime")
-}
-
-func parseRenewalTime(opts dhcp4.Options) (time.Duration, error) {
-	return parseDuration(opts, dhcp4.OptionRenewalTimeValue, "RenewalTime")
-}
-
-func parseRebindingTime(opts dhcp4.Options) (time.Duration, error) {
-	return parseDuration(opts, dhcp4.OptionRebindingTimeValue, "RebindingTime")
 }
