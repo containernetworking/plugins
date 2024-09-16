@@ -27,6 +27,20 @@ jobs:
           version: v1.55.2
           args: -v
           skip-cache: true
+  verify-vendor:
+    name: Verify vendor directory
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Check module vendoring
+        run: |
+          go mod tidy
+          go mod vendor
+          test -z "$(git status --porcelain)" || (echo "please run 'go mod tidy && go mod vendor', and submit your changes"; exit 1)
   build:
     name: Build all linux architectures
     needs: lint
