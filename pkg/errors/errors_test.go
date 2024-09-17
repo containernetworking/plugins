@@ -43,7 +43,7 @@ func TestAnnotate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if !reflect.DeepEqual(Annotatef(test.existingErr, test.contextMessage), test.expectedErr) {
+			if !reflect.DeepEqual(Annotate(test.existingErr, test.contextMessage), test.expectedErr) {
 				t.Errorf("test case %s fails", test.name)
 				return
 			}
