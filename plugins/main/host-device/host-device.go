@@ -393,7 +393,6 @@ func moveLinkOut(containerNs ns.NetNS, ifName string) error {
 		}
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}
