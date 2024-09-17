@@ -22,9 +22,8 @@ jobs:
           format: auto
       - uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.55.2
+          version: v1.61.0
           args: -v
-          skip-cache: true
   verify-vendor:
     name: Verify vendor directory
     runs-on: ubuntu-latest
