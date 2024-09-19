@@ -1754,6 +1754,9 @@ func cmdAddDelCheckTest(origNS, targetNS ns.NetNS, tc testCase, dataDir string) 
 
 	Expect(prevResult).NotTo(BeNil())
 
+	// Check ips config from prevResult
+	checkPreResult(prevResult)
+
 	confString := tc.netConfJSON(dataDir)
 
 	conf := &Net{}
@@ -1777,6 +1780,24 @@ func cmdAddDelCheckTest(origNS, targetNS ns.NetNS, tc testCase, dataDir string) 
 
 	if tc.vlan != 0 && !tc.isLayer2 {
 		delVlanAddrs(origNS, tc.vlan)
+	}
+}
+
+func checkPreResult(prevResult types.Result) {
+	result, err := types100.GetResult(prevResult)
+	Expect(err).NotTo(HaveOccurred())
+
+	ipCfgs, err := getIPCfgs(IFNAME, result)
+	Expect(err).NotTo(HaveOccurred())
+
+	for _, ipCfg := range ipCfgs {
+		Expect(ipCfg.Gateway).NotTo(BeEmpty())
+		if ipVersion(ipCfg.Address.IP) == "4" {
+			Expect(ipCfg.Address.IP.To4()).NotTo(BeNil())
+		} else {
+			Expect(ipCfg.Address.IP.To16()).NotTo(BeNil())
+		}
+		Expect(ipCfg.Address.Mask).NotTo(BeEmpty())
 	}
 }
 
