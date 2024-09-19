@@ -15,6 +15,7 @@
 package link_test
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/networkplumbing/go-nft/nft"
@@ -301,10 +302,10 @@ type configurerStub struct {
 func (a *configurerStub) Apply(c *nft.Config) (*nft.Config, error) {
 	a.applyCounter++
 	if a.failFirstApplyConfig && a.applyCounter == 1 {
-		return nil, fmt.Errorf(errorFirstApplyText)
+		return nil, errors.New(errorFirstApplyText)
 	}
 	if a.failSecondApplyConfig && a.applyCounter == 2 {
-		return nil, fmt.Errorf(errorSecondApplyText)
+		return nil, errors.New(errorSecondApplyText)
 	}
 	a.applyConfig = append(a.applyConfig, c)
 	if a.applyReturnNil {
@@ -316,7 +317,7 @@ func (a *configurerStub) Apply(c *nft.Config) (*nft.Config, error) {
 func (a *configurerStub) Read(_ ...string) (*nft.Config, error) {
 	a.readCalled = true
 	if a.failReadConfig {
-		return nil, fmt.Errorf(errorReadText)
+		return nil, errors.New(errorReadText)
 	}
 	return a.readConfig, nil
 }

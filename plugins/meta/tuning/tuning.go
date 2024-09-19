@@ -319,7 +319,7 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 	}
 
 	if len(errStr) > 0 {
-		return fmt.Errorf(strings.Join(errStr, "; "))
+		return errors.New(strings.Join(errStr, "; "))
 	}
 
 	if err = os.Remove(filePath); err != nil {

@@ -37,7 +37,20 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/containernetworking/plugins/pkg/utils"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
+)
+
+type PortMapper interface {
+	forwardPorts(config *PortMapConf, containerNet net.IPNet) error
+	checkPorts(config *PortMapConf, containerNet net.IPNet) error
+	unforwardPorts(config *PortMapConf) error
+}
+
+// These are vars rather than consts so we can "&" them
+var (
+	iptablesBackend = "iptables"
+	nftablesBackend = "nftables"
 )
 
 // PortMapEntry corresponds to a single entry in the port_mappings argument,
@@ -51,15 +64,22 @@ type PortMapEntry struct {
 
 type PortMapConf struct {
 	types.NetConf
-	SNAT                 *bool     `json:"snat,omitempty"`
-	ConditionsV4         *[]string `json:"conditionsV4"`
-	ConditionsV6         *[]string `json:"conditionsV6"`
-	MasqAll              bool      `json:"masqAll,omitempty"`
-	MarkMasqBit          *int      `json:"markMasqBit"`
-	ExternalSetMarkChain *string   `json:"externalSetMarkChain"`
-	RuntimeConfig        struct {
+
+	mapper PortMapper
+
+	// Generic config
+	Backend       *string   `json:"backend,omitempty"`
+	SNAT          *bool     `json:"snat,omitempty"`
+	ConditionsV4  *[]string `json:"conditionsV4"`
+	ConditionsV6  *[]string `json:"conditionsV6"`
+	MasqAll       bool      `json:"masqAll,omitempty"`
+	MarkMasqBit   *int      `json:"markMasqBit"`
+	RuntimeConfig struct {
 		PortMaps []PortMapEntry `json:"portMappings,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
+
+	// iptables-backend-specific config
+	ExternalSetMarkChain *string `json:"externalSetMarkChain"`
 
 	// These are fields parsed out of the config or the environment;
 	// included here for convenience
@@ -89,7 +109,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	netConf.ContainerID = args.ContainerID
 
 	if netConf.ContIPv4.IP != nil {
-		if err := forwardPorts(netConf, netConf.ContIPv4); err != nil {
+		if err := netConf.mapper.forwardPorts(netConf, netConf.ContIPv4); err != nil {
 			return err
 		}
 		// Delete conntrack entries for UDP to avoid conntrack blackholing traffic
@@ -98,10 +118,21 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if err := deletePortmapStaleConnections(netConf.RuntimeConfig.PortMaps, unix.AF_INET); err != nil {
 			log.Printf("failed to delete stale UDP conntrack entries for %s: %v", netConf.ContIPv4.IP, err)
 		}
+
+		if *netConf.SNAT {
+			// Set the route_localnet bit on the host interface, so that
+			// 127/8 can cross a routing boundary.
+			hostIfName := getRoutableHostIF(netConf.ContIPv4.IP)
+			if hostIfName != "" {
+				if err := enableLocalnetRouting(hostIfName); err != nil {
+					return fmt.Errorf("unable to enable route_localnet: %v", err)
+				}
+			}
+		}
 	}
 
 	if netConf.ContIPv6.IP != nil {
-		if err := forwardPorts(netConf, netConf.ContIPv6); err != nil {
+		if err := netConf.mapper.forwardPorts(netConf, netConf.ContIPv6); err != nil {
 			return err
 		}
 		// Delete conntrack entries for UDP to avoid conntrack blackholing traffic
@@ -130,7 +161,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	// We don't need to parse out whether or not we're using v6 or snat,
 	// deletion is idempotent
-	return unforwardPorts(netConf)
+	return netConf.mapper.unforwardPorts(netConf)
 }
 
 func main() {
@@ -161,13 +192,13 @@ func cmdCheck(args *skel.CmdArgs) error {
 	conf.ContainerID = args.ContainerID
 
 	if conf.ContIPv4.IP != nil {
-		if err := checkPorts(conf, conf.ContIPv4); err != nil {
+		if err := conf.mapper.checkPorts(conf, conf.ContIPv4); err != nil {
 			return err
 		}
 	}
 
 	if conf.ContIPv6.IP != nil {
-		if err := checkPorts(conf, conf.ContIPv6); err != nil {
+		if err := conf.mapper.checkPorts(conf, conf.ContIPv6); err != nil {
 			return err
 		}
 	}
@@ -197,6 +228,8 @@ func parseConfig(stdin []byte, ifName string) (*PortMapConf, *current.Result, er
 		}
 	}
 
+	conf.mapper = &portMapperIPTables{}
+
 	if conf.SNAT == nil {
 		tvar := true
 		conf.SNAT = &tvar
@@ -213,6 +246,21 @@ func parseConfig(stdin []byte, ifName string) (*PortMapConf, *current.Result, er
 
 	if *conf.MarkMasqBit < 0 || *conf.MarkMasqBit > 31 {
 		return nil, nil, fmt.Errorf("MasqMarkBit must be between 0 and 31")
+	}
+
+	err := ensureBackend(&conf)
+	if err != nil {
+		return nil, nil, err
+	}
+	switch *conf.Backend {
+	case iptablesBackend:
+		conf.mapper = &portMapperIPTables{}
+
+	case nftablesBackend:
+		conf.mapper = &portMapperNFTables{}
+
+	default:
+		return nil, nil, fmt.Errorf("unrecognized backend %q", *conf.Backend)
 	}
 
 	// Reject invalid port numbers
@@ -253,4 +301,59 @@ func parseConfig(stdin []byte, ifName string) (*PortMapConf, *current.Result, er
 	}
 
 	return &conf, result, nil
+}
+
+// ensureBackend validates and/or sets conf.Backend
+func ensureBackend(conf *PortMapConf) error {
+	backendConfig := make(map[string][]string)
+
+	if conf.ExternalSetMarkChain != nil {
+		backendConfig[iptablesBackend] = append(backendConfig[iptablesBackend], "externalSetMarkChain")
+	}
+	if conditionsBackend := detectBackendOfConditions(conf.ConditionsV4); conditionsBackend != "" {
+		backendConfig[conditionsBackend] = append(backendConfig[conditionsBackend], "conditionsV4")
+	}
+	if conditionsBackend := detectBackendOfConditions(conf.ConditionsV6); conditionsBackend != "" {
+		backendConfig[conditionsBackend] = append(backendConfig[conditionsBackend], "conditionsV6")
+	}
+
+	// If backend wasn't requested explicitly, default to iptables, unless it is not
+	// available (and nftables is). FIXME: flip this default at some point.
+	if conf.Backend == nil {
+		if !utils.SupportsIPTables() && utils.SupportsNFTables() {
+			conf.Backend = &nftablesBackend
+		} else {
+			conf.Backend = &iptablesBackend
+		}
+	}
+
+	// Make sure we dont have config for the wrong backend
+	var wrongBackend string
+	if *conf.Backend == iptablesBackend {
+		wrongBackend = nftablesBackend
+	} else {
+		wrongBackend = iptablesBackend
+	}
+	if len(backendConfig[wrongBackend]) > 0 {
+		return fmt.Errorf("%s backend was requested but configuration contains %s-specific options %v", *conf.Backend, wrongBackend, backendConfig[wrongBackend])
+	}
+
+	// OK
+	return nil
+}
+
+// detectBackendOfConditions returns "iptables" if conditions contains iptables
+// conditions, "nftables" if it contains nftables conditions, and "" if it is empty.
+func detectBackendOfConditions(conditions *[]string) string {
+	if conditions == nil || len(*conditions) == 0 || (*conditions)[0] == "" {
+		return ""
+	}
+
+	// The first token of any iptables condition would start with a hyphen (e.g. "-d",
+	// "--sport", "-m"). No nftables condition would start that way. (An nftables
+	// condition might include a negative number, but not as the first token.)
+	if (*conditions)[0][0] == '-' {
+		return iptablesBackend
+	}
+	return nftablesBackend
 }

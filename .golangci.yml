@@ -40,6 +40,5 @@ linters-settings:
       - prefix(github.com/containernetworking)
 
 run:
-  skip-dirs:
-    - vendor
   timeout: 5m
+  modules-download-mode: vendor

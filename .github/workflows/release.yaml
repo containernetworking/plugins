@@ -13,13 +13,13 @@ jobs:
       matrix:
         goarch: [amd64, arm, arm64, mips64le, ppc64le, riscv64, s390x]
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.22
-
-      - name: Checkout code
-        uses: actions/checkout@v4
+          go-version-file: go.mod
 
       - name: Build
         env:
@@ -68,13 +68,13 @@ jobs:
       - name: Install dos2unix
         run: sudo apt-get install dos2unix
 
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.21
-
-      - name: Checkout code
-        uses: actions/checkout@v4
+          go-version-file: go.mod
 
       - name: Build
         env:
