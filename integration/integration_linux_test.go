@@ -165,10 +165,12 @@ var _ = Describe("Basic PTP using cnitool", func() {
 
 			By(fmt.Sprintf("adding %s to %s\n\n", "chained-bridge-bandwidth", contNS1.ShortName()))
 			chainedBridgeBandwidthEnv.runInNS(hostNS, cnitoolBin, "add", "network-chain-test", contNS1.LongName())
+			log.Printf("xxxx %s", chainedBridgeBandwidthEnv.runInNS(contNS1, "ip", "addr"))
 			chainedBridgeIP := ipRegexp.FindString(chainedBridgeBandwidthEnv.runInNS(contNS1, "ip", "addr"))
 			Expect(chainedBridgeIP).To(ContainSubstring("10.12.2."))
 
 			By(fmt.Sprintf("adding %s to %s\n\n", "basic-bridge", contNS2.ShortName()))
+			log.Printf("yyyy %s", basicBridgeEnv.runInNS(contNS2, "ip", "addr"))
 			basicBridgeEnv.runInNS(hostNS, cnitoolBin, "add", "network-chain-test", contNS2.LongName())
 			basicBridgeIP := ipRegexp.FindString(basicBridgeEnv.runInNS(contNS2, "ip", "addr"))
 			Expect(basicBridgeIP).To(ContainSubstring("10.11.2."))
