@@ -36,9 +36,10 @@ import (
 // RFC 2131 suggests using exponential backoff, starting with 4sec
 // and randomized to +/- 1sec
 const (
-	resendDelay0     = 4 * time.Second
-	resendDelayMax   = 62 * time.Second
-	defaultLeaseTime = 60 * time.Minute
+	resendDelay0         = 4 * time.Second
+	resendDelayMax       = 62 * time.Second
+	defaultLeaseTime     = 60 * time.Minute
+	defaultResendTimeout = 208 * time.Second // fast resend + backoff resend
 )
 
 // To speed up the retry for first few failures, we retry without
@@ -69,6 +70,7 @@ type DHCPLease struct {
 	expireTime    time.Time
 	timeout       time.Duration
 	resendMax     time.Duration
+	resendTimeout time.Duration
 	broadcast     bool
 	stopping      uint32
 	stop          chan struct{}
@@ -155,7 +157,7 @@ func prepareOptions(cniArgs string, provideOptions []ProvideOption, requestOptio
 func AcquireLease(
 	clientID, netns, ifName string,
 	opts []dhcp4.Option,
-	timeout, resendMax time.Duration, broadcast bool,
+	timeout, resendMax time.Duration, resendTimeout time.Duration, broadcast bool,
 ) (*DHCPLease, error) {
 	errCh := make(chan error, 1)
 
@@ -163,15 +165,16 @@ func AcquireLease(
 	ctx, cancel := context.WithCancel(ctx)
 
 	l := &DHCPLease{
-		clientID:   clientID,
-		stop:       make(chan struct{}),
-		check:      make(chan struct{}),
-		timeout:    timeout,
-		resendMax:  resendMax,
-		broadcast:  broadcast,
-		opts:       opts,
-		cancelFunc: cancel,
-		ctx:        ctx,
+		clientID:      clientID,
+		stop:          make(chan struct{}),
+		check:         make(chan struct{}),
+		timeout:       timeout,
+		resendMax:     resendMax,
+		resendTimeout: resendTimeout,
+		broadcast:     broadcast,
+		opts:          opts,
+		cancelFunc:    cancel,
+		ctx:           ctx,
 	}
 
 	log.Printf("%v: acquiring lease", clientID)
@@ -213,6 +216,7 @@ func AcquireLease(
 func (l *DHCPLease) Stop() {
 	if atomic.CompareAndSwapUint32(&l.stopping, 0, 1) {
 		close(l.stop)
+		l.cancelFunc()
 	}
 	l.wg.Wait()
 }
@@ -251,9 +255,11 @@ func (l *DHCPLease) acquire() error {
 	}
 	defer c.Close()
 
-	pkt, err := backoffRetry(l.resendMax, func() (*nclient4.Lease, error) {
+	timeoutCtx, cancel := context.WithTimeoutCause(l.ctx, l.resendTimeout, errNoMoreTries)
+	defer cancel()
+	pkt, err := backoffRetry(timeoutCtx, l.resendMax, func() (*nclient4.Lease, error) {
 		return c.Request(
-			l.ctx,
+			timeoutCtx,
 			withClientID(l.clientID),
 			withAllOptions(l),
 		)
@@ -351,9 +357,11 @@ func (l *DHCPLease) renew() error {
 	}
 	defer c.Close()
 
-	lease, err := backoffRetry(l.resendMax, func() (*nclient4.Lease, error) {
+	timeoutCtx, cancel := context.WithTimeoutCause(l.ctx, l.resendTimeout, errNoMoreTries)
+	defer cancel()
+	lease, err := backoffRetry(timeoutCtx, l.resendMax, func() (*nclient4.Lease, error) {
 		return c.Renew(
-			l.ctx,
+			timeoutCtx,
 			l.latestLease,
 			withClientID(l.clientID),
 			withAllOptions(l),
@@ -441,7 +449,7 @@ func jitter(span time.Duration) time.Duration {
 	return time.Duration(float64(span) * (2.0*rand.Float64() - 1.0))
 }
 
-func backoffRetry(resendMax time.Duration, f func() (*nclient4.Lease, error)) (*nclient4.Lease, error) {
+func backoffRetry(ctx context.Context, resendMax time.Duration, f func() (*nclient4.Lease, error)) (*nclient4.Lease, error) {
 	baseDelay := resendDelay0
 	var sleepTime time.Duration
 	fastRetryLimit := resendFastMax
@@ -462,17 +470,16 @@ func backoffRetry(resendMax time.Duration, f func() (*nclient4.Lease, error)) (*
 
 		log.Printf("retrying in %f seconds", sleepTime.Seconds())
 
-		time.Sleep(sleepTime)
-
-		// only adjust delay time if we are in normal backoff stage
-		if baseDelay < resendMax && fastRetryLimit == 0 {
-			baseDelay *= 2
-		} else if fastRetryLimit == 0 { // only break if we are at normal delay
-			break
+		select {
+		case <-ctx.Done():
+			return nil, context.Cause(ctx)
+		case <-time.After(sleepTime):
+			// only adjust delay time if we are in normal backoff stage
+			if baseDelay < resendMax && fastRetryLimit == 0 {
+				baseDelay *= 2
+			}
 		}
 	}
-
-	return nil, errNoMoreTries
 }
 
 func newDHCPClient(
