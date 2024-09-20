@@ -166,13 +166,17 @@ var _ = Describe("Basic PTP using cnitool", func() {
 			By(fmt.Sprintf("adding %s to %s\n\n", "chained-bridge-bandwidth", contNS1.ShortName()))
 			chainedBridgeBandwidthEnv.runInNS(hostNS, cnitoolBin, "add", "network-chain-test", contNS1.LongName())
 			log.Printf("xxxx %s", chainedBridgeBandwidthEnv.runInNS(contNS1, "ip", "addr"))
-			log.Printf("xxxx %s", chainedBridgeBandwidthEnv.runInNS(contNS1, "tc", "class", "-s", "-d", "-g", "list"))
+			log.Printf("xxxx %s", chainedBridgeBandwidthEnv.runInNS(contNS1, "tc", "-s", "-d", "-g", "class", "list"))
+			Expect(chainedBridgeBandwidthEnv.runInNS(contNS1, "tc", "-s", "-d", "-g", "class", "list")).To(ContainSubstring("10.12.2."))
+
 			chainedBridgeIP := ipRegexp.FindString(chainedBridgeBandwidthEnv.runInNS(contNS1, "ip", "addr"))
 			Expect(chainedBridgeIP).To(ContainSubstring("10.12.2."))
 
+
 			By(fmt.Sprintf("adding %s to %s\n\n", "basic-bridge", contNS2.ShortName()))
 			log.Printf("yyyy %s", basicBridgeEnv.runInNS(contNS2, "ip", "addr"))
-			log.Printf("yyyy %s", basicBridgeEnv.runInNS(contNS2, "tc", "class", "-s", "-d", "-g", "list"))
+			log.Printf("yyyy %s", basicBridgeEnv.runInNS(contNS2, "tc", "-s", "-d", "-g", "class", "list"))
+			Expect(basicBridgeEnv.runInNS(contNS2, "tc", "-s", "-d", "-g", "class", "list")).To(ContainSubstring("10.11.2."))
 
 			basicBridgeEnv.runInNS(hostNS, cnitoolBin, "add", "network-chain-test", contNS2.LongName())
 			basicBridgeIP := ipRegexp.FindString(basicBridgeEnv.runInNS(contNS2, "ip", "addr"))
