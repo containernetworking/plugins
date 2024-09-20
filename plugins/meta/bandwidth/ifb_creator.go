@@ -75,7 +75,7 @@ func CreateIngressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string,
 		exclude = true
 	}
 
-	return createHTB(rateInBits, burstInBits, hostDevice.Attrs().Index, subnets, exclude)
+	return createHTB(rateInBits, burstInBits, hostDevice.Attrs().MTU, hostDevice.Attrs().Index, subnets, exclude)
 }
 
 func CreateEgressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string, includeSubnets []string, hostDeviceName string, ifbDeviceName string) error {
@@ -134,7 +134,7 @@ func CreateEgressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string, 
 	}
 
 	// throttle traffic on ifb device
-	err = createHTB(rateInBits, burstInBits, ifbDevice.Attrs().Index, subnets, exclude)
+	err = createHTB(rateInBits, burstInBits, ifbDevice.Attrs().MTU, ifbDevice.Attrs().Index, subnets, exclude)
 	if err != nil {
 		// egress from the container/netns pov = ingress from the main netns/host pov
 		return fmt.Errorf("create htb container egress qos rules: %s", err)
@@ -142,7 +142,7 @@ func CreateEgressQdisc(rateInBits, burstInBits uint64, excludeSubnets []string, 
 	return nil
 }
 
-func createHTB(rateInBits, burstInBits uint64, linkIndex int, subnets []string, excludeSubnets bool) error {
+func createHTB(rateInBits, burstInBits uint64, mtu int, linkIndex int, subnets []string, excludeSubnets bool) error {
 	// Netlink struct fields are not clear, let's use shell
 
 	defaultClassID := UnShapedClassMinorID
@@ -160,7 +160,7 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, subnets []string, 
 			Parent:    netlink.HANDLE_ROOT,
 		},
 		Defcls: uint32(defaultClassID),
-		// No idea what these are so let's keep the default values from source code...
+		// Keep the default values from source code
 		Version:      3,
 		Rate2Quantum: 10,
 	}
@@ -184,6 +184,12 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, subnets []string, 
 			Handle:    netlink.MakeHandle(1, ShapedClassMinorID),
 			Parent:    netlink.MakeHandle(1, 0),
 		},
+		// maximum bytes per cycle to dequeue, kernel is warning and limiting unreasonable values
+		// should be set to MTU + hardware header length of 14 bytes to avoid bursts which may cause subsequent txqueuelen drops
+		// https://github.com/torvalds/linux/blob/baeb9a7d8b60b021d907127509c44507539c15e5/net/sched/sch_htb.c#L2037
+		// https://github.com/torvalds/linux/blob/baeb9a7d8b60b021d907127509c44507539c15e5/net/sched/sch_htb.c#L2052-L2055
+		Quantum: uint32(mtu + 14),
+
 		Rate:   rateInBytes,
 		Buffer: bufferInBytes,
 		// Let's set up the "burst" rate to twice the specified rate
@@ -206,8 +212,15 @@ func createHTB(rateInBits, burstInBits uint64, linkIndex int, subnets []string, 
 			Handle:    netlink.MakeHandle(1, UnShapedClassMinorID),
 			Parent:    qdisc.Handle,
 		},
+		// maximum bytes per cycle to dequeue, kernel is warning and limiting unreasonable values
+		// should be set to MTU + hardware header length of 14 bytes to avoid bursts which may cause subsequent txqueuelen drops
+		// https://github.com/torvalds/linux/blob/baeb9a7d8b60b021d907127509c44507539c15e5/net/sched/sch_htb.c#L2037
+		// https://github.com/torvalds/linux/blob/baeb9a7d8b60b021d907127509c44507539c15e5/net/sched/sch_htb.c#L2052-L2055
+		Quantum: uint32(mtu + 14),
+
 		Rate: bigRate,
 		Ceil: bigRate,
+
 		// No need for any burst, the minimum buffer size in q_htb.c should be enough to handle the rate which
 		// is already more than enough
 	}
