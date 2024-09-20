@@ -45,7 +45,8 @@ func getTmpDir() (string, error) {
 }
 
 type DhcpServer struct {
-	cmd *exec.Cmd
+	cmd  *exec.Cmd
+	lock sync.Mutex
 
 	startAddr net.IP
 	endAddr   net.IP
@@ -53,6 +54,16 @@ type DhcpServer struct {
 }
 
 func (s *DhcpServer) Serve() error {
+	if err := s.Start(); err != nil {
+		return err
+	}
+	return s.cmd.Wait()
+}
+
+func (s *DhcpServer) Start() error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	s.cmd = exec.Command(
 		"dnsmasq",
 		"--no-daemon",
@@ -69,11 +80,9 @@ func (s *DhcpServer) Serve() error {
 }
 
 func (s *DhcpServer) Stop() error {
-	if err := s.cmd.Process.Kill(); err != nil {
-		return err
-	}
-	_, err := s.cmd.Process.Wait()
-	return err
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.cmd.Process.Kill()
 }
 
 func dhcpServerStart(netns ns.NetNS, numLeases int, stopCh <-chan bool) *sync.WaitGroup {
@@ -535,7 +544,7 @@ var _ = Describe("DHCP Lease Unavailable Operations", func() {
 		// `go test` timeout with default delays. Since our DHCP server
 		// and client daemon are local processes anyway, we can depend on
 		// them to respond very quickly.
-		clientCmd = exec.Command(dhcpPluginPath, "daemon", "-socketpath", socketPath, "-timeout", "2s", "-resendmax", "8s")
+		clientCmd = exec.Command(dhcpPluginPath, "daemon", "-socketpath", socketPath, "-timeout", "2s", "-resendmax", "8s", "--resendtimeout", "10s")
 
 		// copy dhcp client's stdout/stderr to test stdout
 		var b bytes.Buffer
