@@ -53,7 +53,9 @@ func setup(targetNs ns.NetNS, status netStatus) error {
 	err := targetNs.Do(func(_ ns.NetNS) error {
 		for _, dev := range status.Devices {
 			log.Printf("Adding dev %s\n", dev.Name)
-			link := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Name: dev.Name}}
+			linkAttrs := netlink.NewLinkAttrs()
+			linkAttrs.Name = dev.Name
+			link := &netlink.Dummy{LinkAttrs: linkAttrs}
 			err := netlink.LinkAdd(link)
 			if err != nil {
 				return err

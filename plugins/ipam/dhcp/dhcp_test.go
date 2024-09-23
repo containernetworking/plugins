@@ -155,11 +155,11 @@ var _ = Describe("DHCP Operations", func() {
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
+			linkAttrs := netlink.NewLinkAttrs()
+			linkAttrs.Name = hostVethName
 			err = netlink.LinkAdd(&netlink.Veth{
-				LinkAttrs: netlink.LinkAttrs{
-					Name: hostVethName,
-				},
-				PeerName: contVethName,
+				LinkAttrs: linkAttrs,
+				PeerName:  contVethName,
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -394,11 +394,11 @@ func dhcpSetupOriginalNS() (chan bool, string, ns.NetNS, ns.NetNS, error) {
 	err = originalNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
+		linkAttrs := netlink.NewLinkAttrs()
+		linkAttrs.Name = hostBridgeName
 		// Create bridge in the "host" (original) NS
 		br = &netlink.Bridge{
-			LinkAttrs: netlink.LinkAttrs{
-				Name: hostBridgeName,
-			},
+			LinkAttrs: linkAttrs,
 		}
 
 		err = netlink.LinkAdd(br)

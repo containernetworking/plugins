@@ -346,10 +346,10 @@ var _ = Describe("Add, check, remove tap plugin", func() {
 
 			Expect(
 				targetNS.Do(func(ns.NetNS) error {
+					linkAttrs := netlink.NewLinkAttrs()
+					linkAttrs.Name = bridgeName
 					if err := netlink.LinkAdd(&netlink.Bridge{
-						LinkAttrs: netlink.LinkAttrs{
-							Name: bridgeName,
-						},
+						LinkAttrs: linkAttrs,
 					}); err != nil {
 						return err
 					}

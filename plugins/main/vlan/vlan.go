@@ -119,14 +119,15 @@ func createVlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interfac
 		return nil, err
 	}
 
+	linkAttrs := netlink.NewLinkAttrs()
+	linkAttrs.MTU = conf.MTU
+	linkAttrs.Name = tmpName
+	linkAttrs.ParentIndex = m.Attrs().Index
+	linkAttrs.Namespace = netlink.NsFd(int(netns.Fd()))
+
 	v := &netlink.Vlan{
-		LinkAttrs: netlink.LinkAttrs{
-			MTU:         conf.MTU,
-			Name:        tmpName,
-			ParentIndex: m.Attrs().Index,
-			Namespace:   netlink.NsFd(int(netns.Fd())),
-		},
-		VlanId: conf.VlanID,
+		LinkAttrs: linkAttrs,
+		VlanId:    conf.VlanID,
 	}
 
 	if conf.LinkContNs {

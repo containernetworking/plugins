@@ -208,11 +208,11 @@ var _ = Describe("macvlan Operations", func() {
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
+			linkAttrs := netlink.NewLinkAttrs()
+			linkAttrs.Name = MASTER_NAME
 			// Add master
 			err = netlink.LinkAdd(&netlink.Dummy{
-				LinkAttrs: netlink.LinkAttrs{
-					Name: MASTER_NAME,
-				},
+				LinkAttrs: linkAttrs,
 			})
 			Expect(err).NotTo(HaveOccurred())
 			_, err = netlink.LinkByName(MASTER_NAME)
@@ -224,11 +224,11 @@ var _ = Describe("macvlan Operations", func() {
 		err = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
+			linkAttrs := netlink.NewLinkAttrs()
+			linkAttrs.Name = MASTER_NAME_INCONTAINER
 			// Add master
 			err = netlink.LinkAdd(&netlink.Dummy{
-				LinkAttrs: netlink.LinkAttrs{
-					Name: MASTER_NAME_INCONTAINER,
-				},
+				LinkAttrs: linkAttrs,
 			})
 			Expect(err).NotTo(HaveOccurred())
 			_, err = netlink.LinkByName(MASTER_NAME_INCONTAINER)

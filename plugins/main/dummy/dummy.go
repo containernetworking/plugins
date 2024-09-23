@@ -43,11 +43,12 @@ func parseNetConf(bytes []byte) (*types.NetConf, error) {
 func createDummy(ifName string, netns ns.NetNS) (*current.Interface, error) {
 	dummy := &current.Interface{}
 
+	linkAttrs := netlink.NewLinkAttrs()
+	linkAttrs.Name = ifName
+	linkAttrs.Namespace = netlink.NsFd(int(netns.Fd()))
+
 	dm := &netlink.Dummy{
-		LinkAttrs: netlink.LinkAttrs{
-			Name:      ifName,
-			Namespace: netlink.NsFd(int(netns.Fd())),
-		},
+		LinkAttrs: linkAttrs,
 	}
 
 	if err := netlink.LinkAdd(dm); err != nil {

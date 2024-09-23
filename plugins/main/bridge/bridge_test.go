@@ -1890,10 +1890,10 @@ var _ = Describe("bridge Operations", func() {
 			err := originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
+				linkAttrs := netlink.NewLinkAttrs()
+				linkAttrs.Name = BRNAME
 				err := netlink.LinkAdd(&netlink.Bridge{
-					LinkAttrs: netlink.LinkAttrs{
-						Name: BRNAME,
-					},
+					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
 				link, err := netlink.LinkByName(BRNAME)

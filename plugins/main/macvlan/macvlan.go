@@ -226,12 +226,11 @@ func createMacvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Inter
 		return nil, err
 	}
 
-	linkAttrs := netlink.LinkAttrs{
-		MTU:         conf.MTU,
-		Name:        tmpName,
-		ParentIndex: m.Attrs().Index,
-		Namespace:   netlink.NsFd(int(netns.Fd())),
-	}
+	linkAttrs := netlink.NewLinkAttrs()
+	linkAttrs.MTU = conf.MTU
+	linkAttrs.Name = tmpName
+	linkAttrs.ParentIndex = m.Attrs().Index
+	linkAttrs.Namespace = netlink.NsFd(int(netns.Fd()))
 
 	if conf.Mac != "" {
 		addr, err := net.ParseMAC(conf.Mac)

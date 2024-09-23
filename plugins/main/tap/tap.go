@@ -137,10 +137,9 @@ func createTapWithIptool(tmpName string, mtu int, multiqueue bool, mac string, o
 }
 
 func createLinkWithNetlink(tmpName string, mtu int, nsFd int, multiqueue bool, mac string, owner *uint32, group *uint32) error {
-	linkAttrs := netlink.LinkAttrs{
-		Name:      tmpName,
-		Namespace: netlink.NsFd(nsFd),
-	}
+	linkAttrs := netlink.NewLinkAttrs()
+	linkAttrs.Name = tmpName
+	linkAttrs.Namespace = netlink.NsFd(nsFd)
 	if mtu != 0 {
 		linkAttrs.MTU = mtu
 	}
