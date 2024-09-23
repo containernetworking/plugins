@@ -48,11 +48,11 @@ var _ = Describe("Sysctl tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		testIfaceName = fmt.Sprintf("cnitest.%d", rand.Intn(100000))
+		testLinkAttrs := netlink.NewLinkAttrs()
+		testLinkAttrs.Name = testIfaceName
+		testLinkAttrs.Namespace = netlink.NsFd(int(testNs.Fd()))
 		testIface := &netlink.Dummy{
-			LinkAttrs: netlink.LinkAttrs{
-				Name:      testIfaceName,
-				Namespace: netlink.NsFd(int(testNs.Fd())),
-			},
+			LinkAttrs: testLinkAttrs,
 		}
 
 		err = netlink.LinkAdd(testIface)

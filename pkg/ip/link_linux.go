@@ -32,11 +32,12 @@ var ErrLinkNotFound = errors.New("link not found")
 
 // makeVethPair is called from within the container's network namespace
 func makeVethPair(name, peer string, mtu int, mac string, hostNS ns.NetNS) (netlink.Link, error) {
+	linkAttrs := netlink.NewLinkAttrs()
+	linkAttrs.Name = name
+	linkAttrs.MTU = mtu
+
 	veth := &netlink.Veth{
-		LinkAttrs: netlink.LinkAttrs{
-			Name: name,
-			MTU:  mtu,
-		},
+		LinkAttrs:     linkAttrs,
 		PeerName:      peer,
 		PeerNamespace: netlink.NsFd(int(hostNS.Fd())),
 	}

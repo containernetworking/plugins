@@ -341,10 +341,10 @@ var _ = Describe("base functionality", func() {
 			// prepare ifname in original namespace
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
+				linkAttrs := netlink.NewLinkAttrs()
+				linkAttrs.Name = ifname
 				err := netlink.LinkAdd(&netlink.Dummy{
-					LinkAttrs: netlink.LinkAttrs{
-						Name: ifname,
-					},
+					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
 				origLink, err = netlink.LinkByName(ifname)
@@ -422,10 +422,10 @@ var _ = Describe("base functionality", func() {
 			// prepare host device in original namespace
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
+				linkAttrs := netlink.NewLinkAttrs()
+				linkAttrs.Name = ifname
 				err := netlink.LinkAdd(&netlink.Dummy{
-					LinkAttrs: netlink.LinkAttrs{
-						Name: ifname,
-					},
+					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
 				origLink, err = netlink.LinkByName(ifname)
@@ -483,10 +483,10 @@ var _ = Describe("base functionality", func() {
 			// create another conflict host device with same name "dummy0"
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
+				linkAttrs := netlink.NewLinkAttrs()
+				linkAttrs.Name = ifname
 				err := netlink.LinkAdd(&netlink.Dummy{
-					LinkAttrs: netlink.LinkAttrs{
-						Name: ifname,
-					},
+					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
 				conflictLink, err = netlink.LinkByName(ifname)
@@ -608,10 +608,10 @@ var _ = Describe("base functionality", func() {
 			// prepare ifname in original namespace
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
+				linkAttrs := netlink.NewLinkAttrs()
+				linkAttrs.Name = ifname
 				err := netlink.LinkAdd(&netlink.Dummy{
-					LinkAttrs: netlink.LinkAttrs{
-						Name: ifname,
-					},
+					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
 				origLink, err = netlink.LinkByName(ifname)
@@ -720,10 +720,10 @@ var _ = Describe("base functionality", func() {
 			// prepare ifname in original namespace
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
+				linkAttrs := netlink.NewLinkAttrs()
+				linkAttrs.Name = ifname
 				err := netlink.LinkAdd(&netlink.Dummy{
-					LinkAttrs: netlink.LinkAttrs{
-						Name: ifname,
-					},
+					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
 				origLink, err = netlink.LinkByName(ifname)
@@ -912,10 +912,10 @@ var _ = Describe("base functionality", func() {
 			// prepare ifname in original namespace
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
+				linkAttrs := netlink.NewLinkAttrs()
+				linkAttrs.Name = ifname
 				err := netlink.LinkAdd(&netlink.Dummy{
-					LinkAttrs: netlink.LinkAttrs{
-						Name: ifname,
-					},
+					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
 				origLink, err = netlink.LinkByName(ifname)
@@ -969,10 +969,10 @@ var _ = Describe("base functionality", func() {
 			// prepare ifname in original namespace
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
+				linkAttrs := netlink.NewLinkAttrs()
+				linkAttrs.Name = ifname
 				err := netlink.LinkAdd(&netlink.Dummy{
-					LinkAttrs: netlink.LinkAttrs{
-						Name: ifname,
-					},
+					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
 				origLink, err = netlink.LinkByName(ifname)
@@ -1093,10 +1093,10 @@ var _ = Describe("base functionality", func() {
 			// prepare host device in original namespace
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
+				linkAttrs := netlink.NewLinkAttrs()
+				linkAttrs.Name = ifname
 				err := netlink.LinkAdd(&netlink.Dummy{
-					LinkAttrs: netlink.LinkAttrs{
-						Name: ifname,
-					},
+					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
 				origLink, err = netlink.LinkByName(ifname)
@@ -1154,10 +1154,10 @@ var _ = Describe("base functionality", func() {
 			// create another conflict host device with same name "dummy0"
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
+				linkAttrs := netlink.NewLinkAttrs()
+				linkAttrs.Name = ifname
 				err := netlink.LinkAdd(&netlink.Dummy{
-					LinkAttrs: netlink.LinkAttrs{
-						Name: ifname,
-					},
+					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
 				conflictLink, err = netlink.LinkByName(ifname)
@@ -1227,10 +1227,10 @@ var _ = Describe("base functionality", func() {
 			// prepare host device in original namespace
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
+				linkAttrs := netlink.NewLinkAttrs()
+				linkAttrs.Name = hostIfname
 				err := netlink.LinkAdd(&netlink.Dummy{
-					LinkAttrs: netlink.LinkAttrs{
-						Name: hostIfname,
-					},
+					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
 				origLink, err = netlink.LinkByName(hostIfname)
@@ -1243,10 +1243,10 @@ var _ = Describe("base functionality", func() {
 			// prepare device in container namespace with same name as host device
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
+				linkAttrs := netlink.NewLinkAttrs()
+				linkAttrs.Name = containerAdditionalIfname
 				err := netlink.LinkAdd(&netlink.Dummy{
-					LinkAttrs: netlink.LinkAttrs{
-						Name: containerAdditionalIfname,
-					},
+					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
 				containerLink, err = netlink.LinkByName(containerAdditionalIfname)

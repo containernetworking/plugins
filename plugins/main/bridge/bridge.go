@@ -335,16 +335,11 @@ func bridgeByName(name string) (*netlink.Bridge, error) {
 }
 
 func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*netlink.Bridge, error) {
+	linkAttrs := netlink.NewLinkAttrs()
+	linkAttrs.Name = brName
+	linkAttrs.MTU = mtu
 	br := &netlink.Bridge{
-		LinkAttrs: netlink.LinkAttrs{
-			Name: brName,
-			MTU:  mtu,
-			// Let kernel use default txqueuelen; leaving it unset
-			// means 0, and a zero-length TX queue messes up FIFO
-			// traffic shapers which use TX queue length as the
-			// default packet limit
-			TxQLen: -1,
-		},
+		LinkAttrs: linkAttrs,
 	}
 	if vlanFiltering {
 		br.VlanFiltering = &vlanFiltering

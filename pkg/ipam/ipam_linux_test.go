@@ -56,11 +56,12 @@ var _ = Describe("ConfigureIface", func() {
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
+			linkAttrs := netlink.NewLinkAttrs()
+			linkAttrs.Name = LINK_NAME
+
 			// Add master
 			err = netlink.LinkAdd(&netlink.Dummy{
-				LinkAttrs: netlink.LinkAttrs{
-					Name: LINK_NAME,
-				},
+				LinkAttrs: linkAttrs,
 			})
 			Expect(err).NotTo(HaveOccurred())
 			_, err = netlink.LinkByName(LINK_NAME)

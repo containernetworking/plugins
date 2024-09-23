@@ -110,10 +110,10 @@ var _ = Describe("tuning plugin", func() {
 		err = originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
+			linkAttrs := netlink.NewLinkAttrs()
+			linkAttrs.Name = IFNAME
 			err = netlink.LinkAdd(&netlink.Dummy{
-				LinkAttrs: netlink.LinkAttrs{
-					Name: IFNAME,
-				},
+				LinkAttrs: linkAttrs,
 			})
 			Expect(err).NotTo(HaveOccurred())
 			link, err := netlink.LinkByName(IFNAME)

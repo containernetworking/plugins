@@ -48,11 +48,11 @@ func createVRF(name string, tableID uint32) (*netlink.Vrf, error) {
 		}
 	}
 
+	linkAttrs := netlink.NewLinkAttrs()
+	linkAttrs.Name = name
 	vrf := &netlink.Vrf{
-		LinkAttrs: netlink.LinkAttrs{
-			Name: name,
-		},
-		Table: tableID,
+		LinkAttrs: linkAttrs,
+		Table:     tableID,
 	}
 
 	err = netlink.LinkAdd(vrf)

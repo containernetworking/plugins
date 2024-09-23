@@ -94,19 +94,19 @@ var _ = Describe("vrf plugin", func() {
 		err = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
+			la0 := netlink.NewLinkAttrs()
+			la0.Name = IF0Name
 			err = netlink.LinkAdd(&netlink.Dummy{
-				LinkAttrs: netlink.LinkAttrs{
-					Name: IF0Name,
-				},
+				LinkAttrs: la0,
 			})
 			Expect(err).NotTo(HaveOccurred())
 			_, err = netlink.LinkByName(IF0Name)
 			Expect(err).NotTo(HaveOccurred())
 
+			la1 := netlink.NewLinkAttrs()
+			la1.Name = IF1Name
 			err = netlink.LinkAdd(&netlink.Dummy{
-				LinkAttrs: netlink.LinkAttrs{
-					Name: IF1Name,
-				},
+				LinkAttrs: la1,
 			})
 			Expect(err).NotTo(HaveOccurred())
 			_, err = netlink.LinkByName(IF1Name)
@@ -437,10 +437,10 @@ var _ = Describe("vrf plugin", func() {
 				defer GinkgoRecover()
 				l, err := netlink.LinkByName(IF0Name)
 				Expect(err).NotTo(HaveOccurred())
+				linkAttrs := netlink.NewLinkAttrs()
+				linkAttrs.Name = "testrbridge"
 				br := &netlink.Bridge{
-					LinkAttrs: netlink.LinkAttrs{
-						Name: "testrbridge",
-					},
+					LinkAttrs: linkAttrs,
 				}
 				err = netlink.LinkAdd(br)
 				Expect(err).NotTo(HaveOccurred())
