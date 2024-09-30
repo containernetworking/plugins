@@ -117,11 +117,16 @@ func readback(targetNs ns.NetNS, devNames []string) (netStatus, error) {
 				return err
 			}
 
+			routesNoLinkLocal := []netlink.Route{}
 			for _, route := range routes {
+				if route.Dst.IP.IsLinkLocalMulticast() || route.Dst.IP.IsLinkLocalUnicast() {
+					continue
+				}
 				log.Printf("Got %s route %v", name, route)
+				routesNoLinkLocal = append(routesNoLinkLocal, route)
 			}
 
-			retVal.Devices[i].Routes = routes
+			retVal.Devices[i].Routes = routesNoLinkLocal
 		}
 
 		rules, err := netlink.RuleList(netlink.FAMILY_ALL)
