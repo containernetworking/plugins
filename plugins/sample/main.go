@@ -24,6 +24,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/containernetworking/plugins/pkg/ipam"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
@@ -151,15 +152,39 @@ func cmdDel(args *skel.CmdArgs) error {
 func main() {
 	// replace TODO with your plugin name
 	skel.PluginMainFuncs(skel.CNIFuncs{
-		Add:   cmdAdd,
-		Check: cmdCheck,
-		Del:   cmdDel,
+		Add:    cmdAdd,
+		Check:  cmdCheck,
+		Del:    cmdDel,
+		Status: cmdStatus,
 		/* FIXME GC */
-		/* FIXME Status */
 	}, version.All, bv.BuildString("TODO"))
 }
 
 func cmdCheck(_ *skel.CmdArgs) error {
 	// TODO: implement
 	return fmt.Errorf("not implemented")
+}
+
+// cmdStatus implements the STATUS command, which indicates whether or not
+// this plugin is able to accept ADD requests.
+//
+// If the plugin has external dependencies, such as a daemon
+// or chained ipam plugin, it should determine their status. If all is well,
+// and an ADD can be successfully processed, return nil
+func cmdStatus(args *skel.CmdArgs) error {
+	conf, err := parseConfig(args.StdinData)
+	if err != nil {
+		return err
+	}
+	_ = conf
+
+	// If this plugins delegates IPAM, ensure that IPAM is also running
+	if err := ipam.ExecStatus(conf.IPAM.Type, args.StdinData); err != nil {
+		return err
+	}
+
+	// TODO: implement STATUS here
+	// e.g. querying an external deamon, or delegating STATUS to an IPAM plugin
+
+	return nil
 }

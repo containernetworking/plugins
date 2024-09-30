@@ -508,6 +508,11 @@ type (
 
 func newTesterByVersion(version string, testNS, targetNS ns.NetNS) cmdAddDelTester {
 	switch {
+	case strings.HasPrefix(version, "1.1."):
+		return &testerV10x{
+			testNS:   testNS,
+			targetNS: targetNS,
+		}
 	case strings.HasPrefix(version, "1.0."):
 		return &testerV10x{
 			testNS:   testNS,
@@ -1482,6 +1487,14 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (types.Re
 	// Execute cmdADD on the plugin
 	err := tester.testNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
+
+		// check that STATUS is
+		if testutils.SpecVersionHasSTATUS(tc.cniVersion) {
+			err := testutils.CmdStatus(func() error {
+				return cmdStatus(&skel.CmdArgs{StdinData: []byte(tc.netConfJSON(dataDir))})
+			})
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		r, raw, err := testutils.CmdAddWithArgs(tester.args, func() error {
 			return cmdAdd(tester.args)
