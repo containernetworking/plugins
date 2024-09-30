@@ -231,7 +231,7 @@ type (
 
 func newTesterByVersion(version string) tester {
 	switch {
-	case strings.HasPrefix(version, "1.0."):
+	case strings.HasPrefix(version, "1."):
 		return &testerV10x{}
 	case strings.HasPrefix(version, "0.4."):
 		return &testerV04x{}
@@ -362,6 +362,15 @@ var _ = Describe("base functionality", func() {
 				"type": "host-device",
 				"device": %q
 			}`, ver, ifname)
+
+			// if v1.1 or greater, call CmdStatus
+			if testutils.SpecVersionHasSTATUS(ver) {
+				err := testutils.CmdStatus(func() error {
+					return cmdStatus(&skel.CmdArgs{StdinData: []byte(conf)})
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
 			args := &skel.CmdArgs{
 				ContainerID: "dummy",
 				Netns:       targetNS.Path(),
