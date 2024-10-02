@@ -61,13 +61,12 @@ var _ = Describe("DHCP Multiple Lease Operations", func() {
 		})
 
 		// Start the DHCP server
-		dhcpServerDone, err = dhcpServerStart(originalNS, 2, dhcpServerStopCh)
-		Expect(err).NotTo(HaveOccurred())
+		dhcpServerDone = dhcpServerStart(originalNS, 2, dhcpServerStopCh)
 
 		// Start the DHCP client daemon
 		dhcpPluginPath, err := exec.LookPath("dhcp")
 		Expect(err).NotTo(HaveOccurred())
-		clientCmd = exec.Command(dhcpPluginPath, "daemon", "-socketpath", socketPath)
+		clientCmd = exec.Command(dhcpPluginPath, "daemon", "-socketpath", socketPath, "--timeout", "2s", "--resendtimeout", "8s")
 		err = clientCmd.Start()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(clientCmd.Process).NotTo(BeNil())

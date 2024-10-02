@@ -19,7 +19,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/d2g/dhcp4"
+	dhcp4 "github.com/insomniacslk/dhcp/dhcpv4"
 
 	"github.com/containernetworking/cni/pkg/types"
 )
@@ -61,17 +61,8 @@ func validateRoutes(t *testing.T, routes []*types.Route) {
 }
 
 func TestParseRoutes(t *testing.T) {
-	opts := make(dhcp4.Options)
-	opts[dhcp4.OptionStaticRoute] = []byte{10, 0, 0, 0, 10, 1, 2, 3, 192, 168, 1, 0, 192, 168, 2, 3}
-	routes := parseRoutes(opts)
-
-	validateRoutes(t, routes)
-}
-
-func TestParseCIDRRoutes(t *testing.T) {
-	opts := make(dhcp4.Options)
-	opts[dhcp4.OptionClasslessRouteFormat] = []byte{8, 10, 10, 1, 2, 3, 24, 192, 168, 1, 192, 168, 2, 3}
-	routes := parseCIDRRoutes(opts)
+	data := []byte{10, 0, 0, 0, 10, 1, 2, 3, 192, 168, 1, 0, 192, 168, 2, 3}
+	routes := parseRoutes(data)
 
 	validateRoutes(t, routes)
 }
@@ -87,10 +78,10 @@ func TestParseOptionName(t *testing.T) {
 			"hostname", "host-name", dhcp4.OptionHostName, false,
 		},
 		{
-			"hostname in number", "12", dhcp4.OptionHostName, false,
+			"hostname in number", "12", dhcp4.GenericOptionCode(12), false,
 		},
 		{
-			"random string", "doNotparseMe", 0, true,
+			"random string", "doNotparseMe", dhcp4.OptionPad, true,
 		},
 	}
 	for _, tt := range tests {

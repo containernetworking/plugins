@@ -67,6 +67,10 @@ jobs:
           sudo apt-get install linux-modules-extra-$(uname -r)
       - name: Install nftables
         run: sudo apt-get install nftables
+      - name: Install dnsmasq(dhcp server)
+        run: |
+          sudo apt-get install dnsmasq
+          sudo systemctl disable --now dnsmasq
       - uses: actions/checkout@v4
       - name: setup go
         uses: actions/setup-go@v5

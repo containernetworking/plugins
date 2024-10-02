@@ -39,19 +39,21 @@ import (
 var errNoMoreTries = errors.New("no more tries")
 
 type DHCP struct {
-	mux             sync.Mutex
-	leases          map[string]*DHCPLease
-	hostNetnsPrefix string
-	clientTimeout   time.Duration
-	clientResendMax time.Duration
-	broadcast       bool
+	mux                 sync.Mutex
+	leases              map[string]*DHCPLease
+	hostNetnsPrefix     string
+	clientTimeout       time.Duration
+	clientResendMax     time.Duration
+	clientResendTimeout time.Duration
+	broadcast           bool
 }
 
-func newDHCP(clientTimeout, clientResendMax time.Duration) *DHCP {
+func newDHCP(clientTimeout, clientResendMax time.Duration, resendTimeout time.Duration) *DHCP {
 	return &DHCP{
-		leases:          make(map[string]*DHCPLease),
-		clientTimeout:   clientTimeout,
-		clientResendMax: clientResendMax,
+		leases:              make(map[string]*DHCPLease),
+		clientTimeout:       clientTimeout,
+		clientResendMax:     clientResendMax,
+		clientResendTimeout: resendTimeout,
 	}
 }
 
@@ -74,7 +76,7 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 		return fmt.Errorf("error parsing netconf: %v", err)
 	}
 
-	optsRequesting, optsProviding, err := prepareOptions(args.Args, conf.IPAM.ProvideOptions, conf.IPAM.RequestOptions)
+	opts, err := prepareOptions(args.Args, conf.IPAM.ProvideOptions, conf.IPAM.RequestOptions)
 	if err != nil {
 		return err
 	}
@@ -89,8 +91,8 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 	} else {
 		hostNetns := d.hostNetnsPrefix + args.Netns
 		l, err = AcquireLease(clientID, hostNetns, args.IfName,
-			optsRequesting, optsProviding,
-			d.clientTimeout, d.clientResendMax, d.broadcast)
+			opts,
+			d.clientTimeout, d.clientResendMax, d.clientResendTimeout, d.broadcast)
 		if err != nil {
 			return err
 		}
@@ -190,7 +192,8 @@ func getListener(socketPath string) (net.Listener, error) {
 
 func runDaemon(
 	pidfilePath, hostPrefix, socketPath string,
-	dhcpClientTimeout time.Duration, resendMax time.Duration, broadcast bool,
+	dhcpClientTimeout time.Duration, resendMax time.Duration, resendTimeout time.Duration,
+	broadcast bool,
 ) error {
 	// since other goroutines (on separate threads) will change namespaces,
 	// ensure the RPC server does not get scheduled onto those
@@ -225,7 +228,7 @@ func runDaemon(
 		done <- true
 	}()
 
-	dhcp := newDHCP(dhcpClientTimeout, resendMax)
+	dhcp := newDHCP(dhcpClientTimeout, resendMax, resendTimeout)
 	dhcp.hostNetnsPrefix = hostPrefix
 	dhcp.broadcast = broadcast
 	rpc.Register(dhcp)
