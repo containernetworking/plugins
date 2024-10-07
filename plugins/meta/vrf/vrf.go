@@ -17,6 +17,8 @@ package main
 import (
 	"fmt"
 	"math"
+	"net"
+	"time"
 
 	"github.com/vishvananda/netlink"
 )
@@ -124,7 +126,7 @@ func addInterface(vrf *netlink.Vrf, intf string) error {
 
 	afterAddresses, err := netlink.AddrList(i, netlink.FAMILY_V6)
 	if err != nil {
-		return fmt.Errorf("failed getting ipv6 new addresses for %s", intf)
+		return fmt.Errorf("failed getting ipv6 new addresses for %s: %v", intf, err)
 	}
 
 	// Since keeping the ipv6 address depends on net.ipv6.conf.all.keep_addr_on_down ,
@@ -140,6 +142,37 @@ CONTINUE:
 		err = netlink.AddrAdd(i, &toFind)
 		if err != nil {
 			return fmt.Errorf("could not restore address %s to %s @ %s: %v", toFind, intf, vrf.Name, err)
+		}
+
+		// Waits for local/host routes to be added by the kernel.
+		maxRetry := 10
+		for {
+			routesVRFTable, err := netlink.RouteListFiltered(
+				netlink.FAMILY_ALL,
+				&netlink.Route{
+					Dst: &net.IPNet{
+						IP:   toFind.IP,
+						Mask: net.IPMask{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+					},
+					Table:     int(vrf.Table),
+					LinkIndex: i.Attrs().Index,
+				},
+				netlink.RT_FILTER_OIF|netlink.RT_FILTER_TABLE|netlink.RT_FILTER_DST,
+			)
+			if err != nil {
+				return fmt.Errorf("failed getting routes for %s table %d for dst %s: %v", intf, vrf.Table, toFind.IPNet.String(), err)
+			}
+
+			if len(routesVRFTable) >= 1 {
+				break
+			}
+
+			maxRetry--
+			if maxRetry <= 0 {
+				return fmt.Errorf("failed getting local/host addresses for %s in table %d with dst %s", intf, vrf.Table, toFind.IPNet.String())
+			}
+
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 
