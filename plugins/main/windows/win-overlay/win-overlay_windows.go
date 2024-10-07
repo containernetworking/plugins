@@ -106,13 +106,13 @@ func cmdHcnAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 		return nil, errors.Annotatef(err, "error while hcn.GetNetworkByName(%s)", networkName)
 	}
 	if hcnNetwork == nil {
-		return  nil, fmt.Errorf("network %v is not found", networkName)
+		return nil, fmt.Errorf("network %v is not found", networkName)
 	}
 	if hnsNetwork == nil {
 		return nil, fmt.Errorf("network %v not found", networkName)
 	}
 
-	if !strings.EqualFold(string (hcnNetwork.Type), "Overlay") {
+	if !strings.EqualFold(string(hcnNetwork.Type), "Overlay") {
 		return nil, fmt.Errorf("network %v is of an unexpected type: %v", networkName, hcnNetwork.Type)
 	}
 
@@ -131,7 +131,6 @@ func cmdHcnAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 			n.ApplyOutboundNatPolicy(hnsNetwork.Subnets[0].AddressPrefix)
 		}
 		hcnEndpoint, err := hns.GenerateHcnEndpoint(epInfo, &n.NetConf)
-
 		if err != nil {
 			return nil, errors.Annotate(err, "error while generating HostComputeEndpoint")
 		}
@@ -142,15 +141,14 @@ func cmdHcnAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 	}
 
 	result, err := hns.ConstructHcnResult(hcnNetwork, hcnEndpoint)
-
 	if err != nil {
 		ipam.ExecDel(n.IPAM.Type, args.StdinData)
 		return nil, errors.Annotate(err, "error while constructing HostComputeEndpoint addition result")
 	}
 
 	return result, nil
-
 }
+
 func cmdHnsAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 	success := false
 
@@ -243,6 +241,7 @@ func cmdHnsAdd(args *skel.CmdArgs, n *NetConf) (*current.Result, error) {
 	success = true
 	return result, nil
 }
+
 func cmdAdd(args *skel.CmdArgs) error {
 	n, cniVersion, err := loadNetConf(args.StdinData)
 	if err != nil {
@@ -292,7 +291,20 @@ func main() {
 		Add:    cmdAdd,
 		Check:  cmdCheck,
 		Del:    cmdDel,
+		Status: cmdStatus,
 		/* FIXME GC */
-		/* FIXME Status */
 	}, version.All, bv.BuildString("win-overlay"))
+}
+
+func cmdStatus(args *skel.CmdArgs) error {
+	conf := NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("failed to load netconf: %w", err)
+	}
+
+	if err := ipam.ExecStatus(conf.IPAM.Type, args.StdinData); err != nil {
+		return err
+	}
+
+	return nil
 }

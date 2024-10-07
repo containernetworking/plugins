@@ -429,11 +429,11 @@ func cmdDel(args *skel.CmdArgs) error {
 
 func main() {
 	skel.PluginMainFuncs(skel.CNIFuncs{
-		Add:   cmdAdd,
-		Check: cmdCheck,
-		Del:   cmdDel,
+		Add:    cmdAdd,
+		Check:  cmdCheck,
+		Del:    cmdDel,
+		Status: cmdStatus,
 		/* FIXME GC */
-		/* FIXME Status */
 	}, version.All, bv.BuildString("macvlan"))
 }
 
@@ -567,6 +567,23 @@ func validateCniContainerInterface(intf current.Interface, modeExpected string) 
 			return fmt.Errorf("interface %s Mac %s doesn't match container Mac: %s", intf.Name, intf.Mac, link.Attrs().HardwareAddr)
 		}
 	}
+
+	return nil
+}
+
+func cmdStatus(args *skel.CmdArgs) error {
+	conf := NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("failed to load netconf: %w", err)
+	}
+
+	if conf.IPAM.Type != "" {
+		if err := ipam.ExecStatus(conf.IPAM.Type, args.StdinData); err != nil {
+			return err
+		}
+	}
+
+	// TODO: Check if master interface exists.
 
 	return nil
 }

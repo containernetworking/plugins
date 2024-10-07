@@ -105,7 +105,7 @@ type (
 
 func newTesterByVersion(version string) tester {
 	switch {
-	case strings.HasPrefix(version, "1.0."):
+	case strings.HasPrefix(version, "1."):
 		return &testerV10x{}
 	case strings.HasPrefix(version, "0.4."):
 		return &testerV04x{}
@@ -250,6 +250,14 @@ var _ = Describe("ptp Operations", func() {
 			defer GinkgoRecover()
 
 			var err error
+			if testutils.SpecVersionHasSTATUS(cniVersion) {
+				By("Doing a cni STATUS")
+				err = testutils.CmdStatus(func() error {
+					return cmdStatus(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
 			result, _, err = testutils.CmdAddWithArgs(args, func() error {
 				return cmdAdd(args)
 			})
