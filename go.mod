@@ -3,7 +3,7 @@ module github.com/containernetworking/plugins
 go 1.23
 
 require (
-	github.com/Microsoft/hcsshim v0.12.6
+	github.com/Microsoft/hcsshim v0.12.7
 	github.com/alexflint/go-filemutex v1.3.0
 	github.com/buger/jsonparser v1.1.1
 	github.com/containernetworking/cni v1.2.3
@@ -20,7 +20,7 @@ require (
 	github.com/opencontainers/selinux v1.11.0
 	github.com/safchain/ethtool v0.4.1
 	github.com/vishvananda/netlink v1.3.0
-	golang.org/x/sys v0.24.0
+	golang.org/x/sys v0.25.0
 	sigs.k8s.io/knftables v0.0.17
 )
 
@@ -42,7 +42,7 @@ require (
 	golang.org/x/text v0.17.0 // indirect
 	golang.org/x/tools v0.24.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240701130421-f6361c86f094 // indirect
-	google.golang.org/grpc v1.65.0 // indirect
+	google.golang.org/grpc v1.66.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
