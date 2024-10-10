@@ -40,15 +40,15 @@ func CreateIfb(ifbDeviceName string, mtu int, _ int) error {
 	// if qlen < 1000 {
 	// 	qlen = 1000
 	// }
-	qlen := 0
+
+	linkAttrs := netlink.NewLinkAttrs()
+	linkAttrs.Name = ifbDeviceName
+	linkAttrs.Flags = net.FlagUp
+	linkAttrs.MTU = mtu
+	// linkAttrs.TxQLen = qlen
 
 	err := netlink.LinkAdd(&netlink.Ifb{
-		LinkAttrs: netlink.LinkAttrs{
-			Name:   ifbDeviceName,
-			Flags:  net.FlagUp,
-			MTU:    mtu,
-			TxQLen: qlen,
-		},
+		LinkAttrs: linkAttrs,
 	})
 	if err != nil {
 		return fmt.Errorf("adding link: %s", err)
