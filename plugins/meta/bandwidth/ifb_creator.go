@@ -33,10 +33,14 @@ const (
 	UnShapedClassMinorID uint16 = 1
 )
 
-func CreateIfb(ifbDeviceName string, mtu int, qlen int) error {
-	if qlen < 1000 {
-		qlen = 1000
-	}
+func CreateIfb(ifbDeviceName string, mtu int, _ int) error {
+	// numtxqueues mismatch between veth and ifb is causing performance issues
+	// (similar to mismatch between Host-veth0 and Container peer: https://github.com/torvalds/linux/blob/9d3684c24a5232c2d7ea8f8a3e60fe235e6a9867/drivers/net/veth.c#L1199-L1206)
+	// do not enable until netlink library offer setting numtxqueues on a ifb device
+	// if qlen < 1000 {
+	// 	qlen = 1000
+	// }
+	qlen := 0
 
 	err := netlink.LinkAdd(&netlink.Ifb{
 		LinkAttrs: netlink.LinkAttrs{
