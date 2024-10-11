@@ -8,7 +8,8 @@
             "mtu": 512,
             "ipam": {
                 "type": "host-local",
-                "subnet": "10.9.2.0/24"
+                "subnet": "10.9.2.0/24",
+                "dataDir": "/tmp/chained-ptp-bandwidth-test"
             }
         },
         {

@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"net"
 	"os"
@@ -60,6 +61,13 @@ var _ = Describe("Basic PTP using cnitool", func() {
 			netConfPath, err := filepath.Abs("./testdata")
 			Expect(err).NotTo(HaveOccurred())
 
+			// Flush ipam stores to avoid conflicts
+			err = os.RemoveAll("/tmp/chained-ptp-bandwidth-test")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = os.RemoveAll("/tmp/basic-ptp-test")
+			Expect(err).NotTo(HaveOccurred())
+
 			env = TestEnv([]string{
 				"CNI_PATH=" + cniPath,
 				"NETCONFPATH=" + netConfPath,
@@ -82,6 +90,7 @@ var _ = Describe("Basic PTP using cnitool", func() {
 			env.runInNS(hostNS, cnitoolBin, "add", netName, contNS.LongName())
 
 			addrOutput := env.runInNS(contNS, "ip", "addr")
+
 			Expect(addrOutput).To(ContainSubstring(expectedIPPrefix))
 
 			env.runInNS(hostNS, cnitoolBin, "del", netName, contNS.LongName())
@@ -145,9 +154,13 @@ var _ = Describe("Basic PTP using cnitool", func() {
 
 			chainedBridgeBandwidthEnv.runInNS(hostNS, cnitoolBin, "del", "network-chain-test", contNS1.LongName())
 			basicBridgeEnv.runInNS(hostNS, cnitoolBin, "del", "network-chain-test", contNS2.LongName())
+
+			contNS1.Del()
+			contNS2.Del()
+			hostNS.Del()
 		})
 
-		Measure("limits traffic only on the restricted bandwidth veth device", func(b Benchmarker) {
+		It("limits traffic only on the restricted bandwidth veth device", func() {
 			ipRegexp := regexp.MustCompile(`10\.1[12]\.2\.\d{1,3}`)
 
 			By(fmt.Sprintf("adding %s to %s\n\n", "chained-bridge-bandwidth", contNS1.ShortName()))
@@ -172,17 +185,19 @@ var _ = Describe("Basic PTP using cnitool", func() {
 			// balanced by run time.
 
 			By(fmt.Sprintf("sending tcp traffic to the chained, bridged, traffic shaped container on ip address '%s:%d'\n\n", chainedBridgeIP, chainedBridgeBandwidthPort))
-			runtimeWithLimit := b.Time("with chained bridge and bandwidth plugins", func() {
-				makeTCPClientInNS(hostNS.ShortName(), chainedBridgeIP, chainedBridgeBandwidthPort, packetInBytes)
-			})
+			start := time.Now()
+			makeTCPClientInNS(hostNS.ShortName(), chainedBridgeIP, chainedBridgeBandwidthPort, packetInBytes)
+			runtimeWithLimit := time.Since(start)
+			log.Printf("Runtime with qos limit %.2f seconds", runtimeWithLimit.Seconds())
 
 			By(fmt.Sprintf("sending tcp traffic to the basic bridged container on ip address '%s:%d'\n\n", basicBridgeIP, basicBridgePort))
-			runtimeWithoutLimit := b.Time("with basic bridged plugin", func() {
-				makeTCPClientInNS(hostNS.ShortName(), basicBridgeIP, basicBridgePort, packetInBytes)
-			})
+			start = time.Now()
+			makeTCPClientInNS(hostNS.ShortName(), basicBridgeIP, basicBridgePort, packetInBytes)
+			runtimeWithoutLimit := time.Since(start)
+			log.Printf("Runtime without qos limit %.2f seconds", runtimeWithoutLimit.Seconds())
 
 			Expect(runtimeWithLimit).To(BeNumerically(">", runtimeWithoutLimit+1000*time.Millisecond))
-		}, 1)
+		})
 	})
 })
 
