@@ -15,7 +15,7 @@ require (
 	github.com/networkplumbing/go-nft v0.4.0
 	github.com/onsi/ginkgo/v2 v2.20.2
 	github.com/onsi/gomega v1.34.2
-	github.com/opencontainers/selinux v1.11.0
+	github.com/opencontainers/selinux v1.11.1
 	github.com/safchain/ethtool v0.4.1
 	github.com/vishvananda/netlink v1.3.0
 	golang.org/x/sys v0.26.0
