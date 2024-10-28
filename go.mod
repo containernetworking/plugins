@@ -3,7 +3,7 @@ module github.com/containernetworking/plugins
 go 1.23
 
 require (
-	github.com/Microsoft/hcsshim v0.12.7
+	github.com/Microsoft/hcsshim v0.12.8
 	github.com/alexflint/go-filemutex v1.3.0
 	github.com/buger/jsonparser v1.1.1
 	github.com/containernetworking/cni v1.2.3
@@ -15,7 +15,7 @@ require (
 	github.com/networkplumbing/go-nft v0.4.0
 	github.com/onsi/ginkgo/v2 v2.20.2
 	github.com/onsi/gomega v1.34.2
-	github.com/opencontainers/selinux v1.11.0
+	github.com/opencontainers/selinux v1.11.1
 	github.com/safchain/ethtool v0.4.1
 	github.com/vishvananda/netlink v1.3.0
 	golang.org/x/sys v0.26.0
@@ -25,7 +25,8 @@ require (
 require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/containerd/cgroups/v3 v3.0.3 // indirect
-	github.com/containerd/errdefs v0.1.0 // indirect
+	github.com/containerd/containerd v1.7.23 // indirect
+	github.com/containerd/errdefs v0.3.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect

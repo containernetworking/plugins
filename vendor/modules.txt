@@ -6,7 +6,7 @@ github.com/Microsoft/go-winio/internal/socket
 github.com/Microsoft/go-winio/internal/stringbuffer
 github.com/Microsoft/go-winio/pkg/guid
 github.com/Microsoft/go-winio/vhd
-# github.com/Microsoft/hcsshim v0.12.7
+# github.com/Microsoft/hcsshim v0.12.8
 ## explicit; go 1.21
 github.com/Microsoft/hcsshim
 github.com/Microsoft/hcsshim/computestorage
@@ -46,7 +46,10 @@ github.com/buger/jsonparser
 # github.com/containerd/cgroups/v3 v3.0.3
 ## explicit; go 1.18
 github.com/containerd/cgroups/v3/cgroup1/stats
-# github.com/containerd/errdefs v0.1.0
+# github.com/containerd/containerd v1.7.23
+## explicit; go 1.21
+github.com/containerd/containerd/errdefs
+# github.com/containerd/errdefs v0.3.0
 ## explicit; go 1.20
 github.com/containerd/errdefs
 # github.com/containernetworking/cni v1.2.3
@@ -153,7 +156,7 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
-# github.com/opencontainers/selinux v1.11.0
+# github.com/opencontainers/selinux v1.11.1
 ## explicit; go 1.19
 github.com/opencontainers/selinux/go-selinux
 github.com/opencontainers/selinux/pkg/pwalkdir
