@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 
 	"sigs.k8s.io/knftables"
 )
@@ -110,23 +111,23 @@ func (pmNFT *portMapperNFTables) forwardPorts(config *PortMapConf, containerNet 
 	})
 
 	tx.Add(&knftables.Chain{
-		Name:     "input",
+		Name:     "prerouting",
 		Type:     knftables.PtrTo(knftables.NATType),
-		Hook:     knftables.PtrTo(knftables.InputHook),
+		Hook:     knftables.PtrTo(knftables.PreroutingHook),
 		Priority: knftables.PtrTo(knftables.DNATPriority),
 	})
 	tx.Flush(&knftables.Chain{
-		Name: "input",
+		Name: "prerouting",
 	})
 	tx.Add(&knftables.Rule{
-		Chain: "input",
+		Chain: "prerouting",
 		Rule: knftables.Concat(
 			conditions,
 			"jump", hostIPHostPortsChain,
 		),
 	})
 	tx.Add(&knftables.Rule{
-		Chain: "input",
+		Chain: "prerouting",
 		Rule: knftables.Concat(
 			conditions,
 			"jump", hostPortsChain,
@@ -187,9 +188,8 @@ func (pmNFT *portMapperNFTables) forwardPorts(config *PortMapConf, containerNet 
 				Chain: hostIPHostPortsChain,
 				Rule: knftables.Concat(
 					ipX, "daddr", e.HostIP,
-					ipX, "protocol", e.Protocol,
-					"th dport", e.HostPort,
-					"dnat", ipX, "addr . port", "to", containerNet.IP, ".", e.ContainerPort,
+					e.Protocol, "dport", e.HostPort,
+					"dnat to", net.JoinHostPort(containerNet.IP.String(), strconv.Itoa(e.ContainerPort)),
 				),
 				Comment: &config.ContainerID,
 			})
@@ -197,9 +197,8 @@ func (pmNFT *portMapperNFTables) forwardPorts(config *PortMapConf, containerNet 
 			tx.Add(&knftables.Rule{
 				Chain: hostPortsChain,
 				Rule: knftables.Concat(
-					ipX, "protocol", e.Protocol,
-					"th dport", e.HostPort,
-					"dnat", ipX, "addr . port", "to", containerNet.IP, ".", e.ContainerPort,
+					e.Protocol, "dport", e.HostPort,
+					"dnat to", net.JoinHostPort(containerNet.IP.String(), strconv.Itoa(e.ContainerPort)),
 				),
 				Comment: &config.ContainerID,
 			})

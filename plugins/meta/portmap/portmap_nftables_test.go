@@ -82,21 +82,21 @@ var _ = Describe("portmapping configuration (nftables)", func() {
 add table ip cni_hostport { comment "CNI portmap plugin" ; }
 add chain ip cni_hostport hostip_hostports
 add chain ip cni_hostport hostports
-add chain ip cni_hostport input { type nat hook input priority -100 ; }
 add chain ip cni_hostport masquerading { type nat hook postrouting priority 100 ; }
 add chain ip cni_hostport output { type nat hook output priority -100 ; }
-add rule ip cni_hostport hostip_hostports ip daddr 192.168.0.2 ip protocol tcp th dport 8083 dnat ip addr . port to 10.0.0.2 . 83 comment "icee6giejonei6so"
-add rule ip cni_hostport hostports ip protocol tcp th dport 8080 dnat ip addr . port to 10.0.0.2 . 80 comment "icee6giejonei6so"
-add rule ip cni_hostport hostports ip protocol tcp th dport 8081 dnat ip addr . port to 10.0.0.2 . 80 comment "icee6giejonei6so"
-add rule ip cni_hostport hostports ip protocol udp th dport 8080 dnat ip addr . port to 10.0.0.2 . 81 comment "icee6giejonei6so"
-add rule ip cni_hostport hostports ip protocol udp th dport 8082 dnat ip addr . port to 10.0.0.2 . 82 comment "icee6giejonei6so"
-add rule ip cni_hostport hostports ip protocol tcp th dport 8084 dnat ip addr . port to 10.0.0.2 . 84 comment "icee6giejonei6so"
-add rule ip cni_hostport input a b jump hostip_hostports
-add rule ip cni_hostport input a b jump hostports
+add chain ip cni_hostport prerouting { type nat hook prerouting priority -100 ; }
+add rule ip cni_hostport hostip_hostports ip daddr 192.168.0.2 tcp dport 8083 dnat to 10.0.0.2:83 comment "icee6giejonei6so"
+add rule ip cni_hostport hostports tcp dport 8080 dnat to 10.0.0.2:80 comment "icee6giejonei6so"
+add rule ip cni_hostport hostports tcp dport 8081 dnat to 10.0.0.2:80 comment "icee6giejonei6so"
+add rule ip cni_hostport hostports udp dport 8080 dnat to 10.0.0.2:81 comment "icee6giejonei6so"
+add rule ip cni_hostport hostports udp dport 8082 dnat to 10.0.0.2:82 comment "icee6giejonei6so"
+add rule ip cni_hostport hostports tcp dport 8084 dnat to 10.0.0.2:84 comment "icee6giejonei6so"
 add rule ip cni_hostport masquerading ip saddr 10.0.0.2 ip daddr 10.0.0.2 masquerade comment "icee6giejonei6so"
 add rule ip cni_hostport masquerading ip saddr 127.0.0.1 ip daddr 10.0.0.2 masquerade comment "icee6giejonei6so"
 add rule ip cni_hostport output a b jump hostip_hostports
 add rule ip cni_hostport output a b fib daddr type local jump hostports
+add rule ip cni_hostport prerouting a b jump hostip_hostports
+add rule ip cni_hostport prerouting a b jump hostports
 `)
 				actualRules := strings.TrimSpace(ipv4Fake.Dump())
 				Expect(actualRules).To(Equal(expectedRules))
@@ -113,18 +113,18 @@ add rule ip cni_hostport output a b fib daddr type local jump hostports
 add table ip6 cni_hostport { comment "CNI portmap plugin" ; }
 add chain ip6 cni_hostport hostip_hostports
 add chain ip6 cni_hostport hostports
-add chain ip6 cni_hostport input { type nat hook input priority -100 ; }
 add chain ip6 cni_hostport output { type nat hook output priority -100 ; }
-add rule ip6 cni_hostport hostip_hostports ip6 daddr 2001:db8:a::1 ip6 protocol tcp th dport 8085 dnat ip6 addr . port to 2001:db8::2 . 85 comment "icee6giejonei6so"
-add rule ip6 cni_hostport hostports ip6 protocol tcp th dport 8080 dnat ip6 addr . port to 2001:db8::2 . 80 comment "icee6giejonei6so"
-add rule ip6 cni_hostport hostports ip6 protocol tcp th dport 8081 dnat ip6 addr . port to 2001:db8::2 . 80 comment "icee6giejonei6so"
-add rule ip6 cni_hostport hostports ip6 protocol udp th dport 8080 dnat ip6 addr . port to 2001:db8::2 . 81 comment "icee6giejonei6so"
-add rule ip6 cni_hostport hostports ip6 protocol udp th dport 8082 dnat ip6 addr . port to 2001:db8::2 . 82 comment "icee6giejonei6so"
-add rule ip6 cni_hostport hostports ip6 protocol tcp th dport 8086 dnat ip6 addr . port to 2001:db8::2 . 86 comment "icee6giejonei6so"
-add rule ip6 cni_hostport input c d jump hostip_hostports
-add rule ip6 cni_hostport input c d jump hostports
+add chain ip6 cni_hostport prerouting { type nat hook prerouting priority -100 ; }
+add rule ip6 cni_hostport hostip_hostports ip6 daddr 2001:db8:a::1 tcp dport 8085 dnat to [2001:db8::2]:85 comment "icee6giejonei6so"
+add rule ip6 cni_hostport hostports tcp dport 8080 dnat to [2001:db8::2]:80 comment "icee6giejonei6so"
+add rule ip6 cni_hostport hostports tcp dport 8081 dnat to [2001:db8::2]:80 comment "icee6giejonei6so"
+add rule ip6 cni_hostport hostports udp dport 8080 dnat to [2001:db8::2]:81 comment "icee6giejonei6so"
+add rule ip6 cni_hostport hostports udp dport 8082 dnat to [2001:db8::2]:82 comment "icee6giejonei6so"
+add rule ip6 cni_hostport hostports tcp dport 8086 dnat to [2001:db8::2]:86 comment "icee6giejonei6so"
 add rule ip6 cni_hostport output c d jump hostip_hostports
 add rule ip6 cni_hostport output c d fib daddr type local jump hostports
+add rule ip6 cni_hostport prerouting c d jump hostip_hostports
+add rule ip6 cni_hostport prerouting c d jump hostports
 `)
 				actualRules = strings.TrimSpace(ipv6Fake.Dump())
 				Expect(actualRules).To(Equal(expectedRules))
