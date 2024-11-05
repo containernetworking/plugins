@@ -349,10 +349,11 @@ func detectBackendOfConditions(conditions *[]string) string {
 		return ""
 	}
 
-	// The first token of any iptables condition would start with a hyphen (e.g. "-d",
-	// "--sport", "-m"). No nftables condition would start that way. (An nftables
-	// condition might include a negative number, but not as the first token.)
-	if (*conditions)[0][0] == '-' {
+	// The first character of any iptables condition would either be an hyphen
+	// (e.g. "-d", "--sport", "-m") or an exclamation mark.
+	// No nftables condition would start that way. (An nftables condition might
+	// include a negative number, but not as the first token.)
+	if (*conditions)[0][0] == '-' || (*conditions)[0][0] == '!' {
 		return iptablesBackend
 	}
 	return nftablesBackend

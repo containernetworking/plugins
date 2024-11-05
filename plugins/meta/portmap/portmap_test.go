@@ -44,7 +44,7 @@ var _ = Describe("portmapping configuration", func() {
 					},
 					"snat": false,
 					"conditionsV4": ["-s", "1.2.3.4"],
-					"conditionsV6": ["-s", "12::34"],
+					"conditionsV6": ["!", "-s", "12::34"],
 					"prevResult": {
 						"interfaces": [
 							{"name": "host"},
@@ -76,7 +76,7 @@ var _ = Describe("portmapping configuration", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(c.CNIVersion).To(Equal(ver))
 				Expect(c.ConditionsV4).To(Equal(&[]string{"-s", "1.2.3.4"}))
-				Expect(c.ConditionsV6).To(Equal(&[]string{"-s", "12::34"}))
+				Expect(c.ConditionsV6).To(Equal(&[]string{"!", "-s", "12::34"}))
 				fvar := false
 				Expect(c.SNAT).To(Equal(&fvar))
 				Expect(c.Name).To(Equal("test"))
