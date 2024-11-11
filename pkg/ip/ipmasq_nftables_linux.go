@@ -72,16 +72,16 @@ func commentForInstance(network, ifname, containerID string) string {
 	return comment
 }
 
-// setupIPMasqNFTables is the nftables-based implementation of SetupIPMasqForNetwork
-func setupIPMasqNFTables(ipn *net.IPNet, network, ifname, containerID string) error {
+// setupIPMasqNFTables is the nftables-based implementation of SetupIPMasqForNetworks
+func setupIPMasqNFTables(ipns []*net.IPNet, network, ifname, containerID string) error {
 	nft, err := knftables.New(knftables.InetFamily, ipMasqTableName)
 	if err != nil {
 		return err
 	}
-	return setupIPMasqNFTablesWithInterface(nft, ipn, network, ifname, containerID)
+	return setupIPMasqNFTablesWithInterface(nft, ipns, network, ifname, containerID)
 }
 
-func setupIPMasqNFTablesWithInterface(nft knftables.Interface, ipn *net.IPNet, network, ifname, containerID string) error {
+func setupIPMasqNFTablesWithInterface(nft knftables.Interface, ipns []*net.IPNet, network, ifname, containerID string) error {
 	staleRules, err := findRules(nft, hashForInstance(network, ifname, containerID))
 	if err != nil {
 		return err
@@ -128,37 +128,39 @@ func setupIPMasqNFTablesWithInterface(nft knftables.Interface, ipn *net.IPNet, n
 	for _, rule := range staleRules {
 		tx.Delete(rule)
 	}
-	ip := "ip"
-	if ipn.IP.To4() == nil {
-		ip = "ip6"
+	for _, ipn := range ipns {
+		ip := "ip"
+		if ipn.IP.To4() == nil {
+			ip = "ip6"
+		}
+
+		// e.g. if ipn is "192.168.1.4/24", then dstNet is "192.168.1.0/24"
+		dstNet := &net.IPNet{IP: ipn.IP.Mask(ipn.Mask), Mask: ipn.Mask}
+
+		tx.Add(&knftables.Rule{
+			Chain: ipMasqChainName,
+			Rule: knftables.Concat(
+				ip, "saddr", "==", ipn.IP,
+				ip, "daddr", "!=", dstNet,
+				"masquerade",
+			),
+			Comment: knftables.PtrTo(commentForInstance(network, ifname, containerID)),
+		})
 	}
-
-	// e.g. if ipn is "192.168.1.4/24", then dstNet is "192.168.1.0/24"
-	dstNet := &net.IPNet{IP: ipn.IP.Mask(ipn.Mask), Mask: ipn.Mask}
-
-	tx.Add(&knftables.Rule{
-		Chain: ipMasqChainName,
-		Rule: knftables.Concat(
-			ip, "saddr", "==", ipn.IP,
-			ip, "daddr", "!=", dstNet,
-			"masquerade",
-		),
-		Comment: knftables.PtrTo(commentForInstance(network, ifname, containerID)),
-	})
 
 	return nft.Run(context.TODO(), tx)
 }
 
-// teardownIPMasqNFTables is the nftables-based implementation of TeardownIPMasqForNetwork
-func teardownIPMasqNFTables(ipn *net.IPNet, network, ifname, containerID string) error {
+// teardownIPMasqNFTables is the nftables-based implementation of TeardownIPMasqForNetworks
+func teardownIPMasqNFTables(ipns []*net.IPNet, network, ifname, containerID string) error {
 	nft, err := knftables.New(knftables.InetFamily, ipMasqTableName)
 	if err != nil {
 		return err
 	}
-	return teardownIPMasqNFTablesWithInterface(nft, ipn, network, ifname, containerID)
+	return teardownIPMasqNFTablesWithInterface(nft, ipns, network, ifname, containerID)
 }
 
-func teardownIPMasqNFTablesWithInterface(nft knftables.Interface, _ *net.IPNet, network, ifname, containerID string) error {
+func teardownIPMasqNFTablesWithInterface(nft knftables.Interface, _ []*net.IPNet, network, ifname, containerID string) error {
 	rules, err := findRules(nft, hashForInstance(network, ifname, containerID))
 	if err != nil {
 		return err

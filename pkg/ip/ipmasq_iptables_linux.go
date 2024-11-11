@@ -15,8 +15,10 @@
 package ip
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/coreos/go-iptables/iptables"
 
@@ -24,17 +26,22 @@ import (
 	"github.com/containernetworking/plugins/pkg/utils"
 )
 
-// setupIPMasqIPTables is the iptables-based implementation of SetupIPMasqForNetwork
-func setupIPMasqIPTables(ipn *net.IPNet, network, _, containerID string) error {
+// setupIPMasqIPTables is the iptables-based implementation of SetupIPMasqForNetworks
+func setupIPMasqIPTables(ipns []*net.IPNet, network, _, containerID string) error {
 	// Note: for historical reasons, the iptables implementation ignores ifname.
 	chain := utils.FormatChainName(network, containerID)
 	comment := utils.FormatComment(network, containerID)
-	return SetupIPMasq(ipn, chain, comment)
+	for _, ip := range ipns {
+		if err := SetupIPMasq(ip, chain, comment); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // SetupIPMasq installs iptables rules to masquerade traffic
 // coming from ip of ipn and going outside of ipn.
-// Deprecated: This function only supports iptables. Use SetupIPMasqForNetwork, which
+// Deprecated: This function only supports iptables. Use SetupIPMasqForNetworks, which
 // supports both iptables and nftables.
 func SetupIPMasq(ipn *net.IPNet, chain string, comment string) error {
 	isV6 := ipn.IP.To4() == nil
@@ -87,16 +94,28 @@ func SetupIPMasq(ipn *net.IPNet, chain string, comment string) error {
 	return ipt.AppendUnique("nat", "POSTROUTING", "-s", ipn.IP.String(), "-j", chain, "-m", "comment", "--comment", comment)
 }
 
-// teardownIPMasqIPTables is the iptables-based implementation of TeardownIPMasqForNetwork
-func teardownIPMasqIPTables(ipn *net.IPNet, network, _, containerID string) error {
+// teardownIPMasqIPTables is the iptables-based implementation of TeardownIPMasqForNetworks
+func teardownIPMasqIPTables(ipns []*net.IPNet, network, _, containerID string) error {
 	// Note: for historical reasons, the iptables implementation ignores ifname.
 	chain := utils.FormatChainName(network, containerID)
 	comment := utils.FormatComment(network, containerID)
-	return TeardownIPMasq(ipn, chain, comment)
+
+	var errs []string
+	for _, ipn := range ipns {
+		err := TeardownIPMasq(ipn, chain, comment)
+		if err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+
+	if errs == nil {
+		return nil
+	}
+	return errors.New(strings.Join(errs, "\n"))
 }
 
 // TeardownIPMasq undoes the effects of SetupIPMasq.
-// Deprecated: This function only supports iptables. Use TeardownIPMasqForNetwork, which
+// Deprecated: This function only supports iptables. Use TeardownIPMasqForNetworks, which
 // supports both iptables and nftables.
 func TeardownIPMasq(ipn *net.IPNet, chain string, comment string) error {
 	isV6 := ipn.IP.To4() == nil

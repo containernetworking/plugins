@@ -24,11 +24,11 @@ import (
 	"github.com/containernetworking/plugins/pkg/utils"
 )
 
-// SetupIPMasqForNetwork installs rules to masquerade traffic coming from ip of ipn and
-// going outside of ipn, using a chain name based on network, ifname, and containerID. The
+// SetupIPMasqForNetworks installs rules to masquerade traffic coming from ips of ipns and
+// going outside of ipns, using a chain name based on network, ifname, and containerID. The
 // backend can be either "iptables" or "nftables"; if it is nil, then a suitable default
 // implementation will be used.
-func SetupIPMasqForNetwork(backend *string, ipn *net.IPNet, network, ifname, containerID string) error {
+func SetupIPMasqForNetworks(backend *string, ipns []*net.IPNet, network, ifname, containerID string) error {
 	if backend == nil {
 		// Prefer iptables, unless only nftables is available
 		defaultBackend := "iptables"
@@ -40,27 +40,27 @@ func SetupIPMasqForNetwork(backend *string, ipn *net.IPNet, network, ifname, con
 
 	switch *backend {
 	case "iptables":
-		return setupIPMasqIPTables(ipn, network, ifname, containerID)
+		return setupIPMasqIPTables(ipns, network, ifname, containerID)
 	case "nftables":
-		return setupIPMasqNFTables(ipn, network, ifname, containerID)
+		return setupIPMasqNFTables(ipns, network, ifname, containerID)
 	default:
 		return fmt.Errorf("unknown ipmasq backend %q", *backend)
 	}
 }
 
-// TeardownIPMasqForNetwork undoes the effects of SetupIPMasqForNetwork
-func TeardownIPMasqForNetwork(ipn *net.IPNet, network, ifname, containerID string) error {
+// TeardownIPMasqForNetworks undoes the effects of SetupIPMasqForNetworks
+func TeardownIPMasqForNetworks(ipns []*net.IPNet, network, ifname, containerID string) error {
 	var errs []string
 
 	// Do both the iptables and the nftables cleanup, since the pod may have been
 	// created with a different version of this plugin or a different configuration.
 
-	err := teardownIPMasqIPTables(ipn, network, ifname, containerID)
+	err := teardownIPMasqIPTables(ipns, network, ifname, containerID)
 	if err != nil && utils.SupportsIPTables() {
 		errs = append(errs, err.Error())
 	}
 
-	err = teardownIPMasqNFTables(ipn, network, ifname, containerID)
+	err = teardownIPMasqNFTables(ipns, network, ifname, containerID)
 	if err != nil && utils.SupportsNFTables() {
 		errs = append(errs, err.Error())
 	}
