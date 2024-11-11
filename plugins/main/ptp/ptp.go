@@ -229,10 +229,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	if conf.IPMasq {
+		ipns := []*net.IPNet{}
 		for _, ipc := range result.IPs {
-			if err = ip.SetupIPMasqForNetwork(conf.IPMasqBackend, &ipc.Address, conf.Name, args.IfName, args.ContainerID); err != nil {
-				return err
-			}
+			ipns = append(ipns, &ipc.Address)
+		}
+		if err = ip.SetupIPMasqForNetworks(conf.IPMasqBackend, ipns, conf.Name, args.IfName, args.ContainerID); err != nil {
+			return err
 		}
 	}
 
@@ -291,8 +293,8 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	if len(ipnets) != 0 && conf.IPMasq {
-		for _, ipn := range ipnets {
-			err = ip.TeardownIPMasqForNetwork(ipn, conf.Name, args.IfName, args.ContainerID)
+		if err := ip.TeardownIPMasqForNetworks(ipnets, conf.Name, args.IfName, args.ContainerID); err != nil {
+			return err
 		}
 	}
 

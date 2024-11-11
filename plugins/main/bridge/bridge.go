@@ -668,10 +668,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		if n.IPMasq {
+			ipns := []*net.IPNet{}
 			for _, ipc := range result.IPs {
-				if err = ip.SetupIPMasqForNetwork(n.IPMasqBackend, &ipc.Address, n.Name, args.IfName, args.ContainerID); err != nil {
-					return err
-				}
+				ipns = append(ipns, &ipc.Address)
+			}
+			if err = ip.SetupIPMasqForNetworks(n.IPMasqBackend, ipns, n.Name, args.IfName, args.ContainerID); err != nil {
+				return err
 			}
 		}
 	} else if !n.DisableContainerInterface {
@@ -807,10 +809,8 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	if isLayer3 && n.IPMasq {
-		for _, ipn := range ipnets {
-			if err := ip.TeardownIPMasqForNetwork(ipn, n.Name, args.IfName, args.ContainerID); err != nil {
-				return err
-			}
+		if err := ip.TeardownIPMasqForNetworks(ipnets, n.Name, args.IfName, args.ContainerID); err != nil {
+			return err
 		}
 	}
 

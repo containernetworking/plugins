@@ -15,6 +15,7 @@
 package ip
 
 import (
+	"net"
 	"strings"
 	"testing"
 
@@ -31,43 +32,55 @@ func Test_setupIPMasqNFTables(t *testing.T) {
 		network     string
 		ifname      string
 		containerID string
-		addr        string
+		addrs       []string
 	}{
 		{
 			network:     "unit-test",
 			ifname:      "eth0",
 			containerID: "one",
-			addr:        "192.168.1.1/24",
+			addrs:       []string{"192.168.1.1/24"},
 		},
 		{
 			network:     "unit-test",
 			ifname:      "eth0",
 			containerID: "two",
-			addr:        "192.168.1.2/24",
+			addrs:       []string{"192.168.1.2/24", "2001:db8::2/64"},
 		},
 		{
 			network:     "unit-test",
 			ifname:      "eth0",
 			containerID: "three",
-			addr:        "192.168.99.5/24",
+			addrs:       []string{"192.168.99.5/24"},
 		},
 		{
 			network:     "alternate",
 			ifname:      "net1",
 			containerID: "three",
-			addr:        "10.0.0.5/24",
+			addrs: []string{
+				"10.0.0.5/24",
+				"10.0.0.6/24",
+				"10.0.1.7/24",
+				"2001:db8::5/64",
+				"2001:db8::6/64",
+				"2001:db8:1::7/64",
+			},
 		},
 	}
 
 	for _, c := range containers {
-		addr, err := netlink.ParseAddr(c.addr)
-		if err != nil {
-			t.Fatalf("failed to parse test addr: %v", err)
+		ipns := []*net.IPNet{}
+		for _, addr := range c.addrs {
+			nladdr, err := netlink.ParseAddr(addr)
+			if err != nil {
+				t.Fatalf("failed to parse test addr: %v", err)
+			}
+			ipns = append(ipns, nladdr.IPNet)
 		}
-		err = setupIPMasqNFTablesWithInterface(nft, addr.IPNet, c.network, c.ifname, c.containerID)
+		err := setupIPMasqNFTablesWithInterface(nft, ipns, c.network, c.ifname, c.containerID)
 		if err != nil {
 			t.Fatalf("error from setupIPMasqNFTables: %v", err)
 		}
+
 	}
 
 	expected := strings.TrimSpace(`
@@ -76,8 +89,14 @@ add chain inet cni_plugins_masquerade masq_checks { comment "Masquerade traffic 
 add chain inet cni_plugins_masquerade postrouting { type nat hook postrouting priority 100 ; }
 add rule inet cni_plugins_masquerade masq_checks ip saddr == 192.168.1.1 ip daddr != 192.168.1.0/24 masquerade comment "6fd94d501e58f0aa-287fc69eff0574a2, net: unit-test, if: eth0, id: one"
 add rule inet cni_plugins_masquerade masq_checks ip saddr == 192.168.1.2 ip daddr != 192.168.1.0/24 masquerade comment "6fd94d501e58f0aa-d750b2c8f0f25d5f, net: unit-test, if: eth0, id: two"
+add rule inet cni_plugins_masquerade masq_checks ip6 saddr == 2001:db8::2 ip6 daddr != 2001:db8::/64 masquerade comment "6fd94d501e58f0aa-d750b2c8f0f25d5f, net: unit-test, if: eth0, id: two"
 add rule inet cni_plugins_masquerade masq_checks ip saddr == 192.168.99.5 ip daddr != 192.168.99.0/24 masquerade comment "6fd94d501e58f0aa-a4d4adb82b669cfe, net: unit-test, if: eth0, id: three"
 add rule inet cni_plugins_masquerade masq_checks ip saddr == 10.0.0.5 ip daddr != 10.0.0.0/24 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
+add rule inet cni_plugins_masquerade masq_checks ip saddr == 10.0.0.6 ip daddr != 10.0.0.0/24 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
+add rule inet cni_plugins_masquerade masq_checks ip saddr == 10.0.1.7 ip daddr != 10.0.1.0/24 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
+add rule inet cni_plugins_masquerade masq_checks ip6 saddr == 2001:db8::5 ip6 daddr != 2001:db8::/64 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
+add rule inet cni_plugins_masquerade masq_checks ip6 saddr == 2001:db8::6 ip6 daddr != 2001:db8::/64 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
+add rule inet cni_plugins_masquerade masq_checks ip6 saddr == 2001:db8:1::7 ip6 daddr != 2001:db8:1::/64 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
 add rule inet cni_plugins_masquerade postrouting ip daddr == 224.0.0.0/4  return
 add rule inet cni_plugins_masquerade postrouting ip6 daddr == ff00::/8  return
 add rule inet cni_plugins_masquerade postrouting goto masq_checks
@@ -88,22 +107,18 @@ add rule inet cni_plugins_masquerade postrouting goto masq_checks
 	}
 
 	// Add a new container reusing "one"'s address, before deleting "one"
-	addr, err := netlink.ParseAddr(containers[0].addr)
+	c := containers[0]
+	addr, err := netlink.ParseAddr(c.addrs[0])
 	if err != nil {
 		t.Fatalf("failed to parse test addr: %v", err)
 	}
-	err = setupIPMasqNFTablesWithInterface(nft, addr.IPNet, "unit-test", "eth0", "four")
+	err = setupIPMasqNFTablesWithInterface(nft, []*net.IPNet{addr.IPNet}, "unit-test", "eth0", "four")
 	if err != nil {
 		t.Fatalf("error from setupIPMasqNFTables: %v", err)
 	}
 
 	// Remove "one"
-	c := containers[0]
-	addr, err = netlink.ParseAddr(c.addr)
-	if err != nil {
-		t.Fatalf("failed to parse test addr: %v", err)
-	}
-	err = teardownIPMasqNFTablesWithInterface(nft, addr.IPNet, c.network, c.ifname, c.containerID)
+	err = teardownIPMasqNFTablesWithInterface(nft, []*net.IPNet{addr.IPNet}, c.network, c.ifname, c.containerID)
 	if err != nil {
 		t.Fatalf("error from teardownIPMasqNFTables: %v", err)
 	}
@@ -114,8 +129,14 @@ add table inet cni_plugins_masquerade { comment "Masquerading for plugins from g
 add chain inet cni_plugins_masquerade masq_checks { comment "Masquerade traffic from certain IPs to any (non-multicast) IP outside their subnet" ; }
 add chain inet cni_plugins_masquerade postrouting { type nat hook postrouting priority 100 ; }
 add rule inet cni_plugins_masquerade masq_checks ip saddr == 192.168.1.2 ip daddr != 192.168.1.0/24 masquerade comment "6fd94d501e58f0aa-d750b2c8f0f25d5f, net: unit-test, if: eth0, id: two"
+add rule inet cni_plugins_masquerade masq_checks ip6 saddr == 2001:db8::2 ip6 daddr != 2001:db8::/64 masquerade comment "6fd94d501e58f0aa-d750b2c8f0f25d5f, net: unit-test, if: eth0, id: two"
 add rule inet cni_plugins_masquerade masq_checks ip saddr == 192.168.99.5 ip daddr != 192.168.99.0/24 masquerade comment "6fd94d501e58f0aa-a4d4adb82b669cfe, net: unit-test, if: eth0, id: three"
 add rule inet cni_plugins_masquerade masq_checks ip saddr == 10.0.0.5 ip daddr != 10.0.0.0/24 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
+add rule inet cni_plugins_masquerade masq_checks ip saddr == 10.0.0.6 ip daddr != 10.0.0.0/24 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
+add rule inet cni_plugins_masquerade masq_checks ip saddr == 10.0.1.7 ip daddr != 10.0.1.0/24 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
+add rule inet cni_plugins_masquerade masq_checks ip6 saddr == 2001:db8::5 ip6 daddr != 2001:db8::/64 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
+add rule inet cni_plugins_masquerade masq_checks ip6 saddr == 2001:db8::6 ip6 daddr != 2001:db8::/64 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
+add rule inet cni_plugins_masquerade masq_checks ip6 saddr == 2001:db8:1::7 ip6 daddr != 2001:db8:1::/64 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
 add rule inet cni_plugins_masquerade masq_checks ip saddr == 192.168.1.1 ip daddr != 192.168.1.0/24 masquerade comment "6fd94d501e58f0aa-e766de567ef6c543, net: unit-test, if: eth0, id: four"
 add rule inet cni_plugins_masquerade postrouting ip daddr == 224.0.0.0/4  return
 add rule inet cni_plugins_masquerade postrouting ip6 daddr == ff00::/8  return
@@ -150,8 +171,14 @@ add table inet cni_plugins_masquerade { comment "Masquerading for plugins from g
 add chain inet cni_plugins_masquerade masq_checks { comment "Masquerade traffic from certain IPs to any (non-multicast) IP outside their subnet" ; }
 add chain inet cni_plugins_masquerade postrouting { type nat hook postrouting priority 100 ; }
 add rule inet cni_plugins_masquerade masq_checks ip saddr == 192.168.1.2 ip daddr != 192.168.1.0/24 masquerade comment "6fd94d501e58f0aa-d750b2c8f0f25d5f, net: unit-test, if: eth0, id: two"
+add rule inet cni_plugins_masquerade masq_checks ip6 saddr == 2001:db8::2 ip6 daddr != 2001:db8::/64 masquerade comment "6fd94d501e58f0aa-d750b2c8f0f25d5f, net: unit-test, if: eth0, id: two"
 add rule inet cni_plugins_masquerade masq_checks ip saddr == 192.168.99.5 ip daddr != 192.168.99.0/24 masquerade comment "6fd94d501e58f0aa-a4d4adb82b669cfe, net: unit-test, if: eth0, id: three"
 add rule inet cni_plugins_masquerade masq_checks ip saddr == 10.0.0.5 ip daddr != 10.0.0.0/24 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
+add rule inet cni_plugins_masquerade masq_checks ip saddr == 10.0.0.6 ip daddr != 10.0.0.0/24 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
+add rule inet cni_plugins_masquerade masq_checks ip saddr == 10.0.1.7 ip daddr != 10.0.1.0/24 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
+add rule inet cni_plugins_masquerade masq_checks ip6 saddr == 2001:db8::5 ip6 daddr != 2001:db8::/64 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
+add rule inet cni_plugins_masquerade masq_checks ip6 saddr == 2001:db8::6 ip6 daddr != 2001:db8::/64 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
+add rule inet cni_plugins_masquerade masq_checks ip6 saddr == 2001:db8:1::7 ip6 daddr != 2001:db8:1::/64 masquerade comment "82783ef24bdc7036-acb19d111858e348, net: alternate, if: net1, id: three"
 add rule inet cni_plugins_masquerade postrouting ip daddr == 224.0.0.0/4  return
 add rule inet cni_plugins_masquerade postrouting ip6 daddr == ff00::/8  return
 add rule inet cni_plugins_masquerade postrouting goto masq_checks
