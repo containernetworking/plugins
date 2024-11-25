@@ -33,7 +33,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type EthtoolCmd struct { /* ethtool.c: struct ethtool_cmd */
+// EthtoolCmd is the Go version of the Linux kerne ethtool_cmd struct
+// see ethtool.c
+type EthtoolCmd struct {
 	Cmd            uint32
 	Supported      uint32
 	Advertising    uint32
@@ -102,10 +104,6 @@ func (f *EthtoolCmd) reflect(retv *map[string]uint64) {
 		default:
 			(*retv)[typeField.Name+"_unknown_type"] = 0
 		}
-
-		// tag := typeField.Tag
-		// fmt.Printf("Field Name: %s,\t Field Value: %v,\t Tag Value: %s\n",
-		//	typeField.Name, valueField.Interface(), tag.Get("tag_name"))
 	}
 }
 
@@ -198,6 +196,7 @@ func (e *Ethtool) CmdGetMapped(intf string) (map[string]uint64, error) {
 	return result, nil
 }
 
+// CmdGetMapped returns the interface settings in a map
 func CmdGetMapped(intf string) (map[string]uint64, error) {
 	e, err := NewEthtool()
 	if err != nil {
