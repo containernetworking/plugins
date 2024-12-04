@@ -3,7 +3,7 @@ set -xe
 
 SRC_DIR="${SRC_DIR:-$PWD}"
 DOCKER="${DOCKER:-docker}"
-GOLANG="${GOLANG:-golang:1.22-alpine}"
+GOLANG="${GOLANG:-golang:1.23-alpine}"
 
 TAG=$(git describe --tags --dirty)
 RELEASE_DIR=release-${TAG}
