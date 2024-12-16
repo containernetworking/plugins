@@ -14,11 +14,11 @@ require (
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/networkplumbing/go-nft v0.4.0
 	github.com/onsi/ginkgo/v2 v2.22.0
-	github.com/onsi/gomega v1.36.0
+	github.com/onsi/gomega v1.36.1
 	github.com/opencontainers/selinux v1.11.1
 	github.com/safchain/ethtool v0.5.9
 	github.com/vishvananda/netlink v1.3.0
-	golang.org/x/sys v0.27.0
+	golang.org/x/sys v0.28.0
 	sigs.k8s.io/knftables v0.0.18
 )
 
