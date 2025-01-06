@@ -16,7 +16,7 @@ jobs:
       - name: setup go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: .github/go-version
       - uses: ibiqlik/action-yamllint@v3
         with:
           format: auto
@@ -32,7 +32,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: .github/go-version
       - name: Check module vendoring
         run: |
           go mod tidy
@@ -47,7 +47,7 @@ jobs:
       - name: setup go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: .github/go-version
       - name: Build on all supported architectures
         run: |
           set -e
@@ -75,7 +75,7 @@ jobs:
       - name: setup go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: .github/go-version
       - name: Set up Go for root
         run: |
           sudo ln -sf `which go` `sudo which go` || true
@@ -106,6 +106,6 @@ jobs:
       - name: setup go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: .github/go-version
       - name: test
         run: bash ./test_windows.sh
