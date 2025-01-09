@@ -61,6 +61,7 @@ type NetConf struct {
 	MacSpoofChk               bool         `json:"macspoofchk,omitempty"`
 	EnableDad                 bool         `json:"enabledad,omitempty"`
 	DisableContainerInterface bool         `json:"disableContainerInterface,omitempty"`
+	PortIsolation             bool         `json:"portIsolation,omitempty"`
 
 	Args struct {
 		Cni BridgeArgs `json:"cni,omitempty"`
@@ -387,7 +388,7 @@ func ensureVlanInterface(br *netlink.Bridge, vlanID int, preserveDefaultVlan boo
 			return nil, fmt.Errorf("faild to find host namespace: %v", err)
 		}
 
-		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanID, nil, preserveDefaultVlan, "")
+		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanID, nil, preserveDefaultVlan, "", false)
 		if err != nil {
 			return nil, fmt.Errorf("faild to create vlan gateway %q: %v", name, err)
 		}
@@ -406,7 +407,18 @@ func ensureVlanInterface(br *netlink.Bridge, vlanID int, preserveDefaultVlan boo
 	return brGatewayVeth, nil
 }
 
-func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairpinMode bool, vlanID int, vlans []int, preserveDefaultVlan bool, mac string) (*current.Interface, *current.Interface, error) {
+func setupVeth(
+	netns ns.NetNS,
+	br *netlink.Bridge,
+	ifName string,
+	mtu int,
+	hairpinMode bool,
+	vlanID int,
+	vlans []int,
+	preserveDefaultVlan bool,
+	mac string,
+	portIsolation bool,
+) (*current.Interface, *current.Interface, error) {
 	contIface := &current.Interface{}
 	hostIface := &current.Interface{}
 
@@ -441,6 +453,11 @@ func setupVeth(netns ns.NetNS, br *netlink.Bridge, ifName string, mtu int, hairp
 	// set hairpin mode
 	if err = netlink.LinkSetHairpin(hostVeth, hairpinMode); err != nil {
 		return nil, nil, fmt.Errorf("failed to setup hairpin mode for %v: %v", hostVeth.Attrs().Name, err)
+	}
+
+	// set isolation mode
+	if err = netlink.LinkSetIsolated(hostVeth, portIsolation); err != nil {
+		return nil, nil, fmt.Errorf("failed to set isolated on for %v: %v", hostVeth.Attrs().Name, err)
 	}
 
 	if (vlanID != 0 || len(vlans) > 0) && !preserveDefaultVlan {
@@ -549,7 +566,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan, n.vlans, n.PreserveDefaultVlan, n.mac)
+	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan, n.vlans, n.PreserveDefaultVlan, n.mac, n.PortIsolation)
 	if err != nil {
 		return err
 	}
