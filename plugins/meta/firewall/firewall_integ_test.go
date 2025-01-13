@@ -20,7 +20,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -31,6 +30,8 @@ import (
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
 
+const nsCount = 3
+
 // The integration tests expect the "firewall" binary to be present in $PATH.
 // To run test, e.g, : go test -exec "sudo -E PATH=$(pwd):/opt/cni/bin:$PATH" -v -ginkgo.v
 var _ = Describe("firewall integration tests (ingressPolicy: same-bridge)", func() {
@@ -39,24 +40,23 @@ var _ = Describe("firewall integration tests (ingressPolicy: same-bridge)", func
 	// ns2: bar (10.88.4.0/24)
 	//
 	// ns0@foo can talk to ns1@foo, but cannot talk to ns2@bar
-	const nsCount = 3
+
 	var (
 		configListFoo *libcni.NetworkConfigList // "foo", 10.88.3.0/24
 		configListBar *libcni.NetworkConfigList // "bar", 10.88.4.0/24
 		cniConf       *libcni.CNIConfig
 		namespaces    [nsCount]ns.NetNS
+		results       [nsCount]*types100.Result
 	)
 
-	BeforeEach(func() {
-		var err error
-		rawConfigFoo := `
-{
+	createNetworkConfig := func(name string, subnet string, gateway string, ingressPolicy string) string {
+		return fmt.Sprintf(`{
    "cniVersion": "1.0.0",
-   "name": "foo",
+   "name": "%s",
    "plugins": [
       {
          "type": "bridge",
-         "bridge": "foo",
+         "bridge": "%s",
          "isGateway": true,
          "ipMasq": true,
          "hairpinMode": true,
@@ -70,8 +70,8 @@ var _ = Describe("firewall integration tests (ingressPolicy: same-bridge)", func
             "ranges": [
                [
                   {
-                     "subnet": "10.88.3.0/24",
-                     "gateway": "10.88.3.1"
+                     "subnet": "%s",
+                     "gateway": "%s"
                   }
                ]
             ]
@@ -80,19 +80,14 @@ var _ = Describe("firewall integration tests (ingressPolicy: same-bridge)", func
       {
          "type": "firewall",
          "backend": "iptables",
-         "ingressPolicy": "same-bridge"
+         "ingressPolicy": "%s"
       }
    ]
-}
-`
-		configListFoo, err = libcni.ConfListFromBytes([]byte(rawConfigFoo))
-		Expect(err).NotTo(HaveOccurred())
+}`, name, name, subnet, gateway, ingressPolicy)
+	}
 
-		rawConfigBar := strings.ReplaceAll(rawConfigFoo, "foo", "bar")
-		rawConfigBar = strings.ReplaceAll(rawConfigBar, "10.88.3.", "10.88.4.")
-
-		configListBar, err = libcni.ConfListFromBytes([]byte(rawConfigBar))
-		Expect(err).NotTo(HaveOccurred())
+	BeforeEach(func() {
+		var err error
 
 		// turn PATH in to CNI_PATH.
 		_, err = exec.LookPath("firewall")
@@ -116,89 +111,129 @@ var _ = Describe("firewall integration tests (ingressPolicy: same-bridge)", func
 		}
 	})
 
-	Describe("Testing with network foo and bar", func() {
-		It("should isolate foo from bar", func() {
-			var results [nsCount]*types100.Result
-			for i := 0; i < nsCount; i++ {
-				runtimeConfig := libcni.RuntimeConf{
-					ContainerID: fmt.Sprintf("test-cni-firewall-%d", i),
-					NetNS:       namespaces[i].Path(),
-					IfName:      "eth0",
-				}
-
-				configList := configListFoo
-				switch i {
-				case 0, 1:
-				// leave foo
-				default:
-					configList = configListBar
-				}
-
-				// Clean up garbages produced during past failed executions
-				_ = cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig)
-
-				// Make delete idempotent, so we can clean up on failure
-				netDeleted := false
-				deleteNetwork := func() error {
-					if netDeleted {
-						return nil
-					}
-					netDeleted = true
-					return cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig)
-				}
-				// Create the network
-				res, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig)
-				Expect(err).NotTo(HaveOccurred())
-				// nolint: errcheck
-				defer deleteNetwork()
-
-				results[i], err = types100.NewResultFromResult(res)
-				Expect(err).NotTo(HaveOccurred())
-				fmt.Fprintf(GinkgoWriter, "results[%d]: %+v\n", i, results[i])
-			}
-			ping := func(src, dst int) error {
-				return namespaces[src].Do(func(ns.NetNS) error {
-					defer GinkgoRecover()
-					saddr := results[src].IPs[0].Address.IP.String()
-					daddr := results[dst].IPs[0].Address.IP.String()
-					srcNetName := results[src].Interfaces[0].Name
-					dstNetName := results[dst].Interfaces[0].Name
-
-					fmt.Fprintf(GinkgoWriter, "ping %s (ns%d@%s) -> %s (ns%d@%s)...",
-						saddr, src, srcNetName, daddr, dst, dstNetName)
-					timeoutSec := 1
-					if err := testutils.Ping(saddr, daddr, timeoutSec); err != nil {
-						fmt.Fprintln(GinkgoWriter, "unpingable")
-						return err
-					}
-					fmt.Fprintln(GinkgoWriter, "pingable")
-					return nil
-				})
-			}
-
-			// ns0@foo can ping to ns1@foo
-			err := ping(0, 1)
+	Describe("Testing with ingress-policy 'same-bridge", func() {
+		BeforeEach(func() {
+			var err error
+			configListFoo, err = libcni.ConfListFromBytes([]byte(
+				createNetworkConfig("foo", "10.88.3.0/24", "10.88.3.1", "same-bridge")))
 			Expect(err).NotTo(HaveOccurred())
 
-			// ns1@foo can ping to ns0@foo
-			err = ping(1, 0)
+			configListBar, err = libcni.ConfListFromBytes([]byte(
+				createNetworkConfig("bar", "10.88.4.0/24", "10.88.4.1", "same-bridge")))
 			Expect(err).NotTo(HaveOccurred())
 
-			// ns0@foo cannot ping to ns2@bar
-			err = ping(0, 2)
-			Expect(err).To(HaveOccurred())
+			results = setupNetworks(cniConf, namespaces, configListFoo, configListBar)
+		})
 
-			// ns1@foo cannot ping to ns2@bar
-			err = ping(1, 2)
-			Expect(err).To(HaveOccurred())
+		Context("when testing connectivity", func() {
+			It("should allow communication within foo network", func() {
+				err := ping(namespaces, results, 0, 1)
+				Expect(err).To(Succeed())
+				err = ping(namespaces, results, 1, 0)
+				Expect(err).To(Succeed())
+			})
 
-			// ns2@bar cannot ping to ns0@foo
-			err = ping(2, 0)
-			Expect(err).To(HaveOccurred())
+			It("should prevent communication between foo and bar networks", func() {
+				err := ping(namespaces, results, 0, 2)
+				Expect(err).To(HaveOccurred())
+				err = ping(namespaces, results, 1, 2)
+				Expect(err).To(HaveOccurred())
+				err = ping(namespaces, results, 2, 0)
+				Expect(err).To(HaveOccurred())
+				err = ping(namespaces, results, 2, 1)
+				Expect(err).To(HaveOccurred())
+			})
+		})
+	})
 
-			// ns2@bar cannot ping to ns1@foo
-			err = ping(2, 1)
-			Expect(err).To(HaveOccurred())
+	Describe("Testing with ingress-policy 'isolated", func() {
+		BeforeEach(func() {
+			var err error
+			configListFoo, err = libcni.ConfListFromBytes([]byte(
+				createNetworkConfig("foo", "10.88.3.0/24", "10.88.3.1", "isolated")))
+			Expect(err).NotTo(HaveOccurred())
+
+			configListBar, err = libcni.ConfListFromBytes([]byte(
+				createNetworkConfig("bar", "10.88.4.0/24", "10.88.4.1", "isolated")))
+			Expect(err).NotTo(HaveOccurred())
+
+			results = setupNetworks(cniConf, namespaces, configListFoo, configListBar)
+		})
+
+		Context("when testing connectivity", func() {
+			It("should prevent communication within foo network", func() {
+				err := ping(namespaces, results, 0, 1)
+				Expect(err).To(HaveOccurred())
+				err = ping(namespaces, results, 1, 0)
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("should prevent communication between foo and bar networks", func() {
+				err := ping(namespaces, results, 0, 2)
+				Expect(err).To(HaveOccurred())
+				err = ping(namespaces, results, 1, 2)
+				Expect(err).To(HaveOccurred())
+				err = ping(namespaces, results, 2, 0)
+				Expect(err).To(HaveOccurred())
+				err = ping(namespaces, results, 2, 1)
+				Expect(err).To(HaveOccurred())
+			})
 		})
 	})
 })
+
+func setupNetworks(cniConf *libcni.CNIConfig, namespaces [nsCount]ns.NetNS,
+	configListFoo, configListBar *libcni.NetworkConfigList,
+) [nsCount]*types100.Result {
+	var results [nsCount]*types100.Result
+
+	for i := 0; i < nsCount; i++ {
+		runtimeConfig := libcni.RuntimeConf{
+			ContainerID: fmt.Sprintf("test-cni-firewall-%d", i),
+			NetNS:       namespaces[i].Path(),
+			IfName:      "eth0",
+		}
+
+		configList := configListFoo
+		if i >= 2 {
+			configList = configListBar
+		}
+
+		// Cleanup any existing network
+		_ = cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig)
+
+		// Create network
+		res, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Setup cleanup
+		DeferCleanup(func() {
+			_ = cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig)
+		})
+
+		results[i], err = types100.NewResultFromResult(res)
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	return results
+}
+
+func ping(namespaces [nsCount]ns.NetNS, results [nsCount]*types100.Result, src, dst int) error {
+	return namespaces[src].Do(func(ns.NetNS) error {
+		defer GinkgoRecover()
+		saddr := results[src].IPs[0].Address.IP.String()
+		daddr := results[dst].IPs[0].Address.IP.String()
+		srcNetName := results[src].Interfaces[0].Name
+		dstNetName := results[dst].Interfaces[0].Name
+
+		fmt.Fprintf(GinkgoWriter, "ping %s (ns%d@%s) -> %s (ns%d@%s)...",
+			saddr, src, srcNetName, daddr, dst, dstNetName)
+		timeoutSec := 1
+		if err := testutils.Ping(saddr, daddr, timeoutSec); err != nil {
+			fmt.Fprintln(GinkgoWriter, "unpingable")
+			return err
+		}
+		fmt.Fprintln(GinkgoWriter, "pingable")
+		return nil
+	})
+}
