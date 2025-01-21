@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -55,6 +56,13 @@ const (
 	leaseStateRebinding
 )
 
+// Timing for retrying link existence check
+const (
+	linkCheckDelay0       = 1 * time.Second
+	linkCheckRetryMax     = 10 * time.Second
+	linkCheckTotalTimeout = 30 * time.Second
+)
+
 // This implementation uses 1 OS thread per lease. This is because
 // all the network operations have to be done in network namespace
 // of the interface. This can be improved by switching to the proper
@@ -65,6 +73,7 @@ type DHCPLease struct {
 	clientID      string
 	latestLease   *nclient4.Lease
 	link          netlink.Link
+	linkName      string
 	renewalTime   time.Time
 	rebindingTime time.Time
 	expireTime    time.Time
@@ -190,6 +199,7 @@ func AcquireLease(
 			}
 
 			l.link = link
+			l.linkName = link.Attrs().Name
 
 			if err = l.acquire(); err != nil {
 				return err
@@ -243,7 +253,7 @@ func withAllOptions(l *DHCPLease) dhcp4.Modifier {
 
 func (l *DHCPLease) acquire() error {
 	if (l.link.Attrs().Flags & net.FlagUp) != net.FlagUp {
-		log.Printf("Link %q down. Attempting to set up", l.link.Attrs().Name)
+		log.Printf("Link %q down. Attempting to set up", l.linkName)
 		if err := netlink.LinkSetUp(l.link); err != nil {
 			return err
 		}
@@ -291,6 +301,14 @@ func (l *DHCPLease) maintain() {
 
 	for {
 		var sleepDur time.Duration
+
+		linkCheckCtx, cancel := context.WithTimeoutCause(l.ctx, l.resendTimeout, errNoMoreTries)
+		defer cancel()
+		linkExists, _ := checkLinkExistsWithBackoff(linkCheckCtx, l.linkName)
+		if !linkExists {
+			log.Printf("%v: interface %s no longer exists or link check failed, terminating lease maintenance", l.clientID, l.linkName)
+			return
+		}
 
 		switch state {
 		case leaseStateBound:
@@ -344,9 +362,40 @@ func (l *DHCPLease) maintain() {
 	}
 }
 
+func checkLinkExistsWithBackoff(ctx context.Context, linkName string) (bool, error) {
+	baseDelay := linkCheckDelay0
+	for {
+		exists, err := checkLinkByName(linkName)
+		if err == nil {
+			return exists, nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err() // Context's done, return with its error
+		case <-time.After(baseDelay):
+			if baseDelay < linkCheckRetryMax {
+				baseDelay *= 2
+			}
+		}
+	}
+}
+
+func checkLinkByName(linkName string) (bool, error) {
+	_, err := netlink.LinkByName(linkName)
+	if err != nil {
+		var linkNotFoundErr *netlink.LinkNotFoundError = &netlink.LinkNotFoundError{}
+		if errors.As(err, linkNotFoundErr) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 func (l *DHCPLease) downIface() {
 	if err := netlink.LinkSetDown(l.link); err != nil {
-		log.Printf("%v: failed to bring %v interface DOWN: %v", l.clientID, l.link.Attrs().Name, err)
+		log.Printf("%v: failed to bring %v interface DOWN: %v", l.clientID, l.linkName, err)
 	}
 }
 
