@@ -526,7 +526,6 @@ var _ = Describe("sbr test", func() {
 			})
 
 		// 2 Rules will be created for each IP address. (100, 101)
-		// 2 Rules will also be created for each interface
 		Expect(newStatus.Rules).To(HaveLen(2))
 
 		// First entry corresponds to last table
