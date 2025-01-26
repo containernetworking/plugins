@@ -305,7 +305,9 @@ var _ = Describe("sbr test", func() {
 
 		Expect(newStatus.Rules).To(HaveLen(1))
 		Expect(newStatus.Rules[0].Table).To(Equal(100))
-		Expect(newStatus.Rules[0].Src.String()).To(Equal("192.168.1.209/32"))
+		Expect(newStatus.Rules[0].OifName).To(Equal("net1"))
+		Expect(newStatus.Rules[1].Table).To(Equal(100))
+		Expect(newStatus.Rules[1].Src.String()).To(Equal("192.168.1.209/32"))
 		devNet1 := newStatus.Devices[0]
 		devEth0 := newStatus.Devices[1]
 		Expect(equalRoutes(expNet1.Routes, devNet1.Routes)).To(BeTrue())
@@ -403,7 +405,13 @@ var _ = Describe("sbr test", func() {
 
 		Expect(newStatus.Rules).To(HaveLen(1))
 		Expect(newStatus.Rules[0].Table).To(Equal(100))
+<<<<<<< HEAD
 		Expect(newStatus.Rules[0].Src.String()).To(Equal("192.168.1.209/32"))
+=======
+		Expect(newStatus.Rules[0].OifName).To(Equal("net1"))
+		Expect(newStatus.Rules[1].Table).To(Equal(100))
+		Expect(newStatus.Rules[1].Src.String()).To(Equal("192.168.1.209/32"))
+>>>>>>> 1a633d52 (sbr: fix code and tests)
 		devNet1 := newStatus.Devices[0]
 		devEth0 := newStatus.Devices[1]
 		Expect(equalRoutes(expEth0.Routes, devEth0.Routes)).To(BeTrue())
@@ -472,7 +480,13 @@ var _ = Describe("sbr test", func() {
 
 		// Check results. We expect all the routes on net1 to have moved to
 		// table 100 except for local routes (table 255); a new default gateway
+<<<<<<< HEAD
 		// route to have been created; and 2 rules to exist.
+=======
+		// route to have been created; and 2 rules to exist. There will be no
+		// interface rules, because they don't make sense when there are multiple
+		// IPs for a single interface
+>>>>>>> 1a633d52 (sbr: fix code and tests)
 		expNet1 := oldStatus.Devices[0]
 		expEth0 := oldStatus.Devices[1]
 
@@ -514,13 +528,21 @@ var _ = Describe("sbr test", func() {
 			})
 
 		// 2 Rules will be created for each IP address. (100, 101)
+<<<<<<< HEAD
+=======
+		// 2 Rules will also be created for each interface
+>>>>>>> 1a633d52 (sbr: fix code and tests)
 		Expect(newStatus.Rules).To(HaveLen(2))
 
 		// First entry corresponds to last table
 		Expect(newStatus.Rules[0].Table).To(Equal(101))
 		Expect(newStatus.Rules[0].Src.String()).To(Equal("192.168.101.209/32"))
 
+<<<<<<< HEAD
 		// Second entry corresponds to first table (100)
+=======
+		// Third entry corresponds to first table (100)
+>>>>>>> 1a633d52 (sbr: fix code and tests)
 		Expect(newStatus.Rules[1].Table).To(Equal(100))
 		Expect(newStatus.Rules[1].Src.String()).To(Equal("192.168.1.209/32"))
 
