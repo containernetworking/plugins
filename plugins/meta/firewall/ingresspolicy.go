@@ -31,13 +31,15 @@ func setupIngressPolicy(conf *FirewallNetConf, prevResult *types100.Result) erro
 		// NOP
 		return nil
 	case IngressPolicySameBridge:
-		return setupIngressPolicySameBridge(conf, prevResult)
+		return setupIngressPolicyBridgeIsolation(conf, prevResult, false)
+	case IngressPolicyIsolated:
+		return setupIngressPolicyBridgeIsolation(conf, prevResult, true)
 	default:
 		return fmt.Errorf("unknown ingress policy: %q", conf.IngressPolicy)
 	}
 }
 
-func setupIngressPolicySameBridge(conf *FirewallNetConf, prevResult *types100.Result) error {
+func setupIngressPolicyBridgeIsolation(conf *FirewallNetConf, prevResult *types100.Result, isolated bool) error {
 	if len(prevResult.Interfaces) == 0 {
 		return fmt.Errorf("interface needs to be set for ingress policy %q, make sure to chain \"firewall\" plugin with \"bridge\"",
 			conf.IngressPolicy)
@@ -55,7 +57,7 @@ func setupIngressPolicySameBridge(conf *FirewallNetConf, prevResult *types100.Re
 		if err != nil {
 			return err
 		}
-		if err := setupIsolationChains(ipt, bridgeName); err != nil {
+		if err := setupIsolationChains(ipt, bridgeName, isolated); err != nil {
 			return err
 		}
 	}
@@ -67,7 +69,7 @@ func teardownIngressPolicy(conf *FirewallNetConf) error {
 	case "", IngressPolicyOpen:
 		// NOP
 		return nil
-	case IngressPolicySameBridge:
+	case IngressPolicySameBridge, IngressPolicyIsolated:
 		// NOP
 		//
 		// We can't be sure whether conf.bridgeName is still in use by other containers.
@@ -90,16 +92,24 @@ const (
 // # NOTE: "-j CNI-ISOLATION-STAGE-1" needs to be before "CNI-FORWARD" chain. So we use -I here.
 // iptables -I FORWARD -j CNI-ISOLATION-STAGE-1
 // iptables -A CNI-ISOLATION-STAGE-1 -i ${bridgeName} ! -o ${bridgeName} -j CNI-ISOLATION-STAGE-2
+// [isolated=true] iptables -A CNI-ISOLATION-STAGE-1 -i ${bridgeName} -o ${bridgeName} -j DROP
 // iptables -A CNI-ISOLATION-STAGE-1 -j RETURN
 // iptables -A CNI-ISOLATION-STAGE-2 -o ${bridgeName} -j DROP
 // iptables -A CNI-ISOLATION-STAGE-2 -j RETURN
 // ```
-func setupIsolationChains(ipt *iptables.IPTables, bridgeName string) error {
+func setupIsolationChains(ipt *iptables.IPTables, bridgeName string, isolated bool) error {
 	const (
 		// Future version may support custom chain names
 		stage1Chain = "CNI-ISOLATION-STAGE-1"
 		stage2Chain = "CNI-ISOLATION-STAGE-2"
 	)
+
+	ingressPolicyName := "same-bridge"
+	if isolated {
+		ingressPolicyName = "isolated"
+	}
+
+	withPolicyComment := withPolicyComment(ingressPolicyName)
 	// Commands:
 	// ```
 	// iptables -N CNI-ISOLATION-STAGE-1
@@ -126,14 +136,22 @@ func setupIsolationChains(ipt *iptables.IPTables, bridgeName string) error {
 	// Commands:
 	// ```
 	// iptables -A CNI-ISOLATION-STAGE-1 -i ${bridgeName} ! -o ${bridgeName} -j CNI-ISOLATION-STAGE-2
+	// [isolate=true] iptables -A CNI-ISOLATION-STAGE-1 -i ${bridgeName} -o ${bridgeName} -j DROP
 	// iptables -A CNI-ISOLATION-STAGE-1 -j RETURN
 	// ```
-	stage1Bridge := withDefaultComment(isolationStage1BridgeRule(bridgeName, stage2Chain))
+	stage1BridgeRule := withPolicyComment(isolationStage1BridgeRule(bridgeName, stage2Chain))
+	stage1BridgeDropRule := withPolicyComment(isolationStage1BridgeDropRule(bridgeName))
 	// prepend = true because this needs to be before "-j RETURN"
 	const stage1BridgePrepend = true
-	if err := utils.InsertUnique(ipt, filterTableName, stage1Chain, stage1BridgePrepend, stage1Bridge); err != nil {
+	if err := utils.InsertUnique(ipt, filterTableName, stage1Chain, stage1BridgePrepend, stage1BridgeRule); err != nil {
 		return err
 	}
+	if isolated {
+		if err := utils.InsertUnique(ipt, filterTableName, stage1Chain, stage1BridgePrepend, stage1BridgeDropRule); err != nil {
+			return err
+		}
+	}
+
 	stage1Return := withDefaultComment([]string{"-j", "RETURN"})
 	if err := utils.InsertUnique(ipt, filterTableName, stage1Chain, false, stage1Return); err != nil {
 		return err
@@ -158,12 +176,24 @@ func isolationStage1BridgeRule(bridgeName, stage2Chain string) []string {
 	return []string{"-i", bridgeName, "!", "-o", bridgeName, "-j", stage2Chain}
 }
 
+func isolationStage1BridgeDropRule(bridgeName string) []string {
+	return []string{"-i", bridgeName, "-o", bridgeName, "-j", "DROP"}
+}
+
 func isolationStage2BridgeRule(bridgeName string) []string {
 	return []string{"-o", bridgeName, "-j", "DROP"}
 }
 
+func withPolicyComment(policy string) func([]string) []string {
+	return func(rule []string) []string {
+		comment := fmt.Sprintf("CNI firewall plugin rules (ingressPolicy: %s)", policy)
+
+		return withComment(rule, comment)
+	}
+}
+
 func withDefaultComment(rule []string) []string {
-	defaultComment := "CNI firewall plugin rules (ingressPolicy: same-bridge)"
+	defaultComment := "CNI firewall plugin rules (ingressPolicy: same-bridge|isolated)"
 	return withComment(rule, defaultComment)
 }
 
