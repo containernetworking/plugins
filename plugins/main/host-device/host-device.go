@@ -131,6 +131,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 	defer containerNs.Close()
 
 	result := &current.Result{}
+	result.Interfaces = []*current.Interface{{
+		Name:    args.IfName,
+		Sandbox: containerNs.Path(),
+	}}
+
 	var contDev netlink.Link
 	if !cfg.DPDKMode {
 		hostDev, err := getLink(cfg.Device, cfg.HWAddr, cfg.KernelPath, cfg.PCIAddr, cfg.auxDevice)
@@ -143,11 +148,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return fmt.Errorf("failed to move link %v", err)
 		}
 
-		result.Interfaces = []*current.Interface{{
-			Name:    contDev.Attrs().Name,
-			Mac:     contDev.Attrs().HardwareAddr.String(),
-			Sandbox: containerNs.Path(),
-		}}
+		// Override the device name with the name in the container namespace
+		result.Interfaces[0].Name = contDev.Attrs().Name
+		// Set the MAC address of the interface
+		result.Interfaces[0].Mac = contDev.Attrs().HardwareAddr.String()
 	}
 
 	if cfg.IPAM.Type == "" {
