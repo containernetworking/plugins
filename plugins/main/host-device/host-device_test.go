@@ -218,7 +218,7 @@ func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result)
 
 type tester interface {
 	expectInterfaces(result types.Result, name, mac, sandbox string)
-	expectDpdkInterfaceIP(result types.Result, ipAddress string)
+	expectDpdkInterfaceIP(result types.Result, name, sandbox, ipAddress string)
 }
 
 type testerBase struct{}
@@ -256,11 +256,16 @@ func (t *testerV10x) expectInterfaces(result types.Result, name, mac, sandbox st
 	}))
 }
 
-func (t *testerV10x) expectDpdkInterfaceIP(result types.Result, ipAddress string) {
+func (t *testerV10x) expectDpdkInterfaceIP(result types.Result, name, sandbox, ipAddress string) {
 	// check that the result was sane
 	res, err := types100.NewResultFromResult(result)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(res.Interfaces).To(BeEmpty())
+	Expect(res.Interfaces).To(Equal([]*types100.Interface{
+		{
+			Name:    name,
+			Sandbox: sandbox,
+		},
+	}))
 	Expect(res.IPs).To(HaveLen(1))
 	Expect(res.IPs[0].Address.String()).To(Equal(ipAddress))
 }
@@ -278,11 +283,16 @@ func (t *testerV04x) expectInterfaces(result types.Result, name, mac, sandbox st
 	}))
 }
 
-func (t *testerV04x) expectDpdkInterfaceIP(result types.Result, ipAddress string) {
+func (t *testerV04x) expectDpdkInterfaceIP(result types.Result, name, sandbox, ipAddress string) {
 	// check that the result was sane
 	res, err := types040.NewResultFromResult(result)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(res.Interfaces).To(BeEmpty())
+	Expect(res.Interfaces).To(Equal([]*types040.Interface{
+		{
+			Name:    name,
+			Sandbox: sandbox,
+		},
+	}))
 	Expect(res.IPs).To(HaveLen(1))
 	Expect(res.IPs[0].Address.String()).To(Equal(ipAddress))
 }
@@ -300,11 +310,16 @@ func (t *testerV03x) expectInterfaces(result types.Result, name, mac, sandbox st
 	}))
 }
 
-func (t *testerV03x) expectDpdkInterfaceIP(result types.Result, ipAddress string) {
+func (t *testerV03x) expectDpdkInterfaceIP(result types.Result, name, sandbox, ipAddress string) {
 	// check that the result was sane
 	res, err := types040.NewResultFromResult(result)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(res.Interfaces).To(BeEmpty())
+	Expect(res.Interfaces).To(Equal([]*types040.Interface{
+		{
+			Name:    name,
+			Sandbox: sandbox,
+		},
+	}))
 	Expect(res.IPs).To(HaveLen(1))
 	Expect(res.IPs[0].Address.String()).To(Equal(ipAddress))
 }
@@ -598,7 +613,7 @@ var _ = Describe("base functionality", func() {
 
 			// check that the result was sane
 			t := newTesterByVersion(ver)
-			t.expectDpdkInterfaceIP(resI, targetIP)
+			t.expectDpdkInterfaceIP(resI, cniName, targetNS.Path(), targetIP)
 
 			// call CmdDel
 			_ = originalNS.Do(func(ns.NetNS) error {
@@ -870,7 +885,7 @@ var _ = Describe("base functionality", func() {
 
 			// check that the result was sane
 			t := newTesterByVersion(ver)
-			t.expectDpdkInterfaceIP(resI, targetIP)
+			t.expectDpdkInterfaceIP(resI, cniName, targetNS.Path(), targetIP)
 
 			// call CmdCheck
 			n := &Net{}
