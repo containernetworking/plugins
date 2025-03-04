@@ -259,17 +259,6 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 			return fmt.Errorf("Failed to add src rule: %v", err)
 		}
 
-		// Only add an interface rule if there is 1 IP address configured on the interface
-		if len(ipCfgs) == 1 {
-			interfaceRule := netlink.NewRule()
-			interfaceRule.Table = table
-			log.Printf("Interface to use %s", iface)
-			interfaceRule.OifName = iface
-
-			if err = netlink.RuleAdd(interfaceRule); err != nil {
-				return fmt.Errorf("Failed to add interface rule: %v", err)
-			}
-		}
 		// Add a default route, since this may have been removed by previous
 		// plugin.
 		if ipCfg.Gateway != nil {
@@ -328,6 +317,18 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 		// Use a different table for each ipCfg
 		table++
 		table = getNextTableID(rules, routes, table)
+	}
+
+	// Add an interface rule, only if there is a single IP address configured on the interface
+	if len(ipCfgs) == 1 {
+		interfaceRule := netlink.NewRule()
+		interfaceRule.Table = table
+		log.Printf("Interface to use %s", iface)
+		interfaceRule.OifName = iface
+
+		if err = netlink.RuleAdd(interfaceRule); err != nil {
+			return fmt.Errorf("Failed to add interface rule: %v", err)
+		}
 	}
 
 	// Delete all the interface routes in the default routing table, which were
