@@ -306,10 +306,10 @@ var _ = Describe("sbr test", func() {
 		Expect(newStatus.Rules).To(HaveLen(2))
 
 		Expect(newStatus.Rules[0].Table).To(Equal(100))
-		Expect(newStatus.Rules[0].OifName).To(Equal("net1"))
+		Expect(newStatus.Rules[0].Src.String()).To(Equal("192.168.1.209/32"))
 
 		Expect(newStatus.Rules[1].Table).To(Equal(100))
-		Expect(newStatus.Rules[1].Src.String()).To(Equal("192.168.1.209/32"))
+		Expect(newStatus.Rules[1].OifName).To(Equal("net1"))
 
 		devNet1 := newStatus.Devices[0]
 		devEth0 := newStatus.Devices[1]
@@ -409,10 +409,10 @@ var _ = Describe("sbr test", func() {
 		Expect(newStatus.Rules).To(HaveLen(2))
 
 		Expect(newStatus.Rules[0].Table).To(Equal(100))
-		Expect(newStatus.Rules[0].OifName).To(Equal("net1"))
+		Expect(newStatus.Rules[0].Src.String()).To(Equal("192.168.1.209/32"))
 
 		Expect(newStatus.Rules[1].Table).To(Equal(100))
-		Expect(newStatus.Rules[1].Src.String()).To(Equal("192.168.1.209/32"))
+		Expect(newStatus.Rules[1].OifName).To(Equal("net1"))
 
 		devNet1 := newStatus.Devices[0]
 		devEth0 := newStatus.Devices[1]
