@@ -231,6 +231,18 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 
 	linkIndex := link.Attrs().Index
 
+	// Add an interface rule, only if there is a single IP address configured on the interface
+	if len(ipCfgs) == 1 {
+		interfaceRule := netlink.NewRule()
+		interfaceRule.Table = table
+		log.Printf("Interface to use %s", iface)
+		interfaceRule.OifName = iface
+
+		if err = netlink.RuleAdd(interfaceRule); err != nil {
+			return fmt.Errorf("Failed to add interface rule: %v", err)
+		}
+	}
+
 	// Get all routes for the interface in the default routing table
 	routes, err = netlink.RouteList(link, netlink.FAMILY_ALL)
 	if err != nil {
@@ -317,18 +329,6 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 		// Use a different table for each ipCfg
 		table++
 		table = getNextTableID(rules, routes, table)
-	}
-
-	// Add an interface rule, only if there is a single IP address configured on the interface
-	if len(ipCfgs) == 1 {
-		interfaceRule := netlink.NewRule()
-		interfaceRule.Table = table
-		log.Printf("Interface to use %s", iface)
-		interfaceRule.OifName = iface
-
-		if err = netlink.RuleAdd(interfaceRule); err != nil {
-			return fmt.Errorf("Failed to add interface rule: %v", err)
-		}
 	}
 
 	// Delete all the interface routes in the default routing table, which were
