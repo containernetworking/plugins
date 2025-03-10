@@ -1,7 +1,6 @@
 module github.com/containernetworking/plugins
 
 go 1.23
-
 require (
 	github.com/Microsoft/hcsshim v0.12.9
 	github.com/alexflint/go-filemutex v1.3.0
@@ -13,12 +12,12 @@ require (
 	github.com/insomniacslk/dhcp v0.0.0-20240829085014-a3a4c1f04475
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/networkplumbing/go-nft v0.4.0
-	github.com/onsi/ginkgo/v2 v2.22.2
+	github.com/onsi/ginkgo/v2 v2.23.0
 	github.com/onsi/gomega v1.36.2
 	github.com/opencontainers/selinux v1.11.1
 	github.com/safchain/ethtool v0.5.10
 	github.com/vishvananda/netlink v1.3.0
-	golang.org/x/sys v0.30.0
+	golang.org/x/sys v0.31.0
 	sigs.k8s.io/knftables v0.0.18
 )
 
@@ -43,10 +42,10 @@ require (
 	github.com/u-root/uio v0.0.0-20240224005618-d2acac8f3701 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/net v0.33.0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
-	golang.org/x/tools v0.28.0 // indirect
+	golang.org/x/net v0.35.0 // indirect
+	golang.org/x/sync v0.11.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/tools v0.30.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
 	google.golang.org/grpc v1.67.0 // indirect
 	google.golang.org/protobuf v1.36.1 // indirect
