@@ -99,12 +99,12 @@ func addInterface(vrf *netlink.Vrf, intf string) error {
 		return fmt.Errorf("interface %s has already a master set: %s", intf, master.Attrs().Name)
 	}
 
-	// IPV6 addresses are not maintained unless
+	// Global IPV6 addresses are not maintained unless
 	// sysctl -w net.ipv6.conf.all.keep_addr_on_down=1 is called
 	// so we save it, and restore it back.
-	beforeAddresses, err := netlink.AddrList(i, netlink.FAMILY_V6)
+	beforeAddresses, err := getGlobalAddresses(i, netlink.FAMILY_V6)
 	if err != nil {
-		return fmt.Errorf("failed getting ipv6 addresses for %s", intf)
+		return fmt.Errorf("failed getting global ipv6 addresses before slaving interface: %w", err)
 	}
 
 	// Save all routes that are not local and connected, before setting master,
@@ -114,9 +114,17 @@ func addInterface(vrf *netlink.Vrf, intf string) error {
 		Scope:     netlink.SCOPE_UNIVERSE, // Exclude local and connected routes
 	}
 	filterMask := netlink.RT_FILTER_OIF | netlink.RT_FILTER_SCOPE // Filter based on link index and scope
-	routes, err := netlink.RouteListFiltered(netlink.FAMILY_ALL, filter, filterMask)
+	r, err := netlink.RouteListFiltered(netlink.FAMILY_ALL, filter, filterMask)
 	if err != nil {
 		return fmt.Errorf("failed getting all routes for %s", intf)
+	}
+
+	// Filter out connected IPV6 routes
+	globalRoutes := make([]netlink.Route, 0, len(r))
+	for _, route := range r {
+		if route.Src != nil {
+			globalRoutes = append(globalRoutes, route)
+		}
 	}
 
 	err = netlink.LinkSetMaster(i, vrf)
@@ -124,9 +132,10 @@ func addInterface(vrf *netlink.Vrf, intf string) error {
 		return fmt.Errorf("could not set vrf %s as master of %s: %v", vrf.Name, intf, err)
 	}
 
-	afterAddresses, err := netlink.AddrList(i, netlink.FAMILY_V6)
+	// Used to identify which global IPV6 addresses are missing
+	afterAddresses, err := getGlobalAddresses(i, netlink.FAMILY_V6)
 	if err != nil {
-		return fmt.Errorf("failed getting ipv6 new addresses for %s: %v", intf, err)
+		return fmt.Errorf("failed getting global ipv6 addresses after slaving interface: %w", err)
 	}
 
 	// Since keeping the ipv6 address depends on net.ipv6.conf.all.keep_addr_on_down ,
@@ -144,7 +153,7 @@ CONTINUE:
 			return fmt.Errorf("could not restore address %s to %s @ %s: %v", toFind, intf, vrf.Name, err)
 		}
 
-		// Waits for local/host routes to be added by the kernel.
+		// Waits for global IPV6 addresses to be added by the kernel.
 		maxRetry := 10
 		for {
 			routesVRFTable, err := netlink.RouteListFiltered(
@@ -177,7 +186,7 @@ CONTINUE:
 	}
 
 	// Apply all saved routes for the interface that was moved to the VRF
-	for _, route := range routes {
+	for _, route := range globalRoutes {
 		r := route
 		// Modify original table to vrf one,
 		r.Table = int(vrf.Table)
@@ -217,4 +226,21 @@ func resetMaster(interfaceName string) error {
 		return fmt.Errorf("resetMaster: could reset master to %s", interfaceName)
 	}
 	return nil
+}
+
+// getGlobalAddresses returns the global addresses of the given interface
+func getGlobalAddresses(link netlink.Link, family int) ([]netlink.Addr, error) {
+	addresses, err := netlink.AddrList(link, family)
+	if err != nil {
+		return nil, fmt.Errorf("failed getting list of IP addresses for %s: %w", link.Attrs().Name, err)
+	}
+
+	globalAddresses := make([]netlink.Addr, 0, len(addresses))
+	for _, addr := range addresses {
+		if addr.Scope == int(netlink.SCOPE_UNIVERSE) {
+			globalAddresses = append(globalAddresses, addr)
+		}
+	}
+
+	return globalAddresses, nil
 }
