@@ -412,6 +412,7 @@ var _ = Describe("vrf plugin", func() {
 				// Add additional route to 10.11.10.0/24 via 10.0.0.1 gateway
 				r := netlink.Route{
 					LinkIndex: link.Attrs().Index,
+					Src:       ipv4.IP,
 					Dst:       routev4,
 					Gw:        net.ParseIP("10.0.0.1"),
 					Priority:  100,
