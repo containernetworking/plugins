@@ -31,6 +31,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
@@ -181,7 +182,7 @@ var _ = Describe("DHCP Operations", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			host, err := netlink.LinkByName(hostVethName)
+			host, err := netlinksafe.LinkByName(hostVethName)
 			Expect(err).NotTo(HaveOccurred())
 			err = netlink.LinkSetUp(host)
 			Expect(err).NotTo(HaveOccurred())
@@ -197,7 +198,7 @@ var _ = Describe("DHCP Operations", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			cont, err := netlink.LinkByName(contVethName)
+			cont, err := netlinksafe.LinkByName(contVethName)
 			Expect(err).NotTo(HaveOccurred())
 			err = netlink.LinkSetNsFd(cont, int(targetNS.Fd()))
 			Expect(err).NotTo(HaveOccurred())
@@ -210,7 +211,7 @@ var _ = Describe("DHCP Operations", func() {
 		err = targetNS.Do(func(_ ns.NetNS) error {
 			defer GinkgoRecover()
 
-			link, err := netlink.LinkByName(contVethName)
+			link, err := netlinksafe.LinkByName(contVethName)
 			Expect(err).NotTo(HaveOccurred())
 			err = netlink.LinkSetUp(link)
 			Expect(err).NotTo(HaveOccurred())
@@ -455,16 +456,16 @@ func dhcpSetupOriginalNS() (chan bool, string, ns.NetNS, ns.NetNS, error) {
 		err = netlink.LinkSetUp(veth)
 		Expect(err).NotTo(HaveOccurred())
 
-		bridgeLink, err := netlink.LinkByName(hostBridgeName)
+		bridgeLink, err := netlinksafe.LinkByName(hostBridgeName)
 		Expect(err).NotTo(HaveOccurred())
 
-		hostVethLink, err := netlink.LinkByName(hostVethName0)
+		hostVethLink, err := netlinksafe.LinkByName(hostVethName0)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = netlink.LinkSetMaster(hostVethLink, bridgeLink.(*netlink.Bridge))
 		Expect(err).NotTo(HaveOccurred())
 
-		cont, err := netlink.LinkByName(contVethName0)
+		cont, err := netlinksafe.LinkByName(contVethName0)
 		Expect(err).NotTo(HaveOccurred())
 		err = netlink.LinkSetNsFd(cont, int(targetNS.Fd()))
 		Expect(err).NotTo(HaveOccurred())
@@ -483,16 +484,16 @@ func dhcpSetupOriginalNS() (chan bool, string, ns.NetNS, ns.NetNS, error) {
 		err = netlink.LinkSetUp(veth1)
 		Expect(err).NotTo(HaveOccurred())
 
-		bridgeLink, err = netlink.LinkByName(hostBridgeName)
+		bridgeLink, err = netlinksafe.LinkByName(hostBridgeName)
 		Expect(err).NotTo(HaveOccurred())
 
-		hostVethLink1, err := netlink.LinkByName(hostVethName1)
+		hostVethLink1, err := netlinksafe.LinkByName(hostVethName1)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = netlink.LinkSetMaster(hostVethLink1, bridgeLink.(*netlink.Bridge))
 		Expect(err).NotTo(HaveOccurred())
 
-		cont1, err := netlink.LinkByName(contVethName1)
+		cont1, err := netlinksafe.LinkByName(contVethName1)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = netlink.LinkSetNsFd(cont1, int(targetNS.Fd()))
@@ -521,12 +522,12 @@ var _ = Describe("DHCP Lease Unavailable Operations", func() {
 		err = targetNS.Do(func(_ ns.NetNS) error {
 			defer GinkgoRecover()
 
-			link, err := netlink.LinkByName(contVethName0)
+			link, err := netlinksafe.LinkByName(contVethName0)
 			Expect(err).NotTo(HaveOccurred())
 			err = netlink.LinkSetUp(link)
 			Expect(err).NotTo(HaveOccurred())
 
-			link1, err := netlink.LinkByName(contVethName1)
+			link1, err := netlinksafe.LinkByName(contVethName1)
 			Expect(err).NotTo(HaveOccurred())
 			err = netlink.LinkSetUp(link1)
 			Expect(err).NotTo(HaveOccurred())

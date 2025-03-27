@@ -31,6 +31,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 )
 
@@ -193,7 +194,7 @@ func AcquireLease(
 		errCh <- ns.WithNetNSPath(netns, func(_ ns.NetNS) error {
 			defer l.wg.Done()
 
-			link, err := netlink.LinkByName(ifName)
+			link, err := netlinksafe.LinkByName(ifName)
 			if err != nil {
 				return fmt.Errorf("error looking up %q: %v", ifName, err)
 			}
@@ -382,7 +383,7 @@ func checkLinkExistsWithBackoff(ctx context.Context, linkName string) (bool, err
 }
 
 func checkLinkByName(linkName string) (bool, error) {
-	_, err := netlink.LinkByName(linkName)
+	_, err := netlinksafe.LinkByName(linkName)
 	if err != nil {
 		var linkNotFoundErr *netlink.LinkNotFoundError = &netlink.LinkNotFoundError{}
 		if errors.As(err, linkNotFoundErr) {

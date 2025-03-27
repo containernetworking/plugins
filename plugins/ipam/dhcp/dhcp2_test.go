@@ -27,6 +27,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	current "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
@@ -48,12 +49,12 @@ var _ = Describe("DHCP Multiple Lease Operations", func() {
 		err = targetNS.Do(func(_ ns.NetNS) error {
 			defer GinkgoRecover()
 
-			link, err := netlink.LinkByName(contVethName0)
+			link, err := netlinksafe.LinkByName(contVethName0)
 			Expect(err).NotTo(HaveOccurred())
 			err = netlink.LinkSetUp(link)
 			Expect(err).NotTo(HaveOccurred())
 
-			link1, err := netlink.LinkByName(contVethName1)
+			link1, err := netlinksafe.LinkByName(contVethName1)
 			Expect(err).NotTo(HaveOccurred())
 			err = netlink.LinkSetUp(link1)
 			Expect(err).NotTo(HaveOccurred())

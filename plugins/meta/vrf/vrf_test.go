@@ -28,6 +28,7 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
@@ -101,7 +102,7 @@ var _ = Describe("vrf plugin", func() {
 				LinkAttrs: la0,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			_, err = netlink.LinkByName(IF0Name)
+			_, err = netlinksafe.LinkByName(IF0Name)
 			Expect(err).NotTo(HaveOccurred())
 
 			la1 := netlink.NewLinkAttrs()
@@ -110,7 +111,7 @@ var _ = Describe("vrf plugin", func() {
 				LinkAttrs: la1,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			_, err = netlink.LinkByName(IF1Name)
+			_, err = netlinksafe.LinkByName(IF1Name)
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
@@ -202,7 +203,7 @@ var _ = Describe("vrf plugin", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(routev6).NotTo(BeNil())
 
-				link, err := netlink.LinkByName(IF0Name)
+				link, err := netlinksafe.LinkByName(IF0Name)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Add IP addresses for network reachability
@@ -214,14 +215,14 @@ var _ = Describe("vrf plugin", func() {
 						IP:   ipv6.IP,
 						Mask: net.IPMask{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 					}
-					routes, _ := netlink.RouteListFiltered(netlink.FAMILY_ALL, &netlink.Route{
+					routes, _ := netlinksafe.RouteListFiltered(netlink.FAMILY_ALL, &netlink.Route{
 						Dst:   ipv6RouteDst,
 						Table: 0,
 					}, netlink.RT_FILTER_DST|netlink.RT_FILTER_TABLE)
 					return err == nil && len(routes) >= 1
 				}, time.Second, 500*time.Millisecond).Should(BeTrue())
 
-				ipAddrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+				ipAddrs, err := netlinksafe.AddrList(link, netlink.FAMILY_V4)
 				Expect(err).NotTo(HaveOccurred())
 				// Check if address was assigned properly
 				Expect(ipAddrs[0].IP.String()).To(Equal("10.0.0.2"))
@@ -311,7 +312,7 @@ var _ = Describe("vrf plugin", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(routev6).NotTo(BeNil())
 
-				link, err := netlink.LinkByName(IF0Name)
+				link, err := netlinksafe.LinkByName(IF0Name)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Add IP addresses for network reachability
@@ -323,14 +324,14 @@ var _ = Describe("vrf plugin", func() {
 						IP:   ipv6.IP,
 						Mask: net.IPMask{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 					}
-					routes, _ := netlink.RouteListFiltered(netlink.FAMILY_ALL, &netlink.Route{
+					routes, _ := netlinksafe.RouteListFiltered(netlink.FAMILY_ALL, &netlink.Route{
 						Dst:   ipv6RouteDst,
 						Table: 0,
 					}, netlink.RT_FILTER_DST|netlink.RT_FILTER_TABLE)
 					return err == nil && len(routes) >= 1
 				}, time.Second, 500*time.Millisecond).Should(BeTrue())
 
-				ipAddrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+				ipAddrs, err := netlinksafe.AddrList(link, netlink.FAMILY_V4)
 				Expect(err).NotTo(HaveOccurred())
 				// Check if address was assigned properly
 				Expect(ipAddrs[0].IP.String()).To(Equal("10.0.0.2"))
@@ -381,7 +382,7 @@ var _ = Describe("vrf plugin", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(routev6).NotTo(BeNil())
 
-				link, err := netlink.LinkByName(IF1Name)
+				link, err := netlinksafe.LinkByName(IF1Name)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Add IP addresses for network reachability
@@ -393,14 +394,14 @@ var _ = Describe("vrf plugin", func() {
 						IP:   ipv6.IP,
 						Mask: net.IPMask{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 					}
-					routes, _ := netlink.RouteListFiltered(netlink.FAMILY_ALL, &netlink.Route{
+					routes, _ := netlinksafe.RouteListFiltered(netlink.FAMILY_ALL, &netlink.Route{
 						Dst:   ipv6RouteDst,
 						Table: 0,
 					}, netlink.RT_FILTER_DST|netlink.RT_FILTER_TABLE)
 					return err == nil && len(routes) >= 1
 				}, time.Second, 500*time.Millisecond).Should(BeTrue())
 
-				ipAddrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+				ipAddrs, err := netlinksafe.AddrList(link, netlink.FAMILY_V4)
 				Expect(err).NotTo(HaveOccurred())
 				// Check if address was assigned properly
 				Expect(ipAddrs[0].IP.String()).To(Equal("10.0.0.3"))
@@ -473,7 +474,7 @@ var _ = Describe("vrf plugin", func() {
 		By("Setting the interface's master", func() {
 			err := targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				l, err := netlink.LinkByName(IF0Name)
+				l, err := netlinksafe.LinkByName(IF0Name)
 				Expect(err).NotTo(HaveOccurred())
 				linkAttrs := netlink.NewLinkAttrs()
 				linkAttrs.Name = "testrbridge"
@@ -520,7 +521,7 @@ var _ = Describe("vrf plugin", func() {
 
 			By("Setting the first interface's ip", func() {
 				err := targetNS.Do(func(ns.NetNS) error {
-					l, err := netlink.LinkByName(IF0Name)
+					l, err := netlinksafe.LinkByName(IF0Name)
 					Expect(err).NotTo(HaveOccurred())
 
 					err = netlink.AddrAdd(l, addr0)
@@ -551,7 +552,7 @@ var _ = Describe("vrf plugin", func() {
 
 			By("Setting the second interface's ip", func() {
 				err := targetNS.Do(func(ns.NetNS) error {
-					l, err := netlink.LinkByName(IF1Name)
+					l, err := netlinksafe.LinkByName(IF1Name)
 					Expect(err).NotTo(HaveOccurred())
 
 					err = netlink.AddrAdd(l, addr1)
@@ -584,9 +585,9 @@ var _ = Describe("vrf plugin", func() {
 					defer GinkgoRecover()
 					checkInterfaceOnVRF(vrf0, IF0Name)
 
-					link, err := netlink.LinkByName(IF0Name)
+					link, err := netlinksafe.LinkByName(IF0Name)
 					Expect(err).NotTo(HaveOccurred())
-					addresses, err := netlink.AddrList(link, netlink.FAMILY_ALL)
+					addresses, err := netlinksafe.AddrList(link, netlink.FAMILY_ALL)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(addresses).To(HaveLen(1))
 					Expect(addresses[0].IP.Equal(addr0.IP)).To(BeTrue())
@@ -601,10 +602,10 @@ var _ = Describe("vrf plugin", func() {
 					defer GinkgoRecover()
 					checkInterfaceOnVRF(vrf0, IF0Name)
 
-					link, err := netlink.LinkByName(IF1Name)
+					link, err := netlinksafe.LinkByName(IF1Name)
 					Expect(err).NotTo(HaveOccurred())
 
-					addresses, err := netlink.AddrList(link, netlink.FAMILY_ALL)
+					addresses, err := netlinksafe.AddrList(link, netlink.FAMILY_ALL)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(addresses).To(HaveLen(1))
 					Expect(addresses[0].IP.Equal(addr1.IP)).To(BeTrue())
@@ -620,10 +621,10 @@ var _ = Describe("vrf plugin", func() {
 				}
 				err := targetNS.Do(func(ns.NetNS) error {
 					defer GinkgoRecover()
-					l0, err := netlink.LinkByName(vrf0)
+					l0, err := netlinksafe.LinkByName(vrf0)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(l0).To(BeAssignableToTypeOf(&netlink.Vrf{}))
-					l1, err := netlink.LinkByName(vrf1)
+					l1, err := netlinksafe.LinkByName(vrf1)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(l1).To(BeAssignableToTypeOf(&netlink.Vrf{}))
 
@@ -670,7 +671,7 @@ var _ = Describe("vrf plugin", func() {
 				err := targetNS.Do(func(ns.NetNS) error {
 					defer GinkgoRecover()
 
-					l, err := netlink.LinkByName(vrf0)
+					l, err := netlinksafe.LinkByName(vrf0)
 					Expect(err).NotTo(HaveOccurred())
 					vrf := l.(*netlink.Vrf)
 					Expect(vrf.Table).To(Equal(uint32(tableid0)))
@@ -766,7 +767,7 @@ var _ = Describe("vrf plugin", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			err = targetNS.Do(func(ns.NetNS) error {
-				link, err := netlink.LinkByName(IF0Name)
+				link, err := netlinksafe.LinkByName(IF0Name)
 				Expect(err).NotTo(HaveOccurred())
 				err = netlink.LinkDel(link)
 				Expect(err).NotTo(HaveOccurred())
@@ -801,7 +802,7 @@ var _ = Describe("vrf plugin", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			err = targetNS.Do(func(ns.NetNS) error {
-				link, err := netlink.LinkByName(IF1Name)
+				link, err := netlinksafe.LinkByName(IF1Name)
 				Expect(err).NotTo(HaveOccurred())
 				err = netlink.LinkDel(link)
 				Expect(err).NotTo(HaveOccurred())
@@ -813,7 +814,7 @@ var _ = Describe("vrf plugin", func() {
 		By("Checking that the VRF is removed", func() {
 			targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				_, err := netlink.LinkByName(VRF0Name)
+				_, err := netlinksafe.LinkByName(VRF0Name)
 				Expect(err).To(HaveOccurred())
 				return nil
 			})
@@ -1010,11 +1011,11 @@ func configWithRouteFor(name, intf, vrf, ip, route string) []byte {
 }
 
 func checkInterfaceOnVRF(vrfName, intfName string) {
-	vrf, err := netlink.LinkByName(vrfName)
+	vrf, err := netlinksafe.LinkByName(vrfName)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(vrf).To(BeAssignableToTypeOf(&netlink.Vrf{}))
 
-	link, err := netlink.LinkByName(intfName)
+	link, err := netlinksafe.LinkByName(intfName)
 	Expect(err).NotTo(HaveOccurred())
 	masterIndx := link.Attrs().MasterIndex
 	master, err := netlink.LinkByIndex(masterIndx)
@@ -1023,20 +1024,20 @@ func checkInterfaceOnVRF(vrfName, intfName string) {
 }
 
 func checkRoutesOnVRF(vrfName, intfName string, addrStr string, routesToCheck ...string) {
-	l, err := netlink.LinkByName(vrfName)
+	l, err := netlinksafe.LinkByName(vrfName)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(l).To(BeAssignableToTypeOf(&netlink.Vrf{}))
 
 	vrf, ok := l.(*netlink.Vrf)
 	Expect(ok).To(BeTrue())
 
-	link, err := netlink.LinkByName(intfName)
+	link, err := netlinksafe.LinkByName(intfName)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = netlink.LinkSetUp(link)
 	Expect(err).NotTo(HaveOccurred())
 
-	ipAddrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+	ipAddrs, err := netlinksafe.AddrList(link, netlink.FAMILY_V4)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(ipAddrs).To(HaveLen(1))
 	Expect(ipAddrs[0].IP.String()).To(Equal(addrStr))
@@ -1045,7 +1046,7 @@ func checkRoutesOnVRF(vrfName, intfName string, addrStr string, routesToCheck ..
 		Table: int(vrf.Table),
 	}
 
-	routes, err := netlink.RouteListFiltered(netlink.FAMILY_ALL,
+	routes, err := netlinksafe.RouteListFiltered(netlink.FAMILY_ALL,
 		routeFilter,
 		netlink.RT_FILTER_TABLE)
 	Expect(err).NotTo(HaveOccurred())

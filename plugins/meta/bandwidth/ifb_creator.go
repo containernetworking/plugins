@@ -22,6 +22,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/plugins/pkg/ip"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 )
 
 const latencyInMillis = 25
@@ -53,7 +54,7 @@ func TeardownIfb(deviceName string) error {
 }
 
 func CreateIngressQdisc(rateInBits, burstInBits uint64, hostDeviceName string) error {
-	hostDevice, err := netlink.LinkByName(hostDeviceName)
+	hostDevice, err := netlinksafe.LinkByName(hostDeviceName)
 	if err != nil {
 		return fmt.Errorf("get host device: %s", err)
 	}
@@ -61,11 +62,11 @@ func CreateIngressQdisc(rateInBits, burstInBits uint64, hostDeviceName string) e
 }
 
 func CreateEgressQdisc(rateInBits, burstInBits uint64, hostDeviceName string, ifbDeviceName string) error {
-	ifbDevice, err := netlink.LinkByName(ifbDeviceName)
+	ifbDevice, err := netlinksafe.LinkByName(ifbDeviceName)
 	if err != nil {
 		return fmt.Errorf("get ifb device: %s", err)
 	}
-	hostDevice, err := netlink.LinkByName(hostDeviceName)
+	hostDevice, err := netlinksafe.LinkByName(hostDeviceName)
 	if err != nil {
 		return fmt.Errorf("get host device: %s", err)
 	}

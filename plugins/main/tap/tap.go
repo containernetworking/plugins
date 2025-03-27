@@ -34,6 +34,7 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
@@ -202,7 +203,7 @@ func createTap(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interface
 		}
 
 		if err = ip.RenameLink(tmpName, ifName); err != nil {
-			link, err := netlink.LinkByName(tmpName)
+			link, err := netlinksafe.LinkByName(tmpName)
 			if err != nil {
 				netlink.LinkDel(link)
 				return fmt.Errorf("failed to rename tap to %q: %v", ifName, err)
@@ -211,13 +212,13 @@ func createTap(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interface
 		tap.Name = ifName
 
 		// Re-fetch link to get all properties/attributes
-		link, err := netlink.LinkByName(ifName)
+		link, err := netlinksafe.LinkByName(ifName)
 		if err != nil {
 			return fmt.Errorf("failed to refetch tap %q: %v", ifName, err)
 		}
 
 		if conf.Bridge != "" {
-			bridge, err := netlink.LinkByName(conf.Bridge)
+			bridge, err := netlinksafe.LinkByName(conf.Bridge)
 			if err != nil {
 				return fmt.Errorf("failed to get bridge %s: %v", conf.Bridge, err)
 			}
@@ -322,7 +323,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	} else {
 		// For L2 just change interface status to up
 		err = netns.Do(func(_ ns.NetNS) error {
-			tapInterfaceLink, err := netlink.LinkByName(args.IfName)
+			tapInterfaceLink, err := netlinksafe.LinkByName(args.IfName)
 			if err != nil {
 				return fmt.Errorf("failed to find interface name %q: %v", tapInterface.Name, err)
 			}

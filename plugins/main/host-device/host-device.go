@@ -33,6 +33,7 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
@@ -257,7 +258,7 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, containerIfName stri
 		defer func() {
 			if err != nil {
 				// lookup the device again (index might have changed)
-				if hostDev, err := netlink.LinkByName(hostDevName); err == nil {
+				if hostDev, err := netlinksafe.LinkByName(hostDevName); err == nil {
 					_ = netlink.LinkSetUp(hostDev)
 				}
 			}
@@ -275,7 +276,7 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, containerIfName stri
 	// but host / container naming is easier to follow.
 	if err = tempNS.Do(func(hostNS ns.NetNS) error {
 		// lookup the device in tempNS (index might have changed)
-		tempNSDev, err := netlink.LinkByName(hostDevName)
+		tempNSDev, err := netlinksafe.LinkByName(hostDevName)
 		if err != nil {
 			return fmt.Errorf("failed to find %q in tempNS: %v", hostDevName, err)
 		}
@@ -321,13 +322,13 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, containerIfName stri
 		// Lookup the device again on error, the index might have changed
 		defer func() {
 			if err != nil {
-				tempNSDev, _ = netlink.LinkByName(containerIfName)
+				tempNSDev, _ = netlinksafe.LinkByName(containerIfName)
 			}
 		}()
 
 		err = containerNs.Do(func(_ ns.NetNS) error {
 			var err error
-			contDev, err = netlink.LinkByName(containerIfName)
+			contDev, err = netlinksafe.LinkByName(containerIfName)
 			if err != nil {
 				return fmt.Errorf("failed to find %q in container NS: %v", containerIfName, err)
 			}
@@ -375,7 +376,7 @@ func moveLinkOut(containerNs ns.NetNS, containerIfName string) error {
 		if err != nil && contDev != nil && contDev.Attrs().Flags&net.FlagUp == net.FlagUp {
 			containerNs.Do(func(_ ns.NetNS) error {
 				// lookup the device again (index might have changed)
-				if contDev, err := netlink.LinkByName(containerIfName); err == nil {
+				if contDev, err := netlinksafe.LinkByName(containerIfName); err == nil {
 					_ = netlink.LinkSetUp(contDev)
 				}
 				return nil
@@ -386,7 +387,7 @@ func moveLinkOut(containerNs ns.NetNS, containerIfName string) error {
 	err = containerNs.Do(func(_ ns.NetNS) error {
 		var err error
 		// Lookup the device in the containerNS
-		contDev, err = netlink.LinkByName(containerIfName)
+		contDev, err = netlinksafe.LinkByName(containerIfName)
 		if err != nil {
 			return fmt.Errorf("failed to find %q in containerNS: %v", containerIfName, err)
 		}
@@ -408,7 +409,7 @@ func moveLinkOut(containerNs ns.NetNS, containerIfName string) error {
 
 	err = tempNS.Do(func(hostNS ns.NetNS) error {
 		// Lookup the device in tempNS (index might have changed)
-		tempNSDev, err := netlink.LinkByName(containerIfName)
+		tempNSDev, err := netlinksafe.LinkByName(containerIfName)
 		if err != nil {
 			return fmt.Errorf("failed to find %q in tempNS: %v", containerIfName, err)
 		}
@@ -502,7 +503,7 @@ func linkFromPath(path string) (netlink.Link, error) {
 	}
 	if len(entries) > 0 {
 		// grab the first net device
-		return netlink.LinkByName(entries[0].Name())
+		return netlinksafe.LinkByName(entries[0].Name())
 	}
 	return nil, fmt.Errorf("failed to find network device in path %s", path)
 }
@@ -511,14 +512,14 @@ func getLink(devname, hwaddr, kernelpath, pciaddr string, auxDev string) (netlin
 	switch {
 
 	case len(devname) > 0:
-		return netlink.LinkByName(devname)
+		return netlinksafe.LinkByName(devname)
 	case len(hwaddr) > 0:
 		hwAddr, err := net.ParseMAC(hwaddr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse MAC address %q: %v", hwaddr, err)
 		}
 
-		links, err := netlink.LinkList()
+		links, err := netlinksafe.LinkList()
 		if err != nil {
 			return nil, fmt.Errorf("failed to list node links: %v", err)
 		}
@@ -651,7 +652,7 @@ func validateCniContainerInterface(intf current.Interface) error {
 	if intf.Name == "" {
 		return fmt.Errorf("Container interface name missing in prevResult: %v", intf.Name)
 	}
-	link, err = netlink.LinkByName(intf.Name)
+	link, err = netlinksafe.LinkByName(intf.Name)
 	if err != nil {
 		return fmt.Errorf("Container Interface name in prevResult: %s not found", intf.Name)
 	}

@@ -28,6 +28,7 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
@@ -58,7 +59,7 @@ func createDummy(ifName string, netns ns.NetNS) (*current.Interface, error) {
 
 	err := netns.Do(func(_ ns.NetNS) error {
 		// Re-fetch interface to get all properties/attributes
-		contDummy, err := netlink.LinkByName(ifName)
+		contDummy, err := netlinksafe.LinkByName(ifName)
 		if err != nil {
 			return fmt.Errorf("failed to fetch dummy%q: %v", ifName, err)
 		}
@@ -270,7 +271,7 @@ func validateCniContainerInterface(intf current.Interface) error {
 	if intf.Name == "" {
 		return fmt.Errorf("Container interface name missing in prevResult: %v", intf.Name)
 	}
-	link, err = netlink.LinkByName(intf.Name)
+	link, err = netlinksafe.LinkByName(intf.Name)
 	if err != nil {
 		return fmt.Errorf("Container Interface name in prevResult: %s not found", intf.Name)
 	}
