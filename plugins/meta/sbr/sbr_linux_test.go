@@ -25,6 +25,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
@@ -101,7 +102,7 @@ func readback(targetNs ns.NetNS, devNames []string) (netStatus, error) {
 			log.Printf("Checking device %s", name)
 			retVal.Devices[i].Name = name
 
-			link, err := netlink.LinkByName(name)
+			link, err := netlinksafe.LinkByName(name)
 			if err != nil {
 				return err
 			}
@@ -112,7 +113,7 @@ func readback(targetNs ns.NetNS, devNames []string) (netStatus, error) {
 				Table:     unix.RT_TABLE_UNSPEC,
 			}
 
-			routes, err := netlink.RouteListFiltered(netlink.FAMILY_ALL,
+			routes, err := netlinksafe.RouteListFiltered(netlink.FAMILY_ALL,
 				routeFilter,
 				netlink.RT_FILTER_OIF|netlink.RT_FILTER_TABLE)
 			if err != nil {
@@ -131,7 +132,7 @@ func readback(targetNs ns.NetNS, devNames []string) (netStatus, error) {
 			retVal.Devices[i].Routes = routesNoLinkLocal
 		}
 
-		rules, err := netlink.RuleList(netlink.FAMILY_ALL)
+		rules, err := netlinksafe.RuleList(netlink.FAMILY_ALL)
 		if err != nil {
 			return err
 		}
@@ -609,7 +610,7 @@ var _ = Describe("sbr test", func() {
 		var rules []netlink.Rule
 		err = targetNs.Do(func(_ ns.NetNS) error {
 			var err error
-			rules, err = netlink.RuleListFiltered(
+			rules, err = netlinksafe.RuleListFiltered(
 				netlink.FAMILY_ALL, &netlink.Rule{
 					Table: tableID,
 				},

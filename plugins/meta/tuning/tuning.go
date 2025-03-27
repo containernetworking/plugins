@@ -35,6 +35,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
@@ -154,7 +155,7 @@ func changeMacAddr(ifName string, newMacAddr string) error {
 		return fmt.Errorf("invalid args %v for MAC addr: %v", newMacAddr, err)
 	}
 
-	link, err := netlink.LinkByName(ifName)
+	link, err := netlinksafe.LinkByName(ifName)
 	if err != nil {
 		return fmt.Errorf("failed to get %q: %v", ifName, err)
 	}
@@ -180,7 +181,7 @@ func updateResultsMacAddr(config *TuningConf, ifName string, newMacAddr string) 
 }
 
 func changePromisc(ifName string, val bool) error {
-	link, err := netlink.LinkByName(ifName)
+	link, err := netlinksafe.LinkByName(ifName)
 	if err != nil {
 		return fmt.Errorf("failed to get %q: %v", ifName, err)
 	}
@@ -192,7 +193,7 @@ func changePromisc(ifName string, val bool) error {
 }
 
 func changeMtu(ifName string, mtu int) error {
-	link, err := netlink.LinkByName(ifName)
+	link, err := netlinksafe.LinkByName(ifName)
 	if err != nil {
 		return fmt.Errorf("failed to get %q: %v", ifName, err)
 	}
@@ -200,7 +201,7 @@ func changeMtu(ifName string, mtu int) error {
 }
 
 func changeAllmulti(ifName string, val bool) error {
-	link, err := netlink.LinkByName(ifName)
+	link, err := netlinksafe.LinkByName(ifName)
 	if err != nil {
 		return fmt.Errorf("failed to get %q: %v", ifName, err)
 	}
@@ -212,7 +213,7 @@ func changeAllmulti(ifName string, val bool) error {
 }
 
 func changeTxQLen(ifName string, txQLen int) error {
-	link, err := netlink.LinkByName(ifName)
+	link, err := netlinksafe.LinkByName(ifName)
 	if err != nil {
 		return fmt.Errorf("failed to get %q: %v", ifName, err)
 	}
@@ -221,7 +222,7 @@ func changeTxQLen(ifName string, txQLen int) error {
 
 func createBackup(ifName, containerID, backupPath string, tuningConf *TuningConf) error {
 	config := configToRestore{}
-	link, err := netlink.LinkByName(ifName)
+	link, err := netlinksafe.LinkByName(ifName)
 	if err != nil {
 		return fmt.Errorf("failed to get %q: %v", ifName, err)
 	}
@@ -281,7 +282,7 @@ func restoreBackup(ifName, containerID, backupPath string) error {
 
 	var errStr []string
 
-	_, err = netlink.LinkByName(ifName)
+	_, err = netlinksafe.LinkByName(ifName)
 	if err != nil {
 		return nil
 	}
@@ -483,7 +484,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 			}
 		}
 
-		link, err := netlink.LinkByName(args.IfName)
+		link, err := netlinksafe.LinkByName(args.IfName)
 		if err != nil {
 			return fmt.Errorf("Cannot find container link %v", args.IfName)
 		}

@@ -15,6 +15,7 @@ linters:
   enable:
     - contextcheck
     - durationcheck
+    - forbidigo
     - gci
     - ginkgolinter
     - gocritic
@@ -38,6 +39,14 @@ linters-settings:
       - standard
       - default
       - prefix(github.com/containernetworking)
+
+  forbidigo:
+    forbid:
+      # Copied from https://github.com/moby/moby/pull/48407
+      - pkg: ^github.com/vishvananda/netlink$
+        p: ^netlink\.(Handle\.)?(AddrList|BridgeVlanList|ChainList|ClassList|ConntrackTableList|ConntrackDeleteFilter$|ConntrackDeleteFilters|DevLinkGetDeviceList|DevLinkGetAllPortList|DevlinkGetDeviceParams|FilterList|FouList|GenlFamilyList|GTPPDPList|LinkByName|LinkByAlias|LinkList|LinkSubscribeWithOptions|NeighList$|NeighProxyList|NeighListExecute|NeighSubscribeWithOptions|LinkGetProtinfo|QdiscList|RdmaLinkList|RdmaLinkByName|RdmaLinkDel|RouteList|RouteListFilteredIter|RuleListFiltered$|RouteSubscribeWithOptions|RuleList$|RuleListFiltered|SocketGet|SocketDiagTCPInfo|SocketDiagTCP|SocketDiagUDPInfo|SocketDiagUDP|UnixSocketDiagInfo|UnixSocketDiag|VDPAGetDevConfigList|VDPAGetDevList|VDPAGetMGMTDevList|XfrmPolicyList|XfrmStateList)
+        msg: Use internal netlinksafe package for EINTR handling.
+    analyze-types: true
 
 run:
   timeout: 5m

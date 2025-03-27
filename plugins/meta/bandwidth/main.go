@@ -26,6 +26,7 @@ import (
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/utils"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
@@ -120,7 +121,7 @@ func getIfbDeviceName(networkName string, containerID string) string {
 }
 
 func getMTU(deviceName string) (int, error) {
-	link, err := netlink.LinkByName(deviceName)
+	link, err := netlinksafe.LinkByName(deviceName)
 	if err != nil {
 		return -1, err
 	}
@@ -210,7 +211,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err
 		}
 
-		ifbDevice, err := netlink.LinkByName(ifbDeviceName)
+		ifbDevice, err := netlinksafe.LinkByName(ifbDeviceName)
 		if err != nil {
 			return err
 		}
@@ -250,7 +251,7 @@ func main() {
 }
 
 func SafeQdiscList(link netlink.Link) ([]netlink.Qdisc, error) {
-	qdiscs, err := netlink.QdiscList(link)
+	qdiscs, err := netlinksafe.QdiscList(link)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +292,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
-	link, err := netlink.LinkByName(hostInterface.Name)
+	link, err := netlinksafe.LinkByName(hostInterface.Name)
 	if err != nil {
 		return err
 	}
@@ -339,7 +340,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 		ifbDeviceName := getIfbDeviceName(bwConf.Name, args.ContainerID)
 
-		ifbDevice, err := netlink.LinkByName(ifbDeviceName)
+		ifbDevice, err := netlinksafe.LinkByName(ifbDeviceName)
 		if err != nil {
 			return fmt.Errorf("get ifb device: %s", err)
 		}

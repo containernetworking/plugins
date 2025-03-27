@@ -32,6 +32,7 @@ import (
 	types040 "github.com/containernetworking/cni/pkg/types/040"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
@@ -362,7 +363,7 @@ var _ = Describe("base functionality", func() {
 					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
-				origLink, err = netlink.LinkByName(ifname)
+				origLink, err = netlinksafe.LinkByName(ifname)
 				Expect(err).NotTo(HaveOccurred())
 				err = netlink.LinkSetUp(origLink)
 				Expect(err).NotTo(HaveOccurred())
@@ -408,7 +409,7 @@ var _ = Describe("base functionality", func() {
 			// assert that dummy0 is now in the target namespace and is up
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				link, err := netlink.LinkByName(cniName)
+				link, err := netlinksafe.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
@@ -418,7 +419,7 @@ var _ = Describe("base functionality", func() {
 			// assert that dummy0 is now NOT in the original namespace anymore
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				_, err := netlink.LinkByName(ifname)
+				_, err := netlinksafe.LinkByName(ifname)
 				Expect(err).To(HaveOccurred())
 				return nil
 			})
@@ -431,7 +432,7 @@ var _ = Describe("base functionality", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = netlink.LinkByName(ifname)
+				_, err = netlinksafe.LinkByName(ifname)
 				Expect(err).NotTo(HaveOccurred())
 				return nil
 			})
@@ -452,7 +453,7 @@ var _ = Describe("base functionality", func() {
 					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
-				origLink, err = netlink.LinkByName(ifname)
+				origLink, err = netlinksafe.LinkByName(ifname)
 				Expect(err).NotTo(HaveOccurred())
 				err = netlink.LinkSetUp(origLink)
 				Expect(err).NotTo(HaveOccurred())
@@ -489,7 +490,7 @@ var _ = Describe("base functionality", func() {
 			// assert that dummy0 is now in the target namespace and is up
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				link, err := netlink.LinkByName(cniName)
+				link, err := netlinksafe.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
@@ -499,7 +500,7 @@ var _ = Describe("base functionality", func() {
 			// assert that dummy0 is now NOT in the original namespace anymore
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				_, err := netlink.LinkByName(ifname)
+				_, err := netlinksafe.LinkByName(ifname)
 				Expect(err).To(HaveOccurred())
 				return nil
 			})
@@ -513,7 +514,7 @@ var _ = Describe("base functionality", func() {
 					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
-				conflictLink, err = netlink.LinkByName(ifname)
+				conflictLink, err = netlinksafe.LinkByName(ifname)
 				Expect(err).NotTo(HaveOccurred())
 				err = netlink.LinkSetUp(conflictLink)
 				Expect(err).NotTo(HaveOccurred())
@@ -533,7 +534,7 @@ var _ = Describe("base functionality", func() {
 			// assert container interface "eth0" still exists in target namespace and is up
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				link, err := netlink.LinkByName(cniName)
+				link, err := netlinksafe.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
@@ -561,7 +562,7 @@ var _ = Describe("base functionality", func() {
 			// assert that dummy0 is now back in the original namespace
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				_, err := netlink.LinkByName(ifname)
+				_, err := netlinksafe.LinkByName(ifname)
 				Expect(err).NotTo(HaveOccurred())
 				return nil
 			})
@@ -638,7 +639,7 @@ var _ = Describe("base functionality", func() {
 					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
-				origLink, err = netlink.LinkByName(ifname)
+				origLink, err = netlinksafe.LinkByName(ifname)
 				Expect(err).NotTo(HaveOccurred())
 				err = netlink.LinkSetUp(origLink)
 				Expect(err).NotTo(HaveOccurred())
@@ -684,13 +685,13 @@ var _ = Describe("base functionality", func() {
 			// assert that dummy0 is now in the target namespace and is up
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				link, err := netlink.LinkByName(cniName)
+				link, err := netlinksafe.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 
 				// get the IP address of the interface in the target namespace
-				addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+				addrs, err := netlinksafe.AddrList(link, netlink.FAMILY_V4)
 				Expect(err).NotTo(HaveOccurred())
 				addr := addrs[0].IPNet.String()
 				// assert that IP address is what we set
@@ -702,7 +703,7 @@ var _ = Describe("base functionality", func() {
 			// assert that dummy0 is now NOT in the original namespace anymore
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				_, err := netlink.LinkByName(ifname)
+				_, err := netlinksafe.LinkByName(ifname)
 				Expect(err).To(HaveOccurred())
 				return nil
 			})
@@ -715,7 +716,7 @@ var _ = Describe("base functionality", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err := netlink.LinkByName(ifname)
+				_, err := netlinksafe.LinkByName(ifname)
 				Expect(err).NotTo(HaveOccurred())
 				return nil
 			})
@@ -750,7 +751,7 @@ var _ = Describe("base functionality", func() {
 					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
-				origLink, err = netlink.LinkByName(ifname)
+				origLink, err = netlinksafe.LinkByName(ifname)
 				Expect(err).NotTo(HaveOccurred())
 				err = netlink.LinkSetUp(origLink)
 				Expect(err).NotTo(HaveOccurred())
@@ -787,7 +788,7 @@ var _ = Describe("base functionality", func() {
 			// assert that dummy0 is now in the target namespace and is up
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				link, err := netlink.LinkByName(cniName)
+				link, err := netlinksafe.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
@@ -797,7 +798,7 @@ var _ = Describe("base functionality", func() {
 			// assert that dummy0 is now NOT in the original namespace anymore
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				_, err := netlink.LinkByName(ifname)
+				_, err := netlinksafe.LinkByName(ifname)
 				Expect(err).To(HaveOccurred())
 				return nil
 			})
@@ -833,7 +834,7 @@ var _ = Describe("base functionality", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err := netlink.LinkByName(ifname)
+				_, err := netlinksafe.LinkByName(ifname)
 				Expect(err).NotTo(HaveOccurred())
 				return nil
 			})
@@ -942,7 +943,7 @@ var _ = Describe("base functionality", func() {
 					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
-				origLink, err = netlink.LinkByName(ifname)
+				origLink, err = netlinksafe.LinkByName(ifname)
 				Expect(err).NotTo(HaveOccurred())
 				err = netlink.LinkSetUp(origLink)
 				Expect(err).NotTo(HaveOccurred())
@@ -999,7 +1000,7 @@ var _ = Describe("base functionality", func() {
 					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
-				origLink, err = netlink.LinkByName(ifname)
+				origLink, err = netlinksafe.LinkByName(ifname)
 				Expect(err).NotTo(HaveOccurred())
 				err = netlink.LinkSetUp(origLink)
 				Expect(err).NotTo(HaveOccurred())
@@ -1045,13 +1046,13 @@ var _ = Describe("base functionality", func() {
 			// assert that dummy0 is now in the target namespace and is up
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				link, err := netlink.LinkByName(cniName)
+				link, err := netlinksafe.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
 
 				// get the IP address of the interface in the target namespace
-				addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+				addrs, err := netlinksafe.AddrList(link, netlink.FAMILY_V4)
 				Expect(err).NotTo(HaveOccurred())
 				addr := addrs[0].IPNet.String()
 				// assert that IP address is what we set
@@ -1063,7 +1064,7 @@ var _ = Describe("base functionality", func() {
 			// assert that dummy0 is now NOT in the original namespace anymore
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				_, err := netlink.LinkByName(ifname)
+				_, err := netlinksafe.LinkByName(ifname)
 				Expect(err).To(HaveOccurred())
 				return nil
 			})
@@ -1102,7 +1103,7 @@ var _ = Describe("base functionality", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err := netlink.LinkByName(ifname)
+				_, err := netlinksafe.LinkByName(ifname)
 				Expect(err).NotTo(HaveOccurred())
 				return nil
 			})
@@ -1123,7 +1124,7 @@ var _ = Describe("base functionality", func() {
 					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
-				origLink, err = netlink.LinkByName(ifname)
+				origLink, err = netlinksafe.LinkByName(ifname)
 				Expect(err).NotTo(HaveOccurred())
 				err = netlink.LinkSetUp(origLink)
 				Expect(err).NotTo(HaveOccurred())
@@ -1160,7 +1161,7 @@ var _ = Describe("base functionality", func() {
 			// assert that dummy0 is now in the target namespace and is up
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				link, err := netlink.LinkByName(cniName)
+				link, err := netlinksafe.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
@@ -1170,7 +1171,7 @@ var _ = Describe("base functionality", func() {
 			// assert that dummy0 is now NOT in the original namespace anymore
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				_, err := netlink.LinkByName(ifname)
+				_, err := netlinksafe.LinkByName(ifname)
 				Expect(err).To(HaveOccurred())
 				return nil
 			})
@@ -1184,7 +1185,7 @@ var _ = Describe("base functionality", func() {
 					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
-				conflictLink, err = netlink.LinkByName(ifname)
+				conflictLink, err = netlinksafe.LinkByName(ifname)
 				Expect(err).NotTo(HaveOccurred())
 				err = netlink.LinkSetUp(conflictLink)
 				Expect(err).NotTo(HaveOccurred())
@@ -1204,7 +1205,7 @@ var _ = Describe("base functionality", func() {
 			// assert container interface "eth0" still exists in target namespace and is up
 			err = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				link, err := netlink.LinkByName(cniName)
+				link, err := netlinksafe.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
@@ -1233,7 +1234,7 @@ var _ = Describe("base functionality", func() {
 			// assert that dummy0 is now back in the original namespace
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				_, err := netlink.LinkByName(ifname)
+				_, err := netlinksafe.LinkByName(ifname)
 				Expect(err).NotTo(HaveOccurred())
 				return nil
 			})
@@ -1257,7 +1258,7 @@ var _ = Describe("base functionality", func() {
 					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
-				origLink, err = netlink.LinkByName(hostIfname)
+				origLink, err = netlinksafe.LinkByName(hostIfname)
 				Expect(err).NotTo(HaveOccurred())
 				err = netlink.LinkSetUp(origLink)
 				Expect(err).NotTo(HaveOccurred())
@@ -1273,7 +1274,7 @@ var _ = Describe("base functionality", func() {
 					LinkAttrs: linkAttrs,
 				})
 				Expect(err).NotTo(HaveOccurred())
-				containerLink, err = netlink.LinkByName(containerAdditionalIfname)
+				containerLink, err = netlinksafe.LinkByName(containerAdditionalIfname)
 				Expect(err).NotTo(HaveOccurred())
 				err = netlink.LinkSetUp(containerLink)
 				Expect(err).NotTo(HaveOccurred())
@@ -1310,7 +1311,7 @@ var _ = Describe("base functionality", func() {
 			// assert that host device is now in the target namespace and is up
 			_ = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				link, err := netlink.LinkByName(cniName)
+				link, err := netlinksafe.LinkByName(cniName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(origLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
@@ -1330,7 +1331,7 @@ var _ = Describe("base functionality", func() {
 			// assert container interface "eth0" still exists in target namespace and is up
 			err = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				link, err := netlink.LinkByName(containerAdditionalIfname)
+				link, err := netlinksafe.LinkByName(containerAdditionalIfname)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr).To(Equal(containerLink.Attrs().HardwareAddr))
 				Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
@@ -1341,7 +1342,7 @@ var _ = Describe("base functionality", func() {
 			// assert that host device is now back in the original namespace
 			_ = originalNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				_, err := netlink.LinkByName(hostIfname)
+				_, err := netlinksafe.LinkByName(hostIfname)
 				Expect(err).NotTo(HaveOccurred())
 				return nil
 			})

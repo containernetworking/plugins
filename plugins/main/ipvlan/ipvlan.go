@@ -28,6 +28,7 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
@@ -127,11 +128,11 @@ func createIpvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interf
 	var m netlink.Link
 	if conf.LinkContNs {
 		err = netns.Do(func(_ ns.NetNS) error {
-			m, err = netlink.LinkByName(conf.Master)
+			m, err = netlinksafe.LinkByName(conf.Master)
 			return err
 		})
 	} else {
-		m, err = netlink.LinkByName(conf.Master)
+		m, err = netlinksafe.LinkByName(conf.Master)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
@@ -173,7 +174,7 @@ func createIpvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interf
 		ipvlan.Name = ifName
 
 		// Re-fetch ipvlan to get all properties/attributes
-		contIpvlan, err := netlink.LinkByName(ipvlan.Name)
+		contIpvlan, err := netlinksafe.LinkByName(ipvlan.Name)
 		if err != nil {
 			return fmt.Errorf("failed to refetch ipvlan %q: %v", ipvlan.Name, err)
 		}
@@ -190,7 +191,7 @@ func createIpvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interf
 }
 
 func getDefaultRouteInterfaceName() (string, error) {
-	routeToDstIP, err := netlink.RouteList(nil, netlink.FAMILY_ALL)
+	routeToDstIP, err := netlinksafe.RouteList(nil, netlink.FAMILY_ALL)
 	if err != nil {
 		return "", err
 	}
@@ -411,11 +412,11 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	if n.LinkContNs {
 		err = netns.Do(func(_ ns.NetNS) error {
-			_, err = netlink.LinkByName(n.Master)
+			_, err = netlinksafe.LinkByName(n.Master)
 			return err
 		})
 	} else {
-		_, err = netlink.LinkByName(n.Master)
+		_, err = netlinksafe.LinkByName(n.Master)
 	}
 
 	if err != nil {
@@ -454,7 +455,7 @@ func validateCniContainerInterface(intf current.Interface, modeExpected string) 
 	if intf.Name == "" {
 		return fmt.Errorf("Container interface name missing in prevResult: %v", intf.Name)
 	}
-	link, err = netlink.LinkByName(intf.Name)
+	link, err = netlinksafe.LinkByName(intf.Name)
 	if err != nil {
 		return fmt.Errorf("Container Interface name in prevResult: %s not found", intf.Name)
 	}

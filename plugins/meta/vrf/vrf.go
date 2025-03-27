@@ -21,11 +21,13 @@ import (
 	"time"
 
 	"github.com/vishvananda/netlink"
+
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 )
 
 // findVRF finds a VRF link with the provided name.
 func findVRF(name string) (*netlink.Vrf, error) {
-	link, err := netlink.LinkByName(name)
+	link, err := netlinksafe.LinkByName(name)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +40,7 @@ func findVRF(name string) (*netlink.Vrf, error) {
 
 // createVRF creates a new VRF and sets it up.
 func createVRF(name string, tableID uint32) (*netlink.Vrf, error) {
-	links, err := netlink.LinkList()
+	links, err := netlinksafe.LinkList()
 	if err != nil {
 		return nil, fmt.Errorf("createVRF: Failed to find links %v", err)
 	}
@@ -71,7 +73,7 @@ func createVRF(name string, tableID uint32) (*netlink.Vrf, error) {
 
 // assignedInterfaces returns the list of interfaces associated to the given vrf.
 func assignedInterfaces(vrf *netlink.Vrf) ([]netlink.Link, error) {
-	links, err := netlink.LinkList()
+	links, err := netlinksafe.LinkList()
 	if err != nil {
 		return nil, fmt.Errorf("getAssignedInterfaces: Failed to find links %v", err)
 	}
@@ -86,7 +88,7 @@ func assignedInterfaces(vrf *netlink.Vrf) ([]netlink.Link, error) {
 
 // addInterface adds the given interface to the VRF
 func addInterface(vrf *netlink.Vrf, intf string) error {
-	i, err := netlink.LinkByName(intf)
+	i, err := netlinksafe.LinkByName(intf)
 	if err != nil {
 		return fmt.Errorf("could not get link by name %s", intf)
 	}
@@ -114,7 +116,7 @@ func addInterface(vrf *netlink.Vrf, intf string) error {
 		Scope:     netlink.SCOPE_UNIVERSE, // Exclude local and connected routes
 	}
 	filterMask := netlink.RT_FILTER_OIF | netlink.RT_FILTER_SCOPE // Filter based on link index and scope
-	r, err := netlink.RouteListFiltered(netlink.FAMILY_ALL, filter, filterMask)
+	r, err := netlinksafe.RouteListFiltered(netlink.FAMILY_ALL, filter, filterMask)
 	if err != nil {
 		return fmt.Errorf("failed getting all routes for %s", intf)
 	}
@@ -156,7 +158,7 @@ CONTINUE:
 		// Waits for global IPV6 addresses to be added by the kernel.
 		maxRetry := 10
 		for {
-			routesVRFTable, err := netlink.RouteListFiltered(
+			routesVRFTable, err := netlinksafe.RouteListFiltered(
 				netlink.FAMILY_ALL,
 				&netlink.Route{
 					Dst: &net.IPNet{
@@ -217,7 +219,7 @@ func findFreeRoutingTableID(links []netlink.Link) (uint32, error) {
 }
 
 func resetMaster(interfaceName string) error {
-	intf, err := netlink.LinkByName(interfaceName)
+	intf, err := netlinksafe.LinkByName(interfaceName)
 	if err != nil {
 		return fmt.Errorf("resetMaster: could not get link by name %s", interfaceName)
 	}
@@ -230,7 +232,7 @@ func resetMaster(interfaceName string) error {
 
 // getGlobalAddresses returns the global addresses of the given interface
 func getGlobalAddresses(link netlink.Link, family int) ([]netlink.Addr, error) {
-	addresses, err := netlink.AddrList(link, family)
+	addresses, err := netlinksafe.AddrList(link, family)
 	if err != nil {
 		return nil, fmt.Errorf("failed getting list of IP addresses for %s: %w", link.Attrs().Name, err)
 	}

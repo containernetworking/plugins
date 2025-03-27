@@ -29,6 +29,7 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
@@ -116,7 +117,7 @@ var _ = Describe("tuning plugin", func() {
 				LinkAttrs: linkAttrs,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			link, err := netlink.LinkByName(IFNAME)
+			link, err := netlinksafe.LinkByName(IFNAME)
 			Expect(err).NotTo(HaveOccurred())
 
 			beforeConf.Mac = link.Attrs().HardwareAddr.String()
@@ -249,7 +250,7 @@ var _ = Describe("tuning plugin", func() {
 				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().Promisc).To(Equal(1))
 
@@ -273,7 +274,7 @@ var _ = Describe("tuning plugin", func() {
 					args.ContainerID, "", func() error { return cmdDel(args) })
 				Expect(err).NotTo(HaveOccurred())
 
-				link, err = netlink.LinkByName(IFNAME)
+				link, err = netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().Promisc != 0).To(Equal(*beforeConf.Promisc))
 
@@ -330,7 +331,7 @@ var _ = Describe("tuning plugin", func() {
 				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().Promisc).To(Equal(1))
 
@@ -338,7 +339,7 @@ var _ = Describe("tuning plugin", func() {
 					args.ContainerID, "", func() error { return cmdDel(args) })
 				Expect(err).NotTo(HaveOccurred())
 
-				link, err = netlink.LinkByName(IFNAME)
+				link, err = netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().Promisc != 0).To(Equal(*beforeConf.Promisc))
 
@@ -391,7 +392,7 @@ var _ = Describe("tuning plugin", func() {
 				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().MTU).To(Equal(1454))
 
@@ -415,7 +416,7 @@ var _ = Describe("tuning plugin", func() {
 					args.ContainerID, "", func() error { return cmdDel(args) })
 				Expect(err).NotTo(HaveOccurred())
 
-				link, err = netlink.LinkByName(IFNAME)
+				link, err = netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().MTU).To(Equal(beforeConf.Mtu))
 
@@ -472,7 +473,7 @@ var _ = Describe("tuning plugin", func() {
 				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().MTU).To(Equal(1454))
 
@@ -480,7 +481,7 @@ var _ = Describe("tuning plugin", func() {
 					args.ContainerID, "", func() error { return cmdDel(args) })
 				Expect(err).NotTo(HaveOccurred())
 
-				link, err = netlink.LinkByName(IFNAME)
+				link, err = netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().MTU).To(Equal(beforeConf.Mtu))
 
@@ -525,7 +526,7 @@ var _ = Describe("tuning plugin", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().TxQLen).To(Equal(20000))
 
@@ -547,7 +548,7 @@ var _ = Describe("tuning plugin", func() {
 					args.ContainerID, "", func() error { return cmdDel(args) })
 				Expect(err).NotTo(HaveOccurred())
 
-				link, err = netlink.LinkByName(IFNAME)
+				link, err = netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().TxQLen).To(Equal(*beforeConf.TxQLen))
 
@@ -604,7 +605,7 @@ var _ = Describe("tuning plugin", func() {
 				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().TxQLen).To(Equal(20000))
 
@@ -612,7 +613,7 @@ var _ = Describe("tuning plugin", func() {
 					args.ContainerID, "", func() error { return cmdDel(args) })
 				Expect(err).NotTo(HaveOccurred())
 
-				link, err = netlink.LinkByName(IFNAME)
+				link, err = netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().TxQLen).To(Equal(*beforeConf.TxQLen))
 
@@ -667,7 +668,7 @@ var _ = Describe("tuning plugin", func() {
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
 				Expect(result.Interfaces[0].Mac).To(Equal(mac))
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				hw, err := net.ParseMAC(mac)
 				Expect(err).NotTo(HaveOccurred())
@@ -693,7 +694,7 @@ var _ = Describe("tuning plugin", func() {
 					args.ContainerID, "", func() error { return cmdDel(args) })
 				Expect(err).NotTo(HaveOccurred())
 
-				link, err = netlink.LinkByName(IFNAME)
+				link, err = netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
 
@@ -750,7 +751,7 @@ var _ = Describe("tuning plugin", func() {
 				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				hw, err := net.ParseMAC("c2:11:22:33:44:55")
 				Expect(err).NotTo(HaveOccurred())
@@ -760,7 +761,7 @@ var _ = Describe("tuning plugin", func() {
 					args.ContainerID, "", func() error { return cmdDel(args) })
 				Expect(err).NotTo(HaveOccurred())
 
-				link, err = netlink.LinkByName(IFNAME)
+				link, err = netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
 
@@ -813,7 +814,7 @@ var _ = Describe("tuning plugin", func() {
 				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				hw, err := net.ParseMAC("c2:11:22:33:44:66")
 				Expect(err).NotTo(HaveOccurred())
@@ -839,7 +840,7 @@ var _ = Describe("tuning plugin", func() {
 					args.ContainerID, "", func() error { return cmdDel(args) })
 				Expect(err).NotTo(HaveOccurred())
 
-				link, err = netlink.LinkByName(IFNAME)
+				link, err = netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
 
@@ -895,7 +896,7 @@ var _ = Describe("tuning plugin", func() {
 				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				hw, err := net.ParseMAC("c2:11:22:33:44:55")
 				Expect(err).NotTo(HaveOccurred())
@@ -905,7 +906,7 @@ var _ = Describe("tuning plugin", func() {
 					args.ContainerID, "", func() error { return cmdDel(args) })
 				Expect(err).NotTo(HaveOccurred())
 
-				link, err = netlink.LinkByName(IFNAME)
+				link, err = netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
 
@@ -962,7 +963,7 @@ var _ = Describe("tuning plugin", func() {
 				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				hw, err := net.ParseMAC("c2:11:22:33:44:77")
 				Expect(err).NotTo(HaveOccurred())
@@ -993,7 +994,7 @@ var _ = Describe("tuning plugin", func() {
 					args.ContainerID, "", func() error { return cmdDel(args) })
 				Expect(err).NotTo(HaveOccurred())
 
-				link, err = netlink.LinkByName(IFNAME)
+				link, err = netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr.String()).To(Equal(beforeConf.Mac))
 				Expect(link.Attrs().MTU).To(Equal(beforeConf.Mtu))
@@ -1049,7 +1050,7 @@ var _ = Describe("tuning plugin", func() {
 				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().RawFlags & unix.IFF_ALLMULTI).NotTo(BeZero())
 
@@ -1073,7 +1074,7 @@ var _ = Describe("tuning plugin", func() {
 					args.ContainerID, "", func() error { return cmdDel(args) })
 				Expect(err).NotTo(HaveOccurred())
 
-				link, err = netlink.LinkByName(IFNAME)
+				link, err = netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().RawFlags&unix.IFF_ALLMULTI != 0).To(Equal(*beforeConf.Allmulti))
 
@@ -1130,7 +1131,7 @@ var _ = Describe("tuning plugin", func() {
 				Expect(result.IPs).To(HaveLen(1))
 				Expect(result.IPs[0].Address.String()).To(Equal("10.0.0.2/24"))
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().RawFlags & unix.IFF_ALLMULTI).NotTo(BeZero())
 
@@ -1138,7 +1139,7 @@ var _ = Describe("tuning plugin", func() {
 					args.ContainerID, "", func() error { return cmdDel(args) })
 				Expect(err).NotTo(HaveOccurred())
 
-				link, err = netlink.LinkByName(IFNAME)
+				link, err = netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().RawFlags&unix.IFF_ALLMULTI != 0).To(Equal(*beforeConf.Allmulti))
 

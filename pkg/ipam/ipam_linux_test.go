@@ -24,6 +24,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
@@ -64,7 +65,7 @@ var _ = Describe("ConfigureIface", func() {
 				LinkAttrs: linkAttrs,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			_, err = netlink.LinkByName(LINK_NAME)
+			_, err = netlinksafe.LinkByName(LINK_NAME)
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})
@@ -148,16 +149,16 @@ var _ = Describe("ConfigureIface", func() {
 			err := ConfigureIface(LINK_NAME, result)
 			Expect(err).NotTo(HaveOccurred())
 
-			link, err := netlink.LinkByName(LINK_NAME)
+			link, err := netlinksafe.LinkByName(LINK_NAME)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(link.Attrs().Name).To(Equal(LINK_NAME))
 
-			v4addrs, err := netlink.AddrList(link, syscall.AF_INET)
+			v4addrs, err := netlinksafe.AddrList(link, syscall.AF_INET)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(v4addrs).To(HaveLen(1))
 			Expect(ipNetEqual(v4addrs[0].IPNet, ipv4)).To(BeTrue())
 
-			v6addrs, err := netlink.AddrList(link, syscall.AF_INET6)
+			v6addrs, err := netlinksafe.AddrList(link, syscall.AF_INET6)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(v6addrs).To(HaveLen(2))
 
@@ -171,7 +172,7 @@ var _ = Describe("ConfigureIface", func() {
 			Expect(found).To(BeTrue())
 
 			// Ensure the v4 route, v6 route, and subnet route
-			routes, err := netlink.RouteList(link, 0)
+			routes, err := netlinksafe.RouteList(link, 0)
 			Expect(err).NotTo(HaveOccurred())
 
 			var v4found, v6found, v4Scopefound bool
@@ -209,12 +210,12 @@ var _ = Describe("ConfigureIface", func() {
 			err := ConfigureIface(LINK_NAME, result)
 			Expect(err).NotTo(HaveOccurred())
 
-			link, err := netlink.LinkByName(LINK_NAME)
+			link, err := netlinksafe.LinkByName(LINK_NAME)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(link.Attrs().Name).To(Equal(LINK_NAME))
 
 			// Ensure the v4 route, v6 route, and subnet route
-			routes, err := netlink.RouteList(link, 0)
+			routes, err := netlinksafe.RouteList(link, 0)
 			Expect(err).NotTo(HaveOccurred())
 
 			var v4found, v6found, v4Tablefound bool
@@ -239,7 +240,7 @@ var _ = Describe("ConfigureIface", func() {
 				Table: routeTable,
 			}
 
-			routes, err = netlink.RouteListFiltered(netlink.FAMILY_ALL,
+			routes, err = netlinksafe.RouteListFiltered(netlink.FAMILY_ALL,
 				routeFilter,
 				netlink.RT_FILTER_TABLE)
 			Expect(err).NotTo(HaveOccurred())

@@ -22,13 +22,13 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	types020 "github.com/containernetworking/cni/pkg/types/020"
 	types040 "github.com/containernetworking/cni/pkg/types/040"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
@@ -275,7 +275,7 @@ var _ = Describe("ptp Operations", func() {
 		err = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			link, err := netlink.LinkByName(IFNAME)
+			link, err := netlinksafe.LinkByName(IFNAME)
 			Expect(err).NotTo(HaveOccurred())
 			if mac != "" {
 				Expect(mac).To(Equal(link.Attrs().HardwareAddr.String()))
@@ -337,7 +337,7 @@ var _ = Describe("ptp Operations", func() {
 		err = targetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			link, err := netlink.LinkByName(IFNAME)
+			link, err := netlinksafe.LinkByName(IFNAME)
 			Expect(err).To(HaveOccurred())
 			Expect(link).To(BeNil())
 			return nil

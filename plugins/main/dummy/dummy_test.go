@@ -32,6 +32,7 @@ import (
 	types020 "github.com/containernetworking/cni/pkg/types/020"
 	types040 "github.com/containernetworking/cni/pkg/types/040"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
@@ -187,7 +188,7 @@ var _ = Describe("dummy Operations", func() {
 				LinkAttrs: linkAttrs,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			m, err := netlink.LinkByName(MASTER_NAME)
+			m, err := netlinksafe.LinkByName(MASTER_NAME)
 			Expect(err).NotTo(HaveOccurred())
 			err = netlink.LinkSetUp(m)
 			Expect(err).NotTo(HaveOccurred())
@@ -224,7 +225,7 @@ var _ = Describe("dummy Operations", func() {
 			err = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
-				link, err := netlink.LinkByName("foobar0")
+				link, err := netlinksafe.LinkByName("foobar0")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().Name).To(Equal("foobar0"))
 				return nil
@@ -281,7 +282,7 @@ var _ = Describe("dummy Operations", func() {
 			err = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().Name).To(Equal(IFNAME))
 
@@ -291,7 +292,7 @@ var _ = Describe("dummy Operations", func() {
 					Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
 				}
 
-				addrs, err := netlink.AddrList(link, syscall.AF_INET)
+				addrs, err := netlinksafe.AddrList(link, syscall.AF_INET)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(addrs).To(HaveLen(1))
 				return nil
@@ -341,7 +342,7 @@ var _ = Describe("dummy Operations", func() {
 			err = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).To(HaveOccurred())
 				Expect(link).To(BeNil())
 				return nil

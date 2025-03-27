@@ -31,6 +31,7 @@ import (
 	types020 "github.com/containernetworking/cni/pkg/types/020"
 	types040 "github.com/containernetworking/cni/pkg/types/040"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
@@ -243,7 +244,7 @@ var _ = Describe("Add, check, remove tap plugin", func() {
 			err = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().Name).To(Equal(IFNAME))
 				Expect(link.Type()).To(Equal(TYPETAP))
@@ -253,7 +254,7 @@ var _ = Describe("Add, check, remove tap plugin", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
 				}
-				addrs, err := netlink.AddrList(link, syscall.AF_INET)
+				addrs, err := netlinksafe.AddrList(link, syscall.AF_INET)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(addrs).To(HaveLen(1))
 				return nil
@@ -302,7 +303,7 @@ var _ = Describe("Add, check, remove tap plugin", func() {
 			err = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).To(HaveOccurred())
 				Expect(link).To(BeNil())
 				return nil
@@ -360,7 +361,7 @@ var _ = Describe("Add, check, remove tap plugin", func() {
 					}); err != nil {
 						return err
 					}
-					bridge, err = netlink.LinkByName(bridgeName)
+					bridge, err = netlinksafe.LinkByName(bridgeName)
 					if err != nil {
 						return err
 					}
@@ -391,7 +392,7 @@ var _ = Describe("Add, check, remove tap plugin", func() {
 			err = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().Name).To(Equal(IFNAME))
 				Expect(link.Type()).To(Equal(TYPETAP))
@@ -402,7 +403,7 @@ var _ = Describe("Add, check, remove tap plugin", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
 				}
-				addrs, err := netlink.AddrList(link, syscall.AF_INET)
+				addrs, err := netlinksafe.AddrList(link, syscall.AF_INET)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(addrs).To(HaveLen(1))
 				return nil
@@ -425,7 +426,7 @@ var _ = Describe("Add, check, remove tap plugin", func() {
 			err = targetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
-				link, err := netlink.LinkByName(IFNAME)
+				link, err := netlinksafe.LinkByName(IFNAME)
 				Expect(err).To(HaveOccurred())
 				Expect(link).To(BeNil())
 				return nil

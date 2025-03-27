@@ -22,9 +22,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/plugins/pkg/ip"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
@@ -127,7 +127,7 @@ var _ = Describe("Link", func() {
 		_ = containerNetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			containerVethFromName, err := netlink.LinkByName(containerVethName)
+			containerVethFromName, err := netlinksafe.LinkByName(containerVethName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(containerVethFromName.Attrs().Index).To(Equal(containerVeth.Index))
 
@@ -137,7 +137,7 @@ var _ = Describe("Link", func() {
 		_ = hostNetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			hostVethFromName, err := netlink.LinkByName(hostVethName)
+			hostVethFromName, err := netlinksafe.LinkByName(hostVethName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(hostVethFromName.Attrs().Index).To(Equal(hostVeth.Index))
 
@@ -207,7 +207,7 @@ var _ = Describe("Link", func() {
 			_ = containerNetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
-				_, err := netlink.LinkByName(containerVethName)
+				_, err := netlinksafe.LinkByName(containerVethName)
 				Expect(err).NotTo(HaveOccurred())
 
 				return nil
@@ -216,7 +216,7 @@ var _ = Describe("Link", func() {
 			_ = hostNetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
-				_, err := netlink.LinkByName(hostVethName)
+				_, err := netlinksafe.LinkByName(hostVethName)
 				Expect(err).NotTo(HaveOccurred())
 
 				return nil
@@ -232,7 +232,7 @@ var _ = Describe("Link", func() {
 				Expect(err).NotTo(HaveOccurred())
 				hostVethName = hostVeth.Name
 
-				link, err := netlink.LinkByName(containerVethName)
+				link, err := netlinksafe.LinkByName(containerVethName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr.String()).To(Equal(mac))
 
@@ -242,7 +242,7 @@ var _ = Describe("Link", func() {
 			_ = hostNetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
 
-				link, err := netlink.LinkByName(hostVethName)
+				link, err := netlinksafe.LinkByName(hostVethName)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(link.Attrs().HardwareAddr.String()).NotTo(Equal(mac))
 
@@ -259,7 +259,7 @@ var _ = Describe("Link", func() {
 			err := ip.DelLinkByName(containerVethName)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = netlink.LinkByName(containerVethName)
+			_, err = netlinksafe.LinkByName(containerVethName)
 			Expect(err).To(HaveOccurred())
 
 			return nil
@@ -268,7 +268,7 @@ var _ = Describe("Link", func() {
 		_ = hostNetNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
 
-			_, err := netlink.LinkByName(hostVethName)
+			_, err := netlinksafe.LinkByName(hostVethName)
 			Expect(err).To(HaveOccurred())
 
 			return nil

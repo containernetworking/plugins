@@ -30,6 +30,7 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
@@ -147,7 +148,7 @@ func setupContainerVeth(netns ns.NetNS, ifName string, mtu int, pr *current.Resu
 
 func setupHostVeth(vethName string, result *current.Result) error {
 	// hostVeth moved namespaces and may have a new ifindex
-	veth, err := netlink.LinkByName(vethName)
+	veth, err := netlinksafe.LinkByName(vethName)
 	if err != nil {
 		return fmt.Errorf("failed to lookup %q: %v", vethName, err)
 	}
@@ -390,7 +391,7 @@ func validateCniContainerInterface(intf current.Interface) error {
 	if intf.Name == "" {
 		return fmt.Errorf("Container interface name missing in prevResult: %v", intf.Name)
 	}
-	link, err = netlink.LinkByName(intf.Name)
+	link, err = netlinksafe.LinkByName(intf.Name)
 	if err != nil {
 		return fmt.Errorf("ptp: Container Interface name in prevResult: %s not found", intf.Name)
 	}
