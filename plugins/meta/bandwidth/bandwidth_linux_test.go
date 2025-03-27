@@ -31,6 +31,7 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
@@ -176,11 +177,11 @@ var _ = Describe("bandwidth test", func() {
 					Expect(result.Interfaces[2].Name).To(Equal(ifbDeviceName))
 					Expect(result.Interfaces[2].Sandbox).To(Equal(""))
 
-					ifbLink, err := netlink.LinkByName(ifbDeviceName)
+					ifbLink, err := netlinksafe.LinkByName(ifbDeviceName)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(ifbLink.Attrs().MTU).To(Equal(hostIfaceMTU))
 
-					qdiscs, err := netlink.QdiscList(ifbLink)
+					qdiscs, err := netlinksafe.QdiscList(ifbLink)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(qdiscs).To(HaveLen(1))
@@ -190,10 +191,10 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs[0].(*netlink.Tbf).Rate).To(Equal(uint64(2)))
 					Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 
-					hostVethLink, err := netlink.LinkByName(hostIfname)
+					hostVethLink, err := netlinksafe.LinkByName(hostIfname)
 					Expect(err).NotTo(HaveOccurred())
 
-					qdiscFilters, err := netlink.FilterList(hostVethLink, netlink.MakeHandle(0xffff, 0))
+					qdiscFilters, err := netlinksafe.FilterList(hostVethLink, netlink.MakeHandle(0xffff, 0))
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(qdiscFilters).To(HaveLen(1))
@@ -205,10 +206,10 @@ var _ = Describe("bandwidth test", func() {
 				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
-					ifbLink, err := netlink.LinkByName(hostIfname)
+					ifbLink, err := netlinksafe.LinkByName(hostIfname)
 					Expect(err).NotTo(HaveOccurred())
 
-					qdiscs, err := netlink.QdiscList(ifbLink)
+					qdiscs, err := netlinksafe.QdiscList(ifbLink)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(qdiscs).To(HaveLen(2))
@@ -266,7 +267,7 @@ var _ = Describe("bandwidth test", func() {
 					_, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, ifbDeviceName, []byte(conf), func() error { return cmdAdd(args) })
 					Expect(err).NotTo(HaveOccurred(), string(out))
 
-					_, err = netlink.LinkByName(ifbDeviceName)
+					_, err = netlinksafe.LinkByName(ifbDeviceName)
 					Expect(err).NotTo(HaveOccurred())
 					return nil
 				})).To(Succeed())
@@ -274,10 +275,10 @@ var _ = Describe("bandwidth test", func() {
 				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
-					containerIfLink, err := netlink.LinkByName(hostIfname)
+					containerIfLink, err := netlinksafe.LinkByName(hostIfname)
 					Expect(err).NotTo(HaveOccurred())
 
-					qdiscs, err := netlink.QdiscList(containerIfLink)
+					qdiscs, err := netlinksafe.QdiscList(containerIfLink)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(qdiscs).To(HaveLen(2))
@@ -333,7 +334,7 @@ var _ = Describe("bandwidth test", func() {
 					_, out, err := testutils.CmdAdd(containerNs.Path(), args.ContainerID, ifbDeviceName, []byte(conf), func() error { return cmdAdd(args) })
 					Expect(err).NotTo(HaveOccurred(), string(out))
 
-					_, err = netlink.LinkByName(ifbDeviceName)
+					_, err = netlinksafe.LinkByName(ifbDeviceName)
 					Expect(err).To(HaveOccurred())
 					return nil
 				})).To(Succeed())
@@ -341,10 +342,10 @@ var _ = Describe("bandwidth test", func() {
 				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
-					containerIfLink, err := netlink.LinkByName(hostIfname)
+					containerIfLink, err := netlinksafe.LinkByName(hostIfname)
 					Expect(err).NotTo(HaveOccurred())
 
-					qdiscs, err := netlink.QdiscList(containerIfLink)
+					qdiscs, err := netlinksafe.QdiscList(containerIfLink)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(qdiscs).To(HaveLen(1))
@@ -459,11 +460,11 @@ var _ = Describe("bandwidth test", func() {
 					Expect(result.Interfaces[2].Name).To(Equal(ifbDeviceName))
 					Expect(result.Interfaces[2].Sandbox).To(Equal(""))
 
-					ifbLink, err := netlink.LinkByName(ifbDeviceName)
+					ifbLink, err := netlinksafe.LinkByName(ifbDeviceName)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(ifbLink.Attrs().MTU).To(Equal(hostIfaceMTU))
 
-					qdiscs, err := netlink.QdiscList(ifbLink)
+					qdiscs, err := netlinksafe.QdiscList(ifbLink)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(qdiscs).To(HaveLen(1))
@@ -473,10 +474,10 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs[0].(*netlink.Tbf).Rate).To(Equal(uint64(2)))
 					Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 
-					hostVethLink, err := netlink.LinkByName(hostIfname)
+					hostVethLink, err := netlinksafe.LinkByName(hostIfname)
 					Expect(err).NotTo(HaveOccurred())
 
-					qdiscFilters, err := netlink.FilterList(hostVethLink, netlink.MakeHandle(0xffff, 0))
+					qdiscFilters, err := netlinksafe.FilterList(hostVethLink, netlink.MakeHandle(0xffff, 0))
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(qdiscFilters).To(HaveLen(1))
@@ -488,10 +489,10 @@ var _ = Describe("bandwidth test", func() {
 				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
-					ifbLink, err := netlink.LinkByName(hostIfname)
+					ifbLink, err := netlinksafe.LinkByName(hostIfname)
 					Expect(err).NotTo(HaveOccurred())
 
-					qdiscs, err := netlink.QdiscList(ifbLink)
+					qdiscs, err := netlinksafe.QdiscList(ifbLink)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(qdiscs).To(HaveLen(2))
@@ -609,7 +610,7 @@ var _ = Describe("bandwidth test", func() {
 					err = testutils.CmdDel(containerNs.Path(), args.ContainerID, "", func() error { return cmdDel(args) })
 					Expect(err).NotTo(HaveOccurred(), string(out))
 
-					_, err = netlink.LinkByName(ifbDeviceName)
+					_, err = netlinksafe.LinkByName(ifbDeviceName)
 					Expect(err).To(HaveOccurred())
 
 					return nil
@@ -680,11 +681,11 @@ var _ = Describe("bandwidth test", func() {
 					Expect(result.Interfaces[4].Name).To(Equal(ifbDeviceName))
 					Expect(result.Interfaces[4].Sandbox).To(Equal(""))
 
-					ifbLink, err := netlink.LinkByName(ifbDeviceName)
+					ifbLink, err := netlinksafe.LinkByName(ifbDeviceName)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(ifbLink.Attrs().MTU).To(Equal(hostIfaceMTU))
 
-					qdiscs, err := netlink.QdiscList(ifbLink)
+					qdiscs, err := netlinksafe.QdiscList(ifbLink)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(qdiscs).To(HaveLen(1))
@@ -694,10 +695,10 @@ var _ = Describe("bandwidth test", func() {
 					Expect(qdiscs[0].(*netlink.Tbf).Rate).To(Equal(uint64(2)))
 					Expect(qdiscs[0].(*netlink.Tbf).Limit).To(Equal(uint32(1)))
 
-					hostVethLink, err := netlink.LinkByName(hostIfname)
+					hostVethLink, err := netlinksafe.LinkByName(hostIfname)
 					Expect(err).NotTo(HaveOccurred())
 
-					qdiscFilters, err := netlink.FilterList(hostVethLink, netlink.MakeHandle(0xffff, 0))
+					qdiscFilters, err := netlinksafe.FilterList(hostVethLink, netlink.MakeHandle(0xffff, 0))
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(qdiscFilters).To(HaveLen(1))
@@ -709,10 +710,10 @@ var _ = Describe("bandwidth test", func() {
 				Expect(hostNs.Do(func(_ ns.NetNS) error {
 					defer GinkgoRecover()
 
-					ifbLink, err := netlink.LinkByName(hostIfname)
+					ifbLink, err := netlinksafe.LinkByName(hostIfname)
 					Expect(err).NotTo(HaveOccurred())
 
-					qdiscs, err := netlink.QdiscList(ifbLink)
+					qdiscs, err := netlinksafe.QdiscList(ifbLink)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(qdiscs).To(HaveLen(2))

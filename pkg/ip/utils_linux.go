@@ -25,6 +25,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 )
 
 func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) error {
@@ -33,12 +34,12 @@ func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) 
 		ourAddr := netlink.Addr{IPNet: &ips.Address}
 		match := false
 
-		link, err := netlink.LinkByName(ifName)
+		link, err := netlinksafe.LinkByName(ifName)
 		if err != nil {
 			return fmt.Errorf("Cannot find container link %v", ifName)
 		}
 
-		addrList, err := netlink.AddrList(link, netlink.FAMILY_ALL)
+		addrList, err := netlinksafe.AddrList(link, netlink.FAMILY_ALL)
 		if err != nil {
 			return fmt.Errorf("Cannot obtain List of IP Addresses")
 		}
@@ -67,7 +68,7 @@ func ValidateExpectedInterfaceIPs(ifName string, resultIPs []*current.IPConfig) 
 			family = netlink.FAMILY_V4
 		}
 
-		gwy, err := netlink.RouteListFiltered(family, findGwy, routeFilter)
+		gwy, err := netlinksafe.RouteListFiltered(family, findGwy, routeFilter)
 		if err != nil {
 			return fmt.Errorf("Error %v trying to find Gateway %v for interface %v", err, ips.Gateway, ifName)
 		}
@@ -108,7 +109,7 @@ func ValidateExpectedRoute(resultRoutes []*types.Route) error {
 			return fmt.Errorf("Invalid static route found %v", route)
 		}
 
-		wasFound, err := netlink.RouteListFiltered(family, find, routeFilter)
+		wasFound, err := netlinksafe.RouteListFiltered(family, find, routeFilter)
 		if err != nil {
 			return fmt.Errorf("Expected Route %v not route table lookup error %v", route, err)
 		}

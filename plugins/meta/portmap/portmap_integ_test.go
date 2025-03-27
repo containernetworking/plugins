@@ -31,7 +31,8 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/containernetworking/cni/libcni"
-	"github.com/containernetworking/cni/pkg/types/100"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
@@ -452,7 +453,7 @@ func testEchoServer(address, protocol string, port int, netns string) bool {
 }
 
 func getLocalIP() string {
-	addrs, err := netlink.AddrList(nil, netlink.FAMILY_V4)
+	addrs, err := netlinksafe.AddrList(nil, netlink.FAMILY_V4)
 	Expect(err).NotTo(HaveOccurred())
 
 	for _, addr := range addrs {

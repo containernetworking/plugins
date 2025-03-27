@@ -29,6 +29,7 @@ import (
 	types040 "github.com/containernetworking/cni/pkg/types/040"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
@@ -211,7 +212,7 @@ var _ = Describe("firewall plugin iptables backend", func() {
 				LinkAttrs: linkAttrs,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			_, err = netlink.LinkByName(IFNAME)
+			_, err = netlinksafe.LinkByName(IFNAME)
 			Expect(err).NotTo(HaveOccurred())
 			return nil
 		})

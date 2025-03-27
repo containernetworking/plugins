@@ -26,6 +26,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
@@ -58,7 +59,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	args.IfName = "lo" // ignore config, this only works for loopback
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
-		link, err := netlink.LinkByName(args.IfName)
+		link, err := netlinksafe.LinkByName(args.IfName)
 		if err != nil {
 			return err // not tested
 		}
@@ -68,7 +69,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err // not tested
 		}
 
-		v4Addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+		v4Addrs, err := netlinksafe.AddrList(link, netlink.FAMILY_V4)
 		if err != nil {
 			return err // not tested
 		}
@@ -82,7 +83,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 		}
 
-		v6Addrs, err := netlink.AddrList(link, netlink.FAMILY_V6)
+		v6Addrs, err := netlinksafe.AddrList(link, netlink.FAMILY_V6)
 		if err != nil {
 			return err // not tested
 		}
@@ -145,7 +146,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 	args.IfName = "lo" // ignore config, this only works for loopback
 	err := ns.WithNetNSPath(args.Netns, func(ns.NetNS) error {
-		link, err := netlink.LinkByName(args.IfName)
+		link, err := netlinksafe.LinkByName(args.IfName)
 		if err != nil {
 			return err // not tested
 		}
@@ -185,7 +186,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	args.IfName = "lo" // ignore config, this only works for loopback
 
 	return ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
-		link, err := netlink.LinkByName(args.IfName)
+		link, err := netlinksafe.LinkByName(args.IfName)
 		if err != nil {
 			return err
 		}

@@ -34,6 +34,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/link"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
@@ -271,7 +272,7 @@ func calcGateways(result *current.Result, n *NetConf) (*gwInfo, *gwInfo, error) 
 }
 
 func ensureAddr(br netlink.Link, family int, ipn *net.IPNet, forceAddress bool) error {
-	addrs, err := netlink.AddrList(br, family)
+	addrs, err := netlinksafe.AddrList(br, family)
 	if err != nil && err != syscall.ENOENT {
 		return fmt.Errorf("could not get list of IP addresses: %v", err)
 	}
@@ -324,7 +325,7 @@ func deleteAddr(br netlink.Link, ipn *net.IPNet) error {
 }
 
 func bridgeByName(name string) (*netlink.Bridge, error) {
-	l, err := netlink.LinkByName(name)
+	l, err := netlinksafe.LinkByName(name)
 	if err != nil {
 		return nil, fmt.Errorf("could not lookup %q: %v", name, err)
 	}
@@ -377,7 +378,7 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 func ensureVlanInterface(br *netlink.Bridge, vlanID int, preserveDefaultVlan bool) (netlink.Link, error) {
 	name := fmt.Sprintf("%s.%d", br.Name, vlanID)
 
-	brGatewayVeth, err := netlink.LinkByName(name)
+	brGatewayVeth, err := netlinksafe.LinkByName(name)
 	if err != nil {
 		if err.Error() != "Link not found" {
 			return nil, fmt.Errorf("failed to find interface %q: %v", name, err)
@@ -393,7 +394,7 @@ func ensureVlanInterface(br *netlink.Bridge, vlanID int, preserveDefaultVlan boo
 			return nil, fmt.Errorf("faild to create vlan gateway %q: %v", name, err)
 		}
 
-		brGatewayVeth, err = netlink.LinkByName(brGatewayIface.Name)
+		brGatewayVeth, err = netlinksafe.LinkByName(brGatewayIface.Name)
 		if err != nil {
 			return nil, fmt.Errorf("failed to lookup %q: %v", brGatewayIface.Name, err)
 		}
@@ -439,7 +440,7 @@ func setupVeth(
 	}
 
 	// need to lookup hostVeth again as its index has changed during ns move
-	hostVeth, err := netlink.LinkByName(hostIface.Name)
+	hostVeth, err := netlinksafe.LinkByName(hostIface.Name)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to lookup %q: %v", hostIface.Name, err)
 	}
@@ -486,7 +487,7 @@ func setupVeth(
 }
 
 func removeDefaultVlan(hostVeth netlink.Link) error {
-	vlanInfo, err := netlink.BridgeVlanList()
+	vlanInfo, err := netlinksafe.BridgeVlanList()
 	if err != nil {
 		return err
 	}
@@ -695,7 +696,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	} else if !n.DisableContainerInterface {
 		if err := netns.Do(func(_ ns.NetNS) error {
-			link, err := netlink.LinkByName(args.IfName)
+			link, err := netlinksafe.LinkByName(args.IfName)
 			if err != nil {
 				return fmt.Errorf("failed to retrieve link: %v", err)
 			}
@@ -710,7 +711,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	}
 
-	hostVeth, err := netlink.LinkByName(hostInterface.Name)
+	hostVeth, err := netlinksafe.LinkByName(hostInterface.Name)
 	if err != nil {
 		return err
 	}
@@ -721,7 +722,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		for idx, sleep := range retries {
 			time.Sleep(time.Duration(sleep) * time.Millisecond)
 
-			hostVeth, err = netlink.LinkByName(hostInterface.Name)
+			hostVeth, err = netlinksafe.LinkByName(hostInterface.Name)
 			if err != nil {
 				return err
 			}
@@ -858,7 +859,7 @@ func validateInterface(intf current.Interface, expectInSb bool) (cniBridgeIf, ne
 		return ifFound, nil, fmt.Errorf("Interface name missing ")
 	}
 
-	link, err := netlink.LinkByName(intf.Name)
+	link, err := netlinksafe.LinkByName(intf.Name)
 	if err != nil {
 		return ifFound, nil, fmt.Errorf("Interface name %s not found", intf.Name)
 	}

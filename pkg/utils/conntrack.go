@@ -20,6 +20,8 @@ import (
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 )
 
 // Assigned Internet Protocol Numbers
@@ -51,7 +53,7 @@ func DeleteConntrackEntriesForDstIP(dstIP string, protocol uint8) error {
 	filter.AddIP(netlink.ConntrackOrigDstIP, ip)
 	filter.AddProtocol(protocol)
 
-	_, err := netlink.ConntrackDeleteFilters(netlink.ConntrackTable, family, filter)
+	_, err := netlinksafe.ConntrackDeleteFilters(netlink.ConntrackTable, family, filter)
 	if err != nil {
 		return fmt.Errorf("error deleting connection tracking state for protocol: %d IP: %s, error: %v", protocol, ip, err)
 	}
@@ -65,7 +67,7 @@ func DeleteConntrackEntriesForDstPort(port uint16, protocol uint8, family netlin
 	filter.AddProtocol(protocol)
 	filter.AddPort(netlink.ConntrackOrigDstPort, port)
 
-	_, err := netlink.ConntrackDeleteFilters(netlink.ConntrackTable, family, filter)
+	_, err := netlinksafe.ConntrackDeleteFilters(netlink.ConntrackTable, family, filter)
 	if err != nil {
 		return fmt.Errorf("error deleting connection tracking state for protocol: %d Port: %d, error: %v", protocol, port, err)
 	}

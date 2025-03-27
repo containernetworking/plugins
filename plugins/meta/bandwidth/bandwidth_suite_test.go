@@ -30,6 +30,7 @@ import (
 	"github.com/onsi/gomega/gexec"
 	"github.com/vishvananda/netlink"
 
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 )
 
@@ -120,7 +121,7 @@ func createVeth(hostNs ns.NetNS, hostVethIfName string, containerNs ns.NetNS, co
 			return fmt.Errorf("creating veth pair: %s", err)
 		}
 
-		containerVeth, err := netlink.LinkByName(containerVethIfName)
+		containerVeth, err := netlinksafe.LinkByName(containerVethIfName)
 		if err != nil {
 			return fmt.Errorf("failed to find newly-created veth device %q: %v", containerVethIfName, err)
 		}
@@ -146,7 +147,7 @@ func createVeth(hostNs ns.NetNS, hostVethIfName string, containerNs ns.NetNS, co
 		addr.Peer = peerAddr
 
 		addr.Scope = int(netlink.SCOPE_LINK)
-		hostVeth, err := netlink.LinkByName(hostVethIfName)
+		hostVeth, err := netlinksafe.LinkByName(hostVethIfName)
 		if err != nil {
 			return fmt.Errorf("failed to find newly-created veth device %q: %v", containerVethIfName, err)
 		}
@@ -177,7 +178,7 @@ func createVeth(hostNs ns.NetNS, hostVethIfName string, containerNs ns.NetNS, co
 		addr.Peer = peerAddr
 
 		addr.Scope = int(netlink.SCOPE_LINK)
-		containerVeth, err := netlink.LinkByName(containerVethIfName)
+		containerVeth, err := netlinksafe.LinkByName(containerVethIfName)
 		if err != nil {
 			return fmt.Errorf("failed to find newly-created veth device %q: %v", containerVethIfName, err)
 		}
@@ -206,7 +207,7 @@ func createVethInOneNs(netNS ns.NetNS, vethName, peerName string) {
 			return fmt.Errorf("failed to create veth pair: %v", err)
 		}
 
-		_, err := netlink.LinkByName(peerName)
+		_, err := netlinksafe.LinkByName(peerName)
 		if err != nil {
 			return fmt.Errorf("failed to find newly-created veth device %q: %v", peerName, err)
 		}
@@ -217,7 +218,7 @@ func createVethInOneNs(netNS ns.NetNS, vethName, peerName string) {
 
 func createMacvlan(netNS ns.NetNS, master, macvlanName string) {
 	err := netNS.Do(func(_ ns.NetNS) error {
-		m, err := netlink.LinkByName(master)
+		m, err := netlinksafe.LinkByName(master)
 		if err != nil {
 			return fmt.Errorf("failed to lookup master %q: %v", master, err)
 		}
@@ -235,7 +236,7 @@ func createMacvlan(netNS ns.NetNS, master, macvlanName string) {
 			return fmt.Errorf("failed to create macvlan device: %s", err)
 		}
 
-		_, err = netlink.LinkByName(macvlanName)
+		_, err = netlinksafe.LinkByName(macvlanName)
 		if err != nil {
 			return fmt.Errorf("failed to find newly-created macvlan device %q: %v", macvlanName, err)
 		}

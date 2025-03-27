@@ -23,6 +23,7 @@ import (
 
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ip"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 )
 
@@ -38,7 +39,7 @@ func ConfigureIface(ifName string, res *current.Result) error {
 		return fmt.Errorf("no interfaces to configure")
 	}
 
-	link, err := netlink.LinkByName(ifName)
+	link, err := netlinksafe.LinkByName(ifName)
 	if err != nil {
 		return fmt.Errorf("failed to lookup %q: %v", ifName, err)
 	}

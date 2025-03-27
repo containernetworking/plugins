@@ -31,6 +31,7 @@ import (
 	types020 "github.com/containernetworking/cni/pkg/types/020"
 	types040 "github.com/containernetworking/cni/pkg/types/040"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
+	"github.com/containernetworking/plugins/pkg/netlinksafe"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
@@ -194,7 +195,7 @@ var _ = Describe("vlan Operations", func() {
 				LinkAttrs: linkAttrs,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			m, err := netlink.LinkByName(MASTER_NAME)
+			m, err := netlinksafe.LinkByName(MASTER_NAME)
 			Expect(err).NotTo(HaveOccurred())
 			err = netlink.LinkSetUp(m)
 			Expect(err).NotTo(HaveOccurred())
@@ -212,7 +213,7 @@ var _ = Describe("vlan Operations", func() {
 				LinkAttrs: linkAttrs,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			m, err := netlink.LinkByName(MASTER_NAME_INCONTAINER)
+			m, err := netlinksafe.LinkByName(MASTER_NAME_INCONTAINER)
 			Expect(err).NotTo(HaveOccurred())
 			err = netlink.LinkSetUp(m)
 			Expect(err).NotTo(HaveOccurred())
@@ -268,7 +269,7 @@ var _ = Describe("vlan Operations", func() {
 				err = targetNS.Do(func(ns.NetNS) error {
 					defer GinkgoRecover()
 
-					link, err := netlink.LinkByName("foobar0")
+					link, err := netlinksafe.LinkByName("foobar0")
 					Expect(err).NotTo(HaveOccurred())
 					Expect(link.Attrs().Name).To(Equal("foobar0"))
 					Expect(link.Attrs().MTU).To(Equal(1500))
@@ -298,7 +299,7 @@ var _ = Describe("vlan Operations", func() {
 				err := otherNs.Do(func(ns.NetNS) error {
 					defer GinkgoRecover()
 
-					m, err := netlink.LinkByName(masterInterface)
+					m, err := netlinksafe.LinkByName(masterInterface)
 					Expect(err).NotTo(HaveOccurred())
 					err = netlink.LinkSetMTU(m, 1200)
 					Expect(err).NotTo(HaveOccurred())
@@ -313,7 +314,7 @@ var _ = Describe("vlan Operations", func() {
 				err = targetNS.Do(func(ns.NetNS) error {
 					defer GinkgoRecover()
 
-					link, err := netlink.LinkByName("foobar0")
+					link, err := netlinksafe.LinkByName("foobar0")
 					Expect(err).NotTo(HaveOccurred())
 					Expect(link.Attrs().Name).To(Equal("foobar0"))
 					Expect(link.Attrs().MTU).To(Equal(1200))
@@ -375,7 +376,7 @@ var _ = Describe("vlan Operations", func() {
 				err = targetNS.Do(func(ns.NetNS) error {
 					defer GinkgoRecover()
 
-					link, err := netlink.LinkByName(IFNAME)
+					link, err := netlinksafe.LinkByName(IFNAME)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(link.Attrs().Name).To(Equal(IFNAME))
 
@@ -385,7 +386,7 @@ var _ = Describe("vlan Operations", func() {
 						Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
 					}
 
-					addrs, err := netlink.AddrList(link, syscall.AF_INET)
+					addrs, err := netlinksafe.AddrList(link, syscall.AF_INET)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(addrs).To(HaveLen(1))
 					return nil
@@ -440,7 +441,7 @@ var _ = Describe("vlan Operations", func() {
 				err = targetNS.Do(func(ns.NetNS) error {
 					defer GinkgoRecover()
 
-					link, err := netlink.LinkByName(IFNAME)
+					link, err := netlinksafe.LinkByName(IFNAME)
 					Expect(err).To(HaveOccurred())
 					Expect(link).To(BeNil())
 					return nil
@@ -487,7 +488,7 @@ var _ = Describe("vlan Operations", func() {
 						defer GinkgoRecover()
 
 						// set master link's MTU to 1500
-						link, err := netlink.LinkByName(masterInterface)
+						link, err := netlinksafe.LinkByName(masterInterface)
 						Expect(err).NotTo(HaveOccurred())
 						err = netlink.LinkSetMTU(link, 1500)
 						Expect(err).NotTo(HaveOccurred())
