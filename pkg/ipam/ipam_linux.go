@@ -29,7 +29,8 @@ import (
 
 const (
 	// Note: use slash as separator so we can have dots in interface name (VLANs)
-	DisableIPv6SysctlTemplate = "net/ipv6/conf/%s/disable_ipv6"
+	DisableIPv6SysctlTemplate    = "net/ipv6/conf/%s/disable_ipv6"
+	KeepAddrOnDownSysctlTemplate = "net/ipv6/conf/%s/keep_addr_on_down"
 )
 
 // ConfigureIface takes the result of IPAM plugin and
@@ -56,8 +57,8 @@ func ConfigureIface(ifName string, res *current.Result) error {
 			return fmt.Errorf("failed to add IP addr %v to %q: invalid interface index", ipc, ifName)
 		}
 
-		// Make sure sysctl "disable_ipv6" is 0 if we are about to add
-		// an IPv6 address to the interface
+		// Make sure sysctl "disable_ipv6" is 0 and "keep_addr_on_down" is 1
+		// if we are about to add an IPv6 address to the interface
 		if !hasEnabledIpv6 && ipc.Address.IP.To4() == nil {
 			// Enabled IPv6 for loopback "lo" and the interface
 			// being configured
@@ -80,6 +81,15 @@ func ConfigureIface(ifName string, res *current.Result) error {
 					return fmt.Errorf("failed to enable IPv6 for interface %q (%s=%s): %v", iface, ipv6SysctlValueName, value, err)
 				}
 			}
+
+			// Enable "keep_addr_on_down" for the interface being configured
+			// This prevents the kernel from removing the address when the interface is brought down
+			keepAddrOnDownSysctlValueName := fmt.Sprintf(KeepAddrOnDownSysctlTemplate, ifName)
+			_, err = sysctl.Sysctl(keepAddrOnDownSysctlValueName, "1")
+			if err != nil {
+				return fmt.Errorf("failed to enable keep_addr_on_down for interface %q: %v", ifName, err)
+			}
+
 			hasEnabledIpv6 = true
 		}
 
