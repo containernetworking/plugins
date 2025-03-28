@@ -201,6 +201,49 @@ var _ = Describe("ConfigureIface", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
+	It("keeps IPV6 addresses after the interface is brought down", func() {
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			By("Configuring the interface")
+
+			err := ConfigureIface(LINK_NAME, result)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying the IPV6 address is present")
+
+			link, err := netlinksafe.LinkByName(LINK_NAME)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(link.Attrs().Name).To(Equal(LINK_NAME))
+
+			v6addrs, err := netlinksafe.AddrList(link, syscall.AF_INET6)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v6addrs).To(HaveLen(2))
+
+			var found bool
+			for _, a := range v6addrs {
+				if ipNetEqual(a.IPNet, ipv6) {
+					found = true
+					break
+				}
+			}
+			Expect(found).To(BeTrue())
+
+			By("Bringing the interface down")
+			err = netlink.LinkSetDown(link)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying the IPV6 address is still present")
+			v6addrs, err = netlinksafe.AddrList(link, syscall.AF_INET6)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v6addrs).To(HaveLen(1))
+			Expect(ipNetEqual(v6addrs[0].IPNet, ipv6)).To(BeTrue())
+
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	It("configures a link with routes using address gateways", func() {
 		result.Routes[0].GW = nil
 		result.Routes[1].GW = nil
