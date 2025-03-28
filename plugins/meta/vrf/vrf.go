@@ -156,8 +156,9 @@ CONTINUE:
 		}
 
 		// Waits for global IPV6 addresses to be added by the kernel.
-		maxRetry := 10
-		for {
+		backoffBase := 10 * time.Millisecond
+		maxRetries := 8
+		for retryCount := 0; retryCount <= maxRetries; retryCount++ {
 			routesVRFTable, err := netlinksafe.RouteListFiltered(
 				netlink.FAMILY_ALL,
 				&netlink.Route{
@@ -178,12 +179,13 @@ CONTINUE:
 				break
 			}
 
-			maxRetry--
-			if maxRetry <= 0 {
+			if retryCount == maxRetries {
 				return fmt.Errorf("failed getting local/host addresses for %s in table %d with dst %s", intf, vrf.Table, toFind.IPNet.String())
 			}
 
-			time.Sleep(10 * time.Millisecond)
+			// Exponential backoff - 10ms, 20m, 40ms, 80ms, 160ms, 320ms, 640ms, 1280ms
+			// Approx 2,5 seconds total
+			time.Sleep(backoffBase * time.Duration(1<<retryCount))
 		}
 	}
 
