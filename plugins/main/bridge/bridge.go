@@ -24,6 +24,7 @@ import (
 	"sort"
 	"syscall"
 	"time"
+	"strings"
 
 	"github.com/vishvananda/netlink"
 
@@ -456,9 +457,15 @@ func setupVeth(
 		return nil, nil, fmt.Errorf("failed to setup hairpin mode for %v: %v", hostVeth.Attrs().Name, err)
 	}
 
-	// set isolation mode
-	if err = netlink.LinkSetIsolated(hostVeth, portIsolation); err != nil {
-		return nil, nil, fmt.Errorf("failed to set isolated on for %v: %v", hostVeth.Attrs().Name, err)
+	if portIsolation {
+    		name := hostVeth.Attrs().Name
+    		if strings.HasPrefix(name, "veth") || strings.HasPrefix(name, "vnet") || strings.HasPrefix(name, "tap") {
+        		if err = netlink.LinkSetIsolated(hostVeth, true); err != nil {
+            			fmt.Fprintf(os.Stderr, "[WARN] Failed to set isolated on %s: %v\n", name, err)
+        	} else {
+            			fmt.Fprintf(os.Stderr, "[DEBUG] Isolation set on %s\n", name)
+        		}
+    		}
 	}
 
 	if (vlanID != 0 || len(vlans) > 0) && !preserveDefaultVlan {
