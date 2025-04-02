@@ -66,9 +66,9 @@ var protocolEnums = map[string]uint32{
 }
 
 func (p *PortMapEntry) GetProtocolEnum() (uint32, error) {
-	var u, err = strconv.ParseUint(p.Protocol, 0, 10)
+	u, err := strconv.ParseUint(p.Protocol, 0, 10)
 	if err != nil {
-		var pe, exist = protocolEnums[strings.ToLower(p.Protocol)]
+		pe, exist := protocolEnums[strings.ToLower(p.Protocol)]
 		if !exist {
 			return 0, errors.New("invalid protocol supplied to port mapping policy")
 		}
@@ -323,7 +323,7 @@ func (n *NetConf) ApplyPortMappingPolicy(portMappings []PortMapEntry) {
 
 	toPolicyValue := func(p *PortMapEntry) json.RawMessage {
 		if n.ApiVersion == 2 {
-			var protocolEnum, _ = p.GetProtocolEnum()
+			protocolEnum, _ := p.GetProtocolEnum()
 			return bprintf(`{"Type": "PortMapping", "Settings": {"InternalPort": %d, "ExternalPort": %d, "Protocol": %d, "VIP": "%s"}}`, p.ContainerPort, p.HostPort, protocolEnum, p.HostIP)
 		}
 		return bprintf(`{"Type": "NAT", "InternalPort": %d, "ExternalPort": %d, "Protocol": "%s"}`, p.ContainerPort, p.HostPort, p.Protocol)
