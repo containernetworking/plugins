@@ -1,53 +1,71 @@
-issues:
-  exclude-rules:
-    - linters:
-        - revive
-      text: "don't use ALL_CAPS in Go names; use CamelCase"
-    - linters:
-        - revive
-      text: " and that stutters;"
-    - path: '(.+)_test\.go'
-      text: "dot-imports: should not use dot imports"
-
+version: "2"
+run:
+  modules-download-mode: vendor
 linters:
-  disable:
-    - errcheck
   enable:
     - contextcheck
     - durationcheck
     - forbidigo
-    - gci
     - ginkgolinter
     - gocritic
-    - gofumpt
-    - gosimple
-    - govet
-    - ineffassign
     - misspell
     - nonamedreturns
     - predeclared
     - revive
-    - staticcheck
     - unconvert
     - unparam
-    - unused
     - wastedassign
-
-linters-settings:
-  gci:
-    sections:
-      - standard
-      - default
-      - prefix(github.com/containernetworking)
-
-  forbidigo:
-    forbid:
-      # Copied from https://github.com/moby/moby/pull/48407
-      - pkg: ^github.com/vishvananda/netlink$
-        p: ^netlink\.(Handle\.)?(AddrList|BridgeVlanList|ChainList|ClassList|ConntrackTableList|ConntrackDeleteFilter$|ConntrackDeleteFilters|DevLinkGetDeviceList|DevLinkGetAllPortList|DevlinkGetDeviceParams|FilterList|FouList|GenlFamilyList|GTPPDPList|LinkByName|LinkByAlias|LinkList|LinkSubscribeWithOptions|NeighList$|NeighProxyList|NeighListExecute|NeighSubscribeWithOptions|LinkGetProtinfo|QdiscList|RdmaLinkList|RdmaLinkByName|RdmaLinkDel|RouteList|RouteListFilteredIter|RuleListFiltered$|RouteSubscribeWithOptions|RuleList$|RuleListFiltered|SocketGet|SocketDiagTCPInfo|SocketDiagTCP|SocketDiagUDPInfo|SocketDiagUDP|UnixSocketDiagInfo|UnixSocketDiag|VDPAGetDevConfigList|VDPAGetDevList|VDPAGetMGMTDevList|XfrmPolicyList|XfrmStateList)
-        msg: Use internal netlinksafe package for EINTR handling.
-    analyze-types: true
-
-run:
-  timeout: 5m
-  modules-download-mode: vendor
+  disable:
+    - errcheck
+  settings:
+    forbidigo:
+      forbid:
+        # Copied from https://github.com/moby/moby/pull/48407
+        - pattern: ^netlink\.(Handle\.)?(AddrList|BridgeVlanList|ChainList|ClassList|ConntrackTableList|ConntrackDeleteFilter$|ConntrackDeleteFilters|DevLinkGetDeviceList|DevLinkGetAllPortList|DevlinkGetDeviceParams|FilterList|FouList|GenlFamilyList|GTPPDPList|LinkByName|LinkByAlias|LinkList|LinkSubscribeWithOptions|NeighList$|NeighProxyList|NeighListExecute|NeighSubscribeWithOptions|LinkGetProtinfo|QdiscList|RdmaLinkList|RdmaLinkByName|RdmaLinkDel|RouteList|RouteListFilteredIter|RuleListFiltered$|RouteSubscribeWithOptions|RuleList$|RuleListFiltered|SocketGet|SocketDiagTCPInfo|SocketDiagTCP|SocketDiagUDPInfo|SocketDiagUDP|UnixSocketDiagInfo|UnixSocketDiag|VDPAGetDevConfigList|VDPAGetDevList|VDPAGetMGMTDevList|XfrmPolicyList|XfrmStateList)
+          pkg: ^github.com/vishvananda/netlink$
+          msg: Use internal netlinksafe package for EINTR handling.
+      analyze-types: true
+    staticcheck:
+      checks:
+        - all
+        - '-QF1008'  # nested struct reference
+        - '-ST1005'  # capitalized error strings
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - revive
+          - staticcheck
+        text: use ALL_CAPS in Go names; use CamelCase
+      - linters:
+          - revive
+        text: ' and that stutters;'
+      - path: (.+)_test\.go
+        text: 'dot-imports: should not use dot imports'
+      - path: (.+)_test\.go
+        text: "ginkgo-linter: wrong comparison assertion. Consider using (.+)BeZero(.+)"
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gci
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/containernetworking)
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
