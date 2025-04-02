@@ -385,7 +385,7 @@ func checkLinkExistsWithBackoff(ctx context.Context, linkName string) (bool, err
 func checkLinkByName(linkName string) (bool, error) {
 	_, err := netlinksafe.LinkByName(linkName)
 	if err != nil {
-		var linkNotFoundErr *netlink.LinkNotFoundError = &netlink.LinkNotFoundError{}
+		linkNotFoundErr := &netlink.LinkNotFoundError{}
 		if errors.As(err, linkNotFoundErr) {
 			return false, nil
 		}

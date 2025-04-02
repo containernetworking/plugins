@@ -86,7 +86,7 @@ func createSysctlAllowFile(sysctls []string) error {
 		return err
 	}
 	for _, sysctl := range sysctls {
-		_, err = f.WriteString(fmt.Sprintf("%s\n", sysctl))
+		_, err = fmt.Fprintln(f, sysctl)
 		if err != nil {
 			return err
 		}

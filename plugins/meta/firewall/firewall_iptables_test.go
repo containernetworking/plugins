@@ -37,9 +37,10 @@ import (
 func findChains(chains []string) (bool, bool) {
 	var foundAdmin, foundPriv bool
 	for _, ch := range chains {
-		if ch == "CNI-ADMIN" {
+		switch ch {
+		case "CNI-ADMIN":
 			foundAdmin = true
-		} else if ch == "CNI-FORWARD" {
+		case "CNI-FORWARD":
 			foundPriv = true
 		}
 	}
