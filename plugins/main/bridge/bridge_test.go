@@ -345,7 +345,7 @@ func newResolvConf() (string, error) {
 	}
 	defer f.Close()
 	name := f.Name()
-	_, err = f.WriteString(fmt.Sprintf("nameserver %s", NAMESERVER))
+	_, err = fmt.Fprintf(f, "nameserver %s", NAMESERVER)
 	return name, err
 }
 
@@ -1834,13 +1834,13 @@ var _ = Describe("bridge Operations", func() {
 	})
 
 	var (
-		correctID      int = 10
-		correctMinID   int = 100
-		correctMaxID   int = 105
-		incorrectMinID int = 1000
-		incorrectMaxID int = 100
-		overID         int = 5000
-		negativeID     int = -1
+		correctID      = 10
+		correctMinID   = 100
+		correctMaxID   = 105
+		incorrectMinID = 1000
+		incorrectMaxID = 100
+		overID         = 5000
+		negativeID     = -1
 	)
 
 	DescribeTable(
