@@ -49,7 +49,7 @@ func buildOneConfig(cniVersion string, orig *TuningConf, prevResult types.Result
 	// Ensure every config uses the same name and version
 	config := make(map[string]interface{})
 
-	confBytes, err := json.Marshal(orig)
+	confBytes, err := json.Marshal(*orig)
 	if err != nil {
 		return nil, err
 	}
