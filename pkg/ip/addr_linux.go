@@ -31,15 +31,15 @@ const SETTLE_INTERVAL = 50 * time.Millisecond
 // There is no easy way to wait for this as an event, so just loop until the
 // addresses are no longer tentative.
 // If any addresses are still tentative after timeout seconds, then error.
-func SettleAddresses(ifName string, timeout int) error {
+func SettleAddresses(ifName string, timeout time.Duration) error {
 	link, err := netlinksafe.LinkByName(ifName)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve link: %v", err)
 	}
 
-	deadline := time.Now().Add(time.Duration(timeout) * time.Second)
+	deadline := time.Now().Add(timeout)
 	for {
-		addrs, err := netlinksafe.AddrList(link, netlink.FAMILY_ALL)
+		addrs, err := netlinksafe.AddrList(link, netlink.FAMILY_V6)
 		if err != nil {
 			return fmt.Errorf("could not list addresses: %v", err)
 		}
@@ -50,7 +50,13 @@ func SettleAddresses(ifName string, timeout int) error {
 
 		ok := true
 		for _, addr := range addrs {
-			if addr.Flags&(syscall.IFA_F_TENTATIVE|syscall.IFA_F_DADFAILED) > 0 {
+			if addr.Flags&(syscall.IFA_F_DADFAILED) != 0 {
+				return fmt.Errorf("link %s has address %s in DADFAILED state",
+					ifName,
+					addr.IP.String())
+			}
+
+			if addr.Flags&(syscall.IFA_F_TENTATIVE) != 0 {
 				ok = false
 				break // Break out of the `range addrs`, not the `for`
 			}
