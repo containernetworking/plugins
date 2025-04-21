@@ -14,7 +14,7 @@ require (
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/networkplumbing/go-nft v0.4.0
 	github.com/onsi/ginkgo/v2 v2.23.4
-	github.com/onsi/gomega v1.36.3
+	github.com/onsi/gomega v1.37.0
 	github.com/opencontainers/selinux v1.12.0
 	github.com/pkg/errors v0.9.1
 	github.com/safchain/ethtool v0.5.10
