@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/version"
@@ -45,13 +46,14 @@ type Net struct {
 // range directly, and wish to preserve backwards compatibility
 type IPAMConfig struct {
 	*Range
-	Name       string
-	Type       string         `json:"type"`
-	Routes     []*types.Route `json:"routes"`
-	DataDir    string         `json:"dataDir"`
-	ResolvConf string         `json:"resolvConf"`
-	Ranges     []RangeSet     `json:"ranges"`
-	IPArgs     []net.IP       `json:"-"` // Requested IPs from CNI_ARGS, args and capabilities
+	Name          string
+	Type          string         `json:"type"`
+	Routes        []*types.Route `json:"routes"`
+	DataDir       string         `json:"dataDir"`
+	ResolvConf    string         `json:"resolvConf"`
+	Ranges        []RangeSet     `json:"ranges"`
+	IPArgs        []net.IP       `json:"-"` // Requested IPs from CNI_ARGS, args and capabilities
+	RangeFromFile string         `json:"rangeFromFile"`
 }
 
 type IPAMEnvArgs struct {
@@ -126,6 +128,26 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 	// If a range is supplied as a runtime config, prepend it to the Ranges
 	if len(n.RuntimeConfig.IPRanges) > 0 {
 		n.IPAM.Ranges = append(n.RuntimeConfig.IPRanges, n.IPAM.Ranges...)
+	}
+
+	// If no ranges are configured, try to load from RangeFromFile
+	if len(n.IPAM.Ranges) == 0 && n.IPAM.RangeFromFile != "" {
+		fileBytes, err := os.ReadFile(n.IPAM.RangeFromFile)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to read rangeFromFile %q: %v", n.IPAM.RangeFromFile, err)
+		}
+
+		// Try to unmarshal as a single Range first, then as a slice
+		var singleRange Range
+		if err := json.Unmarshal(fileBytes, &singleRange); err == nil {
+			if singleRange.Subnet.IP != nil {
+				n.IPAM.Ranges = []RangeSet{{singleRange}}
+			} else {
+				return nil, "", fmt.Errorf("failed to parse rangeFromFile %q as a Range", n.IPAM.RangeFromFile)
+			}
+		} else {
+			return nil, "", fmt.Errorf("err: %v, failed to parse rangeFromFile %q as a Range", err, n.IPAM.RangeFromFile)
+		}
 	}
 
 	if len(n.IPAM.Ranges) == 0 {
