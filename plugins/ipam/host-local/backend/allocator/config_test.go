@@ -16,6 +16,7 @@ package allocator
 
 import (
 	"net"
+	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -477,5 +478,35 @@ var _ = Describe("IPAM config", func() {
 			net.IPv4(192, 168, 0, 5).To4(),
 			net.ParseIP("2001:db8::1"),
 		}))
+	})
+
+	It("Should parse ipam ranges from a file", func() {
+		// Create a temporary file with the ranges
+		tempFile, err := os.CreateTemp("", "ranges.conf")
+		Expect(err).NotTo(HaveOccurred())
+		defer os.Remove(tempFile.Name())
+		// Write the ranges to the file
+		_, err = tempFile.WriteString(`{"subnet": "10.128.0.0/11", "rangeStart": "10.128.12.100", "rangeEnd": "10.128.12.254"}`)
+		Expect(err).NotTo(HaveOccurred())
+
+		// use the temp file as the range file
+		input := `{
+			"cniVersion": "0.3.1",
+			"name": "mynet",
+			"type": "macvlan",
+			"master": "foo0",
+			"ipam": {
+				"type": "host-local",
+				"rangeFromFile": "` + tempFile.Name() + `"
+			}
+		}`
+		conf, version, err := LoadIPAMConfig([]byte(input), "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(version).Should(Equal("0.3.1"))
+
+		rgFromFile := conf.Ranges[0][0]
+		Expect(rgFromFile.Subnet).To(Equal(types.IPNet{IP: net.IPv4(10, 128, 0, 0).To4(), Mask: net.CIDRMask(11, 32)}))
+		Expect(rgFromFile.RangeStart).To(Equal(net.IPv4(10, 128, 12, 100)))
+		Expect(rgFromFile.RangeEnd).To(Equal(net.IPv4(10, 128, 12, 254)))
 	})
 })

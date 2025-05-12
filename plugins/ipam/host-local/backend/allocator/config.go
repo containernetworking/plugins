@@ -137,7 +137,6 @@ func LoadIPAMConfig(bytes []byte, envArgs string) (*IPAMConfig, string, error) {
 			return nil, "", fmt.Errorf("failed to read rangeFromFile %q: %v", n.IPAM.RangeFromFile, err)
 		}
 
-		// Try to unmarshal as a single Range first, then as a slice
 		var singleRange Range
 		if err := json.Unmarshal(fileBytes, &singleRange); err == nil {
 			if singleRange.Subnet.IP != nil {
