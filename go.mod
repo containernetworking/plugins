@@ -18,7 +18,7 @@ require (
 	github.com/opencontainers/selinux v1.12.0
 	github.com/pkg/errors v0.9.1
 	github.com/safchain/ethtool v0.5.10
-	github.com/vishvananda/netlink v1.3.1-0.20250303224720-0e7078ed04c8
+	github.com/vishvananda/netlink v1.3.1
 	github.com/vishvananda/netns v0.0.5
 	golang.org/x/sys v0.32.0
 	sigs.k8s.io/knftables v0.0.18
