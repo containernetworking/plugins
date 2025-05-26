@@ -45,8 +45,10 @@ var _ = Describe("firewall integration tests (ingressPolicy: same-bridge)", func
 		configListFoo *libcni.NetworkConfigList // "foo", 10.88.3.0/24
 		configListBar *libcni.NetworkConfigList // "bar", 10.88.4.0/24
 		cniConf       *libcni.CNIConfig
+		testRootNS    ns.NetNS
 		namespaces    [nsCount]ns.NetNS
 		results       [nsCount]*types100.Result
+		dataDir       string
 	)
 
 	createNetworkConfig := func(name string, subnet string, gateway string, ingressPolicy string) string {
@@ -61,6 +63,7 @@ var _ = Describe("firewall integration tests (ingressPolicy: same-bridge)", func
          "ipMasq": true,
          "hairpinMode": true,
          "ipam": {
+		    "dataDir": "%s",
             "type": "host-local",
             "routes": [
                {
@@ -83,7 +86,7 @@ var _ = Describe("firewall integration tests (ingressPolicy: same-bridge)", func
          "ingressPolicy": "%s"
       }
    ]
-}`, name, name, subnet, gateway, ingressPolicy)
+}`, name, name, dataDir, subnet, gateway, ingressPolicy)
 	}
 
 	BeforeEach(func() {
@@ -94,6 +97,13 @@ var _ = Describe("firewall integration tests (ingressPolicy: same-bridge)", func
 		Expect(err).NotTo(HaveOccurred())
 		dirs := filepath.SplitList(os.Getenv("PATH"))
 		cniConf = &libcni.CNIConfig{Path: dirs}
+
+		dataDir, err = os.MkdirTemp("", "firewall_test")
+		Expect(err).NotTo(HaveOccurred())
+
+		testRootNS, err = testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+		fmt.Fprintf(GinkgoWriter, "root namespace: %s\n", testRootNS.Path())
 
 		for i := 0; i < nsCount; i++ {
 			targetNS, err := testutils.NewNS()
@@ -107,8 +117,13 @@ var _ = Describe("firewall integration tests (ingressPolicy: same-bridge)", func
 		for _, targetNS := range namespaces {
 			if targetNS != nil {
 				targetNS.Close()
+				testutils.UnmountNS(targetNS)
 			}
 		}
+
+		Expect(testRootNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(testRootNS)).To(Succeed())
+		Expect(os.RemoveAll(dataDir)).To(Succeed())
 	})
 
 	Describe("Testing with ingress-policy 'same-bridge", func() {
@@ -122,7 +137,7 @@ var _ = Describe("firewall integration tests (ingressPolicy: same-bridge)", func
 				createNetworkConfig("bar", "10.88.4.0/24", "10.88.4.1", "same-bridge")))
 			Expect(err).NotTo(HaveOccurred())
 
-			results = setupNetworks(cniConf, namespaces, configListFoo, configListBar)
+			results = setupNetworks(cniConf, testRootNS, namespaces, configListFoo, configListBar)
 		})
 
 		Context("when testing connectivity", func() {
@@ -157,7 +172,7 @@ var _ = Describe("firewall integration tests (ingressPolicy: same-bridge)", func
 				createNetworkConfig("bar", "10.88.4.0/24", "10.88.4.1", "isolated")))
 			Expect(err).NotTo(HaveOccurred())
 
-			results = setupNetworks(cniConf, namespaces, configListFoo, configListBar)
+			results = setupNetworks(cniConf, testRootNS, namespaces, configListFoo, configListBar)
 		})
 
 		Context("when testing connectivity", func() {
@@ -182,7 +197,7 @@ var _ = Describe("firewall integration tests (ingressPolicy: same-bridge)", func
 	})
 })
 
-func setupNetworks(cniConf *libcni.CNIConfig, namespaces [nsCount]ns.NetNS,
+func setupNetworks(cniConf *libcni.CNIConfig, testRootNS ns.NetNS, namespaces [nsCount]ns.NetNS,
 	configListFoo, configListBar *libcni.NetworkConfigList,
 ) [nsCount]*types100.Result {
 	var results [nsCount]*types100.Result
@@ -199,19 +214,28 @@ func setupNetworks(cniConf *libcni.CNIConfig, namespaces [nsCount]ns.NetNS,
 			configList = configListBar
 		}
 
-		// Cleanup any existing network
-		_ = cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig)
+		err := testRootNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
 
-		// Create network
-		res, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig)
-		Expect(err).NotTo(HaveOccurred())
+			// Create network
+			res, err := cniConf.AddNetworkList(context.TODO(), configList, &runtimeConfig)
 
-		// Setup cleanup
-		DeferCleanup(func() {
-			_ = cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig)
+			Expect(err).NotTo(HaveOccurred())
+
+			results[i], err = types100.NewResultFromResult(res)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Setup cleanup
+			DeferCleanup(func() {
+				testRootNS.Do(func(ns.NetNS) error {
+					err := cniConf.DelNetworkList(context.TODO(), configList, &runtimeConfig)
+					Expect(err).NotTo(HaveOccurred())
+					return nil
+				})
+			})
+
+			return nil
 		})
-
-		results[i], err = types100.NewResultFromResult(res)
 		Expect(err).NotTo(HaveOccurred())
 	}
 
