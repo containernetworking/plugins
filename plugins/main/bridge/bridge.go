@@ -107,8 +107,6 @@ func init() {
 func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 	n := &NetConf{
 		BrName: defaultBrName,
-		// Set default value equal to true to maintain existing behavior.
-		PreserveDefaultVlan: true,
 	}
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
