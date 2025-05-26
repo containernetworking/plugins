@@ -66,7 +66,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install linux-modules-extra-$(uname -r)
       - name: Install nftables
-        run: sudo apt-get install nftables
+        # ensure that bridged traffic goes through netfilter
+        run: |
+          sudo apt-get install nftables
+          sudo modprobe br-netfilter
       - name: Install dnsmasq(dhcp server)
         run: |
           sudo apt-get install dnsmasq
