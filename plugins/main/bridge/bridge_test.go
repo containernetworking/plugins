@@ -691,6 +691,13 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 					}
 				}
 			}
+
+			// Check native vlan
+			nativeVlan := tc.vlan
+			if tc.vlan == 0 {
+				nativeVlan = 1
+			}
+			Expect(checkVlan(nativeVlan, vlans)).To(BeTrue())
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -1032,6 +1039,13 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 					}
 				}
 			}
+
+			// Check native vlan
+			nativeVlan := tc.vlan
+			if tc.vlan == 0 {
+				nativeVlan = 1
+			}
+			Expect(checkVlan(nativeVlan, vlans)).To(BeTrue())
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -1366,6 +1380,13 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 					}
 				}
 			}
+
+			// Check native vlan
+			nativeVlan := tc.vlan
+			if tc.vlan == 0 {
+				nativeVlan = 1
+			}
+			Expect(checkVlan(nativeVlan, vlans)).To(BeTrue())
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -2021,11 +2042,31 @@ var _ = Describe("bridge Operations", func() {
 		})
 
 		// TODO find some way to put pointer
-		It(fmt.Sprintf("[%s] configures and deconfigures a l2 bridge with vlan id 100, vlanTrunk 101,200~210 using ADD/DEL", ver), func() {
+		It(fmt.Sprintf("[%s] configures and deconfigures a l2 bridge with vlanTrunk 101,200~210 using ADD/DEL", ver), func() {
 			id, minID, maxID := 101, 200, 210
 			tc := testCase{
 				cniVersion: ver,
 				isLayer2:   true,
+				vlanTrunk: []*VlanTrunk{
+					{ID: &id},
+					{
+						MinID: &minID,
+						MaxID: &maxID,
+					},
+				},
+				AddErr020: "cannot convert: no valid IP addresses",
+				AddErr010: "cannot convert: no valid IP addresses",
+			}
+			cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+		})
+
+		It(fmt.Sprintf("[%s] configures and deconfigures a l2 bridge with vlan 100, and vlanTrunk 101,200~210 using ADD/DEL", ver), func() {
+			nativeVlan := 100
+			id, minID, maxID := 101, 200, 210
+			tc := testCase{
+				cniVersion: ver,
+				isLayer2:   true,
+				vlan:       nativeVlan,
 				vlanTrunk: []*VlanTrunk{
 					{ID: &id},
 					{
