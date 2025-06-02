@@ -892,6 +892,14 @@ func (tester *testerV10x) cmdDelTest(tc testCase, dataDir string) {
 		link, err := netlinksafe.LinkByName(tester.vethName)
 		Expect(err).To(HaveOccurred())
 		Expect(link).To(BeNil())
+
+		if !tc.isLayer2 && tc.vlan != 0 {
+			// Make sure vlan link exists
+			vlanLink, err := netlinksafe.LinkByName(fmt.Sprintf("%s.%d", BRNAME, tc.vlan))
+			Expect(err).To(HaveOccurred())
+			Expect(vlanLink).To(BeNil())
+		}
+
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
@@ -1233,6 +1241,14 @@ func (tester *testerV04x) cmdDelTest(tc testCase, dataDir string) {
 		link, err := netlinksafe.LinkByName(tester.vethName)
 		Expect(err).To(HaveOccurred())
 		Expect(link).To(BeNil())
+
+		if !tc.isLayer2 && tc.vlan != 0 {
+			// Make sure vlan link exists
+			vlanLink, err := netlinksafe.LinkByName(fmt.Sprintf("%s.%d", BRNAME, tc.vlan))
+			Expect(err).To(HaveOccurred())
+			Expect(vlanLink).To(BeNil())
+		}
+
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
@@ -1461,7 +1477,7 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 func (tester *testerV03x) cmdCheckTest(_ testCase, _ *Net, _ string) {
 }
 
-func (tester *testerV03x) cmdDelTest(_ testCase, _ string) {
+func (tester *testerV03x) cmdDelTest(tc testCase, _ string) {
 	err := tester.testNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
@@ -1491,6 +1507,14 @@ func (tester *testerV03x) cmdDelTest(_ testCase, _ string) {
 		link, err := netlinksafe.LinkByName(tester.vethName)
 		Expect(err).To(HaveOccurred())
 		Expect(link).To(BeNil())
+
+		if !tc.isLayer2 && tc.vlan != 0 {
+			// Make sure vlan link exists
+			vlanLink, err := netlinksafe.LinkByName(fmt.Sprintf("%s.%d", BRNAME, tc.vlan))
+			Expect(err).To(HaveOccurred())
+			Expect(vlanLink).To(BeNil())
+		}
+
 		return nil
 	})
 	Expect(err).NotTo(HaveOccurred())
