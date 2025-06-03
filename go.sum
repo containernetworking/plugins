@@ -106,8 +106,8 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH
 github.com/prashantv/gostub v1.1.0 h1:BTyx3RfQjRHnUWaGF9oQos79AlQ5k8WNktv7VGvVH4g=
 github.com/prashantv/gostub v1.1.0/go.mod h1:A5zLQHz7ieHGG7is6LLXLz7I8+3LZzsrV0P1IAHhP5U=
 github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4/go.mod h1:xMI15A0UPsDsEKsMN9yxemIoYk6Tm2C1GtYGdfGttqA=
-github.com/safchain/ethtool v0.6.0 h1:38VicU4p9ewEQFLemCFiGsknSMn7S3xXEzxaGYTjcn4=
-github.com/safchain/ethtool v0.6.0/go.mod h1:JzoNbG8xeg/BeVeVoMCtCb3UPWoppZZbFpA+1WFh+M0=
+github.com/safchain/ethtool v0.6.1 h1:mhRnXE1H8fV8TTXh/HdqE4tXtb57r//BQh5pPYMuM5k=
+github.com/safchain/ethtool v0.6.1/go.mod h1:JzoNbG8xeg/BeVeVoMCtCb3UPWoppZZbFpA+1WFh+M0=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=
 github.com/sirupsen/logrus v1.9.3/go.mod h1:naHLuLoDiP4jHNo9R0sCBMtWGeIprob74mVsIT4qYEQ=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
