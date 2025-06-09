@@ -179,7 +179,7 @@ github.com/pierrec/lz4/v4/internal/xxh32
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors
-# github.com/safchain/ethtool v0.6.0
+# github.com/safchain/ethtool v0.6.1
 ## explicit; go 1.24.2
 github.com/safchain/ethtool
 # github.com/sirupsen/logrus v1.9.3
