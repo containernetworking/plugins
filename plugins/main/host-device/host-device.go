@@ -211,6 +211,14 @@ func cmdDel(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
+
+	// reboot node no containerNs, first ipam del avoid ip leak
+	if cfg.IPAM.Type != "" {
+	        if err := ipam.ExecDel(cfg.IPAM.Type, args.StdinData); err != nil {
+			return err
+		}
+	}
+	
 	if args.Netns == "" {
 		return nil
 	}
@@ -219,12 +227,6 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
 	}
 	defer containerNs.Close()
-
-	if cfg.IPAM.Type != "" {
-		if err := ipam.ExecDel(cfg.IPAM.Type, args.StdinData); err != nil {
-			return err
-		}
-	}
 
 	if !cfg.DPDKMode {
 		if err := moveLinkOut(containerNs, args.IfName); err != nil {
