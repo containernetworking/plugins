@@ -212,7 +212,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	// reboot node no containerNs, first ipam del avoid ip leak
+	// reboot node there no containerNs, first ipam del avoid ip leak
 	if cfg.IPAM.Type != "" {
 		if err := ipam.ExecDel(cfg.IPAM.Type, args.StdinData); err != nil {
 			return err
