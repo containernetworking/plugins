@@ -14,7 +14,7 @@ jobs:
         goarch: [amd64, arm, arm64, mips64le, ppc64le, riscv64, s390x]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Go
         uses: actions/setup-go@v5
@@ -69,7 +69,7 @@ jobs:
         run: sudo apt-get install dos2unix
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Go
         uses: actions/setup-go@v5
