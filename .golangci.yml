@@ -45,6 +45,9 @@ linters:
       - linters:
           - revive
         text: ' and that stutters;'
+      - linters:
+          - revive
+        text: "var-naming: avoid meaningless package names"
       - path: (.+)_test\.go
         text: 'dot-imports: should not use dot imports'
       - path: (.+)_test\.go
