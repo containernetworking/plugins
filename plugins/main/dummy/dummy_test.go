@@ -233,6 +233,26 @@ var _ = Describe("dummy Operations", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It(fmt.Sprintf("[%s] creates an dummy link in a non-default namespace with conflicting name in original namespace", ver), func() {
+			ifName := "foobar0"
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				// Create dummy in the original namespace, with the same name
+				linkAttrs := netlink.NewLinkAttrs()
+				linkAttrs.Name = ifName
+				dm := &netlink.Dummy{
+					LinkAttrs: linkAttrs,
+				}
+				err := netlink.LinkAdd(dm)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = createDummy(ifName, targetNS)
+				Expect(err).NotTo(HaveOccurred())
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 		It(fmt.Sprintf("[%s] configures and deconfigures a dummy link with ADD/CHECK/DEL", ver), func() {
 			const IFNAME = "dummy0"
 
