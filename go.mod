@@ -13,15 +13,15 @@ require (
 	github.com/insomniacslk/dhcp v0.0.0-20240829085014-a3a4c1f04475
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/networkplumbing/go-nft v0.4.0
-	github.com/onsi/ginkgo/v2 v2.25.1
-	github.com/onsi/gomega v1.38.1
+	github.com/onsi/ginkgo/v2 v2.26.0
+	github.com/onsi/gomega v1.38.2
 	github.com/opencontainers/selinux v1.12.0
 	github.com/pkg/errors v0.9.1
 	github.com/safchain/ethtool v0.6.2
 	github.com/vishvananda/netlink v1.3.1
 	github.com/vishvananda/netns v0.0.5
-	golang.org/x/sys v0.35.0
-	sigs.k8s.io/knftables v0.0.18
+	golang.org/x/sys v0.36.0
+	sigs.k8s.io/knftables v0.0.19
 )
 
 require (
@@ -46,6 +46,7 @@ require (
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	golang.org/x/mod v0.27.0 // indirect
 	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
