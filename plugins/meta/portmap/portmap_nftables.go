@@ -246,14 +246,24 @@ func (pmNFT *portMapperNFTables) checkPorts(config *PortMapConf, containerNet ne
 	var hostPorts, hostIPHostPorts, masqueradings int
 	for _, e := range config.RuntimeConfig.PortMaps {
 		if e.HostIP != "" {
-			hostIPHostPorts++
+			hostIP := net.ParseIP(e.HostIP)
+			isHostV6 := (hostIP.To4() == nil)
+			// Ignore wrong-IP-family HostIPs
+			if isV6 != isHostV6 {
+				continue
+			}
+			if hostIP.IsUnspecified() {
+				hostPorts++
+			} else {
+				hostIPHostPorts++
+			}
 		} else {
 			hostPorts++
 		}
 	}
 	if *config.SNAT {
-		masqueradings = len(config.RuntimeConfig.PortMaps)
-		if isV6 {
+		masqueradings = 1
+		if !isV6 {
 			masqueradings *= 2
 		}
 	}
