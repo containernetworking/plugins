@@ -12,7 +12,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: setup go
         uses: actions/setup-go@v5
         with:
@@ -28,7 +28,7 @@ jobs:
     name: Verify vendor directory
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install Go
         uses: actions/setup-go@v5
         with:
@@ -43,7 +43,7 @@ jobs:
     needs: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: setup go
         uses: actions/setup-go@v5
         with:
@@ -74,7 +74,7 @@ jobs:
         run: |
           sudo apt-get install dnsmasq
           sudo systemctl disable --now dnsmasq
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: setup go
         uses: actions/setup-go@v5
         with:
@@ -105,7 +105,7 @@ jobs:
     needs: build
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: setup go
         uses: actions/setup-go@v5
         with:
