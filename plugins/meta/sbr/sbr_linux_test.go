@@ -628,4 +628,67 @@ var _ = Describe("sbr test", func() {
 		Expect(rules[1].Table).To(Equal(tableID))
 		Expect(rules[1].Src.String()).To(Equal("192.168.1.209/32"))
 	})
+
+	It("Works with static gateway configuration", func() {
+		ifname := "net1"
+		// Configure with a static gateway (192.168.1.254) that differs from
+		// the gateway in prevResult (192.168.1.1)
+		conf := `{
+	"cniVersion": "0.3.0",
+	"name": "cni-plugin-sbr-test",
+	"type": "sbr",
+	"gateway": ["192.168.1.254"],
+	"prevResult": {
+		"cniVersion": "0.3.0",
+		"interfaces": [
+			{
+				"name": "%s",
+				"sandbox": "%s"
+			}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "192.168.1.209/24",
+				"gateway": "192.168.1.1",
+				"interface": 0
+			}
+		],
+		"routes": []
+	}
+}`
+		conf = fmt.Sprintf(conf, ifname, targetNs.Path())
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNs.Path(),
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+
+		err := setup(targetNs, createDefaultStatus())
+		Expect(err).NotTo(HaveOccurred())
+
+		_, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+		Expect(err).NotTo(HaveOccurred())
+
+		newStatus, err := readback(targetNs, []string{"net1", "eth0"})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Check that the static gateway (192.168.1.254) is used instead of
+		// the prevResult gateway (192.168.1.1)
+		Expect(newStatus.Rules).To(HaveLen(1))
+		devNet1 := newStatus.Devices[0]
+
+		// Find the default route in table 100
+		var foundDefaultRoute bool
+		for _, route := range devNet1.Routes {
+			if route.Table == 100 && route.Dst != nil && route.Dst.IP.Equal(net.IPv4zero) {
+				// This is the default route, check the gateway
+				Expect(route.Gw.String()).To(Equal("192.168.1.254"))
+				foundDefaultRoute = true
+				break
+			}
+		}
+		Expect(foundDefaultRoute).To(BeTrue(), "Expected to find default route with static gateway")
+	})
 })
