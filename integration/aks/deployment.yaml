@@ -13,7 +13,7 @@ spec:
         run: nginx-lb
     spec:
       containers:
-      - name: nginx-lb
-        image: nginx
-        ports:
-        - containerPort: 80
+        - name: nginx-lb
+          image: nginx
+          ports:
+            - containerPort: 80
