@@ -637,7 +637,7 @@ var _ = Describe("sbr test", func() {
 	"cniVersion": "0.3.0",
 	"name": "cni-plugin-sbr-test",
 	"type": "sbr",
-	"gateway": ["192.168.1.254"],
+	"gateways": ["192.168.1.254"],
 	"prevResult": {
 		"cniVersion": "0.3.0",
 		"interfaces": [

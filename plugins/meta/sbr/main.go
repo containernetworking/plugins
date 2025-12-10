@@ -50,10 +50,12 @@ type PluginConf struct {
 
 	// Add plugin-specific flags here
 	Table *int `json:"table,omitempty"`
-	// Gateway allows specifying static/hardcoded gateway IP addresses
+	// Gateways allows specifying static/hardcoded gateway IP addresses
 	// If set, these will be used instead of the gateway from prevResult
 	// Supports dual-stack: provide one IPv4 and/or one IPv6 gateway
-	Gateway []string `json:"gateway,omitempty"`
+	// Note: Currently applies the same gateway to all IPs of the same family.
+	// Per-subnet gateway mapping is not yet supported.
+	Gateways []string `json:"gateways,omitempty"`
 	// PreserveDefaultRoutes keeps subnet routes in the main routing table
 	// with proper source IP hints for destination-based routing.
 	// This allows packets without an explicit source IP to be routed correctly.
@@ -177,7 +179,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if conf.Table != nil {
 			return doRoutesWithTable(ipCfgs, *conf.Table)
 		}
-		return doRoutes(ipCfgs, args.IfName, conf.Gateway, conf.PreserveDefaultRoutes)
+		return doRoutes(ipCfgs, args.IfName, conf.Gateways, conf.PreserveDefaultRoutes)
 	})
 	if err != nil {
 		return err
