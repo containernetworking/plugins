@@ -299,6 +299,11 @@ func cmdCheck(args *skel.CmdArgs) error {
 
 	bandwidth := getBandwidth(bwConf)
 
+	// No bandwidth config; nothing to do.
+	if bandwidth == nil || bandwidth.isZero() {
+		return nil
+	}
+
 	if bandwidth.IngressRate > 0 && bandwidth.IngressBurst > 0 {
 		rateInBytes := bandwidth.IngressRate / 8
 		burstInBytes := bandwidth.IngressBurst / 8
