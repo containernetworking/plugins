@@ -23,6 +23,7 @@ import (
 
 	"github.com/alexflint/go-filemutex"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -49,6 +50,16 @@ type PluginConf struct {
 
 	// Add plugin-specific flags here
 	Table *int `json:"table,omitempty"`
+	// Gateways allows specifying static/hardcoded gateway IP addresses
+	// If set, these will be used instead of the gateway from prevResult
+	// Supports dual-stack: provide one IPv4 and/or one IPv6 gateway
+	// Note: Currently applies the same gateway to all IPs of the same family.
+	// Per-subnet gateway mapping is not yet supported.
+	Gateways []string `json:"gateways,omitempty"`
+	// PreserveDefaultRoutes keeps subnet routes in the main routing table
+	// with proper source IP hints for destination-based routing.
+	// This allows packets without an explicit source IP to be routed correctly.
+	PreserveDefaultRoutes bool `json:"preserveDefaultRoutes,omitempty"`
 }
 
 // Wrapper that does a lock before and unlock after operations to serialise
@@ -168,7 +179,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if conf.Table != nil {
 			return doRoutesWithTable(ipCfgs, *conf.Table)
 		}
-		return doRoutes(ipCfgs, args.IfName)
+		return doRoutes(ipCfgs, args.IfName, conf.Gateways, conf.PreserveDefaultRoutes)
 	})
 	if err != nil {
 		return err
@@ -207,7 +218,7 @@ func getNextTableID(rules []netlink.Rule, routes []netlink.Route, candidateID in
 }
 
 // doRoutes does all the work to set up routes and rules during an add.
-func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
+func doRoutes(ipCfgs []*current.IPConfig, iface string, staticGateways []string, preserveDefaultRoutes bool) error {
 	// Get a list of rules and routes ready.
 	rules, err := netlinksafe.RuleList(netlink.FAMILY_ALL)
 	if err != nil {
@@ -238,6 +249,22 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 		return fmt.Errorf("Unable to list routes: %v", err)
 	}
 
+	// Parse static gateways if provided (supports dual-stack)
+	var staticGwV4, staticGwV6 net.IP
+	for _, gw := range staticGateways {
+		ip := net.ParseIP(gw)
+		if ip == nil {
+			return fmt.Errorf("Invalid static gateway IP address: %s", gw)
+		}
+		if ip.To4() != nil {
+			staticGwV4 = ip
+			log.Printf("Using static IPv4 gateway: %s", ip.String())
+		} else {
+			staticGwV6 = ip
+			log.Printf("Using static IPv6 gateway: %s", ip.String())
+		}
+	}
+
 	// Loop through setting up source based rules and default routes.
 	for _, ipCfg := range ipCfgs {
 		log.Printf("Set rule for source %s", ipCfg.String())
@@ -260,10 +287,29 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 			return fmt.Errorf("Failed to add rule: %v", err)
 		}
 
+		// Determine which gateway to use: static gateway takes precedence
+		// Match gateway by IP family (IPv4 vs IPv6)
+		var gateway net.IP
+		if ipCfg.Address.IP.To4() != nil {
+			// IPv4 address - use IPv4 gateway
+			if staticGwV4 != nil {
+				gateway = staticGwV4
+			} else if ipCfg.Gateway != nil {
+				gateway = ipCfg.Gateway
+			}
+		} else {
+			// IPv6 address - use IPv6 gateway
+			if staticGwV6 != nil {
+				gateway = staticGwV6
+			} else if ipCfg.Gateway != nil {
+				gateway = ipCfg.Gateway
+			}
+		}
+
 		// Add a default route, since this may have been removed by previous
 		// plugin.
-		if ipCfg.Gateway != nil {
-			log.Printf("Adding default route to gateway %s", ipCfg.Gateway.String())
+		if gateway != nil {
+			log.Printf("Adding default route to gateway %s", gateway.String())
 
 			var dest net.IPNet
 			if ipCfg.Address.IP.To4() != nil {
@@ -276,7 +322,7 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 
 			route := netlink.Route{
 				Dst:       &dest,
-				Gw:        ipCfg.Gateway,
+				Gw:        gateway,
 				Table:     table,
 				LinkIndex: linkIndex,
 			}
@@ -284,7 +330,7 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 			err = netlink.RouteAdd(&route)
 			if err != nil {
 				return fmt.Errorf("Failed to add default route to %s: %v",
-					ipCfg.Gateway.String(),
+					gateway.String(),
 					err)
 			}
 		}
@@ -320,15 +366,59 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 		table = getNextTableID(rules, routes, table)
 	}
 
-	// Delete all the interface routes in the default routing table, which were
-	// copied to source based routing tables.
-	// Not deleting them while copying to accommodate for multiple ipCfgs from
-	// the same subnet. Else, (error for network is unreachable while adding gateway)
-	for _, route := range routes {
-		log.Printf("Deleting route %s from table %d", route.String(), route.Table)
-		err := netlink.RouteDel(&route)
-		if err != nil {
-			return fmt.Errorf("Failed to delete route: %v", err)
+	// Handle routes in the default routing table
+	if preserveDefaultRoutes {
+		// Keep or re-add subnet routes in main table with source IP hints
+		// for destination-based routing if no source IP is specified
+		log.Printf("Preserving default routes with source IP hints for destination-based routing")
+
+		for _, ipCfg := range ipCfgs {
+			// Find the subnet route for this IP
+			subnet := &net.IPNet{
+				IP:   ipCfg.Address.IP.Mask(ipCfg.Address.Mask),
+				Mask: ipCfg.Address.Mask,
+			}
+
+			log.Printf("Adding/replacing route for subnet %s with src hint %s in main table",
+				subnet.String(), ipCfg.Address.IP.String())
+
+			// Add route to main table with source IP hint
+			route := netlink.Route{
+				LinkIndex: linkIndex,
+				Dst:       subnet,
+				Src:       ipCfg.Address.IP,
+				Table:     unix.RT_TABLE_MAIN,
+				Scope:     netlink.SCOPE_LINK,
+			}
+
+			// Use RouteReplace to update if it exists
+			err := netlink.RouteReplace(&route)
+			if err != nil {
+				log.Printf("Warning: Failed to add subnet route to main table: %v", err)
+				// Don't fail completely, just warn
+			}
+		}
+
+		// Delete non-subnet routes from main table (gateway routes, etc.)
+		for _, route := range routes {
+			// Skip subnet routes (scope link), only delete other routes
+			if route.Scope != netlink.SCOPE_LINK {
+				log.Printf("Deleting non-subnet route %s from table %d", route.String(), route.Table)
+				err := netlink.RouteDel(&route)
+				if err != nil {
+					log.Printf("Warning: Failed to delete route: %v", err)
+				}
+			}
+		}
+	} else {
+		// Not deleting them while copying to accommodate for multiple ipCfgs from
+		// the same subnet. Else, (error for network is unreachable while adding gateway)
+		for _, route := range routes {
+			log.Printf("Deleting route %s from table %d", route.String(), route.Table)
+			err := netlink.RouteDel(&route)
+			if err != nil {
+				return fmt.Errorf("Failed to delete route: %v", err)
+			}
 		}
 	}
 

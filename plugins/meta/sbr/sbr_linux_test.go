@@ -628,4 +628,153 @@ var _ = Describe("sbr test", func() {
 		Expect(rules[1].Table).To(Equal(tableID))
 		Expect(rules[1].Src.String()).To(Equal("192.168.1.209/32"))
 	})
+
+	It("Works with static gateway configuration", func() {
+		ifname := "net1"
+		// Configure with a static gateway (192.168.1.254) that differs from
+		// the gateway in prevResult (192.168.1.1)
+		conf := `{
+	"cniVersion": "0.3.0",
+	"name": "cni-plugin-sbr-test",
+	"type": "sbr",
+	"gateways": ["192.168.1.254"],
+	"prevResult": {
+		"cniVersion": "0.3.0",
+		"interfaces": [
+			{
+				"name": "%s",
+				"sandbox": "%s"
+			}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "192.168.1.209/24",
+				"gateway": "192.168.1.1",
+				"interface": 0
+			}
+		],
+		"routes": []
+	}
+}`
+		conf = fmt.Sprintf(conf, ifname, targetNs.Path())
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNs.Path(),
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+
+		err := setup(targetNs, createDefaultStatus())
+		Expect(err).NotTo(HaveOccurred())
+
+		_, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+		Expect(err).NotTo(HaveOccurred())
+
+		newStatus, err := readback(targetNs, []string{"net1", "eth0"})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Check that the static gateway (192.168.1.254) is used instead of
+		// the prevResult gateway (192.168.1.1)
+		Expect(newStatus.Rules).To(HaveLen(1))
+		devNet1 := newStatus.Devices[0]
+
+		// Find the default route in table 100
+		var foundDefaultRoute bool
+		for _, route := range devNet1.Routes {
+			if route.Table == 100 && route.Dst != nil && route.Dst.IP.Equal(net.IPv4zero) {
+				// This is the default route, check the gateway
+				Expect(route.Gw.String()).To(Equal("192.168.1.254"))
+				foundDefaultRoute = true
+				break
+			}
+		}
+		Expect(foundDefaultRoute).To(BeTrue(), "Expected to find default route with static gateway")
+	})
+
+	It("Works with preserveDefaultRoutes enabled", func() {
+		ifname := "net1"
+		conf := `{
+	"cniVersion": "0.3.0",
+	"name": "cni-plugin-sbr-test",
+	"type": "sbr",
+	"preserveDefaultRoutes": true,
+	"prevResult": {
+		"cniVersion": "0.3.0",
+		"interfaces": [
+			{
+				"name": "%s",
+				"sandbox": "%s"
+			}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "192.168.1.209/24",
+				"gateway": "192.168.1.1",
+				"interface": 0
+			}
+		],
+		"routes": []
+	}
+}`
+		conf = fmt.Sprintf(conf, ifname, targetNs.Path())
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNs.Path(),
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+
+		err := setup(targetNs, createDefaultStatus())
+		Expect(err).NotTo(HaveOccurred())
+
+		_, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+		Expect(err).NotTo(HaveOccurred())
+
+		newStatus, err := readback(targetNs, []string{"net1", "eth0"})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Check that source-based routing rule was created
+		Expect(newStatus.Rules).To(HaveLen(1))
+		Expect(newStatus.Rules[0].Table).To(Equal(100))
+		Expect(newStatus.Rules[0].Src.String()).To(Equal("192.168.1.209/32"))
+
+		devNet1 := newStatus.Devices[0]
+
+		// Check that routes exist in both table 100 (source-based) and
+		// table 254/main (for destination-based routing)
+		var foundSubnetRouteInMain bool
+		var foundSubnetRouteInTable100 bool
+		var foundDefaultRouteInTable100 bool
+
+		for _, route := range devNet1.Routes {
+			// Look for subnet route (192.168.1.0/24) in main table with source hint
+			if route.Dst != nil && route.Dst.IP.Equal(net.IPv4(192, 168, 1, 0)) &&
+				route.Dst.Mask.String() == "ffffff00" {
+				if route.Table == 254 || route.Table == 0 { // 0 is treated as main
+					Expect(route.Src.String()).To(Equal("192.168.1.209"),
+						"Subnet route in main table should have source IP hint")
+					Expect(route.Scope).To(Equal(netlink.SCOPE_LINK))
+					foundSubnetRouteInMain = true
+				}
+				if route.Table == 100 {
+					foundSubnetRouteInTable100 = true
+				}
+			}
+
+			// Look for default route in table 100
+			if route.Table == 100 && route.Dst != nil && route.Dst.IP.Equal(net.IPv4zero) {
+				Expect(route.Gw.String()).To(Equal("192.168.1.1"))
+				foundDefaultRouteInTable100 = true
+			}
+		}
+
+		Expect(foundSubnetRouteInMain).To(BeTrue(),
+			"Expected subnet route in main table with source hint")
+		Expect(foundSubnetRouteInTable100).To(BeTrue(),
+			"Expected subnet route in table 100 for source-based routing")
+		Expect(foundDefaultRouteInTable100).To(BeTrue(),
+			"Expected default route in table 100")
+	})
 })
