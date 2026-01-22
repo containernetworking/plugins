@@ -295,7 +295,7 @@ func ensureAddr(br netlink.Link, family int, ipn *net.IPNet, forceAddress bool) 
 
 	addr := &netlink.Addr{IPNet: ipn, Label: ""}
 	if err := netlink.AddrAdd(br, addr); err != nil && err != syscall.EEXIST {
-		return fmt.Errorf("could not add IP address to %q: %v", br.Attrs().Name, err)
+		return fmt.Errorf("could not add IP address %s to %q: %v", ipnStr, br.Attrs().Name, err)
 	}
 
 	// Set the bridge's MAC to itself. Otherwise, the bridge will take the
