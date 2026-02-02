@@ -116,17 +116,9 @@ func addInterface(vrf *netlink.Vrf, intf string) error {
 		Scope:     netlink.SCOPE_UNIVERSE, // Exclude local and connected routes
 	}
 	filterMask := netlink.RT_FILTER_OIF | netlink.RT_FILTER_SCOPE // Filter based on link index and scope
-	r, err := netlinksafe.RouteListFiltered(netlink.FAMILY_ALL, filter, filterMask)
+	globalRoutes, err := netlinksafe.RouteListFiltered(netlink.FAMILY_ALL, filter, filterMask)
 	if err != nil {
 		return fmt.Errorf("failed getting all routes for %s", intf)
-	}
-
-	// Filter out connected IPV6 routes
-	globalRoutes := make([]netlink.Route, 0, len(r))
-	for _, route := range r {
-		if route.Src != nil {
-			globalRoutes = append(globalRoutes, route)
-		}
 	}
 
 	err = netlink.LinkSetMaster(i, vrf)
