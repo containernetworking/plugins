@@ -13,6 +13,11 @@
 // by netlink functions along with the EINTR. So, it's not possible to do
 // anything but retry. After maxAttempts the EINTR will be returned to the
 // caller.
+
+// SPDX-License-Identifier: Apache-2.0
+// Copyright Docker, Inc.
+// Copied from https://github.com/moby/moby/blob/edaa0eb56d7e749df81bd3dcc2945b81e911b52e/internal/nlwrap/nlwrap_linux.go
+
 package netlinksafe
 
 import (
