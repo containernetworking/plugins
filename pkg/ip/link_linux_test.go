@@ -149,7 +149,7 @@ var _ = Describe("Link", func() {
 		It("returns useful error", func() {
 			_ = containerNetNS.Do(func(ns.NetNS) error {
 				defer GinkgoRecover()
-				testHostVethName := "test" + hostVethName
+				testHostVethName := "t" + hostVethName
 				_, _, err := ip.SetupVethWithName(containerVethName, testHostVethName, mtu, "", hostNetNS)
 				Expect(err.Error()).To(Equal(fmt.Sprintf("container veth name (%q) peer provided (%q) already exists", containerVethName, testHostVethName)))
 
