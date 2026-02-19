@@ -232,6 +232,18 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 
 	linkIndex := link.Attrs().Index
 
+	// Add an interface rule, only if there is a single IP address configured on the interface
+	if len(ipCfgs) == 1 {
+		interfaceRule := netlink.NewRule()
+		interfaceRule.Table = table
+		log.Printf("Interface to use %s", iface)
+		interfaceRule.OifName = iface
+
+		if err = netlink.RuleAdd(interfaceRule); err != nil {
+			return fmt.Errorf("Failed to add interface rule: %v", err)
+		}
+	}
+
 	// Get all routes for the interface in the default routing table
 	routes, err = netlinksafe.RouteList(link, netlink.FAMILY_ALL)
 	if err != nil {
@@ -240,9 +252,9 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 
 	// Loop through setting up source based rules and default routes.
 	for _, ipCfg := range ipCfgs {
-		log.Printf("Set rule for source %s", ipCfg.String())
-		rule := netlink.NewRule()
-		rule.Table = table
+		log.Printf("Set src and interface rules for source %s", ipCfg.String())
+		srcRule := netlink.NewRule()
+		srcRule.Table = table
 
 		// Source must be restricted to a single IP, not a full subnet
 		var src net.IPNet
@@ -254,10 +266,10 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string) error {
 		}
 
 		log.Printf("Source to use %s", src.String())
-		rule.Src = &src
+		srcRule.Src = &src
 
-		if err = netlink.RuleAdd(rule); err != nil {
-			return fmt.Errorf("Failed to add rule: %v", err)
+		if err = netlink.RuleAdd(srcRule); err != nil {
+			return fmt.Errorf("Failed to add src rule: %v", err)
 		}
 
 		// Add a default route, since this may have been removed by previous
@@ -426,12 +438,12 @@ func tidyRules(iface string, table *int) error {
 RULE_LOOP:
 	for _, rule := range rules {
 		log.Printf("Check rule: %v", rule)
-		if rule.Src == nil {
+		if rule.Src == nil && rule.OifName == "" {
 			continue
 		}
 
 		for _, addr := range addrs {
-			if rule.Src.IP.Equal(addr.IP) {
+			if rule.OifName == iface || rule.Src.IP.Equal(addr.IP) {
 				log.Printf("Delete rule %v", rule)
 				err := netlink.RuleDel(&rule)
 				if err != nil {
