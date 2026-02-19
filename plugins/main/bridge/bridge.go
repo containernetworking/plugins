@@ -789,6 +789,21 @@ func cmdDel(args *skel.CmdArgs) error {
 		return ipamDel()
 	}
 
+	// remove the vlan default GW interface
+	if isLayer3 && n.IsDefaultGW && n.Vlan != 0 {
+		var linkNotFoundError netlink.LinkNotFoundError
+
+		name := fmt.Sprintf("%s.%d", n.BrName, n.Vlan)
+		vlanIface, err := netlinksafe.LinkByName(name)
+		if err == nil {
+			if err = netlink.LinkDel(vlanIface); err != nil {
+				return err
+			}
+		} else if !errors.As(err, &linkNotFoundError) {
+			return err
+		}
+	}
+
 	// There is a netns so try to clean up. Delete can be called multiple times
 	// so don't return an error if the device is already removed.
 	// If the device isn't there then don't try to clean up IP masq either.
