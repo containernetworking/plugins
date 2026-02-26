@@ -228,16 +228,32 @@ func (pmNFT *portMapperNFTables) forwardPorts(config *PortMapConf, containerNet 
 		// In theory we should validate that the original dst IP and port are as
 		// expected, but *any* traffic matching one of these patterns would need
 		// to be masqueraded to be able to work correctly anyway.
+
+		var masqSrcAddr string
+		if config.MasqAll {
+			// MasqAll: match traffic from any source IP
+			if isV6 {
+				masqSrcAddr = "::/0"
+			} else {
+				masqSrcAddr = "0.0.0.0/0"
+			}
+		} else {
+			// Default: only match traffic from container's own IP (hairpin)
+			masqSrcAddr = containerNet.IP.String()
+		}
+
 		tx.Add(&knftables.Rule{
 			Chain: masqueradingChain,
 			Rule: knftables.Concat(
-				ipX, "saddr", containerNet.IP,
+				ipX, "saddr", masqSrcAddr,
 				ipX, "daddr", containerNet.IP,
 				"masquerade",
 			),
 			Comment: &config.ContainerID,
 		})
-		if !isV6 {
+		if !isV6 && !config.MasqAll {
+			// Only add localhost rule when MasqAll is false
+			// (when MasqAll is true, 0.0.0.0/0 already covers 127.0.0.1)
 			tx.Add(&knftables.Rule{
 				Chain: masqueradingChain,
 				Rule: knftables.Concat(
@@ -275,8 +291,12 @@ func (pmNFT *portMapperNFTables) checkPorts(config *PortMapConf, containerNet ne
 	}
 	if *config.SNAT {
 		masqueradings = 1
-		if !isV6 {
-			masqueradings *= 2
+		// When MasqAll is false and IPv4, we have 2 rules:
+		// 1. hairpin rule (container IP -> container IP)
+		// 2. localhost rule (127.0.0.1 -> container IP)
+		// When MasqAll is true, we only have 1 rule (0.0.0.0/0 -> container IP)
+		if !isV6 && !config.MasqAll {
+			masqueradings = 2
 		}
 	}
 
