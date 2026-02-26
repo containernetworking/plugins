@@ -224,5 +224,253 @@ add rule ip6 cni_hostport prerouting c d fib daddr type local jump hostports_all
 				Expect(err).To(HaveOccurred())
 			})
 		})
+
+		Describe("MasqAll configuration", func() {
+			var pmNFT *portMapperNFTables
+			var ipv4Fake, ipv6Fake *knftables.Fake
+			BeforeEach(func() {
+				ipv4Fake = knftables.NewFake(knftables.IPv4Family, tableName)
+				ipv6Fake = knftables.NewFake(knftables.IPv6Family, tableName)
+				pmNFT = &portMapperNFTables{
+					ipv4: ipv4Fake,
+					ipv6: ipv6Fake,
+				}
+			})
+
+			It(fmt.Sprintf("[%s] generates correct rules with masqAll=true for IPv4", ver), func() {
+				configTmpl := `{
+					"name": "test",
+					"type": "portmap",
+					"cniVersion": "%s",
+					"backend": "nftables",
+					"runtimeConfig": {
+						"portMappings": [
+							{ "hostPort": 8080, "containerPort": 80, "protocol": "tcp"}
+						]
+					},
+					"snat": true,
+					"masqAll": true
+				}`
+				configBytes := []byte(fmt.Sprintf(configTmpl, ver))
+
+				conf, _, err := parseConfig(configBytes, "foo")
+				Expect(err).NotTo(HaveOccurred())
+				conf.ContainerID = containerID
+
+				err = pmNFT.forwardPorts(conf, *containerNet4)
+				Expect(err).NotTo(HaveOccurred())
+
+				// With masqAll=true, should have only 1 masquerading rule with saddr 0.0.0.0/0
+				expectedRules := strings.TrimSpace(`
+add table ip cni_hostport { comment "CNI portmap plugin" ; }
+add chain ip cni_hostport hostip_hostports
+add chain ip cni_hostport hostports
+add chain ip cni_hostport hostports_all
+add chain ip cni_hostport masquerading { type nat hook postrouting priority 100 ; }
+add chain ip cni_hostport output { type nat hook output priority -100 ; }
+add chain ip cni_hostport prerouting { type nat hook prerouting priority -100 ; }
+add rule ip cni_hostport hostports tcp dport 8080 dnat to 10.0.0.2:80 comment "icee6giejonei6so"
+add rule ip cni_hostport hostports_all jump hostip_hostports
+add rule ip cni_hostport hostports_all jump hostports
+add rule ip cni_hostport masquerading ip saddr 0.0.0.0/0 ip daddr 10.0.0.2 masquerade comment "icee6giejonei6so"
+add rule ip cni_hostport output fib daddr type local jump hostports_all
+add rule ip cni_hostport prerouting fib daddr type local jump hostports_all
+`)
+				actualRules := strings.TrimSpace(ipv4Fake.Dump())
+				Expect(actualRules).To(Equal(expectedRules))
+
+				// Check should pass with 1 masquerading rule
+				err = pmNFT.checkPorts(conf, *containerNet4)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It(fmt.Sprintf("[%s] generates correct rules with masqAll=false for IPv4", ver), func() {
+				configTmpl := `{
+					"name": "test",
+					"type": "portmap",
+					"cniVersion": "%s",
+					"backend": "nftables",
+					"runtimeConfig": {
+						"portMappings": [
+							{ "hostPort": 8080, "containerPort": 80, "protocol": "tcp"}
+						]
+					},
+					"snat": true,
+					"masqAll": false
+				}`
+				configBytes := []byte(fmt.Sprintf(configTmpl, ver))
+
+				conf, _, err := parseConfig(configBytes, "foo")
+				Expect(err).NotTo(HaveOccurred())
+				conf.ContainerID = containerID
+
+				err = pmNFT.forwardPorts(conf, *containerNet4)
+				Expect(err).NotTo(HaveOccurred())
+
+				// With masqAll=false, should have 2 masquerading rules: hairpin + localhost
+				expectedRules := strings.TrimSpace(`
+add table ip cni_hostport { comment "CNI portmap plugin" ; }
+add chain ip cni_hostport hostip_hostports
+add chain ip cni_hostport hostports
+add chain ip cni_hostport hostports_all
+add chain ip cni_hostport masquerading { type nat hook postrouting priority 100 ; }
+add chain ip cni_hostport output { type nat hook output priority -100 ; }
+add chain ip cni_hostport prerouting { type nat hook prerouting priority -100 ; }
+add rule ip cni_hostport hostports tcp dport 8080 dnat to 10.0.0.2:80 comment "icee6giejonei6so"
+add rule ip cni_hostport hostports_all jump hostip_hostports
+add rule ip cni_hostport hostports_all jump hostports
+add rule ip cni_hostport masquerading ip saddr 10.0.0.2 ip daddr 10.0.0.2 masquerade comment "icee6giejonei6so"
+add rule ip cni_hostport masquerading ip saddr 127.0.0.1 ip daddr 10.0.0.2 masquerade comment "icee6giejonei6so"
+add rule ip cni_hostport output fib daddr type local jump hostports_all
+add rule ip cni_hostport prerouting fib daddr type local jump hostports_all
+`)
+				actualRules := strings.TrimSpace(ipv4Fake.Dump())
+				Expect(actualRules).To(Equal(expectedRules))
+
+				// Check should pass with 2 masquerading rules
+				err = pmNFT.checkPorts(conf, *containerNet4)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It(fmt.Sprintf("[%s] generates correct rules with masqAll=true for IPv6", ver), func() {
+				configTmpl := `{
+					"name": "test",
+					"type": "portmap",
+					"cniVersion": "%s",
+					"backend": "nftables",
+					"runtimeConfig": {
+						"portMappings": [
+							{ "hostPort": 8080, "containerPort": 80, "protocol": "tcp"}
+						]
+					},
+					"snat": true,
+					"masqAll": true
+				}`
+				configBytes := []byte(fmt.Sprintf(configTmpl, ver))
+
+				conf, _, err := parseConfig(configBytes, "foo")
+				Expect(err).NotTo(HaveOccurred())
+				conf.ContainerID = containerID
+
+				err = pmNFT.forwardPorts(conf, *containerNet6)
+				Expect(err).NotTo(HaveOccurred())
+
+				// With masqAll=true for IPv6, should have only 1 masquerading rule with saddr ::/0
+				expectedRules := strings.TrimSpace(`
+add table ip6 cni_hostport { comment "CNI portmap plugin" ; }
+add chain ip6 cni_hostport hostip_hostports
+add chain ip6 cni_hostport hostports
+add chain ip6 cni_hostport hostports_all
+add chain ip6 cni_hostport masquerading { type nat hook postrouting priority 100 ; }
+add chain ip6 cni_hostport output { type nat hook output priority -100 ; }
+add chain ip6 cni_hostport prerouting { type nat hook prerouting priority -100 ; }
+add rule ip6 cni_hostport hostports tcp dport 8080 dnat to [2001:db8::2]:80 comment "icee6giejonei6so"
+add rule ip6 cni_hostport hostports_all jump hostip_hostports
+add rule ip6 cni_hostport hostports_all jump hostports
+add rule ip6 cni_hostport masquerading ip6 saddr ::/0 ip6 daddr 2001:db8::2 masquerade comment "icee6giejonei6so"
+add rule ip6 cni_hostport output fib daddr type local jump hostports_all
+add rule ip6 cni_hostport prerouting fib daddr type local jump hostports_all
+`)
+				actualRules := strings.TrimSpace(ipv6Fake.Dump())
+				Expect(actualRules).To(Equal(expectedRules))
+
+				// Check should pass with 1 masquerading rule
+				err = pmNFT.checkPorts(conf, *containerNet6)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It(fmt.Sprintf("[%s] generates correct rules with masqAll=false for IPv6", ver), func() {
+				configTmpl := `{
+					"name": "test",
+					"type": "portmap",
+					"cniVersion": "%s",
+					"backend": "nftables",
+					"runtimeConfig": {
+						"portMappings": [
+							{ "hostPort": 8080, "containerPort": 80, "protocol": "tcp"}
+						]
+					},
+					"snat": true,
+					"masqAll": false
+				}`
+				configBytes := []byte(fmt.Sprintf(configTmpl, ver))
+
+				conf, _, err := parseConfig(configBytes, "foo")
+				Expect(err).NotTo(HaveOccurred())
+				conf.ContainerID = containerID
+
+				err = pmNFT.forwardPorts(conf, *containerNet6)
+				Expect(err).NotTo(HaveOccurred())
+
+				// With masqAll=false for IPv6, should have 1 masquerading rule (no localhost for IPv6)
+				expectedRules := strings.TrimSpace(`
+add table ip6 cni_hostport { comment "CNI portmap plugin" ; }
+add chain ip6 cni_hostport hostip_hostports
+add chain ip6 cni_hostport hostports
+add chain ip6 cni_hostport hostports_all
+add chain ip6 cni_hostport masquerading { type nat hook postrouting priority 100 ; }
+add chain ip6 cni_hostport output { type nat hook output priority -100 ; }
+add chain ip6 cni_hostport prerouting { type nat hook prerouting priority -100 ; }
+add rule ip6 cni_hostport hostports tcp dport 8080 dnat to [2001:db8::2]:80 comment "icee6giejonei6so"
+add rule ip6 cni_hostport hostports_all jump hostip_hostports
+add rule ip6 cni_hostport hostports_all jump hostports
+add rule ip6 cni_hostport masquerading ip6 saddr 2001:db8::2 ip6 daddr 2001:db8::2 masquerade comment "icee6giejonei6so"
+add rule ip6 cni_hostport output fib daddr type local jump hostports_all
+add rule ip6 cni_hostport prerouting fib daddr type local jump hostports_all
+`)
+				actualRules := strings.TrimSpace(ipv6Fake.Dump())
+				Expect(actualRules).To(Equal(expectedRules))
+
+				// Check should pass with 1 masquerading rule
+				err = pmNFT.checkPorts(conf, *containerNet6)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It(fmt.Sprintf("[%s] checkPorts validates correct rule count with masqAll", ver), func() {
+				configTmpl := `{
+					"name": "test",
+					"type": "portmap",
+					"cniVersion": "%s",
+					"backend": "nftables",
+					"runtimeConfig": {
+						"portMappings": [
+							{ "hostPort": 8080, "containerPort": 80, "protocol": "tcp"}
+						]
+					},
+					"snat": true,
+					"masqAll": %t
+				}`
+
+				// Test masqAll=true: expects 1 rule
+				configBytes := []byte(fmt.Sprintf(configTmpl, ver, true))
+				conf, _, err := parseConfig(configBytes, "foo")
+				Expect(err).NotTo(HaveOccurred())
+				conf.ContainerID = containerID
+
+				err = pmNFT.forwardPorts(conf, *containerNet4)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Should pass with 1 rule
+				err = pmNFT.checkPorts(conf, *containerNet4)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Clear the fake nftables
+				ipv4Fake = knftables.NewFake(knftables.IPv4Family, tableName)
+				pmNFT.ipv4 = ipv4Fake
+
+				// Test masqAll=false: expects 2 rules
+				configBytes = []byte(fmt.Sprintf(configTmpl, ver, false))
+				conf, _, err = parseConfig(configBytes, "foo")
+				Expect(err).NotTo(HaveOccurred())
+				conf.ContainerID = containerID
+
+				err = pmNFT.forwardPorts(conf, *containerNet4)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Should pass with 2 rules
+				err = pmNFT.checkPorts(conf, *containerNet4)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
 	}
 })
