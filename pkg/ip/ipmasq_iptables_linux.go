@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 
 	"github.com/coreos/go-iptables/iptables"
@@ -62,18 +63,11 @@ func SetupIPMasq(ipn *net.IPNet, chain string, comment string) error {
 	}
 
 	// Create chain if doesn't exist
-	exists := false
 	chains, err := ipt.ListChains("nat")
 	if err != nil {
 		return fmt.Errorf("failed to list chains: %v", err)
 	}
-	for _, ch := range chains {
-		if ch == chain {
-			exists = true
-			break
-		}
-	}
-	if !exists {
+	if !slices.Contains(chains, chain) {
 		if err = ipt.NewChain("nat", chain); err != nil {
 			return err
 		}

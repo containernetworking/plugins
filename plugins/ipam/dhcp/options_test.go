@@ -46,7 +46,7 @@ func validateRoutes(t *testing.T, routes []*types.Route) {
 		t.Fatalf("wrong length slice; expected %v, got %v", len(expected), len(routes))
 	}
 
-	for i := 0; i < len(routes); i++ {
+	for i := range routes {
 		a := routes[i]
 		e := expected[i]
 
