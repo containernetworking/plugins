@@ -25,10 +25,6 @@ import (
 
 var _ = Describe("portmapping configuration", func() {
 	for _, ver := range []string{"0.3.0", "0.3.1", "0.4.0", "1.0.0"} {
-		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
-		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
-		ver := ver
-
 		Context("config parsing", func() {
 			It(fmt.Sprintf("[%s] correctly parses an ADD config", ver), func() {
 				configBytes := []byte(fmt.Sprintf(`{

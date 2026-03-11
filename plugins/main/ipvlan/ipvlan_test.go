@@ -336,9 +336,6 @@ var _ = Describe("ipvlan Operations", func() {
 		}
 		// for _, ver := range testutils.AllSpecVersions {
 		for _, ver := range [...]string{"1.0.0"} {
-			// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
-			// See Gingkgo's "Patterns for dynamically generating tests" documentation.
-			ver := ver
 			isInContainer := inContainer // Tests need a local var with constant value
 
 			It(fmt.Sprintf("[%s] creates an ipvlan link in a non-default namespace", ver), func() {
