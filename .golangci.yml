@@ -25,6 +25,21 @@ linters:
           pkg: ^github.com/vishvananda/netlink$
           msg: Use internal netlinksafe package for EINTR handling.
       analyze-types: true
+    revive:
+      max-open-files: 2048
+      enable-default-rules: true
+      rules:
+        - name: var-naming
+          arguments:
+            - ["ID"] # AllowList
+            - ["VM"] # DenyList
+            - - skip-initialism-name-checks: true
+                upper-case-const: true
+                skip-package-name-checks: true
+                skip-package-name-collision-with-go-std: true
+                extra-bad-package-names:
+                  - helpers
+                  - models
     staticcheck:
       checks:
         - all
