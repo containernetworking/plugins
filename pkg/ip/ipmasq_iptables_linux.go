@@ -41,6 +41,7 @@ func setupIPMasqIPTables(ipns []*net.IPNet, network, _, containerID string) erro
 
 // SetupIPMasq installs iptables rules to masquerade traffic
 // coming from ip of ipn and going outside of ipn.
+//
 // Deprecated: This function only supports iptables. Use SetupIPMasqForNetworks, which
 // supports both iptables and nftables.
 func SetupIPMasq(ipn *net.IPNet, chain string, comment string) error {
@@ -115,6 +116,7 @@ func teardownIPMasqIPTables(ipns []*net.IPNet, network, _, containerID string) e
 }
 
 // TeardownIPMasq undoes the effects of SetupIPMasq.
+//
 // Deprecated: This function only supports iptables. Use TeardownIPMasqForNetworks, which
 // supports both iptables and nftables.
 func TeardownIPMasq(ipn *net.IPNet, chain string, comment string) error {
