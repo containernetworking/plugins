@@ -22,7 +22,7 @@ jobs:
           format: auto
       - uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.3.0
+          version: v2.10.0
           args: -v
   verify-vendor:
     name: Verify vendor directory
