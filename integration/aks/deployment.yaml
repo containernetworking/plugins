@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-lb
+spec:
+  selector:
+    matchLabels:
+      run: nginx-lb
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        run: nginx-lb
+    spec:
+      containers:
+        - name: nginx-lb
+          image: nginx
+          ports:
+            - containerPort: 80
