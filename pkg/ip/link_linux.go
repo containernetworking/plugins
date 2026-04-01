@@ -73,7 +73,7 @@ func makeVeth(name, vethPeerName string, mtu int, mac string, hostNS ns.NetNS) (
 	var peerName string
 	var veth netlink.Link
 	var err error
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if vethPeerName != "" {
 			peerName = vethPeerName
 		} else {
