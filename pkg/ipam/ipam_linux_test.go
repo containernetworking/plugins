@@ -201,6 +201,89 @@ var _ = Describe("ConfigureIface", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
+	It("configures multiple routes with the same destination (ECMP)", func() {
+		altGateway := net.ParseIP("1.2.3.6")
+		Expect(altGateway).NotTo(BeNil())
+
+		originalRoutes := result.Routes
+		// Inject two gateway options for the same destination to validate ECMP behaviour.
+		result.Routes = []*types.Route{
+			{Dst: *routev4, GW: routegwv4},
+			{Dst: *routev4, GW: altGateway},
+		}
+		defer func() {
+			result.Routes = originalRoutes
+		}()
+
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			err := ConfigureIface(LINK_NAME, result)
+			Expect(err).NotTo(HaveOccurred())
+
+			link, err := netlinksafe.LinkByName(LINK_NAME)
+			Expect(err).NotTo(HaveOccurred())
+
+			routeFilter := &netlink.Route{
+				LinkIndex: link.Attrs().Index,
+				Dst:       routev4,
+			}
+			routes, err := netlinksafe.RouteListFiltered(
+				netlink.FAMILY_V4,
+				routeFilter,
+				netlink.RT_FILTER_OIF|netlink.RT_FILTER_DST,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Modern kernels may collapse duplicate ip route adds into one FIB entry via RTA_MULTIPATH.
+			var multipathRoute *netlink.Route
+			for i := range routes {
+				if routes[i].Dst == nil || !ipNetEqual(routes[i].Dst, routev4) {
+					continue
+				}
+				if len(routes[i].MultiPath) > 0 {
+					multipathRoute = &routes[i]
+					break
+				}
+			}
+			foundGateways := map[string]bool{}
+			if multipathRoute != nil {
+				// When the kernel exposes fib_info_num_path>1 as RTA_MULTIPATH (regardless of nexthop API usage),
+				// assert the two nexthops directly.
+				Expect(multipathRoute.MultiPath).To(HaveLen(2))
+				for _, nh := range multipathRoute.MultiPath {
+					if nh.Gw == nil {
+						continue
+					}
+					if nh.Gw.Equal(routegwv4) || nh.Gw.Equal(altGateway) {
+						foundGateways[nh.Gw.String()] = true
+					}
+				}
+			} else {
+				// Fallback: some setups still list each nexthop as an individual route entry,
+				// so fall back to checking the per-route gateways.
+				for _, route := range routes {
+					if route.Dst == nil || route.Gw == nil {
+						continue
+					}
+					if !ipNetEqual(route.Dst, routev4) {
+						continue
+					}
+					if route.Gw.Equal(routegwv4) || route.Gw.Equal(altGateway) {
+						foundGateways[route.Gw.String()] = true
+					}
+				}
+			}
+
+			Expect(foundGateways).To(HaveLen(2))
+			Expect(foundGateways).To(HaveKey(routegwv4.String()))
+			Expect(foundGateways).To(HaveKey(altGateway.String()))
+
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	It("keeps IPV6 addresses after the interface is brought down", func() {
 		err := originalNS.Do(func(ns.NetNS) error {
 			defer GinkgoRecover()
