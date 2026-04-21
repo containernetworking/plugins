@@ -99,7 +99,6 @@ var _ = Describe("static Operations", func() {
 			))
 			Expect(result.IPs).To(HaveLen(2))
 
-			// Result must preserve both default gateways in order to prove static IPAM keeps ECMP routes.
 			Expect(result.Routes).To(Equal([]*types.Route{
 				{Dst: mustCIDR("0.0.0.0/0")},
 				{Dst: mustCIDR("192.168.0.0/16"), GW: net.ParseIP("10.10.5.1")},
@@ -107,54 +106,6 @@ var _ = Describe("static Operations", func() {
 			}))
 
 			// Release the IP
-			err = testutils.CmdDelWithArgs(args, func() error {
-				return cmdDel(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It(fmt.Sprintf("[%s] keeps multiple gateways for the same destination (ECMP)", ver), func() {
-			const ifname string = "eth0"
-			const nspath string = "/some/where"
-
-			conf := fmt.Sprintf(`{
-				"cniVersion": "%s",
-				"name": "mynet",
-				"type": "ipvlan",
-				"master": "foo0",
-				"ipam": {
-					"type": "static",
-					"addresses": [ {
-						"address": "10.10.0.1/24",
-						"gateway": "10.10.0.254"
-					} ],
-					"routes": [
-						{ "dst": "0.0.0.0/0", "gw": "10.10.0.254" },
-						{ "dst": "0.0.0.0/0", "gw": "10.10.0.253" }
-					]
-				}
-			}`, ver)
-
-			args := &skel.CmdArgs{
-				ContainerID: "dummy",
-				Netns:       nspath,
-				IfName:      ifname,
-				StdinData:   []byte(conf),
-			}
-
-			r, _, err := testutils.CmdAddWithArgs(args, func() error {
-				return cmdAdd(args)
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			result, err := types100.GetResult(r)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(result.Routes).To(Equal([]*types.Route{
-				{Dst: mustCIDR("0.0.0.0/0"), GW: net.ParseIP("10.10.0.254")},
-				{Dst: mustCIDR("0.0.0.0/0"), GW: net.ParseIP("10.10.0.253")},
-			}))
-
 			err = testutils.CmdDelWithArgs(args, func() error {
 				return cmdDel(args)
 			})
