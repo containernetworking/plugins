@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"syscall"
@@ -39,6 +40,36 @@ import (
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 )
+
+func getGroupFwdMaskPath(brName string) string {
+	return fmt.Sprintf("/sys/class/net/%s/bridge/group_fwd_mask", brName)
+}
+
+func setGroupFwdMask(brName string, mask int) error {
+	if mask < 0 || mask > 65535 {
+		return fmt.Errorf("invalid groupFwdMask %d", mask)
+	}
+
+	if mask == 0 {
+		return nil
+	}
+
+	safeName := filepath.Base(brName)
+
+	if safeName == "." || safeName == ".." || safeName == "" {
+		return fmt.Errorf("invalid bridge name %q", brName)
+	}
+
+	path := getGroupFwdMaskPath(safeName)
+
+	if err := os.WriteFile(path, []byte(fmt.Sprintf("%d", mask)), 0o644); err != nil {
+		if os.IsNotExist(err) {
+			return nil // ignore if not supported
+		}
+		return err
+	}
+	return nil
+}
 
 // For testcases to force an error after IPAM has been performed
 var debugPostIPAMError error
@@ -63,6 +94,7 @@ type NetConf struct {
 	EnableDad                 bool         `json:"enabledad,omitempty"`
 	DisableContainerInterface bool         `json:"disableContainerInterface,omitempty"`
 	PortIsolation             bool         `json:"portIsolation,omitempty"`
+	GroupFwdMask              int          `json:"groupFwdMask,omitempty"`
 
 	Args struct {
 		Cni BridgeArgs `json:"cni,omitempty"`
@@ -110,6 +142,9 @@ func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 	}
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
+	}
+	if n.GroupFwdMask < 0 || n.GroupFwdMask > 0xFFFF {
+		return nil, "", fmt.Errorf("invalid groupFwdMask %d", n.GroupFwdMask)
 	}
 	if n.Vlan < 0 || n.Vlan > 4094 {
 		return nil, "", fmt.Errorf("invalid VLAN ID %d (must be between 0 and 4094)", n.Vlan)
@@ -517,6 +552,9 @@ func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
 	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, vlanFiltering)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create bridge %q: %v", n.BrName, err)
+	}
+	if err := setGroupFwdMask(n.BrName, n.GroupFwdMask); err != nil {
+		return nil, nil, fmt.Errorf("failed to set group_fwd_mask: %w", err)
 	}
 
 	return br, &current.Interface{

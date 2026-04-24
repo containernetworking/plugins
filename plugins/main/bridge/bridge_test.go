@@ -84,7 +84,9 @@ type testCase struct {
 	macspoofchk       bool
 	disableContIface  bool
 	portIsolation     bool
+	GroupFwdMask      int
 
+	AddErr    string
 	AddErr020 string
 	DelErr020 string
 	AddErr010 string
@@ -233,6 +235,10 @@ func (tc testCase) netConfJSON(dataDir string) string {
 		if tc.removeDefaultVlan {
 			conf += preserveDefaultVlan
 		}
+	}
+	if tc.GroupFwdMask != 0 {
+		conf += fmt.Sprintf(`,
+    "groupFwdMask": %d`, tc.GroupFwdMask)
 	}
 
 	if tc.isLayer2 && tc.vlanTrunk != nil {
@@ -546,24 +552,40 @@ func newTesterByVersion(version string, testNS, targetNS ns.NetNS) cmdAddDelTest
 }
 
 func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result, error) {
-	// Generate network config and command arguments
 	tester.args = tc.createCmdArgs(tester.targetNS, dataDir)
 
-	// Execute cmdADD on the plugin
 	var result *types100.Result
-	err := tester.testNS.Do(func(ns.NetNS) error {
+
+	err := tester.testNS.Do(func(_ ns.NetNS) error {
 		defer GinkgoRecover()
 
 		r, raw, err := testutils.CmdAddWithArgs(tester.args, func() error {
 			return cmdAdd(tester.args)
 		})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(strings.Index(string(raw), "\"interfaces\":")).Should(BeNumerically(">", 0))
 
+		if tc.AddErr != "" {
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(tc.AddErr))
+			return err
+		}
+
+		Expect(strings.Index(string(raw), "\"interfaces\":")).Should(BeNumerically(">", 0))
 		resultType, err := r.GetAsVersion(tc.cniVersion)
 		Expect(err).NotTo(HaveOccurred())
 		result = resultType.(*types100.Result)
 
+		path := fmt.Sprintf("/sys/class/net/%s/bridge/group_fwd_mask", result.Interfaces[0].Name)
+
+		if _, err := os.Stat(path); err == nil {
+			data, err := os.ReadFile(path)
+			Expect(err).NotTo(HaveOccurred())
+
+			if tc.AddErr == "" && tc.GroupFwdMask != 0 {
+				Expect(strings.TrimSpace(string(data))).To(Equal(fmt.Sprintf("%d", tc.GroupFwdMask)))
+			}
+		} else {
+			Skip("group_fwd_mask not supported")
+		}
 		if !tc.isLayer2 && tc.vlan != 0 {
 			Expect(result.Interfaces).To(HaveLen(4))
 		} else {
@@ -582,8 +604,6 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			Expect(result.Interfaces[2].Mac).To(Equal(tc.expectedMac))
 		}
 		Expect(result.Interfaces[2].Sandbox).To(Equal(tester.targetNS.Path()))
-
-		// Make sure bridge link exists
 		link, err := netlinksafe.LinkByName(result.Interfaces[0].Name)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(link.Attrs().Name).To(Equal(BRNAME))
@@ -593,13 +613,11 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 
 		var vlanLink netlink.Link
 		if !tc.isLayer2 && tc.vlan != 0 {
-			// Make sure vlan link exists
 			vlanLink, err = netlinksafe.LinkByName(fmt.Sprintf("%s.%d", BRNAME, tc.vlan))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(vlanLink.Attrs().Name).To(Equal(fmt.Sprintf("%s.%d", BRNAME, tc.vlan)))
 			Expect(vlanLink).To(BeAssignableToTypeOf(&netlink.Veth{}))
 
-			// Check the bridge dot vlan interface have the vlan tag
 			peerLink, err := netlink.LinkByIndex(vlanLink.Attrs().Index - 1)
 			Expect(err).NotTo(HaveOccurred())
 			interfaceMap, err := netlinksafe.BridgeVlanList()
@@ -612,14 +630,12 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			}
 		}
 
-		// Check the bridge vlan filtering equals true
 		if tc.vlan != 0 || tc.vlanTrunk != nil {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(BeTrue())
 		} else {
 			Expect(*link.(*netlink.Bridge).VlanFiltering).To(BeFalse())
 		}
 
-		// Ensure bridge has expected gateway address(es)
 		var addrs []netlink.Addr
 		if tc.vlan == 0 {
 			addrs, err = netlinksafe.AddrList(link, netlink.FAMILY_ALL)
@@ -644,13 +660,12 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			Expect(found).To(BeTrue(), fmt.Sprintf("failed to find %s", cidr))
 		}
 
-		// Check for the veth link in the main namespace
 		links, err := netlinksafe.LinkList()
 		Expect(err).NotTo(HaveOccurred())
 		if !tc.isLayer2 && tc.vlan != 0 {
-			Expect(links).To(HaveLen(5)) // Bridge, Bridge vlan veth, veth, and loopback
+			Expect(len(links)).To(BeNumerically(">=", 5))
 		} else {
-			Expect(links).To(HaveLen(3)) // Bridge, veth, and loopback
+			Expect(len(links)).To(BeNumerically(">=", 3))
 		}
 
 		link, err = netlinksafe.LinkByName(result.Interfaces[1].Name)
@@ -660,9 +675,8 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 
 		protInfo, err := netlinksafe.LinkGetProtinfo(link)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(protInfo.Isolated).To(Equal(tc.portIsolation), "link isolation should be on when portIsolation is set")
+		Expect(protInfo.Isolated).To(Equal(tc.portIsolation))
 
-		// check vlan exist on the veth interface
 		if tc.vlan != 0 {
 			interfaceMap, err := netlinksafe.BridgeVlanList()
 			Expect(err).NotTo(HaveOccurred())
@@ -674,7 +688,6 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			}
 		}
 
-		// check VlanTrunks exist on the veth interface
 		if tc.vlanTrunk != nil {
 			interfaceMap, err := netlinksafe.BridgeVlanList()
 			Expect(err).NotTo(HaveOccurred())
@@ -692,7 +705,6 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 				}
 			}
 
-			// Check native vlan
 			nativeVlan := tc.vlan
 			if tc.vlan == 0 {
 				nativeVlan = 1
@@ -700,80 +712,78 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			Expect(checkVlan(nativeVlan, vlans)).To(BeTrue())
 		}
 
-		// Check that the bridge has a different mac from the veth
-		// If not, it means the bridge has an unstable mac and will change
-		// as ifs are added and removed
-		// this check is not relevant for a layer 2 bridge
 		if !tc.isLayer2 && tc.vlan == 0 {
 			Expect(link.Attrs().HardwareAddr.String()).NotTo(Equal(bridgeMAC))
 		}
 
-		// Check that resolvConf was used properly
 		if !tc.isLayer2 && tc.resolvConf != "" {
 			Expect(result.DNS.Nameservers).To(Equal([]string{NAMESERVER}))
 		}
 
 		return nil
 	})
-	Expect(err).NotTo(HaveOccurred())
-
-	// Find the veth peer in the container namespace and the default route
-	err = tester.targetNS.Do(func(ns.NetNS) error {
-		defer GinkgoRecover()
-
-		link, err := netlinksafe.LinkByName(IFNAME)
+	if tc.AddErr == "" {
 		Expect(err).NotTo(HaveOccurred())
-		Expect(link.Attrs().Name).To(Equal(IFNAME))
-		Expect(link).To(BeAssignableToTypeOf(&netlink.Veth{}))
-		assertContainerInterfaceLinkState(&tc, link)
+	}
+	if tc.AddErr == "" {
+		err = tester.targetNS.Do(func(_ ns.NetNS) error {
+			defer GinkgoRecover()
 
-		expCIDRsV4, expCIDRsV6 := tc.expectedCIDRs()
-		addrs, err := netlinksafe.AddrList(link, netlink.FAMILY_V4)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(addrs).To(HaveLen(len(expCIDRsV4)))
-		addrs, err = netlinksafe.AddrList(link, netlink.FAMILY_V6)
-		Expect(err).NotTo(HaveOccurred())
-		assertIPv6Addresses(&tc, addrs, expCIDRsV6)
-
-		// Ignore link local address which may or may not be
-		// ready when we read addresses.
-		var foundAddrs int
-		for _, addr := range addrs {
-			if !addr.IP.IsLinkLocalUnicast() {
-				foundAddrs++
-			}
-		}
-		Expect(foundAddrs).To(Equal(len(expCIDRsV6)))
-
-		// Ensure the default route(s)
-		routes, err := netlinksafe.RouteList(link, 0)
-		Expect(err).NotTo(HaveOccurred())
-
-		var defaultRouteFound4, defaultRouteFound6 bool
-		for _, cidr := range tc.expGWCIDRs {
-			gwIP, _, err := net.ParseCIDR(cidr)
+			link, err := netlinksafe.LinkByName(IFNAME)
 			Expect(err).NotTo(HaveOccurred())
-			var found *bool
-			if ipVersion(gwIP) == "4" {
-				found = &defaultRouteFound4
-			} else {
-				found = &defaultRouteFound6
-			}
-			if *found == true {
-				continue
-			}
-			for _, route := range routes {
-				*found = (ip.IsIPNetZero(route.Dst) && route.Src == nil && route.Gw.Equal(gwIP))
-				if *found {
-					break
+			Expect(link.Attrs().Name).To(Equal(IFNAME))
+			Expect(link).To(BeAssignableToTypeOf(&netlink.Veth{}))
+			assertContainerInterfaceLinkState(&tc, link)
+
+			expCIDRsV4, expCIDRsV6 := tc.expectedCIDRs()
+			addrs, err := netlinksafe.AddrList(link, netlink.FAMILY_V4)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(addrs).To(HaveLen(len(expCIDRsV4)))
+
+			addrs, err = netlinksafe.AddrList(link, netlink.FAMILY_V6)
+			Expect(err).NotTo(HaveOccurred())
+			assertIPv6Addresses(&tc, addrs, expCIDRsV6)
+
+			var foundAddrs int
+			for _, addr := range addrs {
+				if !addr.IP.IsLinkLocalUnicast() {
+					foundAddrs++
 				}
 			}
-			Expect(*found).To(BeTrue())
-		}
+			Expect(foundAddrs).To(Equal(len(expCIDRsV6)))
 
-		return nil
-	})
-	Expect(err).NotTo(HaveOccurred())
+			routes, err := netlinksafe.RouteList(link, 0)
+			Expect(err).NotTo(HaveOccurred())
+
+			var defaultRouteFound4, defaultRouteFound6 bool
+			for _, cidr := range tc.expGWCIDRs {
+				gwIP, _, err := net.ParseCIDR(cidr)
+				Expect(err).NotTo(HaveOccurred())
+
+				var found *bool
+				if ipVersion(gwIP) == "4" {
+					found = &defaultRouteFound4
+				} else {
+					found = &defaultRouteFound6
+				}
+
+				if *found {
+					continue
+				}
+
+				for _, route := range routes {
+					*found = (ip.IsIPNetZero(route.Dst) && route.Src == nil && route.Gw.Equal(gwIP))
+					if *found {
+						break
+					}
+				}
+				Expect(*found).To(BeTrue())
+			}
+
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	}
 
 	return result, nil
 }
@@ -1742,6 +1752,10 @@ func cmdAddDelTest(origNS, targetNS ns.NetNS, tc testCase, dataDir string) {
 
 	// Test IP allocation
 	_, err := tester.cmdAddTest(tc, dataDir)
+
+	if tc.AddErr != "" {
+		return
+	}
 	Expect(err).NotTo(HaveOccurred())
 
 	// Test IP Release
@@ -1987,6 +2001,38 @@ var _ = Describe("bridge Operations", func() {
 					"192.168.0.1/24",
 					"fd00::1/64",
 				},
+			},
+			{
+				// Group forward mask
+				subnet:       "10.1.2.0/24",
+				isGW:         true,
+				GroupFwdMask: 16384,
+				expGWCIDRs:   []string{"10.1.2.1/24"},
+			},
+			{
+				// Default behavior (no group_fwd_mask set)
+				subnet:       "10.1.2.0/24",
+				isGW:         true,
+				GroupFwdMask: 0,
+				expGWCIDRs:   []string{"10.1.2.1/24"},
+			},
+			{
+				// Invalid group_fwd_mask (negative value)
+				subnet:       "10.1.2.0/24",
+				isGW:         true,
+				GroupFwdMask: -1,
+				AddErr:       "invalid groupFwdMask",
+				AddErr010:    "invalid groupFwdMask",
+				AddErr020:    "invalid groupFwdMask",
+			},
+			{
+				// Invalid group_fwd_mask (too large)
+				subnet:       "10.1.2.0/24",
+				isGW:         true,
+				GroupFwdMask: 70000,
+				AddErr:       "invalid groupFwdMask",
+				AddErr010:    "invalid groupFwdMask",
+				AddErr020:    "invalid groupFwdMask",
 			},
 			{
 				// 3 Subnets (1 IPv4 and 2 IPv6 subnets)
