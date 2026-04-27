@@ -3,7 +3,7 @@ module github.com/containernetworking/plugins
 go 1.25.0
 
 require (
-	github.com/Microsoft/hcsshim v0.14.0
+	github.com/Microsoft/hcsshim v0.14.1
 	github.com/alexflint/go-filemutex v1.3.0
 	github.com/buger/jsonparser v1.1.2
 	github.com/containernetworking/cni v1.3.0
@@ -11,16 +11,16 @@ require (
 	github.com/coreos/go-systemd/v22 v22.7.0
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/insomniacslk/dhcp v0.0.0-20240829085014-a3a4c1f04475
-	github.com/mattn/go-shellwords v1.0.12
+	github.com/mattn/go-shellwords v1.0.13
 	github.com/networkplumbing/go-nft v0.4.0
-	github.com/onsi/ginkgo/v2 v2.28.1
+	github.com/onsi/ginkgo/v2 v2.28.2
 	github.com/onsi/gomega v1.39.1
 	github.com/opencontainers/selinux v1.13.1
 	github.com/pkg/errors v0.9.1
 	github.com/safchain/ethtool v0.7.0
 	github.com/vishvananda/netlink v1.3.1
 	github.com/vishvananda/netns v0.0.5
-	golang.org/x/sys v0.42.0
+	golang.org/x/sys v0.43.0
 	sigs.k8s.io/knftables v0.0.21
 )
 
