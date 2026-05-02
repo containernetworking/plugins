@@ -236,7 +236,7 @@ func (tc testCase) netConfJSON(dataDir string) string {
 			conf += preserveDefaultVlan
 		}
 	}
-	if tc.GroupFwdMask != 0 {
+	if tc.GroupFwdMask != 0 || strings.Contains(tc.AddErr, "groupFwdMask") {
 		conf += fmt.Sprintf(`,
     "groupFwdMask": %d`, tc.GroupFwdMask)
 	}
@@ -365,7 +365,7 @@ var counter uint
 // arguments for a test case.
 func (tc testCase) createCmdArgs(targetNS ns.NetNS, dataDir string) *skel.CmdArgs {
 	conf := tc.netConfJSON(dataDir)
-	// defer func() { counter += 1 }()
+	defer func() { counter += 1 }()
 	return &skel.CmdArgs{
 		ContainerID: fmt.Sprintf("dummy-%d", counter),
 		Netns:       targetNS.Path(),
@@ -919,6 +919,12 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		r, raw, err := testutils.CmdAddWithArgs(tester.args, func() error {
 			return cmdAdd(tester.args)
 		})
+
+		if tc.AddErr != "" {
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(tc.AddErr))
+			return err
+		}
 		Expect(err).NotTo(HaveOccurred())
 		Expect(strings.Index(string(raw), "\"interfaces\":")).Should(BeNumerically(">", 0))
 
@@ -1260,6 +1266,11 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		r, raw, err := testutils.CmdAddWithArgs(tester.args, func() error {
 			return cmdAdd(tester.args)
 		})
+		if tc.AddErr != "" {
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(tc.AddErr))
+			return err
+		}
 		Expect(err).NotTo(HaveOccurred())
 		Expect(strings.Index(string(raw), "\"interfaces\":")).Should(BeNumerically(">", 0))
 
@@ -1409,7 +1420,9 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 
 		return nil
 	})
-	Expect(err).NotTo(HaveOccurred())
+	if tc.AddErr == "" {
+		Expect(err).NotTo(HaveOccurred())
+	}
 
 	// Find the veth peer in the container namespace and the default route
 	err = tester.targetNS.Do(func(ns.NetNS) error {
@@ -1471,11 +1484,12 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 func (tester *testerV03x) cmdCheckTest(_ testCase, _ *Net, _ string) {
 }
 
-func (tester *testerV03x) cmdDelTest(_ testCase, _ string) {
+func (tester *testerV03x) cmdDelTest(tc testCase, _ string) {
 	err := tester.testNS.Do(func(ns.NetNS) error {
 		defer GinkgoRecover()
 
 		err := testutils.CmdDelWithArgs(tester.args, func() error {
+			tester.args = tc.createCmdArgs(tester.targetNS, "")
 			return cmdDel(tester.args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -1632,13 +1646,14 @@ func (tester *testerV01xOr02x) cmdAddTest(tc testCase, dataDir string) (types.Re
 		return nil
 	})
 	if expect020AddError(tc) {
-		Expect(err).To(MatchError(tc.AddErr020))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(tc.AddErr020))
 		return nil, nil
 	} else if expect010AddError(tc) {
-		Expect(err).To(MatchError(tc.AddErr010))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(tc.AddErr010))
 		return nil, nil
 	}
-	Expect(err).NotTo(HaveOccurred())
 
 	// Find the veth peer in the container namespace and the default route
 	err = tester.targetNS.Do(func(ns.NetNS) error {
@@ -1753,7 +1768,7 @@ func cmdAddDelTest(origNS, targetNS ns.NetNS, tc testCase, dataDir string) {
 	// Test IP allocation
 	_, err := tester.cmdAddTest(tc, dataDir)
 
-	if tc.AddErr != "" {
+	if tc.AddErr != "" || tc.AddErr010 != "" || tc.AddErr020 != "" {
 		return
 	}
 	Expect(err).NotTo(HaveOccurred())
@@ -1945,6 +1960,32 @@ var _ = Describe("bridge Operations", func() {
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It(fmt.Sprintf("[%s] fails for invalid groupFwdMask", ver), func() {
+
+			invalidTests := []testCase{
+				{
+					cniVersion:   ver,
+					subnet:       "10.1.2.0/24",
+					isGW:         true,
+					GroupFwdMask: -1,
+					AddErr:       "invalid groupFwdMask",
+				},
+				{
+					cniVersion:   ver,
+					subnet:       "10.1.2.0/24",
+					isGW:         true,
+					GroupFwdMask: 70000,
+					AddErr:       "invalid groupFwdMask",
+				},
+			}
+
+			for _, tc := range invalidTests {
+				tc := tc
+
+				cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+			}
 		})
 
 		It(fmt.Sprintf("[%s] handles an existing bridge", ver), func() {
@@ -2190,6 +2231,7 @@ var _ = Describe("bridge Operations", func() {
 			})
 			It(fmt.Sprintf("[%s] (%d) configures and deconfigures a bridge, veth with default route and vlanID 100 and no default vlan with ADD/DEL", ver, i), func() {
 				tc.cniVersion = ver
+				tc.GroupFwdMask = 0
 				tc.removeDefaultVlan = true
 				cmdAddDelTest(originalNS, targetNS, tc, dataDir)
 			})
