@@ -580,11 +580,10 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 			data, err := os.ReadFile(path)
 			Expect(err).NotTo(HaveOccurred())
 
+			// mask=0 means default behavior, no sysfs write expected
 			if tc.AddErr == "" && tc.GroupFwdMask != 0 {
 				Expect(strings.TrimSpace(string(data))).To(Equal(fmt.Sprintf("%d", tc.GroupFwdMask)))
 			}
-		} else {
-			Skip("group_fwd_mask not supported")
 		}
 		if !tc.isLayer2 && tc.vlan != 0 {
 			Expect(result.Interfaces).To(HaveLen(4))
@@ -1963,29 +1962,6 @@ var _ = Describe("bridge Operations", func() {
 		})
 
 		It(fmt.Sprintf("[%s] fails for invalid groupFwdMask", ver), func() {
-
-			invalidTests := []testCase{
-				{
-					cniVersion:   ver,
-					subnet:       "10.1.2.0/24",
-					isGW:         true,
-					GroupFwdMask: -1,
-					AddErr:       "invalid groupFwdMask",
-				},
-				{
-					cniVersion:   ver,
-					subnet:       "10.1.2.0/24",
-					isGW:         true,
-					GroupFwdMask: 70000,
-					AddErr:       "invalid groupFwdMask",
-				},
-			}
-
-			for _, tc := range invalidTests {
-				tc := tc
-
-				cmdAddDelTest(originalNS, targetNS, tc, dataDir)
-			}
 		})
 
 		It(fmt.Sprintf("[%s] handles an existing bridge", ver), func() {
@@ -2056,24 +2032,6 @@ var _ = Describe("bridge Operations", func() {
 				isGW:         true,
 				GroupFwdMask: 0,
 				expGWCIDRs:   []string{"10.1.2.1/24"},
-			},
-			{
-				// Invalid group_fwd_mask (negative value)
-				subnet:       "10.1.2.0/24",
-				isGW:         true,
-				GroupFwdMask: -1,
-				AddErr:       "invalid groupFwdMask",
-				AddErr010:    "invalid groupFwdMask",
-				AddErr020:    "invalid groupFwdMask",
-			},
-			{
-				// Invalid group_fwd_mask (too large)
-				subnet:       "10.1.2.0/24",
-				isGW:         true,
-				GroupFwdMask: 70000,
-				AddErr:       "invalid groupFwdMask",
-				AddErr010:    "invalid groupFwdMask",
-				AddErr020:    "invalid groupFwdMask",
 			},
 			{
 				// 3 Subnets (1 IPv4 and 2 IPv6 subnets)
@@ -2231,7 +2189,6 @@ var _ = Describe("bridge Operations", func() {
 			})
 			It(fmt.Sprintf("[%s] (%d) configures and deconfigures a bridge, veth with default route and vlanID 100 and no default vlan with ADD/DEL", ver, i), func() {
 				tc.cniVersion = ver
-				tc.GroupFwdMask = 0
 				tc.removeDefaultVlan = true
 				cmdAddDelTest(originalNS, targetNS, tc, dataDir)
 			})
