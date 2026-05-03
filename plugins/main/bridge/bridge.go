@@ -780,13 +780,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	brInterface.Mac = br.Attrs().HardwareAddr.String()
 
-	// Apply group_fwd_mask after full bridge setup
-	if n.GroupFwdMask != 0 {
-		if err := setGroupFwdMask(n.BrName, n.GroupFwdMask); err != nil {
-			return err
-		}
-	}
-
 	// Return an error requested by testcases, if any
 	if debugPostIPAMError != nil {
 		return debugPostIPAMError
@@ -799,6 +792,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	success = true
+
+	// Apply group_fwd_mask only after full success to avoid interfering with setup
+	if n.GroupFwdMask != 0 && !n.MacSpoofChk {
+		if err := setGroupFwdMask(n.BrName, n.GroupFwdMask); err != nil {
+			return err
+		}
+	}
 
 	return types.PrintResult(result, cniVersion)
 }
