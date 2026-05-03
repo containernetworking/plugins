@@ -553,9 +553,6 @@ func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create bridge %q: %v", n.BrName, err)
 	}
-	if err := setGroupFwdMask(n.BrName, n.GroupFwdMask); err != nil {
-		return nil, nil, fmt.Errorf("failed to set group_fwd_mask: %w", err)
-	}
 
 	return br, &current.Interface{
 		Name: br.Attrs().Name,
@@ -606,6 +603,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan, n.vlans, n.PreserveDefaultVlan, n.mac, n.PortIsolation)
 	if err != nil {
 		return err
+	}
+	if n.GroupFwdMask != 0 {
+		if err := setGroupFwdMask(n.BrName, n.GroupFwdMask); err != nil {
+			return err
+		}
 	}
 
 	// Assume L2 interface only
