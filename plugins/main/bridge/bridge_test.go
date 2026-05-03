@@ -365,7 +365,7 @@ var counter uint
 // arguments for a test case.
 func (tc testCase) createCmdArgs(targetNS ns.NetNS, dataDir string) *skel.CmdArgs {
 	conf := tc.netConfJSON(dataDir)
-	defer func() { counter += 1 }()
+	defer func() { counter++ }()
 	return &skel.CmdArgs{
 		ContainerID: fmt.Sprintf("dummy-%d", counter),
 		Netns:       targetNS.Path(),
@@ -382,7 +382,7 @@ func (tc testCase) createCheckCmdArgs(targetNS ns.NetNS, config *Net) *skel.CmdA
 	Expect(err).NotTo(HaveOccurred())
 
 	// TODO Don't we need to use the same counter as before?
-	// defer func() { counter += 1 }()
+	// defer func() { counter ++}()
 	return &skel.CmdArgs{
 		ContainerID: fmt.Sprintf("dummy-%d", counter),
 		Netns:       targetNS.Path(),
