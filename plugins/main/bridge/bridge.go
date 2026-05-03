@@ -604,11 +604,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
-	if n.GroupFwdMask != 0 {
-		if err := setGroupFwdMask(n.BrName, n.GroupFwdMask); err != nil {
-			return err
-		}
-	}
 
 	// Assume L2 interface only
 	result := &current.Result{
@@ -784,6 +779,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 	brInterface.Mac = br.Attrs().HardwareAddr.String()
+
+	// Apply group_fwd_mask after full bridge setup
+	if n.GroupFwdMask != 0 {
+		if err := setGroupFwdMask(n.BrName, n.GroupFwdMask); err != nil {
+			return err
+		}
+	}
 
 	// Return an error requested by testcases, if any
 	if debugPostIPAMError != nil {
