@@ -594,6 +594,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	// Apply group_fwd_mask early, before veth and rules setup
+	// to avoid interfering with bridge filtering behavior
+	if n.GroupFwdMask != 0 {
+		if err := setGroupFwdMask(n.BrName, n.GroupFwdMask); err != nil {
+			return err
+		}
+	}
+
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
@@ -792,13 +800,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	success = true
-
-	// Apply group_fwd_mask only after full success to avoid interfering with setup
-	if n.GroupFwdMask != 0 && !n.MacSpoofChk {
-		if err := setGroupFwdMask(n.BrName, n.GroupFwdMask); err != nil {
-			return err
-		}
-	}
 
 	return types.PrintResult(result, cniVersion)
 }
