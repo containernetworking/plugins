@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"syscall"
 	"time"
 
@@ -364,7 +365,7 @@ func bridgeByName(name string) (*netlink.Bridge, error) {
 	return br, nil
 }
 
-func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*netlink.Bridge, error) {
+func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool, groupFwdMask int) (*netlink.Bridge, error) {
 	linkAttrs := netlink.NewLinkAttrs()
 	linkAttrs.Name = brName
 	linkAttrs.MTU = mtu
@@ -375,9 +376,16 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 		br.VlanFiltering = &vlanFiltering
 	}
 
+	// Track whether the bridge was newly created
+	created := false
+
 	err := netlink.LinkAdd(br)
-	if err != nil && err != syscall.EEXIST {
-		return nil, fmt.Errorf("could not add %q: %v", brName, err)
+	if err != nil {
+		if err != syscall.EEXIST {
+			return nil, fmt.Errorf("could not add %q: %v", brName, err)
+		}
+	} else {
+		created = true
 	}
 
 	if promiscMode {
@@ -391,6 +399,23 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 	br, err = bridgeByName(brName)
 	if err != nil {
 		return nil, err
+	}
+
+	// Validate group_fwd_mask if bridge already existed
+	if !created && groupFwdMask != 0 {
+		path := getGroupFwdMaskPath(brName)
+		data, err := os.ReadFile(path)
+		if err == nil {
+			current := strings.TrimSpace(string(data))
+			expected := fmt.Sprintf("%d", groupFwdMask)
+
+			if current != expected && current != fmt.Sprintf("0x%x", groupFwdMask) {
+				return nil, fmt.Errorf(
+					"bridge %q already exists with different group_fwd_mask (current=%s, requested=%s)",
+					brName, current, expected,
+				)
+			}
+		}
 	}
 
 	// we want to own the routes for this interface
@@ -549,7 +574,7 @@ func calcGatewayIP(ipn *net.IPNet) net.IP {
 func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
 	vlanFiltering := n.Vlan != 0 || n.VlanTrunk != nil
 	// create bridge if necessary
-	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, vlanFiltering)
+	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, vlanFiltering, n.GroupFwdMask)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create bridge %q: %v", n.BrName, err)
 	}
@@ -594,14 +619,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	// Apply group_fwd_mask early, before veth and rules setup
-	// to avoid interfering with bridge filtering behavior
-	if n.GroupFwdMask != 0 {
-		if err := setGroupFwdMask(n.BrName, n.GroupFwdMask); err != nil {
-			return err
-		}
-	}
-
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
@@ -613,6 +630,34 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	// Apply group_fwd_mask after bridge ports are attached
+	if n.GroupFwdMask != 0 {
+		path := getGroupFwdMaskPath(n.BrName)
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// ignore if not supported
+			} else {
+				return fmt.Errorf("failed to read group_fwd_mask: %w", err)
+			}
+		} else {
+			current := strings.TrimSpace(string(data))
+			expected := fmt.Sprintf("%d", n.GroupFwdMask)
+
+			// Only set if current is 0 (i.e., default/uninitialized)
+			if current == "0" || current == "" {
+				if err := setGroupFwdMask(n.BrName, n.GroupFwdMask); err != nil {
+					return fmt.Errorf("failed to set group_fwd_mask: %w", err)
+				}
+			} else if current != expected && current != fmt.Sprintf("0x%x", n.GroupFwdMask) {
+				return fmt.Errorf(
+					"bridge %q already exists with different group_fwd_mask (current=%s, requested=%s)",
+					n.BrName, current, expected,
+				)
+			}
+		}
+	}
 	// Assume L2 interface only
 	result := &current.Result{
 		CNIVersion: current.ImplementedSpecVersion,

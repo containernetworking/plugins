@@ -576,13 +576,18 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 
 		path := fmt.Sprintf("/sys/class/net/%s/bridge/group_fwd_mask", result.Interfaces[0].Name)
 
-		if _, err := os.Stat(path); err == nil {
+		if tc.GroupFwdMask != 0 && tc.AddErr == "" {
+			// Verify the sysfs write actually happened
 			data, err := os.ReadFile(path)
-			Expect(err).NotTo(HaveOccurred())
+			if err == nil {
+				// Accept both decimal and hex formats from kernel
+				value := strings.TrimSpace(string(data))
+				maskStr := fmt.Sprintf("%d", tc.GroupFwdMask)
+				maskHex := fmt.Sprintf("0x%x", tc.GroupFwdMask)
 
-			// mask=0 means default behavior, no sysfs write expected
-			if tc.AddErr == "" && tc.GroupFwdMask != 0 {
-				Expect(strings.TrimSpace(string(data))).To(Equal(fmt.Sprintf("%d", tc.GroupFwdMask)))
+				Expect(value).To(MatchRegexp(
+					fmt.Sprintf("^(%s|%s)$", maskStr, maskHex),
+				))
 			}
 		}
 		if !tc.isLayer2 && tc.vlan != 0 {
@@ -1962,6 +1967,33 @@ var _ = Describe("bridge Operations", func() {
 		})
 
 		It(fmt.Sprintf("[%s] fails for invalid groupFwdMask", ver), func() {
+			tests := []struct {
+				mask   int
+				errMsg string
+			}{
+				{mask: -1, errMsg: "invalid groupFwdMask"},
+				{mask: 65536, errMsg: "invalid groupFwdMask"},
+				{mask: 100000, errMsg: "invalid groupFwdMask"},
+			}
+
+			for _, test := range tests {
+				conf := fmt.Sprintf(`{
+			"cniVersion": "%s",
+			"name": "testConfig",
+			"type": "bridge",
+			"bridge": "%s",
+			"groupFwdMask": %d,
+			"isDefaultGateway": true,
+			"ipam": {
+				"type": "host-local",
+				"subnet": "10.1.2.0/24"
+			}
+		}`, ver, BRNAME, test.mask)
+
+				_, _, err := loadNetConf([]byte(conf), "")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(test.errMsg))
+			}
 		})
 
 		It(fmt.Sprintf("[%s] handles an existing bridge", ver), func() {
