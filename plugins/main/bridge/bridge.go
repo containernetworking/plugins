@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -44,32 +43,6 @@ import (
 
 func getGroupFwdMaskPath(brName string) string {
 	return fmt.Sprintf("/sys/class/net/%s/bridge/group_fwd_mask", brName)
-}
-
-func setGroupFwdMask(brName string, mask int) error {
-	if mask < 0 || mask > 65535 {
-		return fmt.Errorf("invalid groupFwdMask %d", mask)
-	}
-
-	if mask == 0 {
-		return nil
-	}
-
-	safeName := filepath.Base(brName)
-
-	if safeName == "." || safeName == ".." || safeName == "" {
-		return fmt.Errorf("invalid bridge name %q", brName)
-	}
-
-	path := getGroupFwdMaskPath(safeName)
-
-	if err := os.WriteFile(path, []byte(fmt.Sprintf("%d", mask)), 0o644); err != nil {
-		if os.IsNotExist(err) {
-			return nil // ignore if not supported
-		}
-		return err
-	}
-	return nil
 }
 
 // For testcases to force an error after IPAM has been performed
@@ -423,11 +396,6 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool, group
 
 	if err := netlink.LinkSetUp(br); err != nil {
 		return nil, err
-	}
-
-	// Apply group_fwd_mask only when the bridge is newly created
-	if created && groupFwdMask != 0 {
-		_ = setGroupFwdMask(brName, groupFwdMask)
 	}
 
 	return br, nil

@@ -236,9 +236,9 @@ func (tc testCase) netConfJSON(dataDir string) string {
 			conf += preserveDefaultVlan
 		}
 	}
-	if tc.GroupFwdMask != 0 || strings.Contains(tc.AddErr, "groupFwdMask") {
+	if tc.GroupFwdMask != 0 {
 		conf += fmt.Sprintf(`,
-    "groupFwdMask": %d`, tc.GroupFwdMask)
+		"groupFwdMask": %d`, tc.GroupFwdMask)
 	}
 
 	if tc.isLayer2 && tc.vlanTrunk != nil {
@@ -573,23 +573,6 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		resultType, err := r.GetAsVersion(tc.cniVersion)
 		Expect(err).NotTo(HaveOccurred())
 		result = resultType.(*types100.Result)
-
-		path := fmt.Sprintf("/sys/class/net/%s/bridge/group_fwd_mask", result.Interfaces[0].Name)
-
-		if tc.GroupFwdMask != 0 && tc.AddErr == "" {
-			// Verify the sysfs write actually happened
-			data, err := os.ReadFile(path)
-			if err == nil {
-				// Accept both decimal and hex formats from kernel
-				value := strings.TrimSpace(string(data))
-				maskStr := fmt.Sprintf("%d", tc.GroupFwdMask)
-				maskHex := fmt.Sprintf("0x%x", tc.GroupFwdMask)
-
-				Expect(value).To(MatchRegexp(
-					fmt.Sprintf("^(%s|%s)$", maskStr, maskHex),
-				))
-			}
-		}
 		if !tc.isLayer2 && tc.vlan != 0 {
 			Expect(result.Interfaces).To(HaveLen(4))
 		} else {
