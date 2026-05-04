@@ -425,6 +425,11 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool, group
 		return nil, err
 	}
 
+	// Apply group_fwd_mask only when the bridge is newly created
+	if created && groupFwdMask != 0 {
+		_ = setGroupFwdMask(brName, groupFwdMask)
+	}
+
 	return br, nil
 }
 
@@ -630,34 +635,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	// Apply group_fwd_mask after bridge ports are attached
-	if n.GroupFwdMask != 0 {
-		path := getGroupFwdMaskPath(n.BrName)
-
-		data, err := os.ReadFile(path)
-		if err != nil {
-			if os.IsNotExist(err) {
-				// ignore if not supported
-			} else {
-				return fmt.Errorf("failed to read group_fwd_mask: %w", err)
-			}
-		} else {
-			current := strings.TrimSpace(string(data))
-			expected := fmt.Sprintf("%d", n.GroupFwdMask)
-
-			// Only set if current is 0 (i.e., default/uninitialized)
-			if current == "0" || current == "" {
-				if err := setGroupFwdMask(n.BrName, n.GroupFwdMask); err != nil {
-					return fmt.Errorf("failed to set group_fwd_mask: %w", err)
-				}
-			} else if current != expected && current != fmt.Sprintf("0x%x", n.GroupFwdMask) {
-				return fmt.Errorf(
-					"bridge %q already exists with different group_fwd_mask (current=%s, requested=%s)",
-					n.BrName, current, expected,
-				)
-			}
-		}
-	}
 	// Assume L2 interface only
 	result := &current.Result{
 		CNIVersion: current.ImplementedSpecVersion,
