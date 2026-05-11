@@ -1350,6 +1350,265 @@ var _ = Describe("base functionality", func() {
 	}
 })
 
+var _ = Describe("host-device l3Config", func() {
+	var (
+		originalNS ns.NetNS
+		targetNS   ns.NetNS
+	)
+
+	BeforeEach(func() {
+		var err error
+		originalNS, err = testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+		targetNS, err = testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		Expect(originalNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
+		Expect(targetNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(targetNS)).To(Succeed())
+	})
+
+	It("copies and restores host L3 config across ADD/DEL", func() {
+		const (
+			hostIfName      = "hdl3dummy0"
+			containerIfName = "net1"
+			testAddr        = "10.20.0.2/24"
+			testRouteCIDR   = "10.30.0.0/16"
+			testRuleCIDR    = "10.20.0.0/24"
+			testTable       = 100
+			testPriority    = 30000
+		)
+		var createdLink netlink.Link
+
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			attrs := netlink.NewLinkAttrs()
+			attrs.Name = hostIfName
+			err := netlink.LinkAdd(&netlink.Dummy{LinkAttrs: attrs})
+			Expect(err).NotTo(HaveOccurred())
+			createdLink, err = netlinksafe.LinkByName(hostIfName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(netlink.LinkSetUp(createdLink)).To(Succeed())
+
+			addr, err := netlink.ParseAddr(testAddr)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(netlink.AddrAdd(createdLink, addr)).To(Succeed())
+
+			_, routeDst, err := net.ParseCIDR(testRouteCIDR)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(netlink.RouteAdd(&netlink.Route{
+				LinkIndex: createdLink.Attrs().Index,
+				Dst:       routeDst,
+				Scope:     netlink.SCOPE_LINK,
+				Table:     testTable,
+			})).To(Succeed())
+
+			_, ruleSrc, err := net.ParseCIDR(testRuleCIDR)
+			Expect(err).NotTo(HaveOccurred())
+			rule := netlink.NewRule()
+			rule.Priority = testPriority
+			rule.Table = testTable
+			rule.Src = ruleSrc
+			Expect(netlink.RuleAdd(rule)).To(Succeed())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		conf := fmt.Sprintf(`{
+			"cniVersion": "1.0.0",
+			"name": "cni-plugin-host-device-l3-test",
+			"type": "host-device",
+			"device": %q,
+			"useInterfaceNetwork": true
+		}`, hostIfName)
+		args := &skel.CmdArgs{
+			ContainerID: "dummy-l3",
+			Netns:       targetNS.Path(),
+			IfName:      containerIfName,
+			StdinData:   []byte(conf),
+		}
+
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			_, _, err := testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		err = targetNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			link, err := netlinksafe.LinkByName(containerIfName)
+			Expect(err).NotTo(HaveOccurred())
+
+			addrs, err := netlinksafe.AddrList(link, netlink.FAMILY_V4)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(containsAddr(addrs, testAddr)).To(BeTrue())
+
+			routes, err := netlinksafe.RouteListFiltered(netlink.FAMILY_ALL, &netlink.Route{LinkIndex: link.Attrs().Index, Table: 0}, netlink.RT_FILTER_OIF|netlink.RT_FILTER_TABLE)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(containsRoute(routes, testRouteCIDR, testTable)).To(BeTrue())
+
+			rules, err := netlinksafe.RuleList(netlink.FAMILY_ALL)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(containsRule(rules, testRuleCIDR, testTable, testPriority)).To(BeTrue())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			Expect(testutils.CmdDelWithArgs(args, func() error { return cmdDel(args) })).To(Succeed())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			_, err := netlinksafe.LinkByName(hostIfName)
+			Expect(err).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("returns an error when l3 copy is enabled for dpdk mode", func() {
+		fs := &fakeFilesystem{
+			dirs: []string{
+				"sys/bus/pci/devices/0000:00:00.1",
+				"sys/bus/pci/drivers/vfio-pci",
+			},
+			symlinks: map[string]string{
+				"sys/bus/pci/devices/0000:00:00.1/driver": "../../../../bus/pci/drivers/vfio-pci",
+			},
+		}
+		defer fs.use()()
+
+		conf := `{
+			"cniVersion": "1.0.0",
+			"name": "cni-plugin-host-device-l3-test-dpdk",
+			"type": "host-device",
+			"pciBusID": "0000:00:00.1",
+			"useInterfaceNetwork": true
+		}`
+		args := &skel.CmdArgs{
+			ContainerID: "dummy-l3-dpdk",
+			Netns:       targetNS.Path(),
+			IfName:      "net1",
+			StdinData:   []byte(conf),
+		}
+		_, _, err := testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not supported for dpdk-bound devices"))
+	})
+
+	It("copies and restores host l3 when useInterfaceNetwork is enabled", func() {
+		const (
+			hostIfName      = "hdl3dummy1"
+			containerIfName = "net1"
+			testAddr        = "10.40.0.2/24"
+		)
+		var createdLink netlink.Link
+
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			attrs := netlink.NewLinkAttrs()
+			attrs.Name = hostIfName
+			Expect(netlink.LinkAdd(&netlink.Dummy{LinkAttrs: attrs})).To(Succeed())
+			var lookupErr error
+			createdLink, lookupErr = netlinksafe.LinkByName(hostIfName)
+			Expect(lookupErr).NotTo(HaveOccurred())
+			Expect(netlink.LinkSetUp(createdLink)).To(Succeed())
+			addr, parseErr := netlink.ParseAddr(testAddr)
+			Expect(parseErr).NotTo(HaveOccurred())
+			Expect(netlink.AddrAdd(createdLink, addr)).To(Succeed())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		conf := fmt.Sprintf(`{
+			"cniVersion": "1.0.0",
+			"name": "cni-plugin-host-device-l3-test-enable",
+			"type": "host-device",
+			"device": %q,
+			"useInterfaceNetwork": true
+		}`, hostIfName)
+		args := &skel.CmdArgs{
+			ContainerID: "dummy-l3-copyoff",
+			Netns:       targetNS.Path(),
+			IfName:      containerIfName,
+			StdinData:   []byte(conf),
+		}
+
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			_, _, cmdErr := testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+			Expect(cmdErr).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		err = targetNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			link, linkErr := netlinksafe.LinkByName(containerIfName)
+			Expect(linkErr).NotTo(HaveOccurred())
+			addrs, addrErr := netlinksafe.AddrList(link, netlink.FAMILY_V4)
+			Expect(addrErr).NotTo(HaveOccurred())
+			Expect(containsAddr(addrs, testAddr)).To(BeTrue())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		err = originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+			Expect(testutils.CmdDelWithArgs(args, func() error { return cmdDel(args) })).To(Succeed())
+			_, linkErr := netlinksafe.LinkByName(hostIfName)
+			Expect(linkErr).NotTo(HaveOccurred())
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+})
+
+// containsAddr reports whether address list contains expected CIDR.
+func containsAddr(addrs []netlink.Addr, expectedCIDR string) bool {
+	for _, addr := range addrs {
+		if addr.IPNet != nil && addr.IPNet.String() == expectedCIDR {
+			return true
+		}
+	}
+	return false
+}
+
+// containsRoute reports whether routes contain destination/table.
+func containsRoute(routes []netlink.Route, destinationCIDR string, table int) bool {
+	for _, route := range routes {
+		if route.Dst == nil {
+			continue
+		}
+		if route.Dst.String() == destinationCIDR && route.Table == table {
+			return true
+		}
+	}
+	return false
+}
+
+// containsRule reports whether rule list includes source/table/priority.
+func containsRule(rules []netlink.Rule, sourceCIDR string, table int, priority int) bool {
+	for _, rule := range rules {
+		if rule.Table != table || rule.Priority != priority {
+			continue
+		}
+		if rule.Src != nil && rule.Src.String() == sourceCIDR {
+			return true
+		}
+	}
+	return false
+}
+
 type fakeFilesystem struct {
 	rootDir  string
 	dirs     []string
@@ -1357,6 +1616,9 @@ type fakeFilesystem struct {
 }
 
 func (fs *fakeFilesystem) use() func() {
+	originalSysBusPCI := sysBusPCI
+	originalSysBusAuxiliary := sysBusAuxiliary
+
 	// create the new fake fs root dir in /tmp/sriov...
 	tmpDir, err := os.MkdirTemp("", "sriov")
 	if err != nil {
@@ -1382,6 +1644,8 @@ func (fs *fakeFilesystem) use() func() {
 	sysBusAuxiliary = path.Join(fs.rootDir, "/sys/bus/auxiliary/devices")
 
 	return func() {
+		sysBusPCI = originalSysBusPCI
+		sysBusAuxiliary = originalSysBusAuxiliary
 		// remove temporary fake fs
 		err := os.RemoveAll(fs.rootDir)
 		if err != nil {
