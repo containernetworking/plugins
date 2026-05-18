@@ -99,7 +99,6 @@ var _ = Describe("static Operations", func() {
 			))
 			Expect(result.IPs).To(HaveLen(2))
 
-			// Result must preserve both default gateways in order to prove static IPAM keeps ECMP routes.
 			Expect(result.Routes).To(Equal([]*types.Route{
 				{Dst: mustCIDR("0.0.0.0/0")},
 				{Dst: mustCIDR("192.168.0.0/16"), GW: net.ParseIP("10.10.5.1")},
@@ -150,6 +149,7 @@ var _ = Describe("static Operations", func() {
 			result, err := types100.GetResult(r)
 			Expect(err).NotTo(HaveOccurred())
 
+			// Result must preserve both default gateways in order to prove static IPAM keeps ECMP routes.
 			Expect(result.Routes).To(Equal([]*types.Route{
 				{Dst: mustCIDR("0.0.0.0/0"), GW: net.ParseIP("10.10.0.254")},
 				{Dst: mustCIDR("0.0.0.0/0"), GW: net.ParseIP("10.10.0.253")},
