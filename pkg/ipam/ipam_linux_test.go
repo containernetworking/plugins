@@ -345,6 +345,70 @@ var _ = Describe("ConfigureIface", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
+	It("configures ECMP routes for IPv4", func() {
+		ecmpGWv4 := net.ParseIP("1.2.3.6")
+		result.Routes = append(result.Routes, &types.Route{
+			Dst: *routev4,
+			GW:  ecmpGWv4,
+		})
+
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			err := ConfigureIface(LINK_NAME, result)
+			Expect(err).NotTo(HaveOccurred())
+
+			routes, err := netlinksafe.RouteListFiltered(netlink.FAMILY_V4, &netlink.Route{
+				Dst: routev4,
+			}, netlink.RT_FILTER_DST)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(routes).To(HaveLen(1))
+			Expect(routes[0].MultiPath).To(HaveLen(2))
+
+			gws := []string{
+				routes[0].MultiPath[0].Gw.String(),
+				routes[0].MultiPath[1].Gw.String(),
+			}
+			Expect(gws).To(ContainElement(routegwv4.String()))
+			Expect(gws).To(ContainElement(ecmpGWv4.String()))
+
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("configures ECMP routes for IPv6", func() {
+		ecmpGWv6 := net.ParseIP("abcd:1234:ffff::11")
+		result.Routes = append(result.Routes, &types.Route{
+			Dst: *routev6,
+			GW:  ecmpGWv6,
+		})
+
+		err := originalNS.Do(func(ns.NetNS) error {
+			defer GinkgoRecover()
+
+			err := ConfigureIface(LINK_NAME, result)
+			Expect(err).NotTo(HaveOccurred())
+
+			routes, err := netlinksafe.RouteListFiltered(netlink.FAMILY_V6, &netlink.Route{
+				Dst: routev6,
+			}, netlink.RT_FILTER_DST)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(routes).To(HaveLen(1))
+			Expect(routes[0].MultiPath).To(HaveLen(2))
+
+			gws := []string{
+				routes[0].MultiPath[0].Gw.String(),
+				routes[0].MultiPath[1].Gw.String(),
+			}
+			Expect(gws).To(ContainElement(routegwv6.String()))
+			Expect(gws).To(ContainElement(ecmpGWv6.String()))
+
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	It("does not panic when interface is not specified", func() {
 		result = &current.Result{
 			Interfaces: []*current.Interface{

@@ -22,6 +22,7 @@ import (
 
 	"github.com/vishvananda/netlink"
 
+	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/netlinksafe"
@@ -35,6 +36,19 @@ const (
 
 	dadSettleTimeout = 5 * time.Second
 )
+
+type routeKey struct {
+	dst      string
+	table    int
+	scope    int
+	priority int
+}
+
+type routeGroup struct {
+	route netlink.Route
+	dst   net.IPNet
+	gws   []net.IP
+}
 
 // ConfigureIface takes the result of IPAM plugin and
 // applies to the ifName interface
@@ -120,7 +134,14 @@ func ConfigureIface(ifName string, res *current.Result) error {
 		}
 	}
 
-	for _, r := range res.Routes {
+	return configureRoutes(link, ifName, res.Routes, v4gw, v6gw)
+}
+
+func configureRoutes(link netlink.Link, ifName string, routes []*types.Route, v4gw, v6gw net.IP) error {
+	routeMap := map[routeKey]*routeGroup{}
+	var routeOrder []routeKey
+
+	for _, r := range routes {
 		routeIsV4 := r.Dst.IP.To4() != nil
 		gw := r.GW
 		if gw == nil {
@@ -130,23 +151,45 @@ func ConfigureIface(ifName string, res *current.Result) error {
 				gw = v6gw
 			}
 		}
-		route := netlink.Route{
-			Dst:       &r.Dst,
-			LinkIndex: link.Attrs().Index,
-			Gw:        gw,
-			Priority:  r.Priority,
-		}
 
+		table := 0
 		if r.Table != nil {
-			route.Table = *r.Table
+			table = *r.Table
 		}
-
+		scope := 0
 		if r.Scope != nil {
-			route.Scope = netlink.Scope(*r.Scope)
+			scope = *r.Scope
 		}
 
-		if err = netlink.RouteAddEcmp(&route); err != nil {
-			return fmt.Errorf("failed to add route '%v via %v dev %v metric %d (Scope: %v, Table: %d)': %v", r.Dst, gw, ifName, r.Priority, route.Scope, route.Table, err)
+		key := routeKey{dst: r.Dst.String(), table: table, scope: scope, priority: r.Priority}
+		if _, exists := routeMap[key]; !exists {
+			route := netlink.Route{
+				LinkIndex: link.Attrs().Index,
+				Priority:  r.Priority,
+				Table:     table,
+				Scope:     netlink.Scope(scope),
+			}
+			dst := r.Dst
+			routeMap[key] = &routeGroup{route: route, dst: dst, gws: []net.IP{gw}}
+			routeOrder = append(routeOrder, key)
+		} else {
+			routeMap[key].gws = append(routeMap[key].gws, gw)
+		}
+	}
+
+	for _, key := range routeOrder {
+		entry := routeMap[key]
+		route := entry.route
+		route.Dst = &entry.dst
+		for _, gw := range entry.gws {
+			route.MultiPath = append(route.MultiPath, &netlink.NexthopInfo{
+				LinkIndex: link.Attrs().Index,
+				Gw:        gw,
+			})
+		}
+		if err := netlink.RouteAddEcmp(&route); err != nil {
+			return fmt.Errorf("failed to add route '%v via %v dev %v metric %d (Scope: %v, Table: %d)': %v",
+				entry.dst, entry.gws, ifName, route.Priority, route.Scope, route.Table, err)
 		}
 	}
 
