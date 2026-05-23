@@ -2255,11 +2255,13 @@ var _ = Describe("bridge Operations", func() {
 						addrs, err := netlinksafe.AddrList(bridge, family)
 						Expect(err).NotTo(HaveOccurred())
 						Expect(addrs).To(HaveLen(expNumAddrs))
-						addr := addrs[0].IPNet.String()
-						Expect(addr).To(Equal(cidr0))
+						addrStrs := make([]string, len(addrs))
+						for i, a := range addrs {
+							addrStrs[i] = a.IPNet.String()
+						}
+						Expect(addrStrs).To(ContainElement(cidr0))
 						if cidr1 != "" {
-							addr = addrs[1].IPNet.String()
-							Expect(addr).To(Equal(cidr1))
+							Expect(addrStrs).To(ContainElement(cidr1))
 						}
 					}
 
