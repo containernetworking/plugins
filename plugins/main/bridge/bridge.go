@@ -271,11 +271,13 @@ func ensureAddr(br netlink.Link, family int, ipn *net.IPNet, forceAddress bool) 
 	}
 
 	ipnStr := ipn.String()
+	addrFound := false
 	for _, a := range addrs {
 
 		// string comp is actually easiest for doing IPNet comps
 		if a.IPNet.String() == ipnStr {
-			return nil
+			addrFound = true
+			break
 		}
 
 		// Multiple IPv6 addresses are allowed on the bridge if the
@@ -293,9 +295,11 @@ func ensureAddr(br netlink.Link, family int, ipn *net.IPNet, forceAddress bool) 
 		}
 	}
 
-	addr := &netlink.Addr{IPNet: ipn, Label: ""}
-	if err := netlink.AddrAdd(br, addr); err != nil && err != syscall.EEXIST {
-		return fmt.Errorf("could not add IP address %s to %q: %v", ipnStr, br.Attrs().Name, err)
+	if !addrFound {
+		addr := &netlink.Addr{IPNet: ipn, Label: ""}
+		if err := netlink.AddrAdd(br, addr); err != nil && err != syscall.EEXIST {
+			return fmt.Errorf("could not add IP address %s to %q: %v", ipnStr, br.Attrs().Name, err)
+		}
 	}
 
 	// Set the bridge's MAC to itself. Otherwise, the bridge will take the
