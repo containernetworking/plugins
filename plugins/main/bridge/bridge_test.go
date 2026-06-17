@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/networkplumbing/go-nft/nft"
@@ -405,6 +406,30 @@ func (tc testCase) expectedCIDRs() ([]*net.IPNet, []*net.IPNet) {
 		appendSubnet(r.subnet)
 	}
 	return cidrsV4, cidrsV6
+}
+
+// Attaches a veth port with an optional fixed MAC address to a bridge in the
+// current network namespace. To be cleaned up via the returned function.
+func attachVethPort(br netlink.Link, mac string) (func() error, error) {
+	linkAttrs := netlink.NewLinkAttrs()
+	linkAttrs.Name = "testport0"
+	if mac != "" {
+		hwAddr, err := net.ParseMAC(mac)
+		if err != nil {
+			return nil, err
+		}
+
+		linkAttrs.HardwareAddr = hwAddr
+	}
+	veth := &netlink.Veth{LinkAttrs: linkAttrs, PeerName: "testport1"}
+	if err := netlink.LinkAdd(veth); err != nil {
+		return nil, err
+	}
+	if err := netlink.LinkSetMaster(veth, br); err != nil {
+		return nil, err
+	}
+
+	return sync.OnceValue(func() error { return netlink.LinkDel(veth) }), nil
 }
 
 // delBridgeAddrs() deletes addresses from the bridge
@@ -2373,6 +2398,48 @@ var _ = Describe("bridge Operations", func() {
 					link, err = netlinksafe.LinkByName(BRNAME)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(link.Attrs().HardwareAddr).To(Equal(origMac))
+					return nil
+				})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It(fmt.Sprintf("[%s] (%d) keeps a stable MAC even if the gateway address already exists", ver, i), func() {
+				err := originalNS.Do(func(ns.NetNS) error {
+					defer GinkgoRecover()
+
+					tc.cniVersion = ver
+					br, _, err := setupBridge(tc.netConf())
+					Expect(err).NotTo(HaveOccurred())
+					link, err := netlinksafe.LinkByName(BRNAME)
+					Expect(err).NotTo(HaveOccurred())
+					originalMAC := link.Attrs().HardwareAddr
+
+					// Pre-add the gateway address the plugin is going to
+					// configure, as left behind by an ADD that failed midway.
+					_, subnet, err := net.ParseCIDR(tc.subnet)
+					Expect(err).NotTo(HaveOccurred())
+					gwIP := calcGatewayIP(subnet)
+					err = netlink.AddrAdd(br, &netlink.Addr{
+						IPNet: &net.IPNet{IP: gwIP, Mask: subnet.Mask},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+
+					// The MAC must have been pinned nevertheless: it neither
+					// got zeroed when the container veth was removed, nor
+					// does it change with port churn.
+					link, err = netlinksafe.LinkByName(BRNAME)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(link.Attrs().HardwareAddr).To(Equal(originalMAC))
+
+					cleanupVethPort, err := attachVethPort(br, "02:00:00:00:00:01")
+					Expect(err).NotTo(HaveOccurred())
+					defer func() { Expect(cleanupVethPort()).To(Succeed()) }()
+
+					link, err = netlinksafe.LinkByName(BRNAME)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(link.Attrs().HardwareAddr).To(Equal(originalMAC))
 					return nil
 				})
 				Expect(err).NotTo(HaveOccurred())
