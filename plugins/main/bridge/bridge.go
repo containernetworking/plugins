@@ -15,6 +15,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -303,8 +304,27 @@ func ensureAddr(br netlink.Link, family int, ipn *net.IPNet, forceAddress bool) 
 	}
 
 	// Set the bridge's MAC to itself. Otherwise, the bridge will take the
-	// lowest-numbered mac on the bridge, and will change as ifs churn
-	if err := netlink.LinkSetHardwareAddr(br, br.Attrs().HardwareAddr); err != nil {
+	// lowest-numbered mac on the bridge, and will change as ifs churn. The
+	// cached attrs hold the MAC the bridge had before any veths were attached
+	// during this invocation.
+	hwAddr := br.Attrs().HardwareAddr
+
+	// Check whether the kernel has zeroed the bridge's MAC.
+	// This only happens when the bridge's last port was detached.
+	if isZeroMAC(hwAddr) {
+		// There are no neighbors that could hold stale state about the previous
+		// MAC, so it's fine to generate a suitable stand-in the same way the
+		// kernel does.
+		// https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/include/linux/etherdevice.h?h=v7.1#n237
+		hwAddr = make(net.HardwareAddr, 6)
+		if _, err := rand.Read(hwAddr); err != nil {
+			return fmt.Errorf("failed to generate random MAC address: %w", err)
+		}
+		hwAddr[0] &= 0xfe // clear multicast bit
+		hwAddr[0] |= 0x02 // set local assignment bit (IEEE802)
+	}
+
+	if err := netlink.LinkSetHardwareAddr(br, hwAddr); err != nil {
 		return fmt.Errorf("could not set bridge's mac: %v", err)
 	}
 
@@ -675,6 +695,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 						err = ensureAddr(br, gws.family, &gw, n.ForceAddress)
 						if err != nil {
 							return fmt.Errorf("failed to set bridge addr: %v", err)
+						}
+						// Reload the bridge so it reflects the MAC that ensureAddr just pinned.
+						if br, err = bridgeByName(n.BrName); err != nil {
+							return err
 						}
 					}
 				}
@@ -1119,4 +1143,17 @@ func cmdStatus(args *skel.CmdArgs) error {
 	}
 
 	return nil
+}
+
+// Indicates whether a hardware address is nil, empty, or consists solely of
+// zeros. Technically, the kernel will always report such addresses as an array
+// of zeros, but vishvananda/netlink will "normalize" them to nil.
+func isZeroMAC(mac net.HardwareAddr) bool {
+	for _, b := range mac {
+		if b != 0 {
+			return false
+		}
+	}
+
+	return true
 }
