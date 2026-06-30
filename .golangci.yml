@@ -31,8 +31,8 @@ linters:
       rules:
         - name: var-naming
           arguments:
-            - ["ID"] # AllowList
-            - ["VM"] # DenyList
+            - ["ID"]  # AllowList
+            - ["VM"]  # DenyList
             - - skip-initialism-name-checks: true
                 upper-case-const: true
                 skip-package-name-checks: true
