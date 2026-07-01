@@ -11,7 +11,7 @@ export GOFLAGS="${GOFLAGS} -mod=vendor"
 mkdir -p "${PWD}/bin"
 
 echo "Building plugins ${GOOS}"
-PLUGINS="plugins/meta/* plugins/main/* plugins/ipam/*"
+PLUGINS=${PLUGINS:-"plugins/meta/* plugins/main/* plugins/ipam/*"}
 for d in $PLUGINS; do
 	if [ -d "$d" ]; then
 		plugin="$(basename "$d")"
