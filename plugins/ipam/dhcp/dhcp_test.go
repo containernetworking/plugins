@@ -16,6 +16,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
@@ -25,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	dhcp4 "github.com/insomniacslk/dhcp/dhcpv4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
@@ -135,6 +137,57 @@ const (
 	contVethName string = "eth0"
 	cniDirPrefix string = "/var/run/cni"
 )
+
+type capturedRelease struct {
+	srcIP net.IP
+	msg   *dhcp4.DHCPv4
+}
+
+// snoopRelease opens a raw socket in the given netns, bound to the DHCP
+// server address, and returns a channel that receives the first DHCPRELEASE
+// observed along with the IP source address it was sent from. The channel is
+// closed without a value if no RELEASE arrives before the deadline.
+func snoopRelease(netns ns.NetNS, serverIP string) (chan capturedRelease, error) {
+	var conn net.PacketConn
+	err := netns.Do(func(ns.NetNS) error {
+		var err error
+		conn, err = net.ListenPacket("ip4:udp", serverIP)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	releaseCh := make(chan capturedRelease, 1)
+	go func() {
+		defer GinkgoRecover()
+		defer conn.Close()
+
+		_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		buf := make([]byte, 1500)
+		for {
+			n, src, err := conn.ReadFrom(buf)
+			if err != nil {
+				close(releaseCh)
+				return
+			}
+			// buf holds a UDP datagram (the kernel strips the IPv4
+			// header); filter on destination port 67 and parse the
+			// DHCP payload past the 8-byte UDP header.
+			if n < 8 || binary.BigEndian.Uint16(buf[2:4]) != 67 {
+				continue
+			}
+			msg, err := dhcp4.FromBytes(buf[8:n])
+			if err != nil || msg.MessageType() != dhcp4.MessageTypeRelease {
+				continue
+			}
+			releaseCh <- capturedRelease{srcIP: src.(*net.IPAddr).IP, msg: msg}
+			return
+		}
+	}()
+
+	return releaseCh, nil
+}
 
 var _ = BeforeSuite(func() {
 	err := os.MkdirAll(cniDirPrefix, 0o700)
@@ -301,6 +354,71 @@ var _ = Describe("DHCP Operations", func() {
 				})
 			})
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It(fmt.Sprintf("[%s] sends a unicast DHCPRELEASE sourced from the leased address on DEL", ver), func() {
+			conf := fmt.Sprintf(`{
+			    "cniVersion": "%s",
+			    "name": "mynet",
+			    "type": "ipvlan",
+			    "ipam": {
+				"type": "dhcp",
+				"daemonSocketPath": "%s"
+			    }
+			}`, ver, socketPath)
+
+			args := &skel.CmdArgs{
+				ContainerID: "dummy",
+				Netns:       targetNS.Path(),
+				IfName:      contVethName,
+				StdinData:   []byte(conf),
+			}
+
+			var addResult *types100.Result
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				r, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				addResult, err = types100.GetResult(r)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(addResult.IPs).To(HaveLen(1))
+				Expect(addResult.IPs[0].Address.String()).To(Equal("192.168.1.5/24"))
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Configure the allocated address on the container interface,
+			// as the main plugin consuming this IPAM result would; the
+			// unicast RELEASE below has to be sourced from it.
+			err = targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				link, err := netlinksafe.LinkByName(contVethName)
+				Expect(err).NotTo(HaveOccurred())
+				err = netlink.AddrAdd(link, &netlink.Addr{IPNet: &addResult.IPs[0].Address})
+				Expect(err).NotTo(HaveOccurred())
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			releaseCh, err := snoopRelease(originalNS, "192.168.1.1")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = originalNS.Do(func(ns.NetNS) error {
+				return testutils.CmdDelWithArgs(args, func() error {
+					return cmdDel(args)
+				})
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			var release capturedRelease
+			Eventually(releaseCh, time.Second*10).Should(Receive(&release))
+			Expect(release.srcIP.String()).To(Equal("192.168.1.5"))
+			Expect(release.msg.ClientIPAddr.String()).To(Equal("192.168.1.5"))
 		})
 
 		It(fmt.Sprintf("[%s] correctly handles multiple DELs for the same container", ver), func() {
