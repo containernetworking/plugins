@@ -428,17 +428,35 @@ func (l *DHCPLease) renew() error {
 func (l *DHCPLease) release() error {
 	log.Printf("%v: releasing lease", l.clientID)
 
-	c, err := newDHCPClient(l.link, l.timeout)
+	// RFC 2131 section 4.4.4 says DHCPRELEASE is unicast to the server.
+	// Send it from the leased address so the packet source matches ciaddr.
+	// A kernel UDP socket bound to the leased IP avoids the legacy raw-socket
+	// behavior where DHCPRELEASE used IP source 0.0.0.0.
+	leasedIP := l.latestLease.ACK.YourIPAddr
+	err := l.releaseWithClient(nclient4.WithUnicast(
+		&net.UDPAddr{IP: leasedIP, Port: nclient4.ClientPort}))
+	if err == nil {
+		return nil
+	}
+
+	// Fall back to the legacy raw-socket path (best effort), e.g. if the
+	// leased address or its routes were already removed from the interface.
+	log.Printf("%v: DHCPRELEASE from leased address failed (%v), falling back to legacy raw socket", l.clientID, err)
+	if err := l.releaseWithClient(); err != nil {
+		return fmt.Errorf("failed to send DHCPRELEASE: %w", err)
+	}
+
+	return nil
+}
+
+func (l *DHCPLease) releaseWithClient(clientOpts ...nclient4.ClientOpt) error {
+	c, err := newDHCPClient(l.link, l.timeout, clientOpts...)
 	if err != nil {
 		return err
 	}
 	defer c.Close()
 
-	if err = c.Release(l.latestLease, withClientID(l.clientID)); err != nil {
-		return fmt.Errorf("failed to send DHCPRELEASE")
-	}
-
-	return nil
+	return c.Release(l.latestLease, withClientID(l.clientID))
 }
 
 func (l *DHCPLease) IPNet() (*net.IPNet, error) {
