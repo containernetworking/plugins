@@ -25,7 +25,8 @@ import (
 )
 
 // parseSuppress validates the suppress list and reports which known items are set.
-func parseSuppress(items []string) (gateway bool, err error) {
+func parseSuppress(items []string) (bool, error) {
+	gateway := false
 	for _, item := range items {
 		switch item {
 		case suppressGateway:
