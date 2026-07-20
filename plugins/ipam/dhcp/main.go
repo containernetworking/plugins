@@ -40,6 +40,15 @@ type NetConf struct {
 	IPAM *IPAMConfig `json:"ipam"`
 }
 
+// Supported values for IPAMConfig.Suppress.
+const (
+	// suppressGateway omits the DHCP-provided default gateway from the CNI
+	// result (IPConfig.Gateway and any 0.0.0.0/0 / ::/0 routes). Non-default
+	// routes from the lease are still returned. Useful with Multus so a
+	// secondary interface does not overwrite the pod default route.
+	suppressGateway = "gateway"
+)
+
 type IPAMConfig struct {
 	types.IPAM
 	DaemonSocketPath string `json:"daemonSocketPath"`
@@ -53,6 +62,12 @@ type IPAMConfig struct {
 	RequestOptions []RequestOption `json:"request"`
 	// The metric of routes
 	Priority int `json:"priority,omitempty"`
+	// Suppress is a list of result fields to omit from the CNI result even if
+	// the DHCP server provided them. Currently supported: "gateway".
+	// Note that skipDefault only controls which options are requested; some
+	// servers still send a router option unsolicited. Use suppress: ["gateway"]
+	// to ignore it in the result.
+	Suppress []string `json:"suppress,omitempty"`
 }
 
 // DHCPOption represents a DHCP option. It can be a number, or a string defined in manual dhcp-options(5).

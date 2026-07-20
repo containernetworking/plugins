@@ -24,6 +24,40 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 )
 
+// parseSuppress validates the suppress list and reports which known items are set.
+func parseSuppress(items []string) (gateway bool, err error) {
+	for _, item := range items {
+		switch item {
+		case suppressGateway:
+			gateway = true
+		default:
+			return false, fmt.Errorf("unknown suppress value %q (supported: %q)", item, suppressGateway)
+		}
+	}
+	return gateway, nil
+}
+
+// isDefaultRoute reports whether dst is a default route (prefix length 0).
+func isDefaultRoute(dst net.IPNet) bool {
+	ones, bits := dst.Mask.Size()
+	return bits != 0 && ones == 0
+}
+
+// filterDefaultRoutes returns a copy of routes without default routes.
+func filterDefaultRoutes(routes []*types.Route) []*types.Route {
+	if len(routes) == 0 {
+		return routes
+	}
+	out := make([]*types.Route, 0, len(routes))
+	for _, r := range routes {
+		if r == nil || isDefaultRoute(r.Dst) {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
 var optionNameToID = map[string]dhcp4.OptionCode{
 	"dhcp-client-identifier":  dhcp4.OptionClientIdentifier,
 	"subnet-mask":             dhcp4.OptionSubnetMask,
