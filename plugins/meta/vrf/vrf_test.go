@@ -468,6 +468,146 @@ var _ = Describe("vrf plugin", func() {
 		})
 	})
 
+	It("moves IPv6 ECMP default nexthop into the VRF table", func() {
+		// Reproduce #1253: primary interface already has ::/0, IPAM adds another
+		// ::/0 via the secondary interface, kernel merges them into multipath.
+		// VRF must still move only the secondary nexthop into the VRF table.
+		conf := configFor("test", IF1Name, VRF0Name, "10.0.0.2/24")
+
+		By("Creating an IPv6 ECMP default route spanning both interfaces", func() {
+			err := targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				link0, err := netlinksafe.LinkByName(IF0Name)
+				Expect(err).NotTo(HaveOccurred())
+				link1, err := netlinksafe.LinkByName(IF1Name)
+				Expect(err).NotTo(HaveOccurred())
+
+				addr0, err := types.ParseCIDR("2001:db8:0::2/64")
+				Expect(err).NotTo(HaveOccurred())
+				addr1, err := types.ParseCIDR("2001:db8:1::2/64")
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(netlink.AddrAdd(link0, &netlink.Addr{IPNet: addr0})).To(Succeed())
+				Expect(netlink.AddrAdd(link1, &netlink.Addr{IPNet: addr1})).To(Succeed())
+				Expect(netlink.LinkSetUp(link0)).To(Succeed())
+				Expect(netlink.LinkSetUp(link1)).To(Succeed())
+
+				// Wait for kernel host routes for the IPv6 addresses.
+				Eventually(func() bool {
+					routes, _ := netlinksafe.RouteListFiltered(netlink.FAMILY_V6, &netlink.Route{
+						Dst: &net.IPNet{
+							IP:   addr1.IP,
+							Mask: net.CIDRMask(128, 128),
+						},
+						Table: 0,
+					}, netlink.RT_FILTER_DST|netlink.RT_FILTER_TABLE)
+					return len(routes) >= 1
+				}, time.Second, 100*time.Millisecond).Should(BeTrue())
+
+				defaultDst := &net.IPNet{
+					IP:   net.IPv6zero,
+					Mask: net.CIDRMask(0, 128),
+				}
+				// First default via primary interface.
+				Expect(netlink.RouteAdd(&netlink.Route{
+					LinkIndex: link0.Attrs().Index,
+					Dst:       defaultDst,
+					Gw:        net.ParseIP("2001:db8:0::1"),
+					Priority:  1024,
+				})).To(Succeed())
+				// Second default via secondary interface — becomes multipath/ECMP.
+				Expect(netlink.RouteAdd(&netlink.Route{
+					LinkIndex: link1.Attrs().Index,
+					Dst:       defaultDst,
+					Gw:        net.ParseIP("2001:db8:1::1"),
+					Priority:  1024,
+				})).To(Succeed())
+
+				// Confirm the kernel has a multipath default including both ifaces.
+				routes, err := netlinksafe.RouteListFiltered(netlink.FAMILY_V6, &netlink.Route{
+					Dst:   defaultDst,
+					Table: 0,
+				}, netlink.RT_FILTER_DST|netlink.RT_FILTER_TABLE)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(routes).NotTo(BeEmpty())
+				// Either a multipath route or two separate defaults (depends on kernel);
+				// at least one must reference the secondary interface.
+				hasIF1 := false
+				for _, r := range routes {
+					if r.LinkIndex == link1.Attrs().Index {
+						hasIF1 = true
+					}
+					for _, nh := range r.MultiPath {
+						if nh.LinkIndex == link1.Attrs().Index {
+							hasIF1 = true
+						}
+					}
+				}
+				Expect(hasIF1).To(BeTrue(), "expected a default route nexthop on %s", IF1Name)
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Adding the secondary interface to the VRF", func() {
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				args := &skel.CmdArgs{
+					ContainerID: "dummy",
+					Netns:       targetNS.Path(),
+					IfName:      IF1Name,
+					StdinData:   conf,
+				}
+				_, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking the IPv6 default via the secondary interface is in the VRF table", func() {
+			err := targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				checkInterfaceOnVRF(VRF0Name, IF1Name)
+
+				vrfLink, err := netlinksafe.LinkByName(VRF0Name)
+				Expect(err).NotTo(HaveOccurred())
+				vrf := vrfLink.(*netlink.Vrf)
+				link1, err := netlinksafe.LinkByName(IF1Name)
+				Expect(err).NotTo(HaveOccurred())
+
+				defaultDst := &net.IPNet{
+					IP:   net.IPv6zero,
+					Mask: net.CIDRMask(0, 128),
+				}
+				routes, err := netlinksafe.RouteListFiltered(netlink.FAMILY_V6, &netlink.Route{
+					Dst:   defaultDst,
+					Table: int(vrf.Table),
+				}, netlink.RT_FILTER_DST|netlink.RT_FILTER_TABLE)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(routes).NotTo(BeEmpty(), "expected ::/0 in VRF table %d", vrf.Table)
+
+				found := false
+				for _, r := range routes {
+					if r.LinkIndex == link1.Attrs().Index && r.Gw.Equal(net.ParseIP("2001:db8:1::1")) {
+						found = true
+					}
+					for _, nh := range r.MultiPath {
+						if nh.LinkIndex == link1.Attrs().Index && nh.Gw.Equal(net.ParseIP("2001:db8:1::1")) {
+							found = true
+						}
+					}
+				}
+				Expect(found).To(BeTrue(), "expected ::/0 via 2001:db8:1::1 dev %s in VRF table", IF1Name)
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
 	It("fails if the interface already has a master set", func() {
 		conf := configFor("test", IF0Name, VRF0Name, "10.0.0.2/24")
 
@@ -932,6 +1072,134 @@ var _ = Describe("unit tests", func() {
 			return res
 		}(), uint32(1000), false),
 	)
+
+	Describe("routeForInterface", func() {
+		ipv6Default := &net.IPNet{
+			IP:   net.IPv6zero,
+			Mask: net.CIDRMask(0, 128),
+		}
+		const (
+			eth0Index = 2
+			net1Index = 5
+		)
+
+		It("keeps a single-hop route on the target interface", func() {
+			route := netlink.Route{
+				LinkIndex: net1Index,
+				Dst:       ipv6Default,
+				Gw:        net.ParseIP("2001:db8:1::1"),
+				Priority:  1024,
+				Scope:     netlink.SCOPE_UNIVERSE,
+			}
+
+			got, ok := routeForInterface(route, net1Index)
+			Expect(ok).To(BeTrue())
+			Expect(got).To(Equal(route))
+		})
+
+		It("rejects a single-hop route on another interface", func() {
+			route := netlink.Route{
+				LinkIndex: eth0Index,
+				Dst:       ipv6Default,
+				Gw:        net.ParseIP("fe80::1"),
+				Priority:  1024,
+				Scope:     netlink.SCOPE_UNIVERSE,
+			}
+
+			_, ok := routeForInterface(route, net1Index)
+			Expect(ok).To(BeFalse())
+		})
+
+		It("extracts only the target nexthop from an IPv6 ECMP default route", func() {
+			// Simulates main-table ::/0 after IPAM added a second default via net1
+			// while eth0 already had one, so the kernel merged them into multipath.
+			route := netlink.Route{
+				LinkIndex: 0,
+				Dst:       ipv6Default,
+				Priority:  1024,
+				Scope:     netlink.SCOPE_UNIVERSE,
+				MultiPath: []*netlink.NexthopInfo{
+					{LinkIndex: eth0Index, Gw: net.ParseIP("fe80::1"), Hops: 0},
+					{LinkIndex: net1Index, Gw: net.ParseIP("2001:db8:1::1"), Hops: 0},
+				},
+			}
+
+			got, ok := routeForInterface(route, net1Index)
+			Expect(ok).To(BeTrue())
+			Expect(got.MultiPath).To(BeNil())
+			Expect(got.LinkIndex).To(Equal(net1Index))
+			Expect(got.Gw.Equal(net.ParseIP("2001:db8:1::1"))).To(BeTrue())
+			Expect(got.Dst.String()).To(Equal("::/0"))
+			Expect(got.Priority).To(Equal(1024))
+		})
+
+		It("rejects multipath routes with no nexthop on the target interface", func() {
+			route := netlink.Route{
+				Dst:      ipv6Default,
+				Priority: 1024,
+				MultiPath: []*netlink.NexthopInfo{
+					{LinkIndex: eth0Index, Gw: net.ParseIP("fe80::1")},
+				},
+			}
+
+			_, ok := routeForInterface(route, net1Index)
+			Expect(ok).To(BeFalse())
+		})
+
+		It("keeps multiple nexthops when more than one is on the target interface", func() {
+			route := netlink.Route{
+				Dst: ipv6Default,
+				MultiPath: []*netlink.NexthopInfo{
+					{LinkIndex: net1Index, Gw: net.ParseIP("2001:db8:1::1"), Hops: 0},
+					{LinkIndex: eth0Index, Gw: net.ParseIP("fe80::1"), Hops: 0},
+					{LinkIndex: net1Index, Gw: net.ParseIP("2001:db8:1::2"), Hops: 0},
+				},
+			}
+
+			got, ok := routeForInterface(route, net1Index)
+			Expect(ok).To(BeTrue())
+			Expect(got.MultiPath).To(HaveLen(2))
+			Expect(got.LinkIndex).To(Equal(0))
+			Expect(got.Gw).To(BeNil())
+			Expect(got.MultiPath[0].Gw.Equal(net.ParseIP("2001:db8:1::1"))).To(BeTrue())
+			Expect(got.MultiPath[1].Gw.Equal(net.ParseIP("2001:db8:1::2"))).To(BeTrue())
+		})
+
+		It("filters a mixed list down to routes for the target interface", func() {
+			routes := []netlink.Route{
+				{
+					LinkIndex: eth0Index,
+					Dst:       ipv6Default,
+					Gw:        net.ParseIP("fe80::1"),
+				},
+				{
+					LinkIndex: net1Index,
+					Dst: &net.IPNet{
+						IP:   net.ParseIP("2001:db8:1::"),
+						Mask: net.CIDRMask(64, 128),
+					},
+					Gw: net.ParseIP("2001:db8:1::1"),
+				},
+				{
+					LinkIndex: 0,
+					Dst:       ipv6Default,
+					Priority:  1024,
+					MultiPath: []*netlink.NexthopInfo{
+						{LinkIndex: eth0Index, Gw: net.ParseIP("fe80::1")},
+						{LinkIndex: net1Index, Gw: net.ParseIP("2001:db8:1::1")},
+					},
+				},
+			}
+
+			got := routesForInterface(routes, net1Index)
+			Expect(got).To(HaveLen(2))
+			Expect(got[0].LinkIndex).To(Equal(net1Index))
+			Expect(got[0].Dst.String()).To(Equal("2001:db8:1::/64"))
+			Expect(got[1].LinkIndex).To(Equal(net1Index))
+			Expect(got[1].Gw.Equal(net.ParseIP("2001:db8:1::1"))).To(BeTrue())
+			Expect(got[1].MultiPath).To(BeNil())
+		})
+	})
 })
 
 func configFor(name, intf, vrf, ip string) []byte {
