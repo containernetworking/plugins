@@ -509,19 +509,16 @@ var _ = Describe("vrf plugin", func() {
 					IP:   net.IPv6zero,
 					Mask: net.CIDRMask(0, 128),
 				}
-				// First default via primary interface.
+				// Install multipath default explicitly. Two sequential RouteAdd
+				// calls with the same metric return EEXIST on some kernels
+				// instead of merging into ECMP (repro path from #1253).
 				Expect(netlink.RouteAdd(&netlink.Route{
-					LinkIndex: link0.Attrs().Index,
-					Dst:       defaultDst,
-					Gw:        net.ParseIP("2001:db8:0::1"),
-					Priority:  1024,
-				})).To(Succeed())
-				// Second default via secondary interface — becomes multipath/ECMP.
-				Expect(netlink.RouteAdd(&netlink.Route{
-					LinkIndex: link1.Attrs().Index,
-					Dst:       defaultDst,
-					Gw:        net.ParseIP("2001:db8:1::1"),
-					Priority:  1024,
+					Dst:      defaultDst,
+					Priority: 1024,
+					MultiPath: []*netlink.NexthopInfo{
+						{LinkIndex: link0.Attrs().Index, Gw: net.ParseIP("2001:db8:0::1")},
+						{LinkIndex: link1.Attrs().Index, Gw: net.ParseIP("2001:db8:1::1")},
+					},
 				})).To(Succeed())
 
 				// Confirm the kernel has a multipath default including both ifaces.
