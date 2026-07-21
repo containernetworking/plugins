@@ -320,10 +320,21 @@ func ensureBackend(conf *PortMapConf) error {
 	// If backend wasn't requested explicitly, default to iptables, unless it is not
 	// available (and nftables is). FIXME: flip this default at some point.
 	if conf.Backend == nil {
-		if !utils.SupportsIPTables() && utils.SupportsNFTables() {
+		supportsIPT := utils.SupportsIPTables()
+		supportsNFT := utils.SupportsNFTables()
+		switch {
+		case !supportsIPT && supportsNFT:
 			conf.Backend = &nftablesBackend
-		} else {
+		case supportsIPT || supportsNFT:
 			conf.Backend = &iptablesBackend
+		default:
+			// Both full checks failed (likely missing CAP_NET_ADMIN at detection
+			// time). Fall back to binary presence as tiebreaker.
+			if !utils.IPTablesBinaryAvailable() && utils.NFTablesBinaryAvailable() {
+				conf.Backend = &nftablesBackend
+			} else {
+				conf.Backend = &iptablesBackend
+			}
 		}
 	}
 
