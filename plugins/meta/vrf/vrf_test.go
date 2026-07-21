@@ -821,6 +821,54 @@ var _ = Describe("vrf plugin", func() {
 		})
 	})
 
+	It("returns success on DEL when the enslaved interface is already gone (idempotent)", func() {
+		conf0 := configFor("test", IF0Name, VRF0Name, "10.0.0.2/24")
+
+		By("Adding the interface to the VRF", func() {
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				args := &skel.CmdArgs{
+					ContainerID: "dummy",
+					Netns:       targetNS.Path(),
+					IfName:      IF0Name,
+					StdinData:   conf0,
+				}
+				_, _, err := testutils.CmdAddWithArgs(args, func() error {
+					return cmdAdd(args)
+				})
+				Expect(err).NotTo(HaveOccurred())
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Removing the enslaved interface out-of-band (simulating a teardown race)", func() {
+			err := targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				link, err := netlinksafe.LinkByName(IF0Name)
+				Expect(err).NotTo(HaveOccurred())
+				return netlink.LinkDel(link)
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("DEL succeeding even though the interface is gone", func() {
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				args := &skel.CmdArgs{
+					ContainerID: "dummy",
+					Netns:       targetNS.Path(),
+					IfName:      IF0Name,
+					StdinData:   conf0,
+				}
+				return testutils.CmdDelWithArgs(args, func() error {
+					return cmdDel(args)
+				})
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
 	It("configures and deconfigures VRF with CNI 0.4.0 ADD/DEL", func() {
 		conf := []byte(fmt.Sprintf(`{
 	"name": "test",
