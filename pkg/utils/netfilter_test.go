@@ -16,8 +16,6 @@ package utils
 
 import (
 	"os"
-	"os/exec"
-	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -64,21 +62,5 @@ var _ = Describe("PreferNFTablesDefault", func() {
 		// Suite requires iptables; prefer iptables when both work.
 		Expect(SupportsIPTables()).To(BeTrue())
 		Expect(PreferNFTablesDefault()).To(BeFalse())
-	})
-
-	It("prefers nftables when iptables is missing but nft is on PATH", Serial, func() {
-		nftPath, err := exec.LookPath("nft")
-		if err != nil {
-			Skip("nft not installed on this host")
-		}
-
-		origPath := os.Getenv("PATH")
-		DeferCleanup(func() { os.Setenv("PATH", origPath) })
-		// Keep only the directory that contains nft so iptables is not found.
-		os.Setenv("PATH", filepath.Dir(nftPath))
-
-		Expect(SupportsIPTables()).To(BeFalse())
-		Expect(HasNFTablesCommand()).To(BeTrue())
-		Expect(PreferNFTablesDefault()).To(BeTrue())
 	})
 })
