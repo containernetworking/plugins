@@ -34,7 +34,7 @@ func NewFileLock(lockPath string) (*FileLock, error) {
 	}
 
 	if fi.IsDir() {
-		lockPath = path.Join(lockPath, "lock")
+		lockPath = path.Join(lockPath, lockFileName)
 	}
 
 	f, err := filemutex.New(lockPath)
