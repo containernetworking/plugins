@@ -55,6 +55,22 @@ var _ = Describe("CIDR functions", func() {
 				net.ParseIP("0::123"),
 				net.ParseIP("0::124"),
 			},
+			{
+				net.ParseIP("255.255.255.254"),
+				net.IPv4(255, 255, 255, 255).To4(),
+			},
+			{
+				net.ParseIP("255.255.255.255"),
+				nil,
+			},
+			{
+				net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:fffe"),
+				net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"),
+			},
+			{
+				net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"),
+				nil,
+			},
 		}
 
 		for _, test := range testCases {
