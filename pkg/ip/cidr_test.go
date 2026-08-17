@@ -71,6 +71,11 @@ var _ = Describe("CIDR functions", func() {
 				net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"),
 				nil,
 			},
+			{
+				// a low IPv6 result must stay 16-byte IPv6, not collapse to IPv4
+				net.ParseIP("::ff:ffff"),
+				net.ParseIP("::100:0"),
+			},
 		}
 
 		for _, test := range testCases {
@@ -112,6 +117,20 @@ var _ = Describe("CIDR functions", func() {
 			{
 				net.ParseIP("0::124"),
 				net.ParseIP("0::123"),
+			},
+			{
+				// a low IPv6 result must stay 16-byte IPv6, not collapse to IPv4
+				net.ParseIP("::1:0:0"),
+				net.ParseIP("::ffff:ffff"),
+			},
+			{
+				// underflow below the first address returns nil, not the wrapped absolute value
+				net.ParseIP("0.0.0.0"),
+				nil,
+			},
+			{
+				net.ParseIP("::"),
+				nil,
 			},
 		}
 
