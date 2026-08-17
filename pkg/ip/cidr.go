@@ -19,7 +19,8 @@ import (
 	"net"
 )
 
-// NextIP returns IP incremented by 1, if IP is invalid, return nil
+// NextIP returns IP incremented by 1, or nil if IP is invalid or already the
+// last address in its family.
 func NextIP(ip net.IP) net.IP {
 	normalizedIP := normalizeIP(ip)
 	if normalizedIP == nil {
@@ -68,11 +69,15 @@ func intToIP(i *big.Int, isIPv6 bool) net.IP {
 		return intBytes
 	}
 
+	ipLen := net.IPv4len
 	if isIPv6 {
-		return append(make([]byte, net.IPv6len-len(intBytes)), intBytes...)
+		ipLen = net.IPv6len
 	}
-
-	return append(make([]byte, net.IPv4len-len(intBytes)), intBytes...)
+	// The value overflowed past the last address of its family.
+	if len(intBytes) > ipLen {
+		return nil
+	}
+	return append(make([]byte, ipLen-len(intBytes)), intBytes...)
 }
 
 // normalizeIP will normalize IP by family,

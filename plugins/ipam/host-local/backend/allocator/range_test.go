@@ -120,6 +120,26 @@ var _ = Describe("IP ranges", func() {
 		Expect(err).Should(MatchError("RangeStart 192.0.2.50 not in network 192.0.2.0/24"))
 	})
 
+	It("should reject a RangeStart that lands after the defaulted RangeEnd", func() {
+		// RangeStart is checked before RangeEnd is defaulted, so a broadcast
+		// RangeStart (one above the default RangeEnd) used to slip through.
+		r := Range{
+			Subnet:     mustSubnet("192.0.2.0/24"),
+			RangeStart: net.ParseIP("192.0.2.255"),
+		}
+		err := r.Canonicalize()
+		Expect(err).Should(MatchError("RangeStart 192.0.2.255 is after RangeEnd 192.0.2.254 in network 192.0.2.0/24"))
+
+		// The same gap at the top of the family, where this shape used to
+		// reach the iterator and panic.
+		r = Range{
+			Subnet:     mustSubnet("255.255.255.252/30"),
+			RangeStart: net.ParseIP("255.255.255.255"),
+		}
+		err = r.Canonicalize()
+		Expect(err).Should(MatchError("RangeStart 255.255.255.255 is after RangeEnd 255.255.255.254 in network 255.255.255.252/30"))
+	})
+
 	It("should parse all fields correctly", func() {
 		snstr := "192.0.2.0/24"
 		r := Range{
