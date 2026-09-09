@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/vishvananda/netlink"
@@ -41,7 +42,61 @@ import (
 var (
 	sysBusPCI       = "/sys/bus/pci/devices"
 	sysBusAuxiliary = "/sys/bus/auxiliary/devices"
+	sysClassNet     = "/sys/class/net"
+
+	linkSetNsFd  = netlink.LinkSetNsFd
+	linkSetDown  = netlink.LinkSetDown
+	wiphySetNsFd = netlink.WiphySetNsFd
 )
+
+type moveRequest struct {
+	wiphy int
+}
+
+func (r *moveRequest) move(link netlink.Link, fd int) error {
+	if r == nil {
+		return linkSetNsFd(link, fd)
+	}
+
+	// NL80211 requires every interface on the PHY to be down before moving it.
+	if err := linkSetDown(link); err != nil {
+		return err
+	}
+	return wiphySetNsFd(r.wiphy, fd)
+}
+
+func getMoveRequest(ifName string) (*moveRequest, error) {
+	phyPath := filepath.Join(sysClassNet, ifName, "phy80211")
+	wiphyBytes, err := os.ReadFile(filepath.Join(phyPath, "index"))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read wireless PHY for %q: %v", ifName, err)
+	}
+
+	wiphy, err := strconv.Atoi(strings.TrimSpace(string(wiphyBytes)))
+	if err != nil {
+		return nil, fmt.Errorf("parse wireless PHY for %q: %v", ifName, err)
+	}
+
+	// Enumeration and moving the wiphy cannot be atomic. A sibling created after
+	// this check may move with the PHY, although the kernel should reject one
+	// that is already up.
+	interfaces, err := os.ReadDir(filepath.Join(phyPath, "device", "net"))
+	if err != nil {
+		return nil, fmt.Errorf("list interfaces associated with wireless PHY %d: %v", wiphy, err)
+	}
+	if len(interfaces) != 1 || interfaces[0].Name() != ifName {
+		names := make([]string, 0, len(interfaces))
+		for _, entry := range interfaces {
+			names = append(names, entry.Name())
+		}
+		return nil, fmt.Errorf("wireless PHY %d has associated interfaces %q; host-device can safely move only a PHY containing solely %q", wiphy, names, ifName)
+	}
+
+	return &moveRequest{wiphy: wiphy}, nil
+}
 
 // Array of different linux drivers bound to network device needed for DPDK
 var userspaceDrivers = []string{"vfio-pci", "uio_pci_generic", "igb_uio"}
@@ -237,6 +292,10 @@ func cmdDel(args *skel.CmdArgs) error {
 
 func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, containerIfName string) (netlink.Link, error) {
 	hostDevName := hostDev.Attrs().Name
+	moveRequest, err := getMoveRequest(hostDevName)
+	if err != nil {
+		return nil, err
+	}
 
 	// With recent kernels we could do all changes in a single netlink call,
 	// but on failure the device is left in a partially modified state.
@@ -266,7 +325,7 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, containerIfName stri
 	}
 
 	// Move the host device into tempNS
-	if err = netlink.LinkSetNsFd(hostDev, int(tempNS.Fd())); err != nil {
+	if err = moveRequest.move(hostDev, int(tempNS.Fd())); err != nil {
 		return nil, fmt.Errorf("failed to move %q to tempNS: %v", hostDevName, err)
 	}
 
@@ -286,7 +345,7 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, containerIfName stri
 		// so we need to actively move the device back to hostNS on error
 		defer func() {
 			if err != nil && tempNSDev != nil {
-				_ = netlink.LinkSetNsFd(tempNSDev, int(hostNS.Fd()))
+				_ = moveRequest.move(tempNSDev, int(hostNS.Fd()))
 			}
 		}()
 
@@ -315,7 +374,7 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, containerIfName stri
 		}()
 
 		// Move the device to the containerNS
-		if err = netlink.LinkSetNsFd(tempNSDev, int(containerNs.Fd())); err != nil {
+		if err = moveRequest.move(tempNSDev, int(containerNs.Fd())); err != nil {
 			return fmt.Errorf("failed to move %q (host: %q) to container NS: %v", containerIfName, hostDevName, err)
 		}
 
@@ -336,7 +395,7 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, containerIfName stri
 			// Move the interface back to tempNS on error
 			defer func() {
 				if err != nil {
-					_ = netlink.LinkSetNsFd(contDev, int(tempNS.Fd()))
+					_ = moveRequest.move(contDev, int(tempNS.Fd()))
 				}
 			}()
 
@@ -368,6 +427,7 @@ func moveLinkOut(containerNs ns.NetNS, containerIfName string) error {
 	defer tempNS.Close()
 
 	var contDev netlink.Link
+	var moveRequest *moveRequest
 
 	// Restore original up state in case of error
 	// This must be done in the containerNS as moving
@@ -397,8 +457,13 @@ func moveLinkOut(containerNs ns.NetNS, containerIfName string) error {
 			return fmt.Errorf("failed to find original ifname for %q (alias is not set)", containerIfName)
 		}
 
+		moveRequest, err = getMoveRequest(containerIfName)
+		if err != nil {
+			return err
+		}
+
 		// Move the device to the tempNS
-		if err = netlink.LinkSetNsFd(contDev, int(tempNS.Fd())); err != nil {
+		if err = moveRequest.move(contDev, int(tempNS.Fd())); err != nil {
 			return fmt.Errorf("failed to move %q to tempNS: %v", containerIfName, err)
 		}
 		return nil
@@ -417,7 +482,7 @@ func moveLinkOut(containerNs ns.NetNS, containerIfName string) error {
 		// Move the device back to containerNS on error
 		defer func() {
 			if err != nil {
-				_ = netlink.LinkSetNsFd(tempNSDev, int(containerNs.Fd()))
+				_ = moveRequest.move(tempNSDev, int(containerNs.Fd()))
 			}
 		}()
 
@@ -448,7 +513,7 @@ func moveLinkOut(containerNs ns.NetNS, containerIfName string) error {
 		}()
 
 		// Finally move the device to the hostNS
-		if err = netlink.LinkSetNsFd(tempNSDev, int(hostNS.Fd())); err != nil {
+		if err = moveRequest.move(tempNSDev, int(hostNS.Fd())); err != nil {
 			return fmt.Errorf("failed to move %q to hostNS: %v", hostDevName, err)
 		}
 
