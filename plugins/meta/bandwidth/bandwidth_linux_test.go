@@ -122,10 +122,6 @@ var _ = Describe("bandwidth test", func() {
 	// Bandwidth requires host-side interface info, and thus only
 	// supports 0.3.0 and later CNI versions
 	for _, ver := range []string{"0.3.0", "0.3.1", "0.4.0", "1.0.0"} {
-		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
-		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
-		ver := ver
-
 		Describe("cmdADD", func() {
 			It(fmt.Sprintf("[%s] works with a Veth pair", ver), func() {
 				conf := fmt.Sprintf(`{

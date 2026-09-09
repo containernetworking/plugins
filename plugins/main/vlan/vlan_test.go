@@ -238,10 +238,6 @@ var _ = Describe("vlan Operations", func() {
 		isInContainer := inContainer // Tests need a local var with constant value
 
 		for _, ver := range testutils.AllSpecVersions {
-			// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
-			// See Gingkgo's "Patterns for dynamically generating tests" documentation.
-			ver := ver
-
 			It(fmt.Sprintf("[%s] creates an vlan link in a non-default namespace with given MTU", ver), func() {
 				conf := &NetConf{
 					NetConf: types.NetConf{

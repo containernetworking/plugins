@@ -256,10 +256,6 @@ var _ = Describe("DHCP Operations", func() {
 	})
 
 	for _, ver := range testutils.AllSpecVersions {
-		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
-		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
-		ver := ver
-
 		It(fmt.Sprintf("[%s] configures and deconfigures a link with ADD/DEL", ver), func() {
 			conf := fmt.Sprintf(`{
 			    "cniVersion": "%s",
@@ -579,10 +575,6 @@ var _ = Describe("DHCP Lease Unavailable Operations", func() {
 	})
 
 	for _, ver := range testutils.AllSpecVersions {
-		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
-		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
-		ver := ver
-
 		It(fmt.Sprintf("[%s] configures multiple links with multiple ADD with second lease unavailable", ver), func() {
 			conf := fmt.Sprintf(`{
 			    "cniVersion": "%s",

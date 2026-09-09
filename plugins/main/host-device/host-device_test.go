@@ -347,10 +347,6 @@ var _ = Describe("base functionality", func() {
 	})
 
 	for _, ver := range []string{"0.3.0", "0.3.1", "0.4.0", "1.0.0"} {
-		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
-		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
-		ver := ver
-
 		It(fmt.Sprintf("[%s] works with a valid config without IPAM", ver), func() {
 			var origLink netlink.Link
 
