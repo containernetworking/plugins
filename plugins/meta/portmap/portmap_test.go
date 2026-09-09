@@ -23,6 +23,23 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 )
 
+// deletePortmapStaleConnections is a no-op for non-UDP mappings and must not
+// fail when given only TCP entries (no conntrack call is made).
+var _ = Describe("deletePortmapStaleConnections", func() {
+	It("skips non-UDP port mappings without error", func() {
+		err := deletePortmapStaleConnections([]PortMapEntry{
+			{HostPort: 8080, ContainerPort: 80, Protocol: "tcp"},
+			{HostPort: 8081, ContainerPort: 81, Protocol: "TCP"},
+		}, 2 /* AF_INET */)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("accepts an empty mapping list", func() {
+		err := deletePortmapStaleConnections(nil, 2)
+		Expect(err).NotTo(HaveOccurred())
+	})
+})
+
 var _ = Describe("portmapping configuration", func() {
 	for _, ver := range []string{"0.3.0", "0.3.1", "0.4.0", "1.0.0"} {
 		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
