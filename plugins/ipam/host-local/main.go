@@ -15,6 +15,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -34,9 +35,37 @@ func main() {
 		Add:   cmdAdd,
 		Check: cmdCheck,
 		Del:   cmdDel,
-		/* FIXME GC */
+		GC:    cmdGC,
 		/* FIXME Status */
 	}, version.All, bv.BuildString("host-local"))
+}
+
+// cmdGC releases reservations for attachments the runtime no longer considers
+// live, which is how an allocation leaked by a DEL that never arrived is
+// reclaimed.
+//
+// An empty valid-attachments list is meaningful and means every reservation for
+// this network is stale, so it must not be treated as "nothing to do".
+func cmdGC(args *skel.CmdArgs) error {
+	ipamConf, _, err := allocator.LoadIPAMConfig(args.StdinData, args.Args)
+	if err != nil {
+		return err
+	}
+
+	// LoadIPAMConfig parses the ipam block and does not carry the top level
+	// cni.dev/valid-attachments, so read that separately.
+	n := types.NetConf{}
+	if err := json.Unmarshal(args.StdinData, &n); err != nil {
+		return fmt.Errorf("failed to parse network config: %w", err)
+	}
+
+	store, err := disk.New(ipamConf.Name, ipamConf.DataDir)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+
+	return store.GC(n.ValidAttachments)
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
