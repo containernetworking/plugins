@@ -320,7 +320,7 @@ func ensureBackend(conf *PortMapConf) error {
 	// If backend wasn't requested explicitly, default to iptables, unless it is not
 	// available (and nftables is). FIXME: flip this default at some point.
 	if conf.Backend == nil {
-		if !utils.SupportsIPTables() && utils.SupportsNFTables() {
+		if utils.PreferNFTablesDefault() {
 			conf.Backend = &nftablesBackend
 		} else {
 			conf.Backend = &iptablesBackend
