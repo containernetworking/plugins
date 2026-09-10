@@ -57,6 +57,11 @@ type NetConf struct {
 	RuntimeConfig struct {
 		DeviceID string `json:"deviceID,omitempty"`
 	} `json:"runtimeConfig,omitempty"`
+	// When true, capture the host interface's IP addresses and routes and apply
+	// them inside the container. Useful in cloud/virtual environments where L3
+	// config is provisioned directly on the host device. Can be combined with
+	// IPAM to add extra addresses or routes on top of the host-provided ones.
+	UseInterfaceNetwork bool `json:"useInterfaceNetwork,omitempty"`
 
 	// for internal use
 	auxDevice string `json:"-"` // Auxiliary device name as appears on Auxiliary bus (/sys/bus/auxiliary)
@@ -125,6 +130,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
+
+	interfaceNetworkEnabled := useInterfaceNetwork(cfg)
+	if interfaceNetworkEnabled && cfg.DPDKMode {
+		return fmt.Errorf("useInterfaceNetwork is not supported for dpdk-bound devices")
+	}
+
 	containerNs, err := ns.GetNS(args.Netns)
 	if err != nil {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
@@ -138,10 +149,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}}
 
 	var contDev netlink.Link
+	var networkState *HostNetworkState
 	if !cfg.DPDKMode {
 		hostDev, err := getLink(cfg.Device, cfg.HWAddr, cfg.KernelPath, cfg.PCIAddr, cfg.auxDevice)
 		if err != nil {
 			return fmt.Errorf("failed to find host device: %v", err)
+		}
+
+		networkState, err = newHostNetworkState(hostDev, interfaceNetworkEnabled)
+		if err != nil {
+			return err
 		}
 
 		contDev, err = moveLinkIn(hostDev, containerNs, args.IfName)
@@ -153,11 +170,20 @@ func cmdAdd(args *skel.CmdArgs) error {
 		result.Interfaces[0].Name = contDev.Attrs().Name
 		// Set the MAC address of the interface
 		result.Interfaces[0].Mac = contDev.Attrs().HardwareAddr.String()
+
+		if interfaceNetworkEnabled {
+			if err := networkState.applyToPod(containerNs, contDev); err != nil {
+				return err
+			}
+		}
 	}
 
 	if cfg.IPAM.Type == "" {
 		if cfg.DPDKMode {
 			return types.PrintResult(result, cfg.CNIVersion)
+		}
+		if interfaceNetworkEnabled {
+			return printLinkWithNetworkState(contDev, cfg.CNIVersion, containerNs, networkState)
 		}
 		return printLink(contDev, cfg.CNIVersion, containerNs)
 	}
@@ -181,7 +207,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if len(newResult.IPs) == 0 {
+	if !interfaceNetworkEnabled && len(newResult.IPs) == 0 {
 		return errors.New("IPAM plugin returned missing IP config")
 	}
 
@@ -199,6 +225,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	if interfaceNetworkEnabled {
+		mergeNetworkStateIntoResult(newResult, networkState)
 	}
 
 	newResult.DNS = cfg.DNS
@@ -494,6 +524,36 @@ func printLink(dev netlink.Link, cniVersion string, containerNs ns.NetNS) error 
 		},
 	}
 	return types.PrintResult(&result, cniVersion)
+}
+
+func mergeNetworkStateIntoResult(result *current.Result, state *HostNetworkState) {
+	if state == nil {
+		return
+	}
+	for _, addr := range state.Addresses {
+		result.IPs = append(result.IPs, &current.IPConfig{
+			Interface: current.Int(0),
+			Address:   *addr.IPNet,
+		})
+	}
+	for _, route := range state.Routes {
+		result.Routes = append(result.Routes, routeToCNIRoute(route))
+	}
+}
+
+func printLinkWithNetworkState(dev netlink.Link, cniVersion string, containerNs ns.NetNS, state *HostNetworkState) error {
+	result := &current.Result{
+		CNIVersion: current.ImplementedSpecVersion,
+		Interfaces: []*current.Interface{
+			{
+				Name:    dev.Attrs().Name,
+				Mac:     dev.Attrs().HardwareAddr.String(),
+				Sandbox: containerNs.Path(),
+			},
+		},
+	}
+	mergeNetworkStateIntoResult(result, state)
+	return types.PrintResult(result, cniVersion)
 }
 
 func linkFromPath(path string) (netlink.Link, error) {
