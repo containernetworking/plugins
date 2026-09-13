@@ -100,7 +100,7 @@ func buildOneConfig(netName string, cniVersion string, orig *Net, prevResult typ
 
 type tester interface {
 	// verifyResult minimally verifies the Result and returns the interface's MAC address
-	verifyResult(result types.Result, name string) string
+	verifyResult(result types.Result, err error, name string, numAddrs int) string
 }
 
 type testerBase struct{}
@@ -126,45 +126,62 @@ func newTesterByVersion(version string) tester {
 }
 
 // verifyResult minimally verifies the Result and returns the interface's MAC address
-func (t *testerV10x) verifyResult(result types.Result, name string) string {
+func (t *testerV10x) verifyResult(result types.Result, err error, name string, numAddrs int) string {
+	// Validate error from the CNI ADD
+	Expect(err).NotTo(HaveOccurred())
+
 	r, err := types100.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(r.Interfaces).To(HaveLen(1))
 	Expect(r.Interfaces[0].Name).To(Equal(name))
-	Expect(r.IPs).To(HaveLen(1))
+	Expect(r.IPs).To(HaveLen(numAddrs))
 
 	return r.Interfaces[0].Mac
 }
 
-func verify0403(result types.Result, name string) string {
+func verify0403(result types.Result, err error, name string, numAddrs int) string {
+	// Validate error from the CNI ADD
+	Expect(err).NotTo(HaveOccurred())
+
 	r, err := types040.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(r.Interfaces).To(HaveLen(1))
 	Expect(r.Interfaces[0].Name).To(Equal(name))
-	Expect(r.IPs).To(HaveLen(1))
+	Expect(r.IPs).To(HaveLen(numAddrs))
 
 	return r.Interfaces[0].Mac
 }
 
 // verifyResult minimally verifies the Result and returns the interface's MAC address
-func (t *testerV04x) verifyResult(result types.Result, name string) string {
-	return verify0403(result, name)
+func (t *testerV04x) verifyResult(result types.Result, err error, name string, numAddrs int) string {
+	return verify0403(result, err, name, numAddrs)
 }
 
 // verifyResult minimally verifies the Result and returns the interface's MAC address
-func (t *testerV03x) verifyResult(result types.Result, name string) string {
-	return verify0403(result, name)
+func (t *testerV03x) verifyResult(result types.Result, err error, name string, numAddrs int) string {
+	return verify0403(result, err, name, numAddrs)
 }
 
 // verifyResult minimally verifies the Result and returns the interface's MAC address
-func (t *testerV01xOr02x) verifyResult(result types.Result, _ string) string {
+func (t *testerV01xOr02x) verifyResult(result types.Result, err error, _ string, numAddrs int) string {
+	if result == nil && numAddrs == 0 {
+		Expect(err).To(MatchError("cannot convert: no valid IP addresses"))
+		return ""
+	}
+
 	r, err := types020.GetResult(result)
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(r.IP4.IP.IP).NotTo(BeNil())
-	Expect(r.IP6).To(BeNil())
+	var numIPs int
+	if r.IP4 != nil && r.IP4.IP.IP != nil {
+		numIPs++
+	}
+	if r.IP6 != nil && r.IP6.IP.IP != nil {
+		numIPs++
+	}
+	Expect(numIPs).To(Equal(numAddrs))
 
 	// 0.2 and earlier don't return MAC address
 	return ""
@@ -323,6 +340,92 @@ var _ = Describe("vlan Operations", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
+			It(fmt.Sprintf("[%s] configures and deconfigures a l2 vlan link with ADD/DEL", ver), func() {
+				const IFNAME = "ethX"
+
+				conf := fmt.Sprintf(`{
+			    "cniVersion": "%s",
+			    "name": "vlanTestl2",
+			    "type": "vlan",
+			    "master": "%s",
+			    "vlanId": 1234,
+			    "linkInContainer": %t,
+			    "ipam": {}
+			}`, ver, masterInterface, isInContainer)
+
+				args := &skel.CmdArgs{
+					ContainerID: "dummy",
+					Netns:       targetNS.Path(),
+					IfName:      IFNAME,
+					StdinData:   []byte(conf),
+				}
+
+				var macAddress string
+				err := originalNS.Do(func(ns.NetNS) error {
+					defer GinkgoRecover()
+
+					if testutils.SpecVersionHasSTATUS(ver) {
+						err := testutils.CmdStatus(func() error {
+							return cmdStatus(args)
+						})
+						Expect(err).NotTo(HaveOccurred())
+					}
+
+					result, _, err := testutils.CmdAddWithArgs(args, func() error {
+						return cmdAdd(args)
+					})
+
+					t := newTesterByVersion(ver)
+					macAddress = t.verifyResult(result, err, IFNAME, 0)
+					return nil
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				// Make sure vlan link exists in the target namespace and is up
+				err = targetNS.Do(func(ns.NetNS) error {
+					defer GinkgoRecover()
+
+					link, err := netlinksafe.LinkByName(IFNAME)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(link.Attrs().Name).To(Equal(IFNAME))
+					Expect(link.Attrs().Flags & net.FlagUp).To(Equal(net.FlagUp))
+
+					if macAddress != "" {
+						hwaddr, err := net.ParseMAC(macAddress)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(link.Attrs().HardwareAddr).To(Equal(hwaddr))
+					}
+
+					addrs, err := netlinksafe.AddrList(link, syscall.AF_INET)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(addrs).To(BeEmpty())
+					return nil
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				err = originalNS.Do(func(ns.NetNS) error {
+					defer GinkgoRecover()
+
+					err := testutils.CmdDelWithArgs(args, func() error {
+						return cmdDel(args)
+					})
+					Expect(err).NotTo(HaveOccurred())
+					return nil
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				// Make sure vlan link has been deleted
+				err = targetNS.Do(func(ns.NetNS) error {
+					defer GinkgoRecover()
+
+					link, err := netlinksafe.LinkByName(IFNAME)
+					Expect(err).To(HaveOccurred())
+					Expect(link).To(BeNil())
+					return nil
+				})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
 			It(fmt.Sprintf("[%s] configures and deconfigures a vlan link with ADD/CHECK/DEL", ver), func() {
 				const IFNAME = "ethX"
 
@@ -365,9 +468,8 @@ var _ = Describe("vlan Operations", func() {
 					result, _, err = testutils.CmdAddWithArgs(args, func() error {
 						return cmdAdd(args)
 					})
-					Expect(err).NotTo(HaveOccurred())
 
-					macAddress = t.verifyResult(result, IFNAME)
+					macAddress = t.verifyResult(result, err, IFNAME, 1)
 					return nil
 				})
 				Expect(err).NotTo(HaveOccurred())
