@@ -340,7 +340,7 @@ var _ = Describe("vlan Operations", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It(fmt.Sprintf("[%s] configures and deconfigures a l2 vlan link with ADD/DEL", ver), func() {
+			DescribeTable(fmt.Sprintf("[%s] configures and deconfigures a l2 vlan link with ADD/CHECK/DEL", ver), func(omitIPAM bool) {
 				const IFNAME = "ethX"
 
 				conf := fmt.Sprintf(`{
@@ -353,15 +353,24 @@ var _ = Describe("vlan Operations", func() {
 			    "ipam": {}
 			}`, ver, masterInterface, isInContainer)
 
+				var config map[string]json.RawMessage
+				Expect(json.Unmarshal([]byte(conf), &config)).To(Succeed())
+				if omitIPAM {
+					delete(config, "ipam")
+				}
+				stdin, err := json.Marshal(config)
+				Expect(err).NotTo(HaveOccurred())
+
 				args := &skel.CmdArgs{
 					ContainerID: "dummy",
 					Netns:       targetNS.Path(),
 					IfName:      IFNAME,
-					StdinData:   []byte(conf),
+					StdinData:   stdin,
 				}
 
+				var result types.Result
 				var macAddress string
-				err := originalNS.Do(func(ns.NetNS) error {
+				err = originalNS.Do(func(ns.NetNS) error {
 					defer GinkgoRecover()
 
 					if testutils.SpecVersionHasSTATUS(ver) {
@@ -371,7 +380,8 @@ var _ = Describe("vlan Operations", func() {
 						Expect(err).NotTo(HaveOccurred())
 					}
 
-					result, _, err := testutils.CmdAddWithArgs(args, func() error {
+					var err error
+					result, _, err = testutils.CmdAddWithArgs(args, func() error {
 						return cmdAdd(args)
 					})
 
@@ -380,6 +390,18 @@ var _ = Describe("vlan Operations", func() {
 					return nil
 				})
 				Expect(err).NotTo(HaveOccurred())
+
+				if testutils.SpecVersionHasCHECK(ver) {
+					config["prevResult"], err = json.Marshal(result)
+					Expect(err).NotTo(HaveOccurred())
+					args.StdinData, err = json.Marshal(config)
+					Expect(err).NotTo(HaveOccurred())
+					err = originalNS.Do(func(ns.NetNS) error {
+						return testutils.CmdCheckWithArgs(args, func() error { return cmdCheck(args) })
+					})
+					Expect(err).NotTo(HaveOccurred())
+					args.StdinData = stdin
+				}
 
 				// Make sure vlan link exists in the target namespace and is up
 				err = targetNS.Do(func(ns.NetNS) error {
@@ -410,6 +432,10 @@ var _ = Describe("vlan Operations", func() {
 						return cmdDel(args)
 					})
 					Expect(err).NotTo(HaveOccurred())
+					err = testutils.CmdDelWithArgs(args, func() error {
+						return cmdDel(args)
+					})
+					Expect(err).NotTo(HaveOccurred())
 					return nil
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -424,7 +450,10 @@ var _ = Describe("vlan Operations", func() {
 					return nil
 				})
 				Expect(err).NotTo(HaveOccurred())
-			})
+			},
+				Entry("with empty IPAM", false),
+				Entry("with omitted IPAM", true),
+			)
 
 			It(fmt.Sprintf("[%s] configures and deconfigures a vlan link with ADD/CHECK/DEL", ver), func() {
 				const IFNAME = "ethX"
