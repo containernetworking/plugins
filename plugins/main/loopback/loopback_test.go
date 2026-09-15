@@ -62,10 +62,6 @@ var _ = Describe("Loopback", func() {
 	})
 
 	for _, ver := range testutils.AllSpecVersions {
-		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
-		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
-		ver := ver
-
 		Context("when given a network namespace", func() {
 			It(fmt.Sprintf("[%s] sets the lo device to UP", ver), func() {
 				command.Stdin = generateConfig(ver)

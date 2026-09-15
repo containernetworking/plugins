@@ -54,10 +54,6 @@ var _ = Describe("portmapping configuration (nftables)", func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	for _, ver := range []string{"0.3.0", "0.3.1", "0.4.0", "1.0.0"} {
-		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
-		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
-		ver := ver
-
 		Describe("nftables rules", func() {
 			var pmNFT *portMapperNFTables
 			var ipv4Fake, ipv6Fake *knftables.Fake
