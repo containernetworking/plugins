@@ -99,10 +99,9 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 	err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 		vrf, err := findVRF(conf.VRFName)
-		if _, ok := err.(netlink.LinkNotFoundError); ok {
+		if linkNotFound(err) {
 			return nil
 		}
-
 		if err != nil {
 			return err
 		}
@@ -119,8 +118,11 @@ func cmdDel(args *skel.CmdArgs) error {
 
 		// Meaning, we are deleting the last interface assigned to the VRF
 		if len(interfaces) == 0 {
-			err = netlink.LinkDel(vrf)
-			if err != nil {
+			// CNI DEL must be idempotent: a concurrent netns teardown can remove
+			// the VRF between findVRF and here, so LinkDel returns ENODEV. Treat
+			// "already gone" as success (LinkDel returns a bare errno, not the
+			// typed netlink.LinkNotFoundError).
+			if err = netlink.LinkDel(vrf); err != nil && !linkNotFound(err) {
 				return err
 			}
 		}
