@@ -111,15 +111,20 @@ func addInterface(vrf *netlink.Vrf, intf string) error {
 
 	// Save all routes that are not local and connected, before setting master,
 	// because otherwise those routes will be deleted after interface is moved.
+	//
+	// Only filter by scope here. Multipath (ECMP) routes have LinkIndex == 0 and
+	// carry per-nexthop ifindexes in MultiPath, so RT_FILTER_OIF would miss them
+	// (e.g. an IPv6 ::/0 shared with the primary interface). We extract the
+	// nexthop(s) belonging to this interface below.
 	filter := &netlink.Route{
-		LinkIndex: i.Attrs().Index,
-		Scope:     netlink.SCOPE_UNIVERSE, // Exclude local and connected routes
+		Scope: netlink.SCOPE_UNIVERSE, // Exclude local and connected routes
 	}
-	filterMask := netlink.RT_FILTER_OIF | netlink.RT_FILTER_SCOPE // Filter based on link index and scope
-	globalRoutes, err := netlinksafe.RouteListFiltered(netlink.FAMILY_ALL, filter, filterMask)
+	filterMask := netlink.RT_FILTER_SCOPE
+	allGlobalRoutes, err := netlinksafe.RouteListFiltered(netlink.FAMILY_ALL, filter, filterMask)
 	if err != nil {
 		return fmt.Errorf("failed getting all routes for %s", intf)
 	}
+	globalRoutes := routesForInterface(allGlobalRoutes, i.Attrs().Index)
 
 	err = netlink.LinkSetMaster(i, vrf)
 	if err != nil {
@@ -239,4 +244,57 @@ func getGlobalAddresses(link netlink.Link, family int) ([]netlink.Addr, error) {
 	}
 
 	return globalAddresses, nil
+}
+
+// routesForInterface returns the subset of routes that egress via linkIndex.
+// For multipath routes, only nexthops on that interface are kept (converted to a
+// single-hop route when only one nexthop remains).
+func routesForInterface(routes []netlink.Route, linkIndex int) []netlink.Route {
+	result := make([]netlink.Route, 0, len(routes))
+	for _, route := range routes {
+		if r, ok := routeForInterface(route, linkIndex); ok {
+			result = append(result, r)
+		}
+	}
+	return result
+}
+
+// routeForInterface returns a copy of route that only includes nexthops on
+// linkIndex. ok is false when the route does not use that interface.
+func routeForInterface(route netlink.Route, linkIndex int) (netlink.Route, bool) {
+	if len(route.MultiPath) > 0 {
+		nhs := make([]*netlink.NexthopInfo, 0, len(route.MultiPath))
+		for _, nh := range route.MultiPath {
+			if nh == nil || nh.LinkIndex != linkIndex {
+				continue
+			}
+			nhCopy := *nh
+			nhs = append(nhs, &nhCopy)
+		}
+		if len(nhs) == 0 {
+			return netlink.Route{}, false
+		}
+
+		r := route
+		if len(nhs) == 1 {
+			// Prefer a simple single-nexthop form; this is what IPAM originally
+			// installed before the kernel merged it into an ECMP route.
+			r.MultiPath = nil
+			r.LinkIndex = nhs[0].LinkIndex
+			r.Gw = nhs[0].Gw
+			r.NewDst = nhs[0].NewDst
+			r.Encap = nhs[0].Encap
+			r.Via = nhs[0].Via
+		} else {
+			r.MultiPath = nhs
+			r.LinkIndex = 0
+			r.Gw = nil
+		}
+		return r, true
+	}
+
+	if route.LinkIndex == linkIndex {
+		return route, true
+	}
+	return netlink.Route{}, false
 }
