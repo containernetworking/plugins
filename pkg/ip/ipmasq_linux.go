@@ -32,7 +32,7 @@ func SetupIPMasqForNetworks(backend *string, ipns []*net.IPNet, network, ifname,
 	if backend == nil {
 		// Prefer iptables, unless only nftables is available
 		defaultBackend := "iptables"
-		if !utils.SupportsIPTables() && utils.SupportsNFTables() {
+		if utils.PreferNFTablesDefault() {
 			defaultBackend = "nftables"
 		}
 		backend = &defaultBackend
