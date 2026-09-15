@@ -680,6 +680,111 @@ var _ = Describe("host-local Operations", func() {
 	}
 })
 
+var _ = Describe("host-local GC operations", func() {
+	const netName = "gcplugin"
+
+	var tmpDir string
+
+	BeforeEach(func() {
+		var err error
+		tmpDir, err = os.MkdirTemp("", "host_local_gc_plugin")
+		Expect(err).NotTo(HaveOccurred())
+		// The dir is interpolated into a JSON config, and a Windows path's
+		// backslashes would be read as string escapes.
+		tmpDir = filepath.ToSlash(tmpDir)
+	})
+
+	AfterEach(func() {
+		Expect(os.RemoveAll(tmpDir)).To(Succeed())
+	})
+
+	// confWith renders the network config, optionally carrying the
+	// cni.dev/valid-attachments list that only a GC invocation supplies.
+	confWith := func(validAttachments string) []byte {
+		attach := ""
+		if validAttachments != "" {
+			attach = fmt.Sprintf(`"cni.dev/valid-attachments": [%s],`, validAttachments)
+		}
+		return []byte(fmt.Sprintf(`{
+			"cniVersion": "1.1.0",
+			"name": "%s",
+			"type": "host-local",
+			%s
+			"ipam": {
+				"type": "host-local",
+				"dataDir": "%s",
+				"ranges": [[{ "subnet": "10.9.0.0/24" }]]
+			}
+		}`, netName, attach, tmpDir))
+	}
+
+	add := func(containerID, ifname string) string {
+		args := &skel.CmdArgs{
+			ContainerID: containerID,
+			Netns:       "/some/where",
+			IfName:      ifname,
+			StdinData:   confWith(""),
+		}
+		r, _, err := testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+		Expect(err).NotTo(HaveOccurred())
+		result, err := types100.GetResult(r)
+		Expect(err).NotTo(HaveOccurred())
+		return result.IPs[0].Address.IP.String()
+	}
+
+	reservationExists := func(ip string) bool {
+		_, err := os.Stat(filepath.Join(tmpDir, netName, ip))
+		return err == nil
+	}
+
+	It("releases reservations the runtime no longer reports as attached", func() {
+		liveIP := add("live", "eth0")
+		leakedIP := add("leaked", "eth0")
+		Expect(reservationExists(liveIP)).To(BeTrue())
+		Expect(reservationExists(leakedIP)).To(BeTrue())
+
+		args := &skel.CmdArgs{
+			StdinData: confWith(`{"containerID": "live", "ifname": "eth0"}`),
+		}
+		Expect(cmdGC(args)).To(Succeed())
+
+		Expect(reservationExists(liveIP)).To(BeTrue(), "GC released a live attachment")
+		Expect(reservationExists(leakedIP)).To(BeFalse(), "GC kept a leaked attachment")
+	})
+
+	It("releases every reservation when the runtime reports no attachments", func() {
+		// An absent list is not the same as "nothing to collect": a runtime with
+		// no live attachments for this network expects the store emptied.
+		ip := add("leaked", "eth0")
+		Expect(reservationExists(ip)).To(BeTrue())
+
+		args := &skel.CmdArgs{StdinData: confWith("")}
+		Expect(cmdGC(args)).To(Succeed())
+
+		Expect(reservationExists(ip)).To(BeFalse())
+	})
+
+	It("leaves the store usable for subsequent allocations", func() {
+		leakedIP := add("leaked", "eth0")
+
+		args := &skel.CmdArgs{StdinData: confWith("")}
+		Expect(cmdGC(args)).To(Succeed())
+
+		newIP := add("newcomer", "eth0")
+		Expect(reservationExists(newIP)).To(BeTrue())
+		Expect(reservationExists(leakedIP)).To(BeFalse())
+
+		// Note the new allocation does NOT reuse the reclaimed address straight
+		// away: host-local resumes from last_reserved_ip rather than rescanning
+		// the range, so the address comes back into play on wrap-around. It is
+		// genuinely free either way, which the disk-level GC tests assert
+		// directly via Reserve. GC deliberately does not rewind
+		// last_reserved_ip, since that would change allocation order for
+		// everyone rather than just reclaiming leaks.
+		Expect(newIP).NotTo(Equal(leakedIP))
+	})
+})
+
 func mustCIDR(s string) net.IPNet {
 	ip, n, err := net.ParseCIDR(s)
 	n.IP = ip

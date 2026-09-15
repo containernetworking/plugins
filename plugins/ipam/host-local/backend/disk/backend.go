@@ -21,12 +21,17 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend"
 )
 
 const (
 	lastIPFilePrefix = "last_reserved_ip."
 	LineBreak        = "\r\n"
+	// lockFileName is the file NewFileLock creates when it is handed a
+	// directory. It shares the data dir with the reservations, so GC has to know
+	// its name in order not to delete it.
+	lockFileName = "lock"
 )
 
 var defaultDataDir = "/var/lib/cni/networks"
@@ -163,6 +168,63 @@ func (s *Store) ReleaseByID(id string, ifname string) error {
 		_, err = s.ReleaseByKey(match)
 	}
 	return err
+}
+
+// GC releases every reservation whose attachment is absent from attachments,
+// which the runtime supplies as the complete set of attachments it still
+// considers live. It is how a reservation leaked by a DEL that never arrived
+// gets reclaimed.
+//
+// Like ReleaseByID this is deliberately tolerant of per-file errors: releasing
+// as much as possible is more useful than stopping at the first unreadable
+// reservation.
+func (s *Store) GC(attachments []types.GCAttachment) error {
+	s.Lock()
+	defer s.Unlock()
+
+	valid := make(map[string]struct{}, len(attachments))
+	// Reservations written before the ifname was recorded hold only a container
+	// ID, so keep a second set to match those. Without it the first GC after an
+	// upgrade would release every pre-upgrade allocation.
+	validLegacy := make(map[string]struct{}, len(attachments))
+	for _, a := range attachments {
+		id := strings.TrimSpace(a.ContainerID)
+		valid[id+LineBreak+a.IfName] = struct{}{}
+		validLegacy[id] = struct{}{}
+	}
+
+	entries, err := os.ReadDir(s.dataDir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.IsDir() || !isReservation(e.Name()) {
+			continue
+		}
+		path := filepath.Join(s.dataDir, e.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		key := strings.TrimSpace(string(data))
+		if _, ok := valid[key]; ok {
+			continue
+		}
+		if !strings.Contains(key, LineBreak) {
+			if _, ok := validLegacy[key]; ok {
+				continue
+			}
+		}
+		_ = os.Remove(path)
+	}
+	return nil
+}
+
+// isReservation reports whether a file in a network's data dir is an address
+// reservation. The lock and the per-range last_reserved_ip markers share that
+// directory and have to survive a GC.
+func isReservation(name string) bool {
+	return name != lockFileName && !strings.HasPrefix(name, lastIPFilePrefix)
 }
 
 // GetByID returns the IPs which have been allocated to the specific ID
