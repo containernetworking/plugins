@@ -19,7 +19,8 @@ import (
 	"net"
 )
 
-// NextIP returns IP incremented by 1, if IP is invalid, return nil
+// NextIP returns IP incremented by 1, or nil if IP is invalid or already the
+// last address in its family.
 func NextIP(ip net.IP) net.IP {
 	normalizedIP := normalizeIP(ip)
 	if normalizedIP == nil {
@@ -30,7 +31,8 @@ func NextIP(ip net.IP) net.IP {
 	return intToIP(i.Add(i, big.NewInt(1)), len(normalizedIP) == net.IPv6len)
 }
 
-// PrevIP returns IP decremented by 1, if IP is invalid, return nil
+// PrevIP returns IP decremented by 1, or nil if IP is invalid or already the
+// first address in its family.
 func PrevIP(ip net.IP) net.IP {
 	normalizedIP := normalizeIP(ip)
 	if normalizedIP == nil {
@@ -62,17 +64,29 @@ func ipToInt(ip net.IP) *big.Int {
 }
 
 func intToIP(i *big.Int, isIPv6 bool) net.IP {
-	intBytes := i.Bytes()
-
-	if len(intBytes) == net.IPv4len || len(intBytes) == net.IPv6len {
-		return intBytes
+	// big.Int.Bytes returns the absolute value, so a value that went below the
+	// first address of its family would otherwise come back as a positive IP.
+	if i.Sign() < 0 {
+		return nil
 	}
 
+	ipLen := net.IPv4len
 	if isIPv6 {
-		return append(make([]byte, net.IPv6len-len(intBytes)), intBytes...)
+		ipLen = net.IPv6len
 	}
 
-	return append(make([]byte, net.IPv4len-len(intBytes)), intBytes...)
+	intBytes := i.Bytes()
+	// The value overflowed past the last address of its family.
+	if len(intBytes) > ipLen {
+		return nil
+	}
+
+	// Always return the family's fixed width. Choosing the length from the
+	// minimal big.Int encoding would turn a low IPv6 value whose leading bytes
+	// are zero into a 4-byte IPv4 address.
+	out := make(net.IP, ipLen)
+	copy(out[ipLen-len(intBytes):], intBytes)
+	return out
 }
 
 // normalizeIP will normalize IP by family,
