@@ -97,3 +97,85 @@ func TestParseOptionName(t *testing.T) {
 		})
 	}
 }
+
+func TestParseSuppress(t *testing.T) {
+	tests := []struct {
+		name        string
+		items       []string
+		wantGateway bool
+		wantErr     bool
+	}{
+		{name: "nil", items: nil, wantGateway: false},
+		{name: "empty", items: []string{}, wantGateway: false},
+		{name: "gateway", items: []string{"gateway"}, wantGateway: true},
+		{name: "unknown", items: []string{"routes"}, wantErr: true},
+		{name: "gateway and unknown", items: []string{"gateway", "nope"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseSuppress(tt.items)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("parseSuppress() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got != tt.wantGateway {
+				t.Errorf("parseSuppress() = %v, want %v", got, tt.wantGateway)
+			}
+		})
+	}
+}
+
+func TestIsDefaultRoute(t *testing.T) {
+	_, def4, err := net.ParseCIDR("0.0.0.0/0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, def6, err := net.ParseCIDR("::/0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, nonDef, err := net.ParseCIDR("10.0.0.0/8")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !isDefaultRoute(*def4) {
+		t.Errorf("expected 0.0.0.0/0 to be default")
+	}
+	if !isDefaultRoute(*def6) {
+		t.Errorf("expected ::/0 to be default")
+	}
+	if isDefaultRoute(*nonDef) {
+		t.Errorf("expected 10.0.0.0/8 not to be default")
+	}
+}
+
+func TestFilterDefaultRoutes(t *testing.T) {
+	_, def4, err := net.ParseCIDR("0.0.0.0/0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, lan, err := net.ParseCIDR("10.0.0.0/8")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	routes := []*types.Route{
+		{Dst: *def4, GW: net.IPv4(192, 168, 1, 1)},
+		{Dst: *lan, GW: net.IPv4(192, 168, 1, 1)},
+		nil,
+	}
+	got := filterDefaultRoutes(routes)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(got))
+	}
+	if got[0].Dst.String() != "10.0.0.0/8" {
+		t.Errorf("unexpected route: %v", got[0].Dst)
+	}
+
+	if filterDefaultRoutes(nil) != nil {
+		t.Errorf("nil input should return nil")
+	}
+	if len(filterDefaultRoutes([]*types.Route{})) != 0 {
+		t.Errorf("empty input should return empty")
+	}
+}

@@ -106,11 +106,26 @@ func (d *DHCP) Allocate(args *skel.CmdArgs, result *current.Result) error {
 
 	d.setLease(clientID, l)
 
+	suppressGW, err := parseSuppress(conf.IPAM.Suppress)
+	if err != nil {
+		return err
+	}
+
+	gw := l.Gateway()
+	routes := l.Routes()
+	if suppressGW {
+		// Clear gateway and drop default routes so main plugins do not install
+		// a default route from this attachment. Keep any non-default routes
+		// (e.g. classless static routes / option 121).
+		gw = nil
+		routes = filterDefaultRoutes(routes)
+	}
+
 	result.IPs = []*current.IPConfig{{
 		Address: *ipn,
-		Gateway: l.Gateway(),
+		Gateway: gw,
 	}}
-	result.Routes = l.Routes()
+	result.Routes = routes
 	if conf.IPAM.Priority != 0 {
 		for _, r := range result.Routes {
 			r.Priority = conf.IPAM.Priority
