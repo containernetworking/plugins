@@ -342,7 +342,7 @@ var _ = Describe("DHCP Operations", func() {
 			wg.Add(3)
 			started := sync.WaitGroup{}
 			started.Add(3)
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				go func() {
 					defer GinkgoRecover()
 

@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/vishvananda/netlink"
@@ -504,12 +505,7 @@ func hasDpdkDriver(pciaddr string) (bool, error) {
 		return false, err
 	}
 	driverName := driverStat.Name()
-	for _, drv := range userspaceDrivers {
-		if driverName == drv {
-			return true, nil
-		}
-	}
-	return false, nil
+	return slices.Contains(userspaceDrivers, driverName), nil
 }
 
 func printLink(dev netlink.Link, cniVersion string, containerNs ns.NetNS) error {
