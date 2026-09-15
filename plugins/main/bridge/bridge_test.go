@@ -17,15 +17,19 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/networkplumbing/go-nft/nft"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	gomegaformat "github.com/onsi/gomega/format"
+	gomegatypes "github.com/onsi/gomega/types"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
 	"sigs.k8s.io/knftables"
@@ -405,6 +409,30 @@ func (tc testCase) expectedCIDRs() ([]*net.IPNet, []*net.IPNet) {
 		appendSubnet(r.subnet)
 	}
 	return cidrsV4, cidrsV6
+}
+
+// Attaches a veth port with an optional fixed MAC address to a bridge in the
+// current network namespace. To be cleaned up via the returned function.
+func attachVethPort(br netlink.Link, mac string) (func() error, error) {
+	linkAttrs := netlink.NewLinkAttrs()
+	linkAttrs.Name = "testport0"
+	if mac != "" {
+		hwAddr, err := net.ParseMAC(mac)
+		if err != nil {
+			return nil, err
+		}
+
+		linkAttrs.HardwareAddr = hwAddr
+	}
+	veth := &netlink.Veth{LinkAttrs: linkAttrs, PeerName: "testport1"}
+	if err := netlink.LinkAdd(veth); err != nil {
+		return nil, err
+	}
+	if err := netlink.LinkSetMaster(veth, br); err != nil {
+		return nil, err
+	}
+
+	return sync.OnceValue(func() error { return netlink.LinkDel(veth) }), nil
 }
 
 // delBridgeAddrs() deletes addresses from the bridge
@@ -2377,7 +2405,113 @@ var _ = Describe("bridge Operations", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			It(fmt.Sprintf("[%s] (%d) keeps a stable MAC even if the gateway address already exists", ver, i), func() {
+				err := originalNS.Do(func(ns.NetNS) error {
+					defer GinkgoRecover()
+
+					tc.cniVersion = ver
+					br, _, err := setupBridge(tc.netConf())
+					Expect(err).NotTo(HaveOccurred())
+					link, err := netlinksafe.LinkByName(BRNAME)
+					Expect(err).NotTo(HaveOccurred())
+					originalMAC := link.Attrs().HardwareAddr
+
+					// Pre-add the gateway address the plugin is going to
+					// configure, as left behind by an ADD that failed midway.
+					_, subnet, err := net.ParseCIDR(tc.subnet)
+					Expect(err).NotTo(HaveOccurred())
+					gwIP := calcGatewayIP(subnet)
+					err = netlink.AddrAdd(br, &netlink.Addr{
+						IPNet: &net.IPNet{IP: gwIP, Mask: subnet.Mask},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+
+					// The MAC must have been pinned nevertheless: it neither
+					// got zeroed when the container veth was removed, nor
+					// does it change with port churn.
+					link, err = netlinksafe.LinkByName(BRNAME)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(link.Attrs().HardwareAddr).To(Equal(originalMAC))
+
+					cleanupVethPort, err := attachVethPort(br, "02:00:00:00:00:01")
+					Expect(err).NotTo(HaveOccurred())
+					defer func() { Expect(cleanupVethPort()).To(Succeed()) }()
+
+					link, err = netlinksafe.LinkByName(BRNAME)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(link.Attrs().HardwareAddr).To(Equal(originalMAC))
+					return nil
+				})
+				Expect(err).NotTo(HaveOccurred())
+			})
 		}
+
+		It(fmt.Sprintf("[%s] keeps a stable MAC even if the bridge previously lost all its ports", ver), func() {
+			err := originalNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+
+				// Test dual-stack here: A dual-stack ADD configures a
+				// gateway per family, so it sets the bridge MAC more than
+				// once in a single invocation.
+				tc := testCase{
+					cniVersion: ver,
+					ranges: []rangeInfo{
+						{subnet: "10.1.2.0/24"},
+						{subnet: "2001:db8:42::/64"},
+					},
+					expGWCIDRs: []string{"10.1.2.1/24", "2001:db8:42::1/64"},
+				}
+
+				br, _, err := setupBridge(tc.netConf())
+				Expect(err).NotTo(HaveOccurred())
+
+				// Attach and remove a port so the kernel first generates,
+				// and then zeroes the bridge's MAC.
+				cleanupVethPort, err := attachVethPort(br, "")
+				Expect(err).NotTo(HaveOccurred())
+				defer func() { Expect(cleanupVethPort()).To(Succeed()) }()
+				link, err := netlinksafe.LinkByName(BRNAME)
+				Expect(err).NotTo(HaveOccurred())
+				kernelMAC := link.Attrs().HardwareAddr
+				Expect(kernelMAC).NotTo(beAZeroMAC(), "kernel didn't generate a MAC")
+				Expect(kernelMAC[0]&0x01).To(BeZero(), "kernel-generated MAC is not unicast")
+				Expect(kernelMAC[0]&0x02).NotTo(BeZero(), "kernel-generated MAC is not locally administered")
+				Expect(cleanupVethPort()).To(Succeed())
+				link, err = netlinksafe.LinkByName(BRNAME)
+				Expect(err).NotTo(HaveOccurred())
+				// If the expectation below fails, it may be because the
+				// kernel behavior has changed and it keeps the original
+				// address.
+				Expect(link.Attrs().HardwareAddr).To(beAZeroMAC(), "kernel should have zeroed the MAC after the bridge lost its last port")
+
+				cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+
+				// The plugin must have generated a valid, locally administered
+				// unicast MAC address. This MAC address must have survived the
+				// removal of the container veth during DEL.
+				link, err = netlinksafe.LinkByName(BRNAME)
+				Expect(err).NotTo(HaveOccurred())
+				bridgeMAC := link.Attrs().HardwareAddr
+				Expect(bridgeMAC).NotTo(beAZeroMAC(), "bridge plugin should have generated a MAC")
+				Expect(bridgeMAC).NotTo(Equal(kernelMAC), "generated MAC is the same as the kernel-generated one")
+				Expect(bridgeMAC[0]&0x01).To(BeZero(), "generated MAC should be unicast")
+				Expect(bridgeMAC[0]&0x02).NotTo(BeZero(), "generated MAC should be locally administered")
+
+				// A second pod's ADD on the same bridge must keep that MAC.
+				// Every pod on the node shares the bridge. Between the two
+				// ADDs, it briefly had no ports. Because the generated MAC
+				// address was pinned, the kernel does not zero it.
+				cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+				link, err = netlinksafe.LinkByName(BRNAME)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(link.Attrs().HardwareAddr).To(Equal(bridgeMAC), "generated MAC changed, but it should have been pinned")
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
 
 		It(fmt.Sprintf("[%s] uses an explicit MAC addresses for the container iface (from CNI_ARGS)", ver), func() {
 			err := originalNS.Do(func(ns.NetNS) error {
@@ -2756,4 +2890,26 @@ func assertMacSpoofCheckRules(assert func(actual interface{}, expectedLen int)) 
 		nil, nil, nil,
 		"macspoofchk-dummy-0-eth0",
 	)), 2)
+}
+
+func beAZeroMAC() gomegatypes.GomegaMatcher {
+	return zeroMACMatcher{}
+}
+
+type zeroMACMatcher struct{}
+
+func (zeroMACMatcher) Match(actual any) (bool, error) {
+	if addr, ok := actual.(net.HardwareAddr); ok {
+		return isZeroMAC(addr), nil
+	}
+
+	return false, errors.New("expected a net.HardwareAddr")
+}
+
+func (zeroMACMatcher) FailureMessage(actual any) string {
+	return gomegaformat.Message(fmt.Sprint(actual), "to be a zero MAC")
+}
+
+func (zeroMACMatcher) NegatedFailureMessage(actual any) string {
+	return gomegaformat.Message(fmt.Sprint(actual), "not to be a zero MAC")
 }
