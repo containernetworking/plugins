@@ -22,6 +22,7 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"strings"
 	"syscall"
 	"time"
 
@@ -39,6 +40,10 @@ import (
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 	"github.com/containernetworking/plugins/pkg/utils/sysctl"
 )
+
+func getGroupFwdMaskPath(brName string) string {
+	return fmt.Sprintf("/sys/class/net/%s/bridge/group_fwd_mask", brName)
+}
 
 // For testcases to force an error after IPAM has been performed
 var debugPostIPAMError error
@@ -63,6 +68,7 @@ type NetConf struct {
 	EnableDad                 bool         `json:"enabledad,omitempty"`
 	DisableContainerInterface bool         `json:"disableContainerInterface,omitempty"`
 	PortIsolation             bool         `json:"portIsolation,omitempty"`
+	GroupFwdMask              int          `json:"groupFwdMask,omitempty"`
 
 	Args struct {
 		Cni BridgeArgs `json:"cni,omitempty"`
@@ -110,6 +116,9 @@ func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 	}
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
+	}
+	if n.GroupFwdMask < 0 || n.GroupFwdMask > 0xFFFF {
+		return nil, "", fmt.Errorf("invalid groupFwdMask %d", n.GroupFwdMask)
 	}
 	if n.Vlan < 0 || n.Vlan > 4094 {
 		return nil, "", fmt.Errorf("invalid VLAN ID %d (must be between 0 and 4094)", n.Vlan)
@@ -329,7 +338,7 @@ func bridgeByName(name string) (*netlink.Bridge, error) {
 	return br, nil
 }
 
-func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*netlink.Bridge, error) {
+func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool, groupFwdMask int) (*netlink.Bridge, error) {
 	linkAttrs := netlink.NewLinkAttrs()
 	linkAttrs.Name = brName
 	linkAttrs.MTU = mtu
@@ -340,9 +349,16 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 		br.VlanFiltering = &vlanFiltering
 	}
 
+	// Track whether the bridge was newly created
+	created := false
+
 	err := netlink.LinkAdd(br)
-	if err != nil && err != syscall.EEXIST {
-		return nil, fmt.Errorf("could not add %q: %v", brName, err)
+	if err != nil {
+		if err != syscall.EEXIST {
+			return nil, fmt.Errorf("could not add %q: %v", brName, err)
+		}
+	} else {
+		created = true
 	}
 
 	if promiscMode {
@@ -356,6 +372,23 @@ func ensureBridge(brName string, mtu int, promiscMode, vlanFiltering bool) (*net
 	br, err = bridgeByName(brName)
 	if err != nil {
 		return nil, err
+	}
+
+	// Validate group_fwd_mask if bridge already existed
+	if !created && groupFwdMask != 0 {
+		path := getGroupFwdMaskPath(brName)
+		data, err := os.ReadFile(path)
+		if err == nil {
+			current := strings.TrimSpace(string(data))
+			expected := fmt.Sprintf("%d", groupFwdMask)
+
+			if current != expected && current != fmt.Sprintf("0x%x", groupFwdMask) {
+				return nil, fmt.Errorf(
+					"bridge %q already exists with different group_fwd_mask (current=%s, requested=%s)",
+					brName, current, expected,
+				)
+			}
+		}
 	}
 
 	// we want to own the routes for this interface
@@ -514,7 +547,7 @@ func calcGatewayIP(ipn *net.IPNet) net.IP {
 func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
 	vlanFiltering := n.Vlan != 0 || n.VlanTrunk != nil
 	// create bridge if necessary
-	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, vlanFiltering)
+	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, vlanFiltering, n.GroupFwdMask)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create bridge %q: %v", n.BrName, err)
 	}
