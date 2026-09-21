@@ -15,6 +15,8 @@
 package utils
 
 import (
+	"os/exec"
+
 	"github.com/coreos/go-iptables/iptables"
 	"sigs.k8s.io/knftables"
 )
@@ -31,6 +33,20 @@ func SupportsIPTables() bool {
 	// We don't care whether the chain actually exists, only whether we can *check*
 	// whether it exists.
 	_, err = ipt.ChainExists("filter", "INPUT")
+	return err == nil
+}
+
+// IPTablesBinaryAvailable tests whether the iptables binary is present in PATH.
+// Unlike SupportsIPTables, this does not require CAP_NET_ADMIN.
+func IPTablesBinaryAvailable() bool {
+	_, err := exec.LookPath("iptables")
+	return err == nil
+}
+
+// NFTablesBinaryAvailable tests whether the nft binary is present in PATH.
+// Unlike SupportsNFTables, this does not require CAP_NET_ADMIN.
+func NFTablesBinaryAvailable() bool {
+	_, err := exec.LookPath("nft")
 	return err == nil
 }
 
