@@ -63,6 +63,7 @@ type NetConf struct {
 	EnableDad                 bool         `json:"enabledad,omitempty"`
 	DisableContainerInterface bool         `json:"disableContainerInterface,omitempty"`
 	PortIsolation             bool         `json:"portIsolation,omitempty"`
+	UplinkInterface           string       `json:"uplinkInterface,omitempty"`
 
 	Args struct {
 		Cni BridgeArgs `json:"cni,omitempty"`
@@ -525,6 +526,29 @@ func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
 	}, nil
 }
 
+func ensureUplinkVlan(n *NetConf) error {
+	uplinkIf, err := netlinksafe.LinkByName(n.UplinkInterface)
+	if err != nil {
+		return fmt.Errorf("failed to find uplink interface %q: %v", n.UplinkInterface, err)
+	}
+
+	if n.Vlan != 0 {
+		err = netlink.BridgeVlanAdd(uplinkIf, uint16(n.Vlan), false, false, false, false)
+		if err != nil {
+			return fmt.Errorf("failed to setup vlan tag on interface %q: %v", uplinkIf, err)
+		}
+	}
+
+	for _, vlan := range n.vlans {
+		err = netlink.BridgeVlanAdd(uplinkIf, uint16(vlan), false, false, false, false)
+		if err != nil {
+			return fmt.Errorf("failed to setup vlan tag on interface %q: %w", uplinkIf, err)
+		}
+	}
+
+	return nil
+}
+
 func enableIPForward(family int) error {
 	if family == netlink.FAMILY_V4 {
 		return ip.EnableIP4Forward()
@@ -568,6 +592,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 	hostInterface, containerInterface, err := setupVeth(netns, br, args.IfName, n.MTU, n.HairpinMode, n.Vlan, n.vlans, n.PreserveDefaultVlan, n.mac, n.PortIsolation)
 	if err != nil {
 		return err
+	}
+
+	if n.UplinkInterface != "" {
+		if err = ensureUplinkVlan(n); err != nil {
+			return err
+		}
 	}
 
 	// Assume L2 interface only

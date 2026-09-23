@@ -84,6 +84,7 @@ type testCase struct {
 	macspoofchk       bool
 	disableContIface  bool
 	portIsolation     bool
+	uplinkInterface   string
 
 	AddErr020 string
 	DelErr020 string
@@ -110,6 +111,12 @@ type testCase struct {
 type rangeInfo struct {
 	subnet  string
 	gateway string
+}
+
+type BridgeFixture struct {
+	NS         ns.NetNS
+	BridgeName string
+	UplinkName string
 }
 
 // netConf() creates a NetConf structure for a test case.
@@ -166,6 +173,9 @@ const (
 
 	portIsolation = `,
     "portIsolation": true`
+
+	uplinkInterface = `,
+    "uplinkInterface": "%s"`
 
 	ipamStartStr = `,
     "ipam": {
@@ -273,6 +283,10 @@ func (tc testCase) netConfJSON(dataDir string) string {
 
 	if tc.portIsolation {
 		conf += portIsolation
+	}
+
+	if tc.uplinkInterface != "" {
+		conf += fmt.Sprintf(uplinkInterface, tc.uplinkInterface)
 	}
 
 	if !tc.isLayer2 {
@@ -467,6 +481,91 @@ func ipVersion(ip net.IP) string {
 	return "6"
 }
 
+func NewUplinkBridgeFixture(netns ns.NetNS, bridgeName string) (*BridgeFixture, error) {
+	uplinkName := "dummy0"
+
+	err := netns.Do(func(ns.NetNS) error {
+		link := &netlink.Dummy{
+			LinkAttrs: netlink.LinkAttrs{
+				Name: uplinkName,
+			},
+		}
+		if err := netlink.LinkAdd(link); err != nil {
+			return fmt.Errorf("add dummy: %w", err)
+		}
+		if err := netlink.LinkSetUp(link); err != nil {
+			return fmt.Errorf("up dummy: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Create bridge
+	err = netns.Do(func(ns.NetNS) error {
+		defer GinkgoRecover()
+
+		bridge := &netlink.Bridge{LinkAttrs: netlink.LinkAttrs{Name: bridgeName}}
+		if err := netlink.LinkAdd(bridge); err != nil {
+			return fmt.Errorf("add bridge: %w", err)
+		}
+		if err := netlink.BridgeSetVlanFiltering(bridge, true); err != nil {
+			return fmt.Errorf("vlan filtering: %w", err)
+		}
+		if err := netlink.LinkSetUp(bridge); err != nil {
+			return fmt.Errorf("up bridge: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		_ = deleteLink(netns, uplinkName)
+		return nil, err
+	}
+
+	// Attach dummy to bridge
+	err = netns.Do(func(ns.NetNS) error {
+		link, err := netlinksafe.LinkByName(uplinkName)
+		if err != nil {
+			return fmt.Errorf("lookup dummy: %w", err)
+		}
+		bridge, err := netlinksafe.LinkByName(bridgeName)
+		if err != nil {
+			return fmt.Errorf("lookup bridge: %w", err)
+		}
+		return netlink.LinkSetMaster(link, bridge.(*netlink.Bridge))
+	})
+	if err != nil {
+		_ = deleteLink(netns, uplinkName)
+		_ = deleteLink(netns, bridgeName)
+		return nil, err
+	}
+
+	return &BridgeFixture{
+		NS:         netns,
+		BridgeName: bridgeName,
+		UplinkName: uplinkName,
+	}, nil
+}
+
+func (f *BridgeFixture) Teardown() {
+	_ = f.NS.Do(func(ns.NetNS) error {
+		_ = deleteLink(f.NS, f.UplinkName)
+		_ = deleteLink(f.NS, f.BridgeName)
+		return nil
+	})
+}
+
+func deleteLink(netns ns.NetNS, name string) error {
+	return netns.Do(func(ns.NetNS) error {
+		link, err := netlinksafe.LinkByName(name)
+		if err != nil {
+			return nil // Already deleted or never existed
+		}
+		return netlink.LinkDel(link)
+	})
+}
+
 func countIPAMIPs(path string) (int, error) {
 	count := 0
 	entries, err := os.ReadDir(path)
@@ -647,9 +746,12 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		// Check for the veth link in the main namespace
 		links, err := netlinksafe.LinkList()
 		Expect(err).NotTo(HaveOccurred())
-		if !tc.isLayer2 && tc.vlan != 0 {
+		switch {
+		case !tc.isLayer2 && tc.vlan != 0:
 			Expect(links).To(HaveLen(5)) // Bridge, Bridge vlan veth, veth, and loopback
-		} else {
+		case (tc.vlan != 0 || len(tc.vlanTrunk) > 0) && tc.uplinkInterface != "":
+			Expect(links).To(HaveLen(4)) // Bridge, veth, uplink interface and loopback
+		default:
 			Expect(links).To(HaveLen(3)) // Bridge, veth, and loopback
 		}
 
@@ -999,9 +1101,12 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		// Check for the veth link in the main namespace
 		links, err := netlinksafe.LinkList()
 		Expect(err).NotTo(HaveOccurred())
-		if !tc.isLayer2 && tc.vlan != 0 {
+		switch {
+		case !tc.isLayer2 && tc.vlan != 0:
 			Expect(links).To(HaveLen(5)) // Bridge, Bridge vlan veth, veth, and loopback
-		} else {
+		case (tc.vlan != 0 || len(tc.vlanTrunk) > 0) && tc.uplinkInterface != "":
+			Expect(links).To(HaveLen(4)) // Bridge, veth, uplink interface and loopback
+		default:
 			Expect(links).To(HaveLen(3)) // Bridge, veth, and loopback
 		}
 
@@ -1046,6 +1151,30 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 				nativeVlan = 1
 			}
 			Expect(checkVlan(nativeVlan, vlans)).To(BeTrue())
+		}
+
+		// Check if uplink interface has vlans
+		if tc.uplinkInterface != "" {
+			uplink, err := netlinksafe.LinkByName(tc.uplinkInterface)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(uplink).To(BeAssignableToTypeOf(&netlink.Dummy{}))
+			interfaceMap, err := netlinksafe.BridgeVlanList()
+			Expect(err).NotTo(HaveOccurred())
+			vlans, isExist := interfaceMap[int32(link.Attrs().Index)]
+			Expect(isExist).To(BeTrue())
+			if tc.vlan != 0 {
+				Expect(checkVlan(tc.vlan, vlans)).To(BeTrue())
+			}
+			for _, vlanEntry := range tc.vlanTrunk {
+				if vlanEntry.ID != nil {
+					Expect(checkVlan(*vlanEntry.ID, vlans)).To(BeTrue())
+				}
+				if vlanEntry.MinID != nil && vlanEntry.MaxID != nil {
+					for vid := *vlanEntry.MinID; vid <= *vlanEntry.MaxID; vid++ {
+						Expect(checkVlan(vid, vlans)).To(BeTrue())
+					}
+				}
+			}
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -1340,9 +1469,12 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 		// Check for the veth link in the main namespace
 		links, err := netlinksafe.LinkList()
 		Expect(err).NotTo(HaveOccurred())
-		if !tc.isLayer2 && tc.vlan != 0 {
+		switch {
+		case !tc.isLayer2 && tc.vlan != 0:
 			Expect(links).To(HaveLen(5)) // Bridge, Bridge vlan veth, veth, and loopback
-		} else {
+		case (tc.vlan != 0 || len(tc.vlanTrunk) > 0) && tc.uplinkInterface != "":
+			Expect(links).To(HaveLen(4)) // Bridge, veth, uplink interface and loopback
+		default:
 			Expect(links).To(HaveLen(3)) // Bridge, veth, and loopback
 		}
 
@@ -2088,6 +2220,66 @@ var _ = Describe("bridge Operations", func() {
 				removeDefaultVlan: true,
 				AddErr020:         "cannot convert: no valid IP addresses",
 				AddErr010:         "cannot convert: no valid IP addresses",
+			}
+			cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+		})
+
+		It(fmt.Sprintf("[%s] configures and deconfigures a bridge with vlan id 100 and uplink interface with ADD/DEL", ver), func() {
+			fixture, err := NewUplinkBridgeFixture(originalNS, BRNAME)
+			Expect(err).NotTo(HaveOccurred())
+			defer fixture.Teardown()
+			tc := testCase{
+				cniVersion:      ver,
+				isLayer2:        true,
+				vlan:            100,
+				uplinkInterface: fixture.UplinkName,
+				AddErr020:       "cannot convert: no valid IP addresses",
+				AddErr010:       "cannot convert: no valid IP addresses",
+			}
+			cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+		})
+
+		It(fmt.Sprintf("[%s] configures and deconfigures a bridge with vlanTrunk and uplink interface using ADD/DEL", ver), func() {
+			fixture, err := NewUplinkBridgeFixture(originalNS, BRNAME)
+			Expect(err).NotTo(HaveOccurred())
+			defer fixture.Teardown()
+			id, minID, maxID := 101, 200, 210
+			tc := testCase{
+				cniVersion:      ver,
+				isLayer2:        true,
+				uplinkInterface: fixture.UplinkName,
+				vlanTrunk: []*VlanTrunk{
+					{ID: &id},
+					{
+						MinID: &minID,
+						MaxID: &maxID,
+					},
+				},
+				AddErr020: "cannot convert: no valid IP addresses",
+				AddErr010: "cannot convert: no valid IP addresses",
+			}
+			cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+		})
+
+		It(fmt.Sprintf("[%s] configures and deconfigures a bridge with vlan and vlanTrunk and uplink interface using ADD/DEL", ver), func() {
+			fixture, err := NewUplinkBridgeFixture(originalNS, BRNAME)
+			Expect(err).NotTo(HaveOccurred())
+			defer fixture.Teardown()
+			id, minID, maxID := 101, 200, 210
+			tc := testCase{
+				cniVersion:      ver,
+				isLayer2:        true,
+				uplinkInterface: fixture.UplinkName,
+				vlan:            100,
+				vlanTrunk: []*VlanTrunk{
+					{ID: &id},
+					{
+						MinID: &minID,
+						MaxID: &maxID,
+					},
+				},
+				AddErr020: "cannot convert: no valid IP addresses",
+				AddErr010: "cannot convert: no valid IP addresses",
 			}
 			cmdAddDelTest(originalNS, targetNS, tc, dataDir)
 		})
