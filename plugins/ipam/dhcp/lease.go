@@ -385,7 +385,7 @@ func checkLinkExistsWithBackoff(ctx context.Context, linkName string) (bool, err
 func checkLinkByName(linkName string) (bool, error) {
 	_, err := netlinksafe.LinkByName(linkName)
 	if err != nil {
-		var linkNotFoundErr *netlink.LinkNotFoundError = &netlink.LinkNotFoundError{}
+		linkNotFoundErr := &netlink.LinkNotFoundError{}
 		if errors.As(err, linkNotFoundErr) {
 			return false, nil
 		}
@@ -428,7 +428,14 @@ func (l *DHCPLease) renew() error {
 func (l *DHCPLease) release() error {
 	log.Printf("%v: releasing lease", l.clientID)
 
-	c, err := newDHCPClient(l.link, l.timeout)
+	c, err := newDHCPClient(
+		l.link,
+		l.timeout,
+		nclient4.WithUnicast(&net.UDPAddr{
+			IP:   l.latestLease.ACK.YourIPAddr,
+			Port: nclient4.ClientPort,
+		}),
+	)
 	if err != nil {
 		return err
 	}
@@ -474,7 +481,13 @@ func (l *DHCPLease) Routes() []*types.Route {
 	opt121Routes := ack.ClasslessStaticRoute()
 	if len(opt121Routes) > 0 {
 		for _, r := range opt121Routes {
-			routes = append(routes, &types.Route{Dst: *r.Dest, GW: r.Router})
+			route := &types.Route{Dst: *r.Dest, GW: r.Router}
+			// if router is not specified, add SCOPE_LINK so routes are installed
+			if r.Router.IsUnspecified() {
+				scopeLinkValue := int(netlink.SCOPE_LINK)
+				route.Scope = &scopeLinkValue
+			}
+			routes = append(routes, route)
 		}
 		return routes
 	}

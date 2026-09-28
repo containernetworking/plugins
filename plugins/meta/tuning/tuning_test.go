@@ -49,7 +49,7 @@ func buildOneConfig(cniVersion string, orig *TuningConf, prevResult types.Result
 	// Ensure every config uses the same name and version
 	config := make(map[string]interface{})
 
-	confBytes, err := json.Marshal(orig)
+	confBytes, err := json.Marshal(*orig)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func createSysctlAllowFile(sysctls []string) error {
 		return err
 	}
 	for _, sysctl := range sysctls {
-		_, err = f.WriteString(fmt.Sprintf("%s\n", sysctl))
+		_, err = fmt.Fprintln(f, sysctl)
 		if err != nil {
 			return err
 		}

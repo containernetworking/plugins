@@ -107,8 +107,6 @@ func init() {
 func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 	n := &NetConf{
 		BrName: defaultBrName,
-		// Set default value equal to true to maintain existing behavior.
-		PreserveDefaultVlan: true,
 	}
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
@@ -121,11 +119,6 @@ func loadNetConf(bytes []byte, envArgs string) (*NetConf, string, error) {
 	if err != nil {
 		// fail to parsing
 		return nil, "", err
-	}
-
-	// Currently bridge CNI only support access port(untagged only) or trunk port(tagged only)
-	if n.Vlan > 0 && n.vlans != nil {
-		return nil, "", errors.New("cannot set vlan and vlanTrunk at the same time")
 	}
 
 	if envArgs != "" {
@@ -302,7 +295,7 @@ func ensureAddr(br netlink.Link, family int, ipn *net.IPNet, forceAddress bool) 
 
 	addr := &netlink.Addr{IPNet: ipn, Label: ""}
 	if err := netlink.AddrAdd(br, addr); err != nil && err != syscall.EEXIST {
-		return fmt.Errorf("could not add IP address to %q: %v", br.Attrs().Name, err)
+		return fmt.Errorf("could not add IP address %s to %q: %v", ipnStr, br.Attrs().Name, err)
 	}
 
 	// Set the bridge's MAC to itself. Otherwise, the bridge will take the
@@ -468,7 +461,6 @@ func setupVeth(
 		}
 	}
 
-	// Currently bridge CNI only support access port(untagged only) or trunk port(tagged only)
 	if vlanID != 0 {
 		err = netlink.BridgeVlanAdd(hostVeth, uint16(vlanID), true, true, false, true)
 		if err != nil {
@@ -480,6 +472,15 @@ func setupVeth(
 		err = netlink.BridgeVlanAdd(hostVeth, uint16(v), false, false, false, true)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to setup vlan tag on interface %q: %w", hostIface.Name, err)
+		}
+	}
+
+	// Backwards compatibility with users that did not specify a vlanID
+	if vlanID == 0 && len(vlans) > 0 {
+		// If no vlan is specified, we set the native vlan on the trunk equal to 1
+		err = netlink.BridgeVlanAdd(hostVeth, 1, true, true, false, true)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to setup default native vlan tag on interface %q: %v", hostIface.Name, err)
 		}
 	}
 
@@ -511,10 +512,7 @@ func calcGatewayIP(ipn *net.IPNet) net.IP {
 }
 
 func setupBridge(n *NetConf) (*netlink.Bridge, *current.Interface, error) {
-	vlanFiltering := false
-	if n.Vlan != 0 || n.VlanTrunk != nil {
-		vlanFiltering = true
-	}
+	vlanFiltering := n.Vlan != 0 || n.VlanTrunk != nil
 	// create bridge if necessary
 	br, err := ensureBridge(n.BrName, n.MTU, n.PromiscMode, vlanFiltering)
 	if err != nil {

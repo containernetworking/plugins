@@ -44,20 +44,19 @@ func parseNetConf(bytes []byte) (*types.NetConf, error) {
 func createDummy(ifName string, netns ns.NetNS) (*current.Interface, error) {
 	dummy := &current.Interface{}
 
-	linkAttrs := netlink.NewLinkAttrs()
-	linkAttrs.Name = ifName
-	linkAttrs.Namespace = netlink.NsFd(int(netns.Fd()))
-
-	dm := &netlink.Dummy{
-		LinkAttrs: linkAttrs,
-	}
-
-	if err := netlink.LinkAdd(dm); err != nil {
-		return nil, fmt.Errorf("failed to create dummy: %v", err)
-	}
-	dummy.Name = ifName
-
 	err := netns.Do(func(_ ns.NetNS) error {
+		linkAttrs := netlink.NewLinkAttrs()
+		linkAttrs.Name = ifName
+
+		dm := &netlink.Dummy{
+			LinkAttrs: linkAttrs,
+		}
+
+		if err := netlink.LinkAdd(dm); err != nil {
+			return fmt.Errorf("failed to create dummy: %v", err)
+		}
+		dummy.Name = ifName
+
 		// Re-fetch interface to get all properties/attributes
 		contDummy, err := netlinksafe.LinkByName(ifName)
 		if err != nil {

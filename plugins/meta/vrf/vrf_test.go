@@ -48,7 +48,7 @@ func buildOneConfig(name, cniVersion string, orig *VRFNetConf, prevResult types.
 	// Ensure every config uses the same name and version
 	config := make(map[string]interface{})
 
-	confBytes, err := json.Marshal(orig)
+	confBytes, err := json.Marshal(*orig)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -33,11 +33,15 @@ func BuildRunCommand() command.Command {
 		Usage:         "ginkgo run <FLAGS> <PACKAGES> -- <PASS-THROUGHS>",
 		ShortDoc:      "Run the tests in the passed in <PACKAGES> (or the package in the current directory if left blank)",
 		Documentation: "Any arguments after -- will be passed to the test.",
-		DocLink:       "running-tests",
+		DocLink:       "running-specs",
 		Command: func(args []string, additionalArgs []string) {
 			var errors []error
 			cliConfig, goFlagsConfig, errors = types.VetAndInitializeCLIAndGoConfig(cliConfig, goFlagsConfig)
 			command.AbortIfErrors("Ginkgo detected configuration issues:", errors)
+
+			if types.ReconcileFdOutputConfiguration(reporterConfig, &suiteConfig, &cliConfig) {
+				fmt.Println("--fd is incompatible with parallel runs (-p/-procs) and -randomize-all; ignoring those flags and running specs in series, in declaration order.")
+			}
 
 			runner := &SpecRunner{
 				cliConfig:      cliConfig,
@@ -107,7 +111,7 @@ OUTER_LOOP:
 		}
 
 		opc := internal.NewOrderedParallelCompiler(r.cliConfig.ComputedNumCompilers())
-		opc.StartCompiling(suites, r.goFlagsConfig)
+		opc.StartCompiling(suites, r.goFlagsConfig, false)
 
 	SUITE_LOOP:
 		for {
@@ -142,7 +146,7 @@ OUTER_LOOP:
 			}
 
 			if !endTime.IsZero() {
-				r.suiteConfig.Timeout = endTime.Sub(time.Now())
+				r.suiteConfig.Timeout = time.Until(endTime)
 				if r.suiteConfig.Timeout <= 0 {
 					suites[suiteIdx].State = internal.TestSuiteStateFailedDueToTimeout
 					opc.StopAndDrain()

@@ -37,6 +37,10 @@ func BuildWatchCommand() command.Command {
 			cliConfig, goFlagsConfig, errors = types.VetAndInitializeCLIAndGoConfig(cliConfig, goFlagsConfig)
 			command.AbortIfErrors("Ginkgo detected configuration issues:", errors)
 
+			if types.ReconcileFdOutputConfiguration(reporterConfig, &suiteConfig, &cliConfig) {
+				fmt.Println("--fd is incompatible with parallel runs (-p/-procs) and -randomize-all; ignoring those flags and running specs in series, in declaration order.")
+			}
+
 			watcher := &SpecWatcher{
 				cliConfig:      cliConfig,
 				goFlagsConfig:  goFlagsConfig,
@@ -153,7 +157,7 @@ func (w *SpecWatcher) WatchSpecs(args []string, additionalArgs []string) {
 }
 
 func (w *SpecWatcher) compileAndRun(suite internal.TestSuite, additionalArgs []string) internal.TestSuite {
-	suite = internal.CompileSuite(suite, w.goFlagsConfig)
+	suite = internal.CompileSuite(suite, w.goFlagsConfig, false)
 	if suite.State.Is(internal.TestSuiteStateFailedToCompile) {
 		fmt.Println(suite.CompilationError.Error())
 		return suite

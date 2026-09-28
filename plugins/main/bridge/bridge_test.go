@@ -345,7 +345,7 @@ func newResolvConf() (string, error) {
 	}
 	defer f.Close()
 	name := f.Name()
-	_, err = f.WriteString(fmt.Sprintf("nameserver %s", NAMESERVER))
+	_, err = fmt.Fprintf(f, "nameserver %s", NAMESERVER)
 	return name, err
 }
 
@@ -691,6 +691,13 @@ func (tester *testerV10x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 					}
 				}
 			}
+
+			// Check native vlan
+			nativeVlan := tc.vlan
+			if tc.vlan == 0 {
+				nativeVlan = 1
+			}
+			Expect(checkVlan(nativeVlan, vlans)).To(BeTrue())
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -1032,6 +1039,13 @@ func (tester *testerV04x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 					}
 				}
 			}
+
+			// Check native vlan
+			nativeVlan := tc.vlan
+			if tc.vlan == 0 {
+				nativeVlan = 1
+			}
+			Expect(checkVlan(nativeVlan, vlans)).To(BeTrue())
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -1366,6 +1380,13 @@ func (tester *testerV03x) cmdAddTest(tc testCase, dataDir string) (types.Result,
 					}
 				}
 			}
+
+			// Check native vlan
+			nativeVlan := tc.vlan
+			if tc.vlan == 0 {
+				nativeVlan = 1
+			}
+			Expect(checkVlan(nativeVlan, vlans)).To(BeTrue())
 		}
 
 		// Check that the bridge has a different mac from the veth
@@ -1834,13 +1855,13 @@ var _ = Describe("bridge Operations", func() {
 	})
 
 	var (
-		correctID      int = 10
-		correctMinID   int = 100
-		correctMaxID   int = 105
-		incorrectMinID int = 1000
-		incorrectMaxID int = 100
-		overID         int = 5000
-		negativeID     int = -1
+		correctID      = 10
+		correctMinID   = 100
+		correctMaxID   = 105
+		incorrectMinID = 1000
+		incorrectMaxID = 100
+		overID         = 5000
+		negativeID     = -1
 	)
 
 	DescribeTable(
@@ -2021,11 +2042,31 @@ var _ = Describe("bridge Operations", func() {
 		})
 
 		// TODO find some way to put pointer
-		It(fmt.Sprintf("[%s] configures and deconfigures a l2 bridge with vlan id 100, vlanTrunk 101,200~210 using ADD/DEL", ver), func() {
+		It(fmt.Sprintf("[%s] configures and deconfigures a l2 bridge with vlanTrunk 101,200~210 using ADD/DEL", ver), func() {
 			id, minID, maxID := 101, 200, 210
 			tc := testCase{
 				cniVersion: ver,
 				isLayer2:   true,
+				vlanTrunk: []*VlanTrunk{
+					{ID: &id},
+					{
+						MinID: &minID,
+						MaxID: &maxID,
+					},
+				},
+				AddErr020: "cannot convert: no valid IP addresses",
+				AddErr010: "cannot convert: no valid IP addresses",
+			}
+			cmdAddDelTest(originalNS, targetNS, tc, dataDir)
+		})
+
+		It(fmt.Sprintf("[%s] configures and deconfigures a l2 bridge with vlan 100, and vlanTrunk 101,200~210 using ADD/DEL", ver), func() {
+			nativeVlan := 100
+			id, minID, maxID := 101, 200, 210
+			tc := testCase{
+				cniVersion: ver,
+				isLayer2:   true,
+				vlan:       nativeVlan,
 				vlanTrunk: []*VlanTrunk{
 					{ID: &id},
 					{
@@ -2214,11 +2255,13 @@ var _ = Describe("bridge Operations", func() {
 						addrs, err := netlinksafe.AddrList(bridge, family)
 						Expect(err).NotTo(HaveOccurred())
 						Expect(addrs).To(HaveLen(expNumAddrs))
-						addr := addrs[0].IPNet.String()
-						Expect(addr).To(Equal(cidr0))
+						addrStrs := make([]string, len(addrs))
+						for i, a := range addrs {
+							addrStrs[i] = a.IPNet.String()
+						}
+						Expect(addrStrs).To(ContainElement(cidr0))
 						if cidr1 != "" {
-							addr = addrs[1].IPNet.String()
-							Expect(addr).To(Equal(cidr1))
+							Expect(addrStrs).To(ContainElement(cidr1))
 						}
 					}
 

@@ -26,9 +26,14 @@ import (
 const (
 	tableName = "cni_hostport"
 
+	// Intermediate chain to jump to both 'hostip_hostports' and 'hostports'
+	hostPortsAllChain = "hostports_all"
+	// This chain was used for rules with hostIP, we do not use it anymore,
+	// but we keep it to make upgrade transparent
 	hostIPHostPortsChain = "hostip_hostports"
-	hostPortsChain       = "hostports"
-	masqueradingChain    = "masquerading"
+	// Chain containing all the rules
+	hostPortsChain    = "hostports"
+	masqueradingChain = "masquerading"
 )
 
 // The nftables portmap implementation is fairly similar to the iptables implementation:
@@ -104,10 +109,34 @@ func (pmNFT *portMapperNFTables) forwardPorts(config *PortMapConf, containerNet 
 	})
 
 	tx.Add(&knftables.Chain{
-		Name: "hostports",
+		Name: hostPortsChain,
 	})
+
 	tx.Add(&knftables.Chain{
-		Name: "hostip_hostports",
+		Name: hostIPHostPortsChain,
+	})
+
+	// setup intermediate chain
+	tx.Add(&knftables.Chain{
+		Name: hostPortsAllChain,
+	})
+
+	tx.Flush(&knftables.Chain{
+		Name: hostPortsAllChain,
+	})
+
+	tx.Add(&knftables.Rule{
+		Chain: hostPortsAllChain,
+		Rule: knftables.Concat(
+			"jump", hostIPHostPortsChain,
+		),
+	})
+
+	tx.Add(&knftables.Rule{
+		Chain: hostPortsAllChain,
+		Rule: knftables.Concat(
+			"jump", hostPortsChain,
+		),
 	})
 
 	tx.Add(&knftables.Chain{
@@ -123,14 +152,8 @@ func (pmNFT *portMapperNFTables) forwardPorts(config *PortMapConf, containerNet 
 		Chain: "prerouting",
 		Rule: knftables.Concat(
 			conditions,
-			"jump", hostIPHostPortsChain,
-		),
-	})
-	tx.Add(&knftables.Rule{
-		Chain: "prerouting",
-		Rule: knftables.Concat(
-			conditions,
-			"jump", hostPortsChain,
+			"fib daddr type local",
+			"jump", hostPortsAllChain,
 		),
 	})
 
@@ -147,15 +170,8 @@ func (pmNFT *portMapperNFTables) forwardPorts(config *PortMapConf, containerNet 
 		Chain: "output",
 		Rule: knftables.Concat(
 			conditions,
-			"jump", hostIPHostPortsChain,
-		),
-	})
-	tx.Add(&knftables.Rule{
-		Chain: "output",
-		Rule: knftables.Concat(
-			conditions,
 			"fib daddr type local",
-			"jump", hostPortsChain,
+			"jump", hostPortsAllChain,
 		),
 	})
 
@@ -184,8 +200,10 @@ func (pmNFT *portMapperNFTables) forwardPorts(config *PortMapConf, containerNet 
 		}
 
 		if useHostIP {
+			// we add the rule to 'hostports' instead of 'hostip_hostports'
+			// as we want to remove 'hostip_hostports' long-term
 			tx.Add(&knftables.Rule{
-				Chain: hostIPHostPortsChain,
+				Chain: hostPortsChain,
 				Rule: knftables.Concat(
 					ipX, "daddr", e.HostIP,
 					e.Protocol, "dport", e.HostPort,
@@ -210,16 +228,32 @@ func (pmNFT *portMapperNFTables) forwardPorts(config *PortMapConf, containerNet 
 		// In theory we should validate that the original dst IP and port are as
 		// expected, but *any* traffic matching one of these patterns would need
 		// to be masqueraded to be able to work correctly anyway.
+
+		var masqSrcAddr string
+		if config.MasqAll {
+			// MasqAll: match traffic from any source IP
+			if isV6 {
+				masqSrcAddr = "::/0"
+			} else {
+				masqSrcAddr = "0.0.0.0/0"
+			}
+		} else {
+			// Default: only match traffic from container's own IP (hairpin)
+			masqSrcAddr = containerNet.IP.String()
+		}
+
 		tx.Add(&knftables.Rule{
 			Chain: masqueradingChain,
 			Rule: knftables.Concat(
-				ipX, "saddr", containerNet.IP,
+				ipX, "saddr", masqSrcAddr,
 				ipX, "daddr", containerNet.IP,
 				"masquerade",
 			),
 			Comment: &config.ContainerID,
 		})
-		if !isV6 {
+		if !isV6 && !config.MasqAll {
+			// Only add localhost rule when MasqAll is false
+			// (when MasqAll is true, 0.0.0.0/0 already covers 127.0.0.1)
 			tx.Add(&knftables.Rule{
 				Chain: masqueradingChain,
 				Rule: knftables.Concat(
@@ -243,18 +277,26 @@ func (pmNFT *portMapperNFTables) forwardPorts(config *PortMapConf, containerNet 
 func (pmNFT *portMapperNFTables) checkPorts(config *PortMapConf, containerNet net.IPNet) error {
 	isV6 := (containerNet.IP.To4() == nil)
 
-	var hostPorts, hostIPHostPorts, masqueradings int
+	var hostPorts, masqueradings int
 	for _, e := range config.RuntimeConfig.PortMaps {
 		if e.HostIP != "" {
-			hostIPHostPorts++
-		} else {
-			hostPorts++
+			hostIP := net.ParseIP(e.HostIP)
+			isHostV6 := (hostIP.To4() == nil)
+			// Ignore wrong-IP-family HostIPs
+			if isV6 != isHostV6 {
+				continue
+			}
 		}
+		hostPorts++
 	}
 	if *config.SNAT {
-		masqueradings = len(config.RuntimeConfig.PortMaps)
-		if isV6 {
-			masqueradings *= 2
+		masqueradings = 1
+		// When MasqAll is false and IPv4, we have 2 rules:
+		// 1. hairpin rule (container IP -> container IP)
+		// 2. localhost rule (127.0.0.1 -> container IP)
+		// When MasqAll is true, we only have 1 rule (0.0.0.0/0 -> container IP)
+		if !isV6 && !config.MasqAll {
+			masqueradings = 2
 		}
 	}
 
@@ -264,12 +306,6 @@ func (pmNFT *portMapperNFTables) checkPorts(config *PortMapConf, containerNet ne
 	}
 	if hostPorts > 0 {
 		err := checkPortsAgainstRules(nft, hostPortsChain, config.ContainerID, hostPorts)
-		if err != nil {
-			return err
-		}
-	}
-	if hostIPHostPorts > 0 {
-		err := checkPortsAgainstRules(nft, hostIPHostPortsChain, config.ContainerID, hostIPHostPorts)
 		if err != nil {
 			return err
 		}
