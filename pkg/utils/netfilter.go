@@ -15,6 +15,8 @@
 package utils
 
 import (
+	"os/exec"
+
 	"github.com/coreos/go-iptables/iptables"
 	"sigs.k8s.io/knftables"
 )
@@ -43,4 +45,24 @@ func SupportsNFTables() bool {
 	// the iptables case.
 	_, err := knftables.New(knftables.IPv4Family, "supports_nftables_test")
 	return err == nil
+}
+
+// HasNFTablesCommand reports whether the nft binary is available on PATH.
+// Unlike SupportsNFTables, this does not open a netlink connection and therefore
+// does not require CAP_NET_ADMIN.
+func HasNFTablesCommand() bool {
+	_, err := exec.LookPath("nft")
+	return err == nil
+}
+
+// PreferNFTablesDefault is used when no netfilter backend was requested
+// explicitly. Prefer iptables when it works; if iptables is unavailable, fall
+// back to nftables when either a full knftables probe succeeds or the nft
+// binary is present (probe can fail without CAP_NET_ADMIN even on nft-only
+// systems).
+func PreferNFTablesDefault() bool {
+	if SupportsIPTables() {
+		return false
+	}
+	return SupportsNFTables() || HasNFTablesCommand()
 }
