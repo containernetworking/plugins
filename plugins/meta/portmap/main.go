@@ -161,7 +161,22 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	// We don't need to parse out whether or not we're using v6 or snat,
 	// deletion is idempotent
-	return netConf.mapper.unforwardPorts(netConf)
+	if err := netConf.mapper.unforwardPorts(netConf); err != nil {
+		return err
+	}
+
+	// Flush UDP conntrack after removing the DNAT rules. Without this, a later
+	// consumer of the same hostPort (for example a pod that switches to
+	// hostNetwork:true and binds the port directly) can be blackholed by stale
+	// NAT state left from the previous mapping. cmdAdd already flushes on the
+	// setup path; DEL needs the same cleanup. Failures are informative only.
+	if err := deletePortmapStaleConnections(netConf.RuntimeConfig.PortMaps, unix.AF_INET); err != nil {
+		log.Printf("failed to delete stale UDP conntrack entries on DEL: %v", err)
+	}
+	if err := deletePortmapStaleConnections(netConf.RuntimeConfig.PortMaps, unix.AF_INET6); err != nil {
+		log.Printf("failed to delete stale UDP conntrack entries on DEL: %v", err)
+	}
+	return nil
 }
 
 func main() {
