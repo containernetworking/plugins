@@ -428,7 +428,14 @@ func (l *DHCPLease) renew() error {
 func (l *DHCPLease) release() error {
 	log.Printf("%v: releasing lease", l.clientID)
 
-	c, err := newDHCPClient(l.link, l.timeout)
+	c, err := newDHCPClient(
+		l.link,
+		l.timeout,
+		nclient4.WithUnicast(&net.UDPAddr{
+			IP:   l.latestLease.ACK.YourIPAddr,
+			Port: nclient4.ClientPort,
+		}),
+	)
 	if err != nil {
 		return err
 	}
