@@ -22,7 +22,7 @@ import (
 	"net"
 	"os"
 	"runtime"
-	"sort"
+	"slices"
 	"syscall"
 	"time"
 
@@ -195,7 +195,7 @@ func collectVlanTrunk(vlanTrunk []*VlanTrunk) ([]int, error) {
 	for k := range vlanMap {
 		vlans = append(vlans, k)
 	}
-	sort.Slice(vlans, func(i int, j int) bool { return vlans[i] < vlans[j] })
+	slices.Sort(vlans)
 	return vlans, nil
 }
 

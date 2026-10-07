@@ -122,7 +122,7 @@ var _ = Describe("Utils", func() {
 		It("is (nearly) perfect (injective function)", func() {
 			hashes := map[string]int{}
 
-			for i := 0; i < 1000; i++ {
+			for i := range 1000 {
 				name := fmt.Sprintf("string %d", i)
 				hashes[MustFormatHashWithPrefix(8, "", name)]++
 			}
