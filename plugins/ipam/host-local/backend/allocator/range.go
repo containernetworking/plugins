@@ -84,6 +84,11 @@ func (r *Range) Canonicalize() error {
 		r.RangeEnd = lastIP(r.Subnet)
 	}
 
+	// RangeEnd may have just been defaulted, so check the ordering now.
+	if ip.Cmp(r.RangeStart, r.RangeEnd) > 0 {
+		return fmt.Errorf("RangeStart %s is after RangeEnd %s in network %s", r.RangeStart.String(), r.RangeEnd.String(), (*net.IPNet)(&r.Subnet).String())
+	}
+
 	return nil
 }
 
