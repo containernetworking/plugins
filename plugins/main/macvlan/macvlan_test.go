@@ -258,10 +258,6 @@ var _ = Describe("macvlan Operations", func() {
 			linkInContainer = fmt.Sprintf("\"linkInContainer\": %t,", *isInContainer)
 		}
 		for _, ver := range testutils.AllSpecVersions {
-			// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
-			// See Gingkgo's "Patterns for dynamically generating tests" documentation.
-			ver := ver
-
 			It(fmt.Sprintf("[%s] creates an macvlan link in a non-default namespace", ver), func() {
 				conf := &NetConf{
 					NetConf: types.NetConf{
