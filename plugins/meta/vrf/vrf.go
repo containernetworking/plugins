@@ -15,9 +15,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"net"
+	"syscall"
 	"time"
 
 	"github.com/vishvananda/netlink"
@@ -214,14 +216,30 @@ func findFreeRoutingTableID(links []netlink.Link) (uint32, error) {
 
 func resetMaster(interfaceName string) error {
 	intf, err := netlinksafe.LinkByName(interfaceName)
-	if err != nil {
-		return fmt.Errorf("resetMaster: could not get link by name %s", interfaceName)
+	if linkNotFound(err) {
+		// Interface already gone (e.g. concurrent netns teardown). DEL is
+		// best-effort, so there is nothing left to reset.
+		return nil
 	}
-	err = netlink.LinkSetNoMaster(intf)
 	if err != nil {
-		return fmt.Errorf("resetMaster: could reset master to %s", interfaceName)
+		return fmt.Errorf("resetMaster: could not get link by name %s: %w", interfaceName, err)
+	}
+	if err := netlink.LinkSetNoMaster(intf); err != nil {
+		return fmt.Errorf("resetMaster: could not reset master of %s: %w", interfaceName, err)
 	}
 	return nil
+}
+
+// linkNotFound reports whether err indicates the link is already gone. netlink
+// returns a typed LinkNotFoundError from LinkByName, but a bare errno (ENODEV)
+// from LinkDel, so both must be matched. Per the CNI spec, DEL is best-effort
+// and must not fail when a resource has already been removed.
+func linkNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	var lnf netlink.LinkNotFoundError
+	return errors.As(err, &lnf) || errors.Is(err, syscall.ENODEV) || errors.Is(err, syscall.ENOENT)
 }
 
 // getGlobalAddresses returns the global addresses of the given interface
