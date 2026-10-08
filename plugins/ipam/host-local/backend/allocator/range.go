@@ -53,6 +53,9 @@ func (r *Range) Canonicalize() error {
 		if err := canonicalizeIP(&r.Gateway); err != nil {
 			return err
 		}
+		if len(r.Gateway) != len(r.Subnet.IP) || !(*net.IPNet)(&r.Subnet).Contains(r.Gateway) {
+			return fmt.Errorf("gateway %s not in network %s", r.Gateway.String(), (*net.IPNet)(&r.Subnet).String())
+		}
 	}
 
 	// RangeStart: If specified, make sure it's sane (inside the subnet),

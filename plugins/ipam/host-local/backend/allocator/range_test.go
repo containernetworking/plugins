@@ -52,6 +52,37 @@ var _ = Describe("IP ranges", func() {
 			Gateway:    net.IP{192, 0, 2, 1},
 		}))
 	})
+	It("should reject an explicit gateway outside the subnet", func() {
+		snstr := "10.0.0.0/24"
+		r := Range{
+			Subnet:  mustSubnet(snstr),
+			Gateway: net.ParseIP("192.168.1.1"),
+		}
+
+		err := r.Canonicalize()
+		Expect(err).Should(MatchError("gateway 192.168.1.1 not in network 10.0.0.0/24"))
+	})
+	It("should reject an explicit gateway with mismatched address family", func() {
+		snstr := "10.0.0.0/24"
+		r := Range{
+			Subnet:  mustSubnet(snstr),
+			Gateway: net.ParseIP("2001:db8::1"),
+		}
+
+		err := r.Canonicalize()
+		Expect(err).Should(MatchError("gateway 2001:db8::1 not in network 10.0.0.0/24"))
+	})
+	It("should accept an explicit valid gateway inside the subnet", func() {
+		snstr := "10.0.0.0/24"
+		r := Range{
+			Subnet:  mustSubnet(snstr),
+			Gateway: net.ParseIP("10.0.0.254"),
+		}
+
+		err := r.Canonicalize()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(r.Gateway).To(Equal(net.IP{10, 0, 0, 254}))
+	})
 	It("should reject ipv4 subnet using a masked address", func() {
 		snstr := "192.0.2.12/24"
 		r := Range{Subnet: mustSubnet(snstr)}
