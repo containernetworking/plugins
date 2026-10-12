@@ -15,6 +15,9 @@
 package utils
 
 import (
+	"errors"
+	"os/exec"
+
 	"github.com/coreos/go-iptables/iptables"
 	"sigs.k8s.io/knftables"
 )
@@ -42,5 +45,19 @@ func SupportsNFTables() bool {
 	// knftables.New() does sanity checks so we don't need any further test like in
 	// the iptables case.
 	_, err := knftables.New(knftables.IPv4Family, "supports_nftables_test")
-	return err == nil
+	if err == nil {
+		return true
+	}
+	return isIndeterminateNFTablesError(err)
+}
+
+// isIndeterminateNFTablesError returns true if err indicates that the nft binary
+// was found and executed, but failed — e.g. due to insufficient capabilities such
+// as CAP_NET_ADMIN at detection time. In that case, nftables should be treated as
+// available rather than unsupported, since the real invocation may run with
+// different privileges than the detection step. Only a genuinely missing or
+// unexecutable binary should be treated as "unsupported".
+func isIndeterminateNFTablesError(err error) bool {
+	var exitErr *exec.ExitError
+	return errors.As(err, &exitErr)
 }

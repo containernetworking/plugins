@@ -15,7 +15,9 @@
 package utils
 
 import (
+	"errors"
 	"os"
+	"os/exec"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -48,5 +50,21 @@ var _ = Describe("netfilter support", func() {
 		It("reports that nftables is not supported", func() {
 			Expect(SupportsNFTables()).To(BeFalse(), "found nftables outside of PATH??")
 		})
+	})
+})
+
+var _ = Describe("isIndeterminateNFTablesError", func() {
+	It("returns false for a nil error", func() {
+		Expect(isIndeterminateNFTablesError(nil)).To(BeFalse())
+	})
+
+	It("returns true when the nft binary ran but failed (e.g. permission denied)", func() {
+		err := &exec.ExitError{}
+		Expect(isIndeterminateNFTablesError(err)).To(BeTrue())
+	})
+
+	It("returns false when the nft binary could not be found or executed", func() {
+		err := errors.New("exec: \"nft\": executable file not found in $PATH")
+		Expect(isIndeterminateNFTablesError(err)).To(BeFalse())
 	})
 })
