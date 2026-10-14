@@ -101,7 +101,7 @@ func (r *Range) Contains(addr net.IP) bool {
 		return false
 	}
 
-	subnet := (net.IPNet)(r.Subnet)
+	subnet := net.IPNet(r.Subnet)
 
 	// Not the same address family
 	if len(addr) != len(r.Subnet.IP) {
