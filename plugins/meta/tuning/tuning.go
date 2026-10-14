@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -120,6 +121,9 @@ func parseConf(data []byte, envArgs string) (*TuningConf, error) {
 	// Get args
 	if conf.Args != nil && conf.Args.A != nil {
 		if conf.Args.A.SysCtl != nil {
+			if conf.SysCtl == nil {
+				conf.SysCtl = make(map[string]string)
+			}
 			for k, v := range *conf.Args.A.SysCtl {
 				conf.SysCtl[k] = v
 			}
@@ -601,7 +605,10 @@ type sysctlCheck struct {
 	SysCtl map[sysctlKey]string `json:"sysctl"`
 }
 
-var sysctlDuplicatesMap = map[sysctlKey]interface{}{}
+var (
+	sysctlDuplicatesLock sync.Mutex
+	sysctlDuplicatesMap  = map[sysctlKey]interface{}{}
+)
 
 func (d *sysctlKey) UnmarshalText(data []byte) error {
 	key := sysctlKey(string(data))
@@ -613,6 +620,10 @@ func (d *sysctlKey) UnmarshalText(data []byte) error {
 }
 
 func validateSysctlConflictingKeys(data []byte) error {
+	sysctlDuplicatesLock.Lock()
+	defer sysctlDuplicatesLock.Unlock()
+	sysctlDuplicatesMap = map[sysctlKey]interface{}{}
+
 	sysctlCheck := sysctlCheck{}
 	return json.Unmarshal(data, &sysctlCheck)
 }
