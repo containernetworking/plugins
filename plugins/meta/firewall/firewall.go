@@ -33,6 +33,13 @@ import (
 type FirewallNetConf struct {
 	types.NetConf
 
+	// AllowPublishedPorts opts into scoped DNAT forwarding for same-bridge networks.
+	AllowPublishedPorts bool `json:"allowPublishedPorts,omitempty"`
+	// RuntimeConfig contains capabilities supplied by the runtime.
+	RuntimeConfig struct {
+		PortMappings []publishedPortMapping `json:"portMappings,omitempty"`
+	} `json:"runtimeConfig,omitempty"`
+
 	// Backend is the firewall type to add rules to.  Allowed values are
 	// 'iptables' and 'firewalld'.
 	Backend string `json:"backend"`
@@ -150,11 +157,24 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	if _, err := publishedPortRules(conf, result); err != nil {
+		return err
+	}
+	if conf.AllowPublishedPorts && conf.IngressPolicy == IngressPolicySameBridge {
+		if _, ok := backend.(*iptablesBackend); !ok {
+			return fmt.Errorf("allowPublishedPorts requires the iptables backend")
+		}
+	}
 	if err := backend.Add(conf, result); err != nil {
 		return err
 	}
 
 	if err := setupIngressPolicy(conf, result); err != nil {
+		return err
+	}
+
+	if err := setupPublishedPorts(conf, result, args.ContainerID); err != nil {
+		_ = backend.Del(conf, result)
 		return err
 	}
 
@@ -175,6 +195,12 @@ func cmdDel(args *skel.CmdArgs) error {
 	backend, err := getBackend(conf)
 	if err != nil {
 		return err
+	}
+
+	if conf.AllowPublishedPorts {
+		if err := deletePublishedPorts(conf, args.ContainerID); err != nil {
+			return err
+		}
 	}
 
 	// Runtime errors are ignored
@@ -211,5 +237,8 @@ func cmdCheck(args *skel.CmdArgs) error {
 		return err
 	}
 
-	return backend.Check(conf, result)
+	if err := backend.Check(conf, result); err != nil {
+		return err
+	}
+	return checkPublishedPorts(conf, result, args.ContainerID)
 }
