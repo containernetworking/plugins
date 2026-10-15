@@ -30,10 +30,18 @@ import (
 // implementation will be used.
 func SetupIPMasqForNetworks(backend *string, ipns []*net.IPNet, network, ifname, containerID string) error {
 	if backend == nil {
-		// Prefer iptables, unless only nftables is available
+		// Prefer iptables, unless only nftables is available. FIXME: flip this default at some point.
 		defaultBackend := "iptables"
-		if !utils.SupportsIPTables() && utils.SupportsNFTables() {
+		supportsIPT := utils.SupportsIPTables()
+		supportsNFT := utils.SupportsNFTables()
+		if !supportsIPT && supportsNFT {
 			defaultBackend = "nftables"
+		} else if !supportsIPT && !supportsNFT {
+			// Both full checks failed (likely missing CAP_NET_ADMIN at detection
+			// time). Fall back to binary presence as tiebreaker.
+			if !utils.IPTablesBinaryAvailable() && utils.NFTablesBinaryAvailable() {
+				defaultBackend = "nftables"
+			}
 		}
 		backend = &defaultBackend
 	}
