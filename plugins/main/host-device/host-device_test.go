@@ -16,6 +16,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -36,6 +37,139 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 )
+
+var _ = Describe("wireless device moves", func() {
+	var originalSysClassNet string
+
+	BeforeEach(func() {
+		originalSysClassNet = sysClassNet
+		sysClassNet = GinkgoT().TempDir()
+	})
+
+	AfterEach(func() {
+		sysClassNet = originalSysClassNet
+	})
+
+	makeWirelessDevice := func(ifName, index string, associatedInterfaces ...string) {
+		phyPath := path.Join(sysClassNet, ifName, "phy80211")
+		Expect(os.MkdirAll(path.Join(phyPath, "device", "net"), 0o755)).To(Succeed())
+		Expect(os.WriteFile(path.Join(phyPath, "index"), []byte(index), 0o644)).To(Succeed())
+		for _, name := range associatedInterfaces {
+			Expect(os.Mkdir(path.Join(phyPath, "device", "net", name), 0o755)).To(Succeed())
+		}
+	}
+
+	It("selects an ordinary link move when no wireless PHY exists", func() {
+		request, err := getMoveRequest("eth0")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(request).To(BeNil())
+	})
+
+	It("selects a wiphy move for a PHY containing only the requested interface", func() {
+		makeWirelessDevice("wlan0", "7\n", "wlan0")
+
+		request, err := getMoveRequest("wlan0")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(request).To(Equal(&moveRequest{wiphy: 7}))
+	})
+
+	It("rejects a malformed wireless PHY index", func() {
+		makeWirelessDevice("wlan0", "not-an-index", "wlan0")
+
+		request, err := getMoveRequest("wlan0")
+		Expect(request).To(BeNil())
+		Expect(err).To(MatchError(ContainSubstring(`parse wireless PHY for "wlan0"`)))
+	})
+
+	It("rejects a missing device net directory", func() {
+		phyPath := path.Join(sysClassNet, "wlan0", "phy80211")
+		Expect(os.MkdirAll(phyPath, 0o755)).To(Succeed())
+		Expect(os.WriteFile(path.Join(phyPath, "index"), []byte("7\n"), 0o644)).To(Succeed())
+
+		request, err := getMoveRequest("wlan0")
+		Expect(request).To(BeNil())
+		Expect(err).To(MatchError(ContainSubstring("list interfaces associated with wireless PHY 7")))
+	})
+
+	It("rejects an unreadable device net path", func() {
+		phyPath := path.Join(sysClassNet, "wlan0", "phy80211")
+		Expect(os.MkdirAll(path.Join(phyPath, "device"), 0o755)).To(Succeed())
+		Expect(os.WriteFile(path.Join(phyPath, "index"), []byte("7\n"), 0o644)).To(Succeed())
+		Expect(os.WriteFile(path.Join(phyPath, "device", "net"), nil, 0o644)).To(Succeed())
+
+		request, err := getMoveRequest("wlan0")
+		Expect(request).To(BeNil())
+		Expect(err).To(MatchError(ContainSubstring("list interfaces associated with wireless PHY 7")))
+	})
+
+	DescribeTable("rejects a PHY without exactly the requested interface",
+		func(associatedInterfaces ...string) {
+			makeWirelessDevice("wlan0", "7\n", associatedInterfaces...)
+
+			request, err := getMoveRequest("wlan0")
+			Expect(request).To(BeNil())
+			Expect(err).To(MatchError(ContainSubstring(`host-device can safely move only a PHY containing solely "wlan0"`)))
+		},
+		Entry("with no associated interfaces"),
+		Entry("with a differently named sole interface", "wlan1"),
+	)
+
+	It("rejects moving a PHY with sibling interfaces", func() {
+		makeWirelessDevice("wlan0", "7\n", "p2p0", "wlan0")
+
+		request, err := getMoveRequest("wlan0")
+		Expect(request).To(BeNil())
+		Expect(err).To(MatchError(ContainSubstring(`wireless PHY 7 has associated interfaces ["p2p0" "wlan0"]`)))
+	})
+
+	It("preserves ordinary-link dispatch and propagates wireless move failures", func() {
+		originalLinkSetNsFd := linkSetNsFd
+		originalLinkSetDown := linkSetDown
+		originalWiphySetNsFd := wiphySetNsFd
+		defer func() {
+			linkSetNsFd = originalLinkSetNsFd
+			linkSetDown = originalLinkSetDown
+			wiphySetNsFd = originalWiphySetNsFd
+		}()
+
+		link := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Name: "test0"}}
+		linkMoved := false
+		wiphyMoved := false
+		movedWiphy := 0
+		movedFD := 0
+		linkSetNsFd = func(netlink.Link, int) error {
+			linkMoved = true
+			return nil
+		}
+		linkSetDown = func(netlink.Link) error { return errors.New("down failed") }
+		wiphySetNsFd = func(wiphy, fd int) error {
+			wiphyMoved = true
+			movedWiphy = wiphy
+			movedFD = fd
+			return nil
+		}
+
+		Expect((*moveRequest)(nil).move(link, 11)).To(Succeed())
+		Expect(linkMoved).To(BeTrue())
+
+		err := (&moveRequest{wiphy: 7}).move(link, 11)
+		Expect(err).To(MatchError("down failed"))
+		Expect(wiphyMoved).To(BeFalse())
+
+		linkSetDown = func(netlink.Link) error { return nil }
+		wiphySetNsFd = func(wiphy, fd int) error {
+			wiphyMoved = true
+			movedWiphy = wiphy
+			movedFD = fd
+			return errors.New("wiphy move failed")
+		}
+		err = (&moveRequest{wiphy: 7}).move(link, 11)
+		Expect(err).To(MatchError("wiphy move failed"))
+		Expect(wiphyMoved).To(BeTrue())
+		Expect(movedWiphy).To(Equal(7))
+		Expect(movedFD).To(Equal(11))
+	})
+})
 
 type Net struct {
 	Name          string                 `json:"name"`
