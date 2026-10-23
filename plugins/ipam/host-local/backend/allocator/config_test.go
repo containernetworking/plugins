@@ -418,6 +418,25 @@ var _ = Describe("IPAM config", func() {
 		Expect(err).To(MatchError("invalid range set 0: mixed address families"))
 	})
 
+	It("should reject a range whose RangeStart sits at the top of the address family", func() {
+		// This config used to be accepted and then panic inside Get; the
+		// RangeStart was only checked against a not-yet-defaulted RangeEnd.
+		input := `{
+				"cniVersion": "0.3.1",
+				"name": "mynet",
+				"type": "ipvlan",
+				"master": "foo0",
+				"ipam": {
+					"type": "host-local",
+					"ranges": [
+						[{"subnet":"255.255.255.252/30","rangeStart":"255.255.255.255","gateway":"255.255.255.255"}]
+					]
+				}
+			}`
+		_, _, err := LoadIPAMConfig([]byte(input), "")
+		Expect(err).To(MatchError("invalid range set 0: RangeStart 255.255.255.255 is after RangeEnd 255.255.255.254 in network 255.255.255.252/30"))
+	})
+
 	It("Should should error on too many ranges", func() {
 		input := `{
 				"cniVersion": "0.2.0",
