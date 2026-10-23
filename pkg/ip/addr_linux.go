@@ -50,13 +50,13 @@ func SettleAddresses(ifName string, timeout time.Duration) error {
 
 		ok := true
 		for _, addr := range addrs {
-			if addr.Flags&(syscall.IFA_F_DADFAILED) != 0 {
+			if addr.Flags&syscall.IFA_F_DADFAILED != 0 {
 				return fmt.Errorf("link %s has address %s in DADFAILED state",
 					ifName,
 					addr.IP.String())
 			}
 
-			if addr.Flags&(syscall.IFA_F_TENTATIVE) != 0 {
+			if addr.Flags&syscall.IFA_F_TENTATIVE != 0 {
 				ok = false
 				break // Break out of the `range addrs`, not the `for`
 			}
