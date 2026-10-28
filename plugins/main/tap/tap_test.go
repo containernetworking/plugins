@@ -192,8 +192,6 @@ var _ = Describe("Add, check, remove tap plugin", func() {
 	})
 
 	for _, ver := range testutils.AllSpecVersions {
-		ver := ver
-
 		It(fmt.Sprintf("[%s] add, check and remove a tap device run correctly", ver), func() {
 			conf := fmt.Sprintf(`{
 				    "cniVersion": "%s",

@@ -28,10 +28,6 @@ var _ = Describe("portmapping configuration (iptables)", func() {
 	containerID := "icee6giejonei6sohng6ahngee7laquohquee9shiGo7fohferakah3Feiyoolu2pei7ciPhoh7shaoX6vai3vuf0ahfaeng8yohb9ceu0daez5hashee8ooYai5wa3y"
 
 	for _, ver := range []string{"0.3.0", "0.3.1", "0.4.0", "1.0.0"} {
-		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
-		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
-		ver := ver
-
 		Describe("Generating iptables chains", func() {
 			Context("for DNAT", func() {
 				It(fmt.Sprintf("[%s] generates a correct standard container chain", ver), func() {
