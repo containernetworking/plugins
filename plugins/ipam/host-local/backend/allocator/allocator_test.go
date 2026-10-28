@@ -127,6 +127,72 @@ var _ = Describe("host-local ip allocator", func() {
 			Expect(r.nextip()).To(Equal(net.IP{192, 168, 1, 3}))
 			Expect(r.nextip()).To(BeNil())
 		})
+
+		It("should terminate when NextIP returns nil at the end of the address family", func() {
+			// IPv4 family boundary
+			p4 := RangeSet{
+				Range{
+					RangeStart: net.IPv4(255, 255, 255, 255).To4(),
+					Subnet:     mustSubnet("255.255.255.252/30"),
+				},
+			}
+			iter4 := RangeIter{
+				rangeset: &p4,
+			}
+			ipNet, _ := iter4.Next()
+			Expect(ipNet).NotTo(BeNil())
+			Expect(ipNet.IP).To(Equal(net.IPv4(255, 255, 255, 255).To4()))
+
+			ipNet, _ = iter4.Next()
+			Expect(ipNet).To(BeNil())
+
+			// IPv6 family boundary
+			p6 := RangeSet{
+				Range{
+					RangeStart: net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"),
+					Subnet:     mustSubnet("ffff:ffff:ffff:ffff:ffff:ffff:ffff:fffc/126"),
+				},
+			}
+			iter6 := RangeIter{
+				rangeset: &p6,
+			}
+			ipNet, _ = iter6.Next()
+			Expect(ipNet).NotTo(BeNil())
+			Expect(ipNet.IP).To(Equal(net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff")))
+
+			ipNet, _ = iter6.Next()
+			Expect(ipNet).To(BeNil())
+
+			// Multi-range: rolls over to next range when reaching family boundary
+			pMulti := RangeSet{
+				Range{
+					RangeStart: net.IPv4(255, 255, 255, 255).To4(),
+					Subnet:     mustSubnet("255.255.255.252/30"),
+				},
+				Range{
+					RangeStart: net.IPv4(10, 0, 0, 1).To4(),
+					RangeEnd:   net.IPv4(10, 0, 0, 2).To4(),
+					Subnet:     mustSubnet("10.0.0.0/24"),
+				},
+			}
+			iterMulti := RangeIter{
+				rangeset: &pMulti,
+			}
+			ipNet, _ = iterMulti.Next()
+			Expect(ipNet).NotTo(BeNil())
+			Expect(ipNet.IP).To(Equal(net.IPv4(255, 255, 255, 255).To4()))
+
+			ipNet, _ = iterMulti.Next()
+			Expect(ipNet).NotTo(BeNil())
+			Expect(ipNet.IP).To(Equal(net.IPv4(10, 0, 0, 1).To4()))
+
+			ipNet, _ = iterMulti.Next()
+			Expect(ipNet).NotTo(BeNil())
+			Expect(ipNet.IP).To(Equal(net.IPv4(10, 0, 0, 2).To4()))
+
+			ipNet, _ = iterMulti.Next()
+			Expect(ipNet).To(BeNil())
+		})
 	})
 
 	Context("when has free ip", func() {
