@@ -172,6 +172,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	isLayer3 := n.IPAM.Type != ""
+
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
 		return fmt.Errorf("failed to open netns %q: %v", args.Netns, err)
@@ -183,40 +185,66 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	// run the IPAM plugin and get back the config to apply
-	r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
-	if err != nil {
-		return fmt.Errorf("failed to execute IPAM delegate: %v", err)
+	result := &current.Result{
+		CNIVersion: current.ImplementedSpecVersion,
+		Interfaces: []*current.Interface{vlanInterface},
 	}
 
-	// Invoke ipam del if err to avoid ip leak
-	defer func() {
+	if isLayer3 {
+		// run the IPAM plugin and get back the config to apply
+		r, err := ipam.ExecAdd(n.IPAM.Type, args.StdinData)
 		if err != nil {
-			ipam.ExecDel(n.IPAM.Type, args.StdinData)
+			return fmt.Errorf("failed to execute IPAM delegate: %v", err)
 		}
-	}()
 
-	// Convert whatever the IPAM result was into the current Result type
-	result, err := current.NewResultFromResult(r)
-	if err != nil {
-		return err
-	}
+		// Invoke ipam del if err to avoid ip leak
+		defer func() {
+			if err != nil {
+				ipam.ExecDel(n.IPAM.Type, args.StdinData)
+			}
+		}()
 
-	if len(result.IPs) == 0 {
-		return errors.New("IPAM plugin returned missing IP config")
-	}
-	for _, ipc := range result.IPs {
-		// All addresses belong to the vlan interface
-		ipc.Interface = current.Int(0)
-	}
+		// Convert whatever the IPAM result was into the current Result type
+		ipamResult, err := current.NewResultFromResult(r)
+		if err != nil {
+			return err
+		}
 
-	result.Interfaces = []*current.Interface{vlanInterface}
+		if len(ipamResult.IPs) == 0 {
+			return errors.New("IPAM plugin returned missing IP config")
+		}
 
-	err = netns.Do(func(_ ns.NetNS) error {
-		return ipam.ConfigureIface(args.IfName, result)
-	})
-	if err != nil {
-		return err
+		result.IPs = ipamResult.IPs
+		result.Routes = ipamResult.Routes
+
+		for _, ipc := range result.IPs {
+			// All addresses belong to the vlan interface
+			ipc.Interface = current.Int(0)
+		}
+
+		err = netns.Do(func(_ ns.NetNS) error {
+			return ipam.ConfigureIface(args.IfName, result)
+		})
+		if err != nil {
+			return err
+		}
+	} else {
+		// For L2 just change interface status to up
+		err = netns.Do(func(_ ns.NetNS) error {
+			vlanInterfaceLink, err := netlinksafe.LinkByName(args.IfName)
+			if err != nil {
+				return fmt.Errorf("failed to find interface name %q: %v", vlanInterface.Name, err)
+			}
+
+			if err := netlink.LinkSetUp(vlanInterfaceLink); err != nil {
+				return fmt.Errorf("failed to set %q UP: %v", args.IfName, err)
+			}
+
+			return nil
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	result.DNS = n.DNS
@@ -230,9 +258,12 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	err = ipam.ExecDel(n.IPAM.Type, args.StdinData)
-	if err != nil {
-		return err
+	isLayer3 := n.IPAM.Type != ""
+	if isLayer3 {
+		err = ipam.ExecDel(n.IPAM.Type, args.StdinData)
+		if err != nil {
+			return err
+		}
 	}
 
 	if args.Netns == "" {
@@ -275,6 +306,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
+	isLayer3 := conf.IPAM.Type != ""
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
@@ -282,11 +314,14 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	// run the IPAM plugin and get back the config to apply
-	err = ipam.ExecCheck(conf.IPAM.Type, args.StdinData)
-	if err != nil {
-		return err
+	if isLayer3 {
+		// run the IPAM plugin and get back the config to apply
+		err = ipam.ExecCheck(conf.IPAM.Type, args.StdinData)
+		if err != nil {
+			return err
+		}
 	}
+
 	if conf.NetConf.RawPrevResult == nil {
 		return fmt.Errorf("vlan: Required prevResult missing")
 	}
@@ -407,8 +442,10 @@ func cmdStatus(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to load netconf: %w", err)
 	}
 
-	if err := ipam.ExecStatus(conf.IPAM.Type, args.StdinData); err != nil {
-		return err
+	if conf.IPAM.Type != "" {
+		if err := ipam.ExecStatus(conf.IPAM.Type, args.StdinData); err != nil {
+			return err
+		}
 	}
 
 	// TODO: Check if master interface exists.
