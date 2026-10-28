@@ -15,6 +15,8 @@
 package testutils
 
 import (
+	"slices"
+
 	"github.com/containernetworking/cni/pkg/version"
 )
 
@@ -24,12 +26,7 @@ var AllSpecVersions = [...]string{"0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "
 // SpecVersionHasIPVersion returns true if the given CNI specification version
 // includes the "version" field in the IP address elements
 func SpecVersionHasIPVersion(ver string) bool {
-	for _, i := range []string{"0.3.0", "0.3.1", "0.4.0"} {
-		if ver == i {
-			return true
-		}
-	}
-	return false
+	return slices.Contains([]string{"0.3.0", "0.3.1", "0.4.0"}, ver)
 }
 
 // SpecVersionHasCHECK returns true if the given CNI specification version
