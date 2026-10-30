@@ -61,10 +61,15 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Install kernel module
+      - name: Install kernel modules
         run: |
           sudo apt-get update
-          sudo apt-get install linux-modules-extra-$(uname -r)
+          kernel_release="$(uname -r)"
+          sudo apt-get install -y "linux-modules-${kernel_release}"
+          # Newer kernels include extra modules in the regular package.
+          if apt-cache show "linux-modules-extra-${kernel_release}" >/dev/null 2>&1; then
+            sudo apt-get install -y "linux-modules-extra-${kernel_release}"
+          fi
       - name: Install nftables
         # ensure that bridged traffic goes through netfilter
         run: |
