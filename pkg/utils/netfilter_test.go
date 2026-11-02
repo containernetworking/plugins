@@ -48,5 +48,20 @@ var _ = Describe("netfilter support", func() {
 		It("reports that nftables is not supported", func() {
 			Expect(SupportsNFTables()).To(BeFalse(), "found nftables outside of PATH??")
 		})
+		It("reports that iptables binary is not available", func() {
+			Expect(IPTablesBinaryAvailable()).To(BeFalse(), "found iptables outside of PATH??")
+		})
+		It("reports that nft binary is not available", func() {
+			Expect(NFTablesBinaryAvailable()).To(BeFalse(), "found nft outside of PATH??")
+		})
+	})
+
+	When("binaries are available", func() {
+		It("reports that iptables binary is available", func() {
+			Expect(IPTablesBinaryAvailable()).To(BeTrue(), "This test should only fail if iptables is not available, but the test suite as a whole requires it to be available.")
+		})
+		It("reports that nft binary is available", func() {
+			Expect(NFTablesBinaryAvailable()).To(BeTrue(), "This test should only fail if nft is not available, but the test suite as a whole requires it to be available.")
+		})
 	})
 })
