@@ -164,11 +164,15 @@ func genToplevelDnatChain() chain {
 
 // genDnatChain creates the per-container chain.
 // Conditions are any static entry conditions for the chain.
+// Entry rules are prepended within CNI-HOSTPORT-DNAT so that the most recent
+// container using a host port wins without moving CNI-HOSTPORT-DNAT ahead of
+// Kubernetes service rules in PREROUTING/OUTPUT.
 func genDnatChain(netName, containerID string) chain {
 	return chain{
-		table:       "nat",
-		name:        utils.MustFormatChainNameWithPrefix(netName, containerID, "DN-"),
-		entryChains: []string{TopLevelDNATChainName},
+		table:        "nat",
+		name:         utils.MustFormatChainNameWithPrefix(netName, containerID, "DN-"),
+		entryChains:  []string{TopLevelDNATChainName},
+		prependEntry: true,
 	}
 }
 
