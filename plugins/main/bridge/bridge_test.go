@@ -1938,10 +1938,6 @@ var _ = Describe("bridge Operations", func() {
 	)
 
 	for _, ver := range testutils.AllSpecVersions {
-		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
-		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
-		ver := ver
-
 		It(fmt.Sprintf("[%s] creates a bridge", ver), func() {
 			conf := testCase{cniVersion: ver}.netConf()
 			err := originalNS.Do(func(ns.NetNS) error {
@@ -2040,8 +2036,6 @@ var _ = Describe("bridge Operations", func() {
 				resolvConf: resolvConf,
 			},
 		} {
-			tc := tc
-			i := i
 			It(fmt.Sprintf("[%s] (%d) configures and deconfigures a bridge and veth with default route with ADD/DEL", ver, i), func() {
 				tc.cniVersion = ver
 				cmdAddDelTest(originalNS, targetNS, tc, dataDir)
@@ -2164,8 +2158,6 @@ var _ = Describe("bridge Operations", func() {
 				DelErr010: "CNI version 0.1.0 does not support more than 1 address per family",
 			},
 		} {
-			tc := tc
-			i := i
 			It(fmt.Sprintf("[%s] (%d) configures and deconfigures a bridge, veth with default route and vlanID 100 with ADD/DEL", ver, i), func() {
 				tc.cniVersion = ver
 				cmdAddDelTest(originalNS, targetNS, tc, dataDir)
@@ -2200,8 +2192,6 @@ var _ = Describe("bridge Operations", func() {
 				},
 			},
 		} {
-			tc := tc
-			i := i
 			It(fmt.Sprintf("[%s] (%d) configures and deconfigures a bridge and veth with default route with ADD/DEL", ver, i), func() {
 				tc.cniVersion = ver
 				cmdAddDelTest(originalNS, targetNS, tc, dataDir)
@@ -2245,8 +2235,6 @@ var _ = Describe("bridge Operations", func() {
 				gwCIDRSecond: "fd00:1234::1/64",
 			},
 		} {
-			tc := tc
-			i := i
 			It(fmt.Sprintf("[%s] (%d) ensure bridge address", ver, i), func() {
 				conf := testCase{cniVersion: ver, isGW: true}.netConf()
 
@@ -2383,8 +2371,6 @@ var _ = Describe("bridge Operations", func() {
 				subnet: "2001:db8:42::/64",
 			},
 		} {
-			tc := tc
-			i := i
 			It(fmt.Sprintf("[%s] (%d) creates a bridge with a stable MAC addresses", ver, i), func() {
 				err := originalNS.Do(func(ns.NetNS) error {
 					defer GinkgoRecover()
@@ -2632,7 +2618,6 @@ var _ = Describe("bridge Operations", func() {
 					cniVersion:    ver,
 				},
 			} {
-				tc := tc
 				It(fmt.Sprintf("[%s] configures a bridge and ipMasq rules with ipMasqBackend %q", ver, tc.ipMasqBackend), func() {
 					err := originalNS.Do(func(ns.NetNS) error {
 						defer GinkgoRecover()
@@ -2711,8 +2696,6 @@ var _ = Describe("bridge Operations", func() {
 					},
 				},
 			} {
-				tc := tc
-				i := i
 				It(fmt.Sprintf("[%s] (%d) configures and deconfigures a bridge and veth with default route with ADD/DEL/CHECK", ver, i), func() {
 					tc.cniVersion = ver
 					cmdAddDelCheckTest(originalNS, targetNS, tc, dataDir)

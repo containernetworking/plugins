@@ -94,10 +94,6 @@ var _ = Describe("portmap integration tests", func() {
 	})
 
 	for _, ver := range []string{"0.3.0", "0.3.1", "0.4.0", "1.0.0"} {
-		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
-		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
-		ver := ver
-
 		Describe("Creating an interface in a namespace with the ptp plugin", func() {
 			// This needs to be done using Ginkgo's asynchronous testing mode.
 			It(fmt.Sprintf("[%s] forwards a TCP port on ipv4", ver), func(done Done) {
