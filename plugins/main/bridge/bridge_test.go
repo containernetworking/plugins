@@ -1835,8 +1835,10 @@ func cmdAddDelCheckTest(origNS, targetNS ns.NetNS, tc testCase, dataDir string) 
 	err = json.Unmarshal([]byte(confString), &conf)
 	Expect(err).NotTo(HaveOccurred())
 
-	conf.IPAM, _, err = allocator.LoadIPAMConfig([]byte(confString), "")
-	Expect(err).NotTo(HaveOccurred())
+	if !tc.isLayer2 {
+		conf.IPAM, _, err = allocator.LoadIPAMConfig([]byte(confString), "")
+		Expect(err).NotTo(HaveOccurred())
+	}
 
 	newConf, err := buildOneConfig("testConfig", tc.cniVersion, conf, prevResult)
 	Expect(err).NotTo(HaveOccurred())
@@ -2718,6 +2720,14 @@ var _ = Describe("bridge Operations", func() {
 					cmdAddDelCheckTest(originalNS, targetNS, tc, dataDir)
 				})
 			}
+
+			It(fmt.Sprintf("[%s] configures and deconfigures a l2 bridge and veth with ADD/DEL/CHECK", ver), func() {
+				tc := testCase{
+					cniVersion: ver,
+					isLayer2:   true,
+				}
+				cmdAddDelCheckTest(originalNS, targetNS, tc, dataDir)
+			})
 		}
 
 		It(fmt.Sprintf("[%s] configures mac spoof-check (no mac spoofing)", ver), func() {
