@@ -1016,10 +1016,14 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	// run the IPAM plugin and get back the config to apply
-	err = ipam.ExecCheck(n.IPAM.Type, args.StdinData)
-	if err != nil {
-		return err
+	isLayer3 := n.IPAM.Type != ""
+
+	if isLayer3 {
+		// run the IPAM plugin and get back the config to apply
+		err = ipam.ExecCheck(n.IPAM.Type, args.StdinData)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Parse previous result.
