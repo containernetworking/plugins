@@ -34,6 +34,10 @@ are very busy and read the mailing lists.
 Each plugin is compiled simply with `go build`.  Two scripts, `build_linux.sh` and `build_windows.sh`,
 are supplied which will build all the plugins for their respective OS.
 
+Dependencies are managed with Go modules and pinned in `go.mod` and `go.sum`.
+Go downloads dependencies as needed; run `go mod download` to populate the module
+cache before building offline. Run `go mod tidy` after changing dependencies.
+
 ## Contribution workflow
 
 This is a rough outline of how to prepare a contribution:

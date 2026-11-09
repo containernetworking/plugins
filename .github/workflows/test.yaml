@@ -24,8 +24,8 @@ jobs:
         with:
           version: v2.14.0
           args: -v
-  verify-vendor:
-    name: Verify vendor directory
+  verify-modules:
+    name: Verify Go modules
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -33,11 +33,10 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version-file: .github/go-version
-      - name: Check module vendoring
+      - name: Check Go modules
         run: |
-          go mod tidy
-          go mod vendor
-          test -z "$(git status --porcelain)" || (echo "please run 'go mod tidy && go mod vendor', and submit your changes"; exit 1)
+          go mod tidy -diff
+          go mod verify
   build:
     name: Build all linux architectures
     needs: lint

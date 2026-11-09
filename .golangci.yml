@@ -1,6 +1,6 @@
 version: "2"
 run:
-  modules-download-mode: vendor
+  modules-download-mode: readonly
 linters:
   enable:
     - contextcheck

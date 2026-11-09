@@ -25,6 +25,7 @@ _testmain.go
 
 bin/
 gopath/
+/vendor/
 .vagrant
 .idea
 /release-*
