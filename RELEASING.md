@@ -15,7 +15,7 @@ Creating a new release produces the following artifacts:
   - Create a draft of the release note
   - Discuss the level of testing that's needed and create a test plan if sensible
   - Check what version of `go` is used in the build container, updating it if there's a new stable release.
-  - Update the vendor directory and Godeps to pin to the corresponding containernetworking/cni release. Create a PR, makes sure it passes CI and get it merged.
+  - Update the containernetworking/cni dependency in `go.mod` to the corresponding release and run `go mod tidy` to update `go.sum`. Create a PR, make sure it passes CI and get it merged.
 
 ## Creating the release artifacts
 1. Make sure you are on the master branch and don't have any local uncommitted changes.
