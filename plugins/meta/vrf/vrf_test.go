@@ -1130,6 +1130,31 @@ var _ = Describe("unit tests", func() {
 			Expect(got.Priority).To(Equal(1024))
 		})
 
+		It("keeps nexthop flags when a multipath route collapses to one hop", func() {
+			route := netlink.Route{
+				LinkIndex: 0,
+				Dst:       ipv6Default,
+				Priority:  1024,
+				Flags:     int(netlink.FLAG_PERVASIVE),
+				MultiPath: []*netlink.NexthopInfo{
+					{LinkIndex: eth0Index, Gw: net.ParseIP("fe80::1")},
+					{
+						LinkIndex: net1Index,
+						Gw:        net.ParseIP("2001:db8:1::1"),
+						Flags:     int(netlink.FLAG_ONLINK),
+					},
+				},
+			}
+
+			got, ok := routeForInterface(route, net1Index)
+			Expect(ok).To(BeTrue())
+			Expect(got.MultiPath).To(BeNil())
+			Expect(got.LinkIndex).To(Equal(net1Index))
+			Expect(got.Gw.Equal(net.ParseIP("2001:db8:1::1"))).To(BeTrue())
+			Expect(got.Flags & int(netlink.FLAG_ONLINK)).To(Equal(int(netlink.FLAG_ONLINK)))
+			Expect(got.Flags & int(netlink.FLAG_PERVASIVE)).To(Equal(int(netlink.FLAG_PERVASIVE)))
+		})
+
 		It("rejects multipath routes with no nexthop on the target interface", func() {
 			route := netlink.Route{
 				Dst:      ipv6Default,

@@ -279,12 +279,15 @@ func routeForInterface(route netlink.Route, linkIndex int) (netlink.Route, bool)
 		if len(nhs) == 1 {
 			// Prefer a simple single-nexthop form; this is what IPAM originally
 			// installed before the kernel merged it into an ECMP route.
+			// onlink and the other nexthop flags live on the nexthop, not the
+			// multipath route header, so copy them onto the single-hop route.
 			r.MultiPath = nil
 			r.LinkIndex = nhs[0].LinkIndex
 			r.Gw = nhs[0].Gw
 			r.NewDst = nhs[0].NewDst
 			r.Encap = nhs[0].Encap
 			r.Via = nhs[0].Via
+			r.Flags |= nhs[0].Flags
 		} else {
 			r.MultiPath = nhs
 			r.LinkIndex = 0
