@@ -38,6 +38,7 @@ type NetConf struct {
 	types.NetConf
 	Master     string `json:"master"`
 	Mode       string `json:"mode"`
+	Flag       string `json:"flag,omitempty"`
 	MTU        int    `json:"mtu"`
 	LinkContNs bool   `json:"linkInContainer,omitempty"`
 }
@@ -104,6 +105,32 @@ func modeFromString(s string) (netlink.IPVlanMode, error) {
 	}
 }
 
+func flagFromString(s string) (netlink.IPVlanFlag, error) {
+	switch s {
+	case "", "bridge":
+		return netlink.IPVLAN_FLAG_BRIDGE, nil
+	case "private":
+		return netlink.IPVLAN_FLAG_PRIVATE, nil
+	case "vepa":
+		return netlink.IPVLAN_FLAG_VEPA, nil
+	default:
+		return 0, fmt.Errorf("unknown ipvlan flag: %q", s)
+	}
+}
+
+func flagToString(flag netlink.IPVlanFlag) (string, error) {
+	switch flag {
+	case netlink.IPVLAN_FLAG_BRIDGE:
+		return "bridge", nil
+	case netlink.IPVLAN_FLAG_PRIVATE:
+		return "private", nil
+	case netlink.IPVLAN_FLAG_VEPA:
+		return "vepa", nil
+	default:
+		return "", fmt.Errorf("unknown ipvlan flag: %d", flag)
+	}
+}
+
 func modeToString(mode netlink.IPVlanMode) (string, error) {
 	switch mode {
 	case netlink.IPVLAN_MODE_L2:
@@ -121,6 +148,11 @@ func createIpvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interf
 	ipvlan := &current.Interface{}
 
 	mode, err := modeFromString(conf.Mode)
+	if err != nil {
+		return nil, err
+	}
+
+	flag, err := flagFromString(conf.Flag)
 	if err != nil {
 		return nil, err
 	}
@@ -154,6 +186,7 @@ func createIpvlan(conf *NetConf, ifName string, netns ns.NetNS) (*current.Interf
 	mv := &netlink.IPVlan{
 		LinkAttrs: linkAttrs,
 		Mode:      mode,
+		Flag:      flag,
 	}
 
 	if conf.LinkContNs {
@@ -426,7 +459,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	// Check prevResults for ips, routes and dns against values found in the container
 	if err := netns.Do(func(_ ns.NetNS) error {
 		// Check interface against values found in the container
-		err := validateCniContainerInterface(contMap, n.Mode)
+		err := validateCniContainerInterface(contMap, n.Mode, n.Flag)
 		if err != nil {
 			return err
 		}
@@ -448,7 +481,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	return nil
 }
 
-func validateCniContainerInterface(intf current.Interface, modeExpected string) error {
+func validateCniContainerInterface(intf current.Interface, modeExpected, flagExpected string) error {
 	var link netlink.Link
 	var err error
 
@@ -482,6 +515,22 @@ func validateCniContainerInterface(intf current.Interface, modeExpected string) 
 			return err
 		}
 		return fmt.Errorf("Container IPVlan mode %s does not match expected value: %s", currString, confString)
+	}
+
+	flag, err := flagFromString(flagExpected)
+	if err != nil {
+		return err
+	}
+	if ipv.Flag != flag {
+		currString, err := flagToString(ipv.Flag)
+		if err != nil {
+			return err
+		}
+		confString, err := flagToString(flag)
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("Container IPVlan flag %s does not match expected value: %s", currString, confString)
 	}
 
 	if intf.Mac != "" {
