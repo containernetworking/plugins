@@ -193,6 +193,112 @@ var _ = Describe("host-local ip allocator", func() {
 			ipNet, _ = iterMulti.Next()
 			Expect(ipNet).To(BeNil())
 		})
+
+		It("should rollover from family boundary lastReservedIP to next range and complete cycle in GetIter", func() {
+			// IPv4 family boundary rollover with GetIter
+			firstSubnet4 := mustSubnet("255.255.255.252/30")
+			secondSubnet4 := mustSubnet("10.0.0.0/29")
+			p4 := RangeSet{
+				Range{
+					RangeStart: net.IPv4(255, 255, 255, 255).To4(),
+					Subnet:     firstSubnet4,
+				},
+				Range{
+					RangeStart: net.IPv4(10, 0, 0, 1).To4(),
+					RangeEnd:   net.IPv4(10, 0, 0, 3).To4(),
+					Gateway:    net.IPv4(10, 0, 0, 1).To4(),
+					Subnet:     secondSubnet4,
+				},
+			}
+			lastIP4 := net.IPv4(255, 255, 255, 255).To4()
+			store4 := fakestore.NewFakeStore(map[string]string{}, map[string]net.IP{"0": lastIP4})
+			alloc4 := IPAllocator{
+				rangeset: &p4,
+				store:    store4,
+				rangeID:  "0",
+			}
+
+			iter4, err := alloc4.GetIter()
+			Expect(err).NotTo(HaveOccurred())
+
+			// 1st Next: rolls over to second range and returns 10.0.0.2/29 (skipping gateway 10.0.0.1)
+			ipNet, gw := iter4.Next()
+			Expect(ipNet).NotTo(BeNil())
+			Expect(ipNet.IP).To(Equal(net.IPv4(10, 0, 0, 2).To4()))
+			Expect(ipNet.Mask).To(Equal(secondSubnet4.Mask))
+			Expect(gw).To(Equal(net.IPv4(10, 0, 0, 1).To4()))
+
+			// 2nd Next: returns 10.0.0.3/29
+			ipNet, gw = iter4.Next()
+			Expect(ipNet).NotTo(BeNil())
+			Expect(ipNet.IP).To(Equal(net.IPv4(10, 0, 0, 3).To4()))
+			Expect(ipNet.Mask).To(Equal(secondSubnet4.Mask))
+			Expect(gw).To(Equal(net.IPv4(10, 0, 0, 1).To4()))
+
+			// 3rd Next: rolls over back to first range and returns 255.255.255.255/30
+			ipNet, gw = iter4.Next()
+			Expect(ipNet).NotTo(BeNil())
+			Expect(ipNet.IP).To(Equal(net.IPv4(255, 255, 255, 255).To4()))
+			Expect(ipNet.Mask).To(Equal(firstSubnet4.Mask))
+			Expect(gw).To(BeNil())
+
+			// 4th Next: returns nil, nil (full cycle completed)
+			ipNet, gw = iter4.Next()
+			Expect(ipNet).To(BeNil())
+			Expect(gw).To(BeNil())
+
+			// IPv6 family boundary rollover with GetIter
+			firstSubnet6 := mustSubnet("ffff:ffff:ffff:ffff:ffff:ffff:ffff:fffc/126")
+			secondSubnet6 := mustSubnet("2001:db8::/125")
+			p6 := RangeSet{
+				Range{
+					RangeStart: net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"),
+					Subnet:     firstSubnet6,
+				},
+				Range{
+					RangeStart: net.ParseIP("2001:db8::1"),
+					RangeEnd:   net.ParseIP("2001:db8::3"),
+					Gateway:    net.ParseIP("2001:db8::1"),
+					Subnet:     secondSubnet6,
+				},
+			}
+			lastIP6 := net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff")
+			store6 := fakestore.NewFakeStore(map[string]string{}, map[string]net.IP{"0": lastIP6})
+			alloc6 := IPAllocator{
+				rangeset: &p6,
+				store:    store6,
+				rangeID:  "0",
+			}
+
+			iter6, err := alloc6.GetIter()
+			Expect(err).NotTo(HaveOccurred())
+
+			// 1st Next: rolls over to second range and returns 2001:db8::2/125 (skipping gateway 2001:db8::1)
+			ipNet, gw = iter6.Next()
+			Expect(ipNet).NotTo(BeNil())
+			Expect(ipNet.IP).To(Equal(net.ParseIP("2001:db8::2")))
+			Expect(ipNet.Mask).To(Equal(secondSubnet6.Mask))
+			Expect(gw).To(Equal(net.ParseIP("2001:db8::1")))
+
+			// 2nd Next: returns 2001:db8::3/125
+			ipNet, gw = iter6.Next()
+			Expect(ipNet).NotTo(BeNil())
+			Expect(ipNet.IP).To(Equal(net.ParseIP("2001:db8::3")))
+			Expect(ipNet.Mask).To(Equal(secondSubnet6.Mask))
+			Expect(gw).To(Equal(net.ParseIP("2001:db8::1")))
+
+			// 3rd Next: rolls over back to first range and returns ffff:...:ffff/126
+			ipNet, gw = iter6.Next()
+			Expect(ipNet).NotTo(BeNil())
+			Expect(ipNet.IP).To(Equal(net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff")))
+			Expect(ipNet.Mask).To(Equal(firstSubnet6.Mask))
+			Expect(gw).To(BeNil())
+
+			// 4th Next: returns nil, nil (full cycle completed)
+			ipNet, gw = iter6.Next()
+			Expect(ipNet).To(BeNil())
+			Expect(gw).To(BeNil())
+		})
 	})
 
 	Context("when has free ip", func() {
