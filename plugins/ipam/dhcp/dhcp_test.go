@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,6 +53,12 @@ type DhcpServer struct {
 	startAddr net.IP
 	endAddr   net.IP
 	leaseTime time.Duration
+
+	// logDHCP enables dnsmasq's --log-dhcp, which logs every DHCP packet
+	// (including DHCPRELEASE) to stderr.
+	logDHCP bool
+	// logWriter, when set, receives a copy of dnsmasq's stderr.
+	logWriter io.Writer
 }
 
 func (s *DhcpServer) Serve() error {
@@ -65,17 +72,23 @@ func (s *DhcpServer) Start() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	s.cmd = exec.Command(
-		"dnsmasq",
+	args := []string{
 		"--no-daemon",
 		"--dhcp-sequential-ip", // allocate IPs sequentially
 		"--port=0",             // disable DNS
 		"--conf-file=-",        // Do not read /etc/dnsmasq.conf
 		fmt.Sprintf("--dhcp-range=%s,%s,%d", s.startAddr, s.endAddr, int(s.leaseTime.Seconds())),
-	)
+	}
+	if s.logDHCP {
+		args = append(args, "--log-dhcp")
+	}
+	s.cmd = exec.Command("dnsmasq", args...)
 	s.cmd.Stdin = bytes.NewBufferString("")
 	s.cmd.Stdout = os.Stdout
 	s.cmd.Stderr = os.Stderr
+	if s.logWriter != nil {
+		s.cmd.Stderr = io.MultiWriter(os.Stderr, s.logWriter)
+	}
 
 	return s.cmd.Start()
 }
@@ -87,10 +100,19 @@ func (s *DhcpServer) Stop() error {
 }
 
 func dhcpServerStart(netns ns.NetNS, numLeases int, stopCh <-chan bool) *sync.WaitGroup {
+	return dhcpServerStartWith(netns, numLeases, stopCh, nil)
+}
+
+// dhcpServerStartWith is like dhcpServerStart, but when logWriter is non-nil it
+// enables dnsmasq's --log-dhcp and tees dnsmasq's stderr into logWriter so
+// tests can observe the DHCP packets the server receives.
+func dhcpServerStartWith(netns ns.NetNS, numLeases int, stopCh <-chan bool, logWriter io.Writer) *sync.WaitGroup {
 	dhcpServer := &DhcpServer{
 		startAddr: net.IPv4(192, 168, 1, 5),
 		endAddr:   net.IPv4(192, 168, 1, 5+uint8(numLeases)-1),
 		leaseTime: 5 * time.Minute,
+		logDHCP:   logWriter != nil,
+		logWriter: logWriter,
 	}
 
 	stopWg := sync.WaitGroup{}
@@ -666,6 +688,228 @@ var _ = Describe("DHCP Lease Unavailable Operations", func() {
 				})
 			})
 			Expect(err).NotTo(HaveOccurred())
+		})
+	}
+})
+
+// syncBuffer is a concurrency-safe bytes.Buffer, used to capture a
+// subprocess's output while the test inspects it.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// cniEnv returns the current environment with any CNI_* variables removed and
+// the supplied variables added, mirroring how a CNI runtime invokes a plugin.
+func cniEnv(vars map[string]string) []string {
+	env := make([]string, 0, len(os.Environ())+len(vars))
+	for _, kv := range os.Environ() {
+		if strings.HasPrefix(kv, "CNI_") {
+			continue
+		}
+		env = append(env, kv)
+	}
+	for k, v := range vars {
+		env = append(env, k+"="+v)
+	}
+	return env
+}
+
+// This suite drives the real bridge plugin against the DHCP IPAM plugin and
+// the DHCP daemon, and verifies that tearing down the bridge network sends a
+// DHCPRELEASE to the DHCP server.
+//
+// It is a regression test for the bridge + DHCP teardown bug: bridge's cmdDel
+// removes the container interface *before* invoking IPAM DEL, so the DHCP
+// daemon's release() can no longer create an nclient4 client (which requires
+// the link to exist) and no DHCPRELEASE ever reaches the server. On unfixed
+// code, the final assertion fails.
+var _ = XDescribe("Bridge teardown with DHCP IPAM", func() {
+	const (
+		bridgeName  = "dhcp-br0"
+		ifName      = "eth0"
+		containerID = "bridge-dhcp-release"
+	)
+
+	var (
+		originalNS, targetNS  ns.NetNS
+		dhcpServerStopCh      chan bool
+		dhcpServerDone        *sync.WaitGroup
+		clientCmd             *exec.Cmd
+		socketPath, tmpDir    string
+		dnsmasqLog, daemonLog *syncBuffer
+		bridgePath, cniPath   string
+		err                   error
+	)
+
+	BeforeEach(func() {
+		dhcpServerStopCh = make(chan bool)
+		dnsmasqLog = &syncBuffer{}
+		daemonLog = &syncBuffer{}
+
+		tmpDir, err = getTmpDir()
+		Expect(err).NotTo(HaveOccurred())
+		socketPath = filepath.Join(tmpDir, "dhcp.sock")
+
+		originalNS, err = testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+		targetNS, err = testutils.NewNS()
+		Expect(err).NotTo(HaveOccurred())
+
+		// The bridge plays the role of the DHCP server's interface, as it
+		// would in a real bridged network.
+		err = originalNS.Do(func(_ ns.NetNS) error {
+			br := &netlink.Bridge{LinkAttrs: netlink.NewLinkAttrs()}
+			br.LinkAttrs.Name = bridgeName
+			if err := netlink.LinkAdd(br); err != nil {
+				return err
+			}
+			addr := &netlink.Addr{IPNet: &net.IPNet{
+				IP:   net.IPv4(192, 168, 1, 1),
+				Mask: net.IPv4Mask(255, 255, 255, 0),
+			}}
+			if err := netlink.AddrAdd(br, addr); err != nil {
+				return err
+			}
+			if err := netlink.LinkSetUp(br); err != nil {
+				return err
+			}
+
+			// A bridge with no ports reports NO-CARRIER, and dnsmasq only
+			// enables DHCP on interfaces that are running when it starts.
+			// Attach a dummy port so the bridge is DHCP-capable before the
+			// bridge plugin creates its own veth later on.
+			dummy := &netlink.Dummy{LinkAttrs: netlink.NewLinkAttrs()}
+			dummy.LinkAttrs.Name = "dhcp-srv0"
+			if err := netlink.LinkAdd(dummy); err != nil {
+				return err
+			}
+			if err := netlink.LinkSetUp(dummy); err != nil {
+				return err
+			}
+			return netlink.LinkSetMaster(dummy, br)
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Start the DHCP server with packet logging enabled, so a DHCPRELEASE
+		// sent by the daemon shows up in dnsmasqLog.
+		dhcpServerDone = dhcpServerStartWith(originalNS, 1, dhcpServerStopCh, dnsmasqLog)
+
+		// Start the DHCP client daemon.
+		dhcpPluginPath, err := exec.LookPath("dhcp")
+		Expect(err).NotTo(HaveOccurred())
+		// Use short timeouts so a broken setup fails fast rather than after
+		// the daemon's default multi-minute retry window.
+		clientCmd = exec.Command(dhcpPluginPath, "daemon", "-socketpath", socketPath,
+			"-timeout", "2s", "-resendmax", "8s", "--resendtimeout", "10s")
+		clientCmd.Stdout = io.MultiWriter(os.Stdout, daemonLog)
+		clientCmd.Stderr = io.MultiWriter(os.Stderr, daemonLog)
+		err = clientCmd.Start()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(clientCmd.Process).NotTo(BeNil())
+
+		// Wait up to 15 seconds for the client socket.
+		Eventually(func() bool {
+			_, err := os.Stat(socketPath)
+			return err == nil
+		}, time.Second*15, time.Second/4).Should(BeTrue())
+
+		bridgePath, err = exec.LookPath("bridge")
+		Expect(err).NotTo(HaveOccurred())
+		bridgePath, err = filepath.Abs(bridgePath)
+		Expect(err).NotTo(HaveOccurred())
+		// CNI_PATH is where the bridge plugin will look for the dhcp IPAM
+		// plugin; both are built into the same directory.
+		cniPath = filepath.Dir(bridgePath)
+	})
+
+	AfterEach(func() {
+		dhcpServerStopCh <- true
+		dhcpServerDone.Wait()
+		clientCmd.Process.Kill()
+		clientCmd.Wait()
+
+		Expect(originalNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(originalNS)).To(Succeed())
+		Expect(targetNS.Close()).To(Succeed())
+		Expect(testutils.UnmountNS(targetNS)).To(Succeed())
+
+		Expect(os.RemoveAll(tmpDir)).To(Succeed())
+	})
+
+	for _, ver := range testutils.AllSpecVersions {
+		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
+		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
+		ver := ver
+
+		It(fmt.Sprintf("[%s] sends DHCPRELEASE when the bridge deletes the container interface", ver), func() {
+			conf := fmt.Sprintf(`{
+			    "cniVersion": "%s",
+			    "name": "bridge-dhcp-release",
+			    "type": "bridge",
+			    "bridge": "%s",
+			    "ipam": {
+				"type": "dhcp",
+				"daemonSocketPath": "%s"
+			    }
+			}`, ver, bridgeName, socketPath)
+
+			// The bridge plugin must run in originalNS, where the bridge and
+			// the DHCP server live; targetNS is referenced through CNI_NETNS.
+			runBridge := func(command string) ([]byte, error) {
+				var out []byte
+				err := originalNS.Do(func(_ ns.NetNS) error {
+					cmd := exec.Command(bridgePath)
+					cmd.Env = cniEnv(map[string]string{
+						"CNI_COMMAND":     command,
+						"CNI_CONTAINERID": containerID,
+						"CNI_NETNS":       targetNS.Path(),
+						"CNI_IFNAME":      ifName,
+						"CNI_PATH":        cniPath,
+					})
+					cmd.Stdin = strings.NewReader(conf)
+					var err error
+					out, err = cmd.CombinedOutput()
+					return err
+				})
+				return out, err
+			}
+
+			out, err := runBridge("ADD")
+			Expect(err).NotTo(HaveOccurred(), "bridge ADD failed: %s", string(out))
+
+			// Wait for the DHCP handshake to complete, which proves the server
+			// logged this lease and that --log-dhcp is working.
+			Eventually(dnsmasqLog.String, 15*time.Second, 100*time.Millisecond).
+				Should(ContainSubstring("DHCPACK"), func() string {
+					return fmt.Sprintf("expected dnsmasq to log a DHCPACK; dnsmasq log:\n%s\ndaemon log:\n%s",
+						dnsmasqLog.String(), daemonLog.String())
+				})
+
+			out, err = runBridge("DEL")
+			Expect(err).NotTo(HaveOccurred(), "bridge DEL failed: %s", string(out))
+
+			// Regression test for the bridge + DHCP teardown bug: the bridge
+			// removes the container interface before invoking IPAM DEL, so the
+			// DHCP daemon's release() cannot create an nclient4 client (which
+			// requires the link to exist) and no DHCPRELEASE is sent.
+			Eventually(dnsmasqLog.String, 10*time.Second, 100*time.Millisecond).
+				Should(ContainSubstring("DHCPRELEASE"), func() string {
+					return fmt.Sprintf("bridge DEL removed the container interface before the DHCP IPAM could send DHCPRELEASE; dnsmasq log:\n%s\ndaemon log:\n%s",
+						dnsmasqLog.String(), daemonLog.String())
+				})
 		})
 	}
 })
