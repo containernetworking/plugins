@@ -17,6 +17,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -34,7 +35,11 @@ import (
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
-const firstTableID = 100
+const (
+	firstTableID = 100
+	// Reserved for SBR interface rules.
+	sbrInterfaceRuleProtocol = 253
+)
 
 // PluginConf is the configuration document passed in.
 type PluginConf struct {
@@ -60,6 +65,10 @@ type PluginConf struct {
 	// enabling destination-based routing when no explicit source IP is specified.
 	// This allows both source-based and destination-based routing to work together.
 	AddSourceHints bool `json:"addSourceHints,omitempty"`
+	// UseOriginatingIf adds fallback rules for local sockets bound to the interface.
+	// With automatic allocation, each family uses the SBR table for its first address.
+	// With an explicit table, the caller provides the routes for every configured family.
+	UseOriginatingIf bool `json:"useOriginatingIf,omitempty"`
 }
 
 // Wrapper that does a lock before and unlock after operations to serialise
@@ -177,9 +186,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// Do the actual work.
 	err = withLockAndNetNS(args.Netns, func(_ ns.NetNS) error {
 		if conf.Table != nil {
-			return doRoutesWithTable(ipCfgs, *conf.Table)
+			return doRoutesWithTable(ipCfgs, args.IfName, *conf.Table, conf.UseOriginatingIf)
 		}
-		return doRoutes(ipCfgs, args.IfName, conf.Gateways, conf.AddSourceHints)
+		return doRoutes(ipCfgs, args.IfName, conf.Gateways, conf.AddSourceHints, conf.UseOriginatingIf)
 	})
 	if err != nil {
 		return err
@@ -218,7 +227,7 @@ func getNextTableID(rules []netlink.Rule, routes []netlink.Route, candidateID in
 }
 
 // doRoutes does all the work to set up routes and rules during an add.
-func doRoutes(ipCfgs []*current.IPConfig, iface string, staticGateways []string, addSourceHints bool) error {
+func doRoutes(ipCfgs []*current.IPConfig, iface string, staticGateways []string, addSourceHints bool, useOriginatingIf bool) error {
 	// Get a list of rules and routes ready.
 	rules, err := netlinksafe.RuleList(netlink.FAMILY_ALL)
 	if err != nil {
@@ -276,6 +285,7 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string, staticGateways []string,
 		}
 	}
 
+	var sourceRules []*netlink.Rule
 	// Loop through setting up source based rules and default routes.
 	for _, ipCfg := range ipCfgs {
 		log.Printf("Set rule for source %s", ipCfg.String())
@@ -283,25 +293,28 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string, staticGateways []string,
 		rule.Table = table
 
 		// Source must be restricted to a single IP, not a full subnet
-		var src net.IPNet
-		src.IP = ipCfg.Address.IP
-		if src.IP.To4() != nil {
+		src := net.IPNet{IP: ipCfg.Address.IP}
+		isIPv4 := ipCfg.Address.IP.To4() != nil
+		if isIPv4 {
 			src.Mask = net.CIDRMask(32, 32)
+			rule.Family = netlink.FAMILY_V4 // oif has no src address so we set explicitly
 		} else {
 			src.Mask = net.CIDRMask(128, 128)
+			rule.Family = netlink.FAMILY_V6
 		}
 
 		log.Printf("Source to use %s", src.String())
 		rule.Src = &src
 
-		if err = netlink.RuleAdd(rule); err != nil {
+		if useOriginatingIf {
+			sourceRules = append(sourceRules, rule)
+		} else if err = netlink.RuleAdd(rule); err != nil {
 			return fmt.Errorf("Failed to add rule: %v", err)
 		}
 
 		// Determine which gateway to use: static gateway takes precedence
 		// Match gateway by IP family (IPv4 vs IPv6)
 		var gateway net.IP
-		isIPv4 := ipCfg.Address.IP.To4() != nil
 
 		switch {
 		case isIPv4 && staticGwV4 != nil:
@@ -318,7 +331,7 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string, staticGateways []string,
 			log.Printf("Adding default route to gateway %s", gateway.String())
 
 			var dest net.IPNet
-			if ipCfg.Address.IP.To4() != nil {
+			if isIPv4 {
 				dest.IP = net.IPv4zero
 				dest.Mask = net.CIDRMask(0, 32)
 			} else {
@@ -370,6 +383,12 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string, staticGateways []string,
 		// Use a different table for each ipCfg
 		table++
 		table = getNextTableID(rules, routes, table)
+	}
+
+	if useOriginatingIf {
+		if err := installInterfaceAndSourceRules(iface, sourceRules); err != nil {
+			return err
+		}
 	}
 
 	// Handle routes in the default routing table
@@ -431,7 +450,42 @@ func doRoutes(ipCfgs []*current.IPConfig, iface string, staticGateways []string,
 	return nil
 }
 
-func doRoutesWithTable(ipCfgs []*current.IPConfig, table int) error {
+func installInterfaceAndSourceRules(iface string, sourceRules []*netlink.Rule) error {
+	var interfaceRules []*netlink.Rule
+	familySeen := make(map[int]bool, 2)
+	// Create oif rules, based on the first address seen for each family
+	for _, sourceRule := range sourceRules {
+		if familySeen[sourceRule.Family] {
+			continue
+		}
+		rule := netlink.NewRule()
+		rule.Family = sourceRule.Family
+		rule.Table = sourceRule.Table
+		rule.OifName = iface
+		rule.Protocol = sbrInterfaceRuleProtocol
+		interfaceRules = append(interfaceRules, rule)
+		familySeen[rule.Family] = true
+	}
+
+	// Install interface rules first so automatic priorities put source rules
+	// ahead of the interface rule within each family.
+	rules := append(interfaceRules, sourceRules...)
+	for i, rule := range rules {
+		if err := netlink.RuleAdd(rule); err != nil {
+			addErr := fmt.Errorf("failed to add SBR rule %v: %w", rule, err)
+			for _, added := range rules[:i] {
+				if err := netlink.RuleDel(added); err != nil {
+					addErr = errors.Join(addErr, fmt.Errorf("failed to roll back SBR rule %v: %w", added, err))
+				}
+			}
+			return addErr
+		}
+	}
+	return nil
+}
+
+func doRoutesWithTable(ipCfgs []*current.IPConfig, iface string, table int, useOriginatingIf bool) error {
+	var sourceRules []*netlink.Rule
 	for _, ipCfg := range ipCfgs {
 		log.Printf("Set rule for source %s", ipCfg.String())
 		rule := netlink.NewRule()
@@ -442,18 +496,25 @@ func doRoutesWithTable(ipCfgs []*current.IPConfig, table int) error {
 		src.IP = ipCfg.Address.IP
 		if src.IP.To4() != nil {
 			src.Mask = net.CIDRMask(32, 32)
+			rule.Family = netlink.FAMILY_V4
 		} else {
 			src.Mask = net.CIDRMask(128, 128)
+			rule.Family = netlink.FAMILY_V6
 		}
 
 		log.Printf("Source to use %s", src.String())
 		rule.Src = &src
 
-		if err := netlink.RuleAdd(rule); err != nil {
+		if useOriginatingIf {
+			sourceRules = append(sourceRules, rule)
+		} else if err := netlink.RuleAdd(rule); err != nil {
 			return fmt.Errorf("failed to add rule: %v", err)
 		}
 	}
 
+	if useOriginatingIf {
+		return installInterfaceAndSourceRules(iface, sourceRules)
+	}
 	return nil
 }
 
@@ -500,6 +561,21 @@ func tidyRules(iface string, table *int) error {
 		}
 	}
 
+	deleteRule := func(rule *netlink.Rule) {
+		log.Printf("Delete rule %v", rule)
+		if err := netlink.RuleDel(rule); err != nil {
+			errReturn = fmt.Errorf("failed to delete rule %v: %w", rule, err)
+			log.Print(errReturn)
+		}
+	}
+
+	// Interface rules are identified by name and may outlive the link.
+	for _, rule := range rules {
+		if rule.OifName == iface && rule.Protocol == sbrInterfaceRuleProtocol {
+			deleteRule(&rule)
+		}
+	}
+
 	link, err := netlinksafe.LinkByName(iface)
 	if err != nil {
 		// If interface is not found by any reason it's safe to ignore an error. Also, we don't need to raise an error
@@ -507,7 +583,7 @@ func tidyRules(iface string, table *int) error {
 		// https://github.com/containernetworking/cni/blob/main/SPEC.md#del-remove-container-from-network-or-un-apply-modifications
 		_, notFound := err.(netlink.LinkNotFoundError)
 		if notFound {
-			return nil
+			return errReturn
 		}
 		log.Printf("Failed to get link %s: %v", iface, err)
 		return fmt.Errorf("Failed to get link %s: %v", iface, err)
@@ -519,25 +595,17 @@ func tidyRules(iface string, table *int) error {
 		return fmt.Errorf("Failed to list all addrs: %v", err)
 	}
 
-RULE_LOOP:
 	for _, rule := range rules {
-		log.Printf("Check rule: %v", rule)
-		if rule.Src == nil {
+		if rule.Src == nil || rule.OifName != "" {
 			continue
 		}
 
 		for _, addr := range addrs {
 			if rule.Src.IP.Equal(addr.IP) {
-				log.Printf("Delete rule %v", rule)
-				err := netlink.RuleDel(&rule)
-				if err != nil {
-					errReturn = fmt.Errorf("Failed to delete rule %v", err)
-					log.Printf("... Failed! %v", err)
-				}
-				continue RULE_LOOP
+				deleteRule(&rule)
+				break
 			}
 		}
-
 	}
 
 	return errReturn
