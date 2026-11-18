@@ -974,4 +974,240 @@ var _ = Describe("sbr test", func() {
 		Expect(foundDefaultRouteInTable100).To(BeTrue(),
 			"Expected default route in table 100")
 	})
+
+	It("adds an oif rule when useOriginatingIf is enabled", func() {
+		ifname := "net1"
+		conf := `{
+	"cniVersion": "0.3.0",
+	"name": "cni-plugin-sbr-test",
+	"type": "sbr",
+	"useOriginatingIf": true,
+	"prevResult": {
+		"cniVersion": "0.3.0",
+		"interfaces": [
+			{
+				"name": "%s",
+				"sandbox": "%s"
+			}
+		],
+		"ips": [
+			{
+				"version": "4",
+				"address": "192.168.1.209/24",
+				"gateway": "192.168.1.1",
+				"interface": 0
+			}
+		],
+		"routes": []
+	}
+}`
+		conf = fmt.Sprintf(conf, ifname, targetNs.Path())
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNs.Path(),
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+
+		err := setup(targetNs, createDefaultStatus())
+		Expect(err).NotTo(HaveOccurred())
+
+		oldStatus, err := readback(targetNs, []string{"net1", "eth0"})
+		Expect(err).NotTo(HaveOccurred())
+
+		_, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+		Expect(err).NotTo(HaveOccurred())
+
+		newStatus, err := readback(targetNs, []string{"net1", "eth0"})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect the non-local routes on net1 and the new default route in
+		// table 100, along with one source rule and one oif rule.
+		expNet1 := oldStatus.Devices[0]
+		expEth0 := oldStatus.Devices[1]
+		for i := range expNet1.Routes {
+			if expNet1.Routes[i].Table != 255 {
+				expNet1.Routes[i].Table = 100
+			}
+		}
+		expNet1.Routes = append(expNet1.Routes,
+			netlink.Route{
+				Gw:        net.IPv4(192, 168, 1, 1),
+				Dst:       &net.IPNet{IP: net.IPv4zero, Mask: net.IPMask(net.IPv4zero)},
+				Table:     100,
+				LinkIndex: expNet1.Routes[0].LinkIndex,
+			})
+
+		Expect(newStatus.Rules).To(ConsistOf(
+			And(HaveField("Table", 100), HaveField("OifName", ""),
+				HaveField("Src.String()", "192.168.1.209/32")),
+			And(HaveField("Table", 100), HaveField("Family", netlink.FAMILY_V4),
+				HaveField("OifName", ifname), HaveField("Protocol", uint8(sbrInterfaceRuleProtocol))),
+		))
+		devNet1 := newStatus.Devices[0]
+		devEth0 := newStatus.Devices[1]
+		Expect(equalRoutes(expNet1.Routes, devNet1.Routes)).To(BeTrue())
+		Expect(equalRoutes(expEth0.Routes, devEth0.Routes)).To(BeTrue())
+
+		conf = `{
+	"cniVersion": "0.3.0",
+	"name": "cni-plugin-sbr-test",
+	"type": "sbr"
+}`
+
+		// And now check that we can back it all out.
+		args = &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNs.Path(),
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+		err = testutils.CmdDelWithArgs(args, func() error { return cmdDel(args) })
+		Expect(err).NotTo(HaveOccurred())
+
+		retVal, err := readback(targetNs, []string{"net1", "eth0"})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Check results. We expect the rules to have been removed.
+		Expect(retVal.Rules).To(BeEmpty())
+	})
+
+	It("installs one oif rule per family with lower precedence than its source rules", func() {
+		ifname := "net1"
+		conf := fmt.Sprintf(`{
+			"cniVersion": "0.3.0",
+			"name": "cni-plugin-sbr-test",
+			"type": "sbr",
+			"useOriginatingIf": true,
+			"prevResult": {
+				"cniVersion": "0.3.0",
+				"interfaces": [{"name": "%s", "sandbox": "%s"}],
+				"ips": [
+					{"version": "6", "address": "fd00::10/64", "gateway": "fd00::1", "interface": 0},
+					{"version": "4", "address": "192.168.1.209/24", "gateway": "192.168.1.1", "interface": 0},
+					{"version": "4", "address": "192.168.1.210/24", "gateway": "192.168.1.1", "interface": 0}
+				]
+			}
+		}`, ifname, targetNs.Path())
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNs.Path(),
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+		status := createDefaultStatus()
+		status.Devices[1].Addrs = append(status.Devices[1].Addrs,
+			net.IPNet{IP: net.ParseIP("fd00::10"), Mask: net.CIDRMask(64, 128)},
+			net.IPNet{IP: net.ParseIP("192.168.1.210"), Mask: net.CIDRMask(24, 32)},
+		)
+		Expect(setup(targetNs, status)).To(Succeed())
+
+		_, _, err := testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+		Expect(err).NotTo(HaveOccurred())
+
+		result, err := readback(targetNs, []string{ifname, "eth0"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Rules).To(HaveLen(5))
+		for _, expected := range []struct {
+			family  int
+			table   int
+			sources []string
+		}{
+			{netlink.FAMILY_V6, 100, []string{"fd00::10/128"}},
+			{netlink.FAMILY_V4, 101, []string{"192.168.1.209/32", "192.168.1.210/32"}},
+		} {
+			var oifRule netlink.Rule
+			Expect(result.Rules).To(ContainElement(And(
+				HaveField("Family", expected.family), HaveField("Table", expected.table),
+				HaveField("OifName", ifname), HaveField("Src", BeNil()),
+				HaveField("Protocol", uint8(sbrInterfaceRuleProtocol)),
+			), &oifRule))
+			for offset, source := range expected.sources {
+				Expect(result.Rules).To(ContainElement(And(
+					HaveField("Family", expected.family), HaveField("Table", expected.table+offset),
+					HaveField("OifName", ""), HaveField("Src.String()", source),
+					HaveField("Priority", BeNumerically("<", oifRule.Priority)),
+				)))
+			}
+		}
+	})
+
+	It("adds and removes oif rules for both families in an explicit table", func() {
+		const tableID = 5000
+		ifname := "net1"
+		conf := fmt.Sprintf(`{
+			"cniVersion": "0.3.0",
+			"name": "cni-plugin-sbr-test",
+			"type": "sbr",
+			"table": %d,
+			"useOriginatingIf": true,
+			"prevResult": {
+				"cniVersion": "0.3.0",
+				"interfaces": [{"name": "%s", "sandbox": "%s"}],
+				"ips": [
+					{"version": "6", "address": "fd00::10/64", "interface": 0},
+					{"version": "4", "address": "192.168.1.209/24", "interface": 0}
+				]
+			}
+		}`, tableID, ifname, targetNs.Path())
+		args := &skel.CmdArgs{
+			ContainerID: "dummy",
+			Netns:       targetNs.Path(),
+			IfName:      ifname,
+			StdinData:   []byte(conf),
+		}
+
+		status := createDefaultStatus()
+		status.Devices[1].Addrs = append(status.Devices[1].Addrs,
+			net.IPNet{IP: net.ParseIP("fd00::10"), Mask: net.CIDRMask(64, 128)})
+		for _, prefix := range []string{"203.0.113.0/24", "2001:db8::/64"} {
+			_, dst, err := net.ParseCIDR(prefix)
+			Expect(err).NotTo(HaveOccurred())
+			status.Devices[1].Routes = append(status.Devices[1].Routes,
+				netlink.Route{Dst: dst, Table: tableID, Scope: netlink.SCOPE_LINK})
+		}
+		Expect(setup(targetNs, status)).To(Succeed())
+		before, err := readback(targetNs, []string{ifname, "eth0"})
+		Expect(err).NotTo(HaveOccurred())
+
+		_, _, err = testutils.CmdAddWithArgs(args, func() error { return cmdAdd(args) })
+		Expect(err).NotTo(HaveOccurred())
+		afterAdd, err := readback(targetNs, []string{ifname, "eth0"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(afterAdd.Devices).To(Equal(before.Devices))
+
+		filter := &netlink.Rule{Table: tableID}
+		Expect(targetNs.Do(func(_ ns.NetNS) error {
+			rules, err := netlinksafe.RuleListFiltered(netlink.FAMILY_ALL, filter, netlink.RT_FILTER_TABLE)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(rules).To(ConsistOf(
+				And(HaveField("OifName", ""), HaveField("Src.String()", "192.168.1.209/32")),
+				And(HaveField("OifName", ""), HaveField("Src.String()", "fd00::10/128")),
+				And(HaveField("OifName", ifname), HaveField("Protocol", uint8(sbrInterfaceRuleProtocol)),
+					HaveField("Family", netlink.FAMILY_V4)),
+				And(HaveField("OifName", ifname), HaveField("Protocol", uint8(sbrInterfaceRuleProtocol)),
+					HaveField("Family", netlink.FAMILY_V6)),
+			))
+			// We create this rule just to ensure it's not removed when the plugin is deleted
+			foreignOifRule := netlink.NewRule()
+			foreignOifRule.Family = netlink.FAMILY_V4
+			foreignOifRule.Table = tableID
+			foreignOifRule.OifName = ifname
+			foreignOifRule.Protocol = unix.RTPROT_STATIC
+			return netlink.RuleAdd(foreignOifRule)
+		})).To(Succeed())
+
+		Expect(testutils.CmdDelWithArgs(args, func() error { return cmdDel(args) })).To(Succeed())
+		afterDel, err := readback(targetNs, []string{ifname, "eth0"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(afterDel.Devices).To(Equal(before.Devices))
+		Expect(targetNs.Do(func(_ ns.NetNS) error {
+			rules, err := netlinksafe.RuleListFiltered(netlink.FAMILY_ALL, filter, netlink.RT_FILTER_TABLE)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(rules).To(ConsistOf(
+				And(HaveField("OifName", ifname), HaveField("Protocol", uint8(unix.RTPROT_STATIC))),
+			))
+			return nil
+		})).To(Succeed())
+	})
 })
