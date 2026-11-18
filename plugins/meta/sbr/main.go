@@ -469,7 +469,8 @@ func installInterfaceAndSourceRules(iface string, sourceRules []*netlink.Rule) e
 
 	// Install interface rules first so automatic priorities put source rules
 	// ahead of the interface rule within each family.
-	rules := append(interfaceRules, sourceRules...)
+	var rules []*netlink.Rule
+	rules = append(append(rules, interfaceRules...), sourceRules...)
 	for i, rule := range rules {
 		if err := netlink.RuleAdd(rule); err != nil {
 			addErr := fmt.Errorf("failed to add SBR rule %v: %w", rule, err)
