@@ -171,7 +171,7 @@ func gcIPMasqIPTables(_ string, _ []types.GCAttachment) error {
 	return nil
 }
 
-// isNotExist returnst true if the error is from iptables indicating
+// isNotExist returns true if the error is from iptables indicating
 // that the target does not exist.
 func isNotExist(err error) bool {
 	e, ok := err.(*iptables.Error)

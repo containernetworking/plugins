@@ -311,7 +311,7 @@ func moveLinkIn(hostDev netlink.Link, containerNs ns.NetNS, containerIfName stri
 			return fmt.Errorf("failed to find %q in tempNS: %v", hostDevName, err)
 		}
 
-		// detroying a non empty tempNS would move physical devices back to the initial net namespace,
+		// destroying a non empty tempNS would move physical devices back to the initial net namespace,
 		// not the namespace of the "parent" process, and virtual devices would be destroyed,
 		// so we need to actively move the device back to hostNS on error
 		defer func() {

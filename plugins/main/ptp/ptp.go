@@ -342,7 +342,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	}
 
 	var contMap current.Interface
-	// Find interfaces for name whe know, that of host-device inside container
+	// Find interfaces for name we know, that of host-device inside container
 	for _, intf := range result.Interfaces {
 		if args.IfName == intf.Name {
 			if args.Netns == intf.Sandbox {
