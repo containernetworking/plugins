@@ -403,12 +403,12 @@ func ensureVlanInterface(br *netlink.Bridge, vlanID int, preserveDefaultVlan boo
 
 		hostNS, err := ns.GetCurrentNS()
 		if err != nil {
-			return nil, fmt.Errorf("faild to find host namespace: %v", err)
+			return nil, fmt.Errorf("failed to find host namespace: %v", err)
 		}
 
 		_, brGatewayIface, err := setupVeth(hostNS, br, name, br.MTU, false, vlanID, nil, preserveDefaultVlan, "", false)
 		if err != nil {
-			return nil, fmt.Errorf("faild to create vlan gateway %q: %v", name, err)
+			return nil, fmt.Errorf("failed to create vlan gateway %q: %v", name, err)
 		}
 
 		brGatewayVeth, err = netlinksafe.LinkByName(brGatewayIface.Name)
@@ -1044,7 +1044,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	var contCNI, vethCNI cniBridgeIf
 	var brMap, contMap current.Interface
 
-	// Find interfaces for names whe know, CNI Bridge and container
+	// Find interfaces for names we know, CNI Bridge and container
 	for _, intf := range result.Interfaces {
 		if n.BrName == intf.Name {
 			brMap = *intf

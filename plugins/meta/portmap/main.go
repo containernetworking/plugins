@@ -22,7 +22,7 @@
 // This has one notable limitation: it does not perform any kind of reservation
 // of the actual host port. If there is a service on the host, it will have all
 // its traffic captured by the container. If another container also claims a given
-// port, it will caputure the traffic - it is last-write-wins.
+// port, it will capture the traffic - it is last-write-wins.
 package main
 
 import (
