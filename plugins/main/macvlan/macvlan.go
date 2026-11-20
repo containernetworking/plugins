@@ -109,12 +109,35 @@ func loadConf(args *skel.CmdArgs, envArgs string) (*NetConf, string, error) {
 	if err := json.Unmarshal(args.StdinData, n); err != nil {
 		return nil, "", fmt.Errorf("failed to load netconf: %v", err)
 	}
-	if n.Master == "" {
-		defaultRouteInterface, err := getNamespacedDefaultRouteInterfaceName(args.Netns, n.LinkContNs)
-		if err != nil {
-			return nil, "", err
+
+	var result *current.Result
+	var err error
+	// Parse previous result
+	if n.NetConf.RawPrevResult != nil {
+		if err = version.ParsePrevResult(&n.NetConf); err != nil {
+			return nil, "", fmt.Errorf("could not parse prevResult: %v", err)
 		}
-		n.Master = defaultRouteInterface
+
+		result, err = current.NewResultFromResult(n.PrevResult)
+		if err != nil {
+			return nil, "", fmt.Errorf("could not convert result to current version: %v", err)
+		}
+	}
+	if n.Master == "" {
+		if result == nil {
+			var defaultRouteInterface string
+			defaultRouteInterface, err = getNamespacedDefaultRouteInterfaceName(args.Netns, n.LinkContNs)
+			if err != nil {
+				return nil, "", err
+			}
+			n.Master = defaultRouteInterface
+		} else {
+			if len(result.Interfaces) == 1 && result.Interfaces[0].Name != "" {
+				n.Master = result.Interfaces[0].Name
+			} else {
+				return nil, "", fmt.Errorf("chained master failure. PrevResult lacks a single named interface")
+			}
+		}
 	}
 
 	// check existing and MTU of master interface
