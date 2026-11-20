@@ -105,7 +105,7 @@ var _ = Describe("firewall integration tests (ingressPolicy: same-bridge)", func
 		Expect(err).NotTo(HaveOccurred())
 		fmt.Fprintf(GinkgoWriter, "root namespace: %s\n", testRootNS.Path())
 
-		for i := 0; i < nsCount; i++ {
+		for i := range nsCount {
 			targetNS, err := testutils.NewNS()
 			Expect(err).NotTo(HaveOccurred())
 			fmt.Fprintf(GinkgoWriter, "namespace %d:%s\n", i, targetNS.Path())
@@ -202,7 +202,7 @@ func setupNetworks(cniConf *libcni.CNIConfig, testRootNS ns.NetNS, namespaces [n
 ) [nsCount]*types100.Result {
 	var results [nsCount]*types100.Result
 
-	for i := 0; i < nsCount; i++ {
+	for i := range nsCount {
 		runtimeConfig := libcni.RuntimeConf{
 			ContainerID: fmt.Sprintf("test-cni-firewall-%d", i),
 			NetNS:       namespaces[i].Path(),

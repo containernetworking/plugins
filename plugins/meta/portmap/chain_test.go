@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math/rand"
 	"runtime"
+	"slices"
 	"sync"
 
 	"github.com/coreos/go-iptables/iptables"
@@ -101,16 +102,9 @@ var _ = Describe("chain tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Verify the chain exists
-		ok := false
 		chains, err := ipt.ListChains(TABLE)
 		Expect(err).NotTo(HaveOccurred())
-		for _, chain := range chains {
-			if chain == testChain.name {
-				ok = true
-				break
-			}
-		}
-		if !ok {
+		if !slices.Contains(chains, testChain.name) {
 			Fail("Could not find created chain")
 		}
 
@@ -208,7 +202,7 @@ var _ = Describe("chain tests", func() {
 		err := testChain.setup(ipt)
 		Expect(err).NotTo(HaveOccurred())
 		errCh := make(chan error, N)
-		for i := 0; i < N; i++ {
+		for range N {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
