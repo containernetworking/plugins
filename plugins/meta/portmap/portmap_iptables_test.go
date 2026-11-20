@@ -38,9 +38,10 @@ var _ = Describe("portmapping configuration (iptables)", func() {
 					ch := genDnatChain(netName, containerID)
 
 					Expect(ch).To(Equal(chain{
-						table:       "nat",
-						name:        "CNI-DN-bfd599665540dd91d5d28",
-						entryChains: []string{TopLevelDNATChainName},
+						table:        "nat",
+						name:         "CNI-DN-bfd599665540dd91d5d28",
+						entryChains:  []string{TopLevelDNATChainName},
+						prependEntry: true,
 					}))
 					configBytes := []byte(fmt.Sprintf(`{
 						"name": "test",
@@ -69,9 +70,10 @@ var _ = Describe("portmapping configuration (iptables)", func() {
 
 					ch = genDnatChain(conf.Name, containerID)
 					Expect(ch).To(Equal(chain{
-						table:       "nat",
-						name:        "CNI-DN-67e92b96e692a494b6b85",
-						entryChains: []string{"CNI-HOSTPORT-DNAT"},
+						table:        "nat",
+						name:         "CNI-DN-67e92b96e692a494b6b85",
+						entryChains:  []string{"CNI-HOSTPORT-DNAT"},
+						prependEntry: true,
 					}))
 
 					n, err := types.ParseCIDR("10.0.0.2/24")
@@ -171,9 +173,10 @@ var _ = Describe("portmapping configuration (iptables)", func() {
 					ch := genDnatChain(netName, containerID)
 
 					Expect(ch).To(Equal(chain{
-						table:       "nat",
-						name:        "CNI-DN-bfd599665540dd91d5d28",
-						entryChains: []string{TopLevelDNATChainName},
+						table:        "nat",
+						name:         "CNI-DN-bfd599665540dd91d5d28",
+						entryChains:  []string{TopLevelDNATChainName},
+						prependEntry: true,
 					}))
 					configBytes := []byte(fmt.Sprintf(`{
 						"name": "test",
