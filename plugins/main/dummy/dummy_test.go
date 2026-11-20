@@ -206,10 +206,6 @@ var _ = Describe("dummy Operations", func() {
 	})
 
 	for _, ver := range testutils.AllSpecVersions {
-		// Redefine ver inside for scope so real value is picked up by each dynamically defined It()
-		// See Gingkgo's "Patterns for dynamically generating tests" documentation.
-		ver := ver
-
 		It(fmt.Sprintf("[%s] creates an dummy link in a non-default namespace", ver), func() {
 			// Create dummy in other namespace
 			err := originalNS.Do(func(ns.NetNS) error {
