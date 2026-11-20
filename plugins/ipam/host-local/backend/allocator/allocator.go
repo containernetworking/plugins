@@ -180,6 +180,14 @@ func (a *IPAllocator) GetIter() (*RangeIter, error) {
 // Next returns the next IP, its mask, and its gateway. Returns nil
 // if the iterator has been exhausted
 func (i *RangeIter) Next() (*net.IPNet, net.IP) {
+	if i.rangeset == nil || len(*i.rangeset) == 0 {
+		return nil, nil
+	}
+
+	if i.rangeIdx < 0 || i.rangeIdx >= len(*i.rangeset) {
+		i.rangeIdx = 0
+	}
+
 	r := (*i.rangeset)[i.rangeIdx]
 
 	// If this is the first time iterating and we're not starting in the middle
@@ -187,6 +195,9 @@ func (i *RangeIter) Next() (*net.IPNet, net.IP) {
 	if i.cur == nil {
 		i.cur = r.RangeStart
 		i.startIP = i.cur
+		if i.cur == nil {
+			return nil, nil
+		}
 		if i.cur.Equal(r.Gateway) {
 			return i.Next()
 		}
@@ -203,6 +214,19 @@ func (i *RangeIter) Next() (*net.IPNet, net.IP) {
 		i.cur = r.RangeStart
 	} else {
 		i.cur = ip.NextIP(i.cur)
+		if i.cur == nil {
+			// NextIP returned nil because i.cur was the last address in its family.
+			// Advance to the next range in the set.
+			i.rangeIdx++
+			i.rangeIdx %= len(*i.rangeset)
+			r = (*i.rangeset)[i.rangeIdx]
+
+			i.cur = r.RangeStart
+		}
+	}
+
+	if i.cur == nil {
+		return nil, nil
 	}
 
 	if i.startIP == nil {
