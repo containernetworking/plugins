@@ -50,7 +50,7 @@ jobs:
         run: sha512sum cni-plugins-linux-${{ matrix.goarch }}-${{ github.ref_name }}.tgz | tee cni-plugins-linux-${{ matrix.goarch }}-${{ github.ref_name }}.tgz.sha512
 
       - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2
+        uses: svenstaro/upload-release-action@04733e069f2d7f7f0b4aebc4fbdbce8613b03ccd # v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ./dist/*
@@ -105,7 +105,7 @@ jobs:
         run: sha512sum cni-plugins-windows-${{ matrix.goarch }}-${{ github.ref_name }}.tgz | tee cni-plugins-windows-${{ matrix.goarch }}-${{ github.ref_name }}.tgz.sha512
 
       - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2
+        uses: svenstaro/upload-release-action@04733e069f2d7f7f0b4aebc4fbdbce8613b03ccd # v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ./dist/*
