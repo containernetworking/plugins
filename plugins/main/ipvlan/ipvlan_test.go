@@ -48,6 +48,7 @@ type Net struct {
 	Type          string                 `json:"type,omitempty"`
 	Master        string                 `json:"master"`
 	Mode          string                 `json:"mode"`
+	Flag          string                 `json:"flag,omitempty"`
 	IPAM          *allocator.IPAMConfig  `json:"ipam"`
 	DNS           types.DNS              `json:"dns"`
 	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
@@ -371,6 +372,90 @@ var _ = Describe("ipvlan Operations", func() {
 					link, err := netlinksafe.LinkByName("foobar0")
 					Expect(err).NotTo(HaveOccurred())
 					Expect(link.Attrs().Name).To(Equal("foobar0"))
+					return nil
+				})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			for _, flagName := range []string{"bridge", "private", "vepa"} {
+				flagName := flagName
+				expectedFlag, err := flagFromString(flagName)
+				Expect(err).NotTo(HaveOccurred())
+
+				It(fmt.Sprintf("[%s] creates an ipvlan link with flag %q", ver, flagName), func() {
+					conf := &NetConf{
+						NetConf: types.NetConf{
+							CNIVersion: ver,
+							Name:       "testConfig",
+							Type:       "ipvlan",
+						},
+						Master:     masterInterface,
+						Mode:       "l2",
+						Flag:       flagName,
+						MTU:        1500,
+						LinkContNs: isInContainer,
+					}
+
+					err := originalNS.Do(func(ns.NetNS) error {
+						defer GinkgoRecover()
+
+						_, err := createIpvlan(conf, "foobar0", targetNS)
+						Expect(err).NotTo(HaveOccurred())
+						return nil
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					err = targetNS.Do(func(ns.NetNS) error {
+						defer GinkgoRecover()
+
+						link, err := netlinksafe.LinkByName("foobar0")
+						Expect(err).NotTo(HaveOccurred())
+						ipv, ok := link.(*netlink.IPVlan)
+						Expect(ok).To(BeTrue())
+						Expect(ipv.Flag).To(Equal(expectedFlag))
+						return nil
+					})
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It(fmt.Sprintf("[%s] configures and deconfigures an ipvlan link with flag %q with ADD/CHECK/DEL", ver, flagName), func() {
+					conf := fmt.Sprintf(`{
+				    "cniVersion": "%s",
+				    "name": "mynet",
+				    "type": "ipvlan",
+				    "master": "%s",
+				    "flag": "%s",
+					"linkInContainer": %t,
+				    "ipam": {
+					"type": "host-local",
+					"subnet": "10.1.2.0/24",
+					"dataDir": "%s"
+				    }
+				}`, ver, masterInterface, flagName, isInContainer, dataDir)
+
+					ipvlanAddCheckDelTest(conf, "", originalNS, targetNS)
+				})
+			}
+
+			It(fmt.Sprintf("[%s] rejects an unknown ipvlan flag", ver), func() {
+				conf := &NetConf{
+					NetConf: types.NetConf{
+						CNIVersion: ver,
+						Name:       "testConfig",
+						Type:       "ipvlan",
+					},
+					Master:     masterInterface,
+					Mode:       "l2",
+					Flag:       "bogus",
+					MTU:        1500,
+					LinkContNs: isInContainer,
+				}
+
+				err := originalNS.Do(func(ns.NetNS) error {
+					defer GinkgoRecover()
+
+					_, err := createIpvlan(conf, "foobar0", targetNS)
+					Expect(err).To(MatchError(ContainSubstring(`unknown ipvlan flag: "bogus"`)))
 					return nil
 				})
 				Expect(err).NotTo(HaveOccurred())
