@@ -11,7 +11,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.7.0
 	github.com/godbus/dbus/v5 v5.2.4
 	github.com/insomniacslk/dhcp v0.0.0-20260719225207-c76316d4aa82
-	github.com/mattn/go-shellwords v1.0.16
+	github.com/mattn/go-shellwords v1.0.17
 	github.com/networkplumbing/go-nft v0.4.0
 	github.com/onsi/ginkgo/v2 v2.34.0
 	github.com/onsi/gomega v1.44.0
@@ -20,7 +20,7 @@ require (
 	github.com/safchain/ethtool v0.7.0
 	github.com/vishvananda/netlink v1.3.1
 	github.com/vishvananda/netns v0.0.5
-	golang.org/x/sys v0.49.0
+	golang.org/x/sys v0.50.0
 	sigs.k8s.io/knftables v0.0.22
 )
 
